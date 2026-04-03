@@ -1,0 +1,111 @@
+.header {
+  height: 4rem;
+  z-index: 40;
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2.5rem;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.leftGroup {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.searchContainer {
+  position: relative;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.searchInput {
+  background-color: var(--surface-container-low);
+  border: none;
+  border-radius: 9999px;
+  padding: 0.5rem 1rem 0.5rem 2.5rem;
+  width: 20rem;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.searchInput:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 79, 196, 0.2);
+}
+
+.rightGroup {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.createBtn {
+  background-color: var(--primary);
+  color: var(--on-primary);
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  box-shadow: 0 10px 15px -3px rgba(0, 79, 196, 0.2), 0 4px 6px -4px rgba(0, 79, 196, 0.2);
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.createBtn:hover {
+  transform: scale(1.05);
+}
+
+.createBtn:active {
+  transform: scale(0.95);
+}
+
+.actionsGroup {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--slate-400);
+}
+
+.iconBtn {
+  color: inherit;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.iconBtn:hover {
+  color: var(--primary);
+}
+
+.relative {
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  background-color: var(--error);
+  border-radius: 9999px;
+}
+
+.avatar {
+  height: 2rem;
+  width: 2rem;
+  border-radius: 9999px;
+  overflow: hidden;
+  border: 2px solid white;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.avatarImg {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
