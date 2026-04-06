@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import { createContext, useContext, useMemo, useReducer } from 'react';
 import {
   buildVariantTitle,
   cloneProduct,
@@ -435,42 +435,6 @@ export function ProductProvider({ children }) {
     };
   }, [state.editor.draftProduct, state.products]);
 
-  useEffect(() => {
-    if (!selectedProduct || !state.editor.isOpen || state.editor.mode !== 'existing') {
-      return;
-    }
-
-    if (state.confirmDialog?.kind === 'unsaved-changes') {
-      return;
-    }
-
-    if (hasUnsavedChanges && !state.editor.autosaveEnabled) {
-      return;
-    }
-
-    if (
-      state.editor.draftProduct?.id === selectedProduct.id &&
-      state.editor.baselineProduct?.id === selectedProduct.id
-    ) {
-      return;
-    }
-
-    dispatch({
-      type: 'OPEN_EDITOR',
-      product: selectedProduct,
-      mode: 'existing',
-      selectedProductId: selectedProduct.id,
-    });
-  }, [
-    hasUnsavedChanges,
-    selectedProduct,
-    state.confirmDialog,
-    state.editor.autosaveEnabled,
-    state.editor.baselineProduct,
-    state.editor.draftProduct,
-    state.editor.isOpen,
-    state.editor.mode,
-  ]);
 
   const pushToast = (message, tone = 'success') => {
     const toastId = createEntityId('toast');
