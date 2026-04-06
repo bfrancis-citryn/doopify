@@ -29,7 +29,7 @@ const STATUS_LABELS = {
 };
 
 export default function ProductCatalog() {
-  const { products, selectedProductId, searchQuery, activeFilter, formatMoney, actions } = useProductStore();
+  const { products, selectedProductId, searchQuery, activeFilter, editor, formatMoney, actions } = useProductStore();
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const visibleProducts = useMemo(
@@ -91,11 +91,14 @@ export default function ProductCatalog() {
           <div className={styles.emptyState}>
             <p className={`font-headline ${styles.emptyTitle}`}>No matching products</p>
             <p className={styles.emptyText}>Try a broader search or switch filters to explore the rest of the catalog.</p>
+            <button className={styles.emptyAction} onClick={() => actions.setActiveFilter('all')} type="button">
+              Clear filters
+            </button>
           </div>
         ) : null}
 
         {visibleProducts.map(product => {
-          const isSelected = selectedProductId === product.id;
+          const isSelected = selectedProductId === product.id || editor.draftProduct?.id === product.id;
           const featuredImage = getProductFeaturedImage(product);
           const totalInventory = getProductTotalInventory(product);
           const variantCount = getProductVariantCount(product);

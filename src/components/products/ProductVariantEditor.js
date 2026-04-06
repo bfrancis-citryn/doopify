@@ -101,6 +101,7 @@ export default function ProductVariantEditor() {
                     <input
                       aria-label="Variant label"
                       className={styles.tableInput}
+                      disabled={!variant.isDefault}
                       onChange={event => actions.updateVariantField(variant.id, 'title', event.target.value)}
                       type="text"
                       value={variant.title}

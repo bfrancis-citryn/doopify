@@ -288,18 +288,20 @@ function productReducer(state, action) {
       const nextProducts = isExisting
         ? state.products.map(product => (product.id === action.product.id ? action.product : product))
         : [action.product, ...state.products];
+      const nextSelectedProductId = action.keepSelection === false ? state.selectedProductId : action.product.id;
+      const shouldKeepEditorOpen = action.keepEditorOpen !== false;
 
       return {
         ...state,
         products: nextProducts,
-        selectedProductId: action.product.id,
+        selectedProductId: nextSelectedProductId,
         editor: {
           ...state.editor,
-          isOpen: true,
+          isOpen: shouldKeepEditorOpen,
           mode: 'existing',
-          draftProduct: cloneProduct(action.product),
-          baselineProduct: cloneProduct(action.product),
-          previewImageId: action.product.featuredImageId || action.product.images?.[0]?.id || null,
+          draftProduct: shouldKeepEditorOpen ? cloneProduct(action.product) : null,
+          baselineProduct: shouldKeepEditorOpen ? cloneProduct(action.product) : null,
+          previewImageId: shouldKeepEditorOpen ? action.product.featuredImageId || action.product.images?.[0]?.id || null : null,
           validationErrors: {},
           isSaving: false,
         },
@@ -584,12 +586,17 @@ export function ProductProvider({ children }) {
     });
   };
 
-  const saveDraft = async ({ silent = false } = {}) => {
+  const saveDraft = async ({ silent = false, keepEditorOpen = true, keepSelection = true } = {}) => {
     if (!state.editor.draftProduct || state.editor.isSaving) {
       return false;
     }
 
     if (!draftValidation.isValid) {
+      dispatch({
+        type: 'SET_VALIDATION_ERRORS',
+        errors: draftValidation.errors,
+      });
+
       if (!silent) {
         pushToast('Fix the highlighted product fields before saving.', 'error');
       }
@@ -608,6 +615,8 @@ export function ProductProvider({ children }) {
     dispatch({
       type: 'COMMIT_PRODUCT',
       product: preparedProduct,
+      keepEditorOpen,
+      keepSelection,
     });
 
     if (!silent) {
@@ -674,15 +683,11 @@ export function ProductProvider({ children }) {
   const requestCloseEditor = async () => {
     if (hasUnsavedChanges) {
       if (state.editor.autosaveEnabled) {
-        const didSave = await saveDraft({ silent: true });
+        const didSave = await saveDraft({ silent: true, keepEditorOpen: false, keepSelection: true });
         if (!didSave) {
           pushToast('Resolve validation issues before closing the editor.', 'error');
           return;
         }
-        dispatch({
-          type: 'CLOSE_EDITOR',
-          keepSelection: true,
-        });
         return;
       }
 
@@ -762,6 +767,13 @@ export function ProductProvider({ children }) {
           sku: field === 'sku' ? value : variant.sku,
           price: field === 'basePrice' ? value : variant.price,
           compareAtPrice: field === 'compareAtPrice' ? value : variant.compareAtPrice,
+        }));
+      }
+
+      if (field === 'title' && !draftProduct.images.length) {
+        nextDraft.variants = (nextDraft.variants || []).map(variant => ({
+          ...variant,
+          title: variant.isDefault ? 'Default' : variant.title,
         }));
       }
 
@@ -1153,6 +1165,14 @@ export function ProductProvider({ children }) {
       }
 
       if (resolution === 'save') {
+        if (dialog.pendingAction?.kind === 'close-editor') {
+          const didSave = await saveDraft({ silent: true, keepEditorOpen: false, keepSelection: true });
+          if (didSave) {
+            dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
+          }
+          return;
+        }
+
         const didSave = await saveDraft({ silent: true });
         if (didSave) {
           dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
