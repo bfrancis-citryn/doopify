@@ -89,7 +89,7 @@ export default function ProductsWorkspace() {
 
               <div className={editor.isOpen ? `${styles.detailDock} ${styles.detailDockOpen}` : styles.detailDock}>
                 <div className={editor.isOpen ? `${styles.detailPanel} ${styles.detailPanelOpen}` : styles.detailPanel}>
-                  <ProductEditorDrawer key={editor.draftProduct?.id || editor.mode} />
+                  <ProductEditorDrawer />
                 </div>
               </div>
             </div>

@@ -27,8 +27,8 @@ function SectionCard({ eyebrow, title, children }) {
 }
 
 export default function ProductEditorDrawer() {
-  const { editor, formatMoney, actions } = useProductStore();
-  const draftProduct = editor.draftProduct;
+  const { editor, selectedProduct, formatMoney, actions } = useProductStore();
+  const draftProduct = editor.mode === 'existing' ? selectedProduct || editor.draftProduct : editor.draftProduct;
 
   if (!draftProduct || !editor.isOpen) {
     return null;

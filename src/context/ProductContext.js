@@ -440,11 +440,13 @@ export function ProductProvider({ children }) {
       return;
     }
 
+    const preparedProduct = prepareProductForSave(product);
+
     dispatch({
       type: 'OPEN_EDITOR',
-      product,
+      product: preparedProduct,
       mode: 'existing',
-      selectedProductId: product.id,
+      selectedProductId: preparedProduct.id,
     });
   };
 
