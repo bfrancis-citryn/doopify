@@ -367,7 +367,16 @@ export function syncOptionsWithVariants(options = [], variants = []) {
 }
 
 export function deriveInventorySummary(variants = []) {
-  const totalAvailable = variants.reduce((sum, variant) => {
+  const normalizedVariants = variants.length
+    ? variants
+    : [
+        {
+          inventoryQty: 0,
+          isActive: true,
+        },
+      ];
+
+  const totalAvailable = normalizedVariants.reduce((sum, variant) => {
     if (variant?.isActive === false) {
       return sum;
     }
@@ -741,6 +750,7 @@ export function validateProduct(product) {
   const basePriceInput = parseNumericInput(product.basePrice);
   const compareAtPriceInput = parseNumericInput(product.compareAtPrice);
   const rawOptions = product.options || [];
+  const variants = product.variants?.length ? product.variants : [createDefaultVariant(product)];
 
   if (!title) {
     errors.title = 'Title is required.';
@@ -797,7 +807,7 @@ export function validateProduct(product) {
   const variantKeys = new Set();
   const optionNames = options.map(option => option.name);
   const variantRowErrors = {};
-  product.variants.forEach(variant => {
+  variants.forEach(variant => {
     const rowErrors = {};
     const variantPriceInput = parseNumericInput(variant.price);
     const variantCompareAtInput = parseNumericInput(variant.compareAtPrice);
@@ -853,28 +863,29 @@ export function prepareProductForSave(product) {
   const baseProduct = cloneProduct(product);
   const options = sanitizeOptions(baseProduct.options);
   const mediaState = ensureMediaState(baseProduct.images, baseProduct.featuredImageId);
-  const variants =
-    baseProduct.variants?.length
-      ? baseProduct.variants.map(variant => ({
-          ...variant,
-          id: variant.id || createId('variant'),
-          title: trimString(variant.title) || buildVariantTitle(variant.optionValues, options.map(option => option.name)),
-          sku: trimString(variant.sku),
-          price: normalizeMoney(variant.price ?? baseProduct.basePrice),
-          compareAtPrice: normalizeMoney(variant.compareAtPrice ?? baseProduct.compareAtPrice),
-          inventoryQty: normalizeInventory(variant.inventoryQty),
-          imageId: mediaState.images.find(image => image.id === variant.imageId)?.id || mediaState.featuredImageId,
-          isDefault: !options.length,
-          isActive: variant.isActive ?? true,
-        }))
-      : generateVariantsFromOptions(
-          {
-            ...baseProduct,
-            featuredImageId: mediaState.featuredImageId,
-          },
-          options,
-          []
-        );
+  const shouldGenerateFromOptions = options.length > 0;
+  const baseVariants = shouldGenerateFromOptions
+    ? generateVariantsFromOptions(
+        {
+          ...baseProduct,
+          featuredImageId: mediaState.featuredImageId,
+        },
+        options,
+        baseProduct.variants || []
+      )
+    : (baseProduct.variants?.length ? baseProduct.variants : [createDefaultVariant(baseProduct)]);
+  const variants = baseVariants.map(variant => ({
+    ...variant,
+    id: variant.id || createId('variant'),
+    title: trimString(variant.title) || buildVariantTitle(variant.optionValues, options.map(option => option.name)),
+    sku: trimString(variant.sku),
+    price: normalizeMoney(variant.price ?? baseProduct.basePrice),
+    compareAtPrice: normalizeMoney(variant.compareAtPrice ?? baseProduct.compareAtPrice),
+    inventoryQty: normalizeInventory(variant.inventoryQty),
+    imageId: mediaState.images.find(image => image.id === variant.imageId)?.id || mediaState.featuredImageId,
+    isDefault: !options.length,
+    isActive: variant.isActive ?? true,
+  }));
   const syncedVariants =
     !options.length && variants.length
       ? variants.map((variant, index) => ({

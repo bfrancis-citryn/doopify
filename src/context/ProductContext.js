@@ -198,6 +198,8 @@ function getComparableProduct(product) {
 }
 
 function openEditorState(state, product, mode = 'existing', selectedProductId = product?.id || null) {
+  const resolvedProduct = product ? prepareProductForSave(product) : null;
+
   return {
     ...state,
     selectedProductId,
@@ -205,9 +207,9 @@ function openEditorState(state, product, mode = 'existing', selectedProductId = 
       ...state.editor,
       isOpen: true,
       mode,
-      draftProduct: product ? cloneProduct(product) : null,
-      baselineProduct: product ? cloneProduct(product) : null,
-      previewImageId: product?.featuredImageId || product?.images?.[0]?.id || null,
+      draftProduct: resolvedProduct ? cloneProduct(resolvedProduct) : null,
+      baselineProduct: resolvedProduct ? cloneProduct(resolvedProduct) : null,
+      previewImageId: resolvedProduct?.featuredImageId || resolvedProduct?.images?.[0]?.id || null,
       validationErrors: {},
       isSaving: false,
     },
@@ -528,7 +530,15 @@ export function ProductProvider({ children }) {
       return;
     }
 
-    const nextDraft = updater(cloneProduct(currentDraft));
+    const nextDraftRaw = updater(cloneProduct(currentDraft));
+    if (!nextDraftRaw) {
+      return;
+    }
+
+    const nextDraft = prepareProductForSave({
+      ...nextDraftRaw,
+      updatedAt: currentDraft.updatedAt,
+    });
     const nextPreviewImageId =
       nextDraft.images.find(image => image.id === state.editor.previewImageId)?.id ||
       nextDraft.featuredImageId ||
@@ -608,7 +618,11 @@ export function ProductProvider({ children }) {
   };
 
   const requestSelectProduct = async productId => {
-    if (productId === state.selectedProductId && state.editor.mode === 'existing') {
+    if (
+      productId === state.selectedProductId &&
+      state.editor.mode === 'existing' &&
+      state.editor.draftProduct?.id === productId
+    ) {
       if (!state.editor.isOpen) {
         openExistingProduct(productId);
       }
@@ -1001,14 +1015,14 @@ export function ProductProvider({ children }) {
       return;
     }
 
+    if (!draftProduct.options.length) {
+      pushToast('Add an option group like Size or Color to create more variants.', 'info');
+      return;
+    }
+
     const missingCombos = getMissingVariantCombos(draftProduct.options, draftProduct.variants);
     if (!missingCombos.length) {
-      pushToast(
-        draftProduct.options.length
-          ? 'All current option combinations already exist. Add a new option value to create another variant.'
-          : 'Add an option group like Size or Color to create more variants.',
-        'info'
-      );
+      pushToast('All current option combinations already exist. Add a new option value to create another variant.', 'info');
       return;
     }
 
@@ -1040,14 +1054,16 @@ export function ProductProvider({ children }) {
   const updateVariantField = (variantId, field, value) => {
     updateDraftProduct(draftProduct => ({
       ...draftProduct,
-      variants: draftProduct.variants.map(variant =>
-        variant.id === variantId
-          ? {
-              ...variant,
-              [field]: field === 'inventoryQty' ? Math.max(0, Number.parseInt(value, 10) || 0) : value,
-            }
-          : variant
-      ),
+      variants: draftProduct.variants.map(variant => {
+        if (variant.id !== variantId) {
+          return variant;
+        }
+
+        return {
+          ...variant,
+          [field]: field === 'inventoryQty' ? value : value,
+        };
+      }),
     }));
   };
 

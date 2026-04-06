@@ -77,14 +77,6 @@ export default function ProductsWorkspace() {
               </div>
 
               <div className={styles.consoleActions}>
-                <button className={styles.actionBtn} onClick={() => actions.showToast('Import is queued for a future release.', 'info')} type="button">
-                  <span className="material-symbols-outlined text-base">file_upload</span>
-                  Import
-                </button>
-                <button className={styles.actionBtn} onClick={() => actions.showToast('Export is coming soon.', 'info')} type="button">
-                  <span className="material-symbols-outlined text-base">file_download</span>
-                  Export
-                </button>
                 <button className={styles.primaryActionBtn} onClick={() => actions.requestCreateProduct()} type="button">
                   <span className="material-symbols-outlined text-base">add</span>
                   New Product
