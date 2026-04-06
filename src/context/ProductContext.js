@@ -587,10 +587,15 @@ export function ProductProvider({ children }) {
       return false;
     }
 
-    if (!draftValidation.isValid) {
+    const preparedProduct = prepareProductForSave(state.editor.draftProduct);
+    const preparedValidation = validateProduct(preparedProduct);
+    const skuValidationErrors = collectSkuValidationErrors(preparedProduct, state.products);
+    const mergedPreparedErrors = mergeValidationErrors(preparedValidation.errors, skuValidationErrors);
+
+    if (Object.keys(mergedPreparedErrors).length) {
       dispatch({
         type: 'SET_VALIDATION_ERRORS',
-        errors: draftValidation.errors,
+        errors: mergedPreparedErrors,
       });
 
       if (!silent) {
@@ -599,7 +604,19 @@ export function ProductProvider({ children }) {
       return false;
     }
 
-    const preparedProduct = prepareProductForSave(state.editor.draftProduct);
+    if (!draftValidation.isValid && !silent) {
+      dispatch({
+        type: 'SET_VALIDATION_ERRORS',
+        errors: draftValidation.errors,
+      });
+    }
+
+    if (!draftValidation.isValid && silent && Object.keys(draftValidation.errors).length && !Object.keys(mergedPreparedErrors).length) {
+      dispatch({
+        type: 'SET_VALIDATION_ERRORS',
+        errors: {},
+      });
+    }
 
     dispatch({
       type: 'SET_SAVING',
@@ -634,7 +651,7 @@ export function ProductProvider({ children }) {
       return;
     }
 
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && state.editor.isOpen) {
       if (state.editor.autosaveEnabled) {
         const didSave = await saveDraft({ silent: true });
         if (!didSave) {
@@ -656,7 +673,7 @@ export function ProductProvider({ children }) {
   };
 
   const requestCreateProduct = async () => {
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && state.editor.isOpen) {
       if (state.editor.autosaveEnabled) {
         const didSave = await saveDraft({ silent: true });
         if (!didSave) {
@@ -677,7 +694,7 @@ export function ProductProvider({ children }) {
   };
 
   const requestCloseEditor = async () => {
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && state.editor.isOpen) {
       if (state.editor.autosaveEnabled) {
         const didSave = await saveDraft({ silent: true, keepEditorOpen: false, keepSelection: true });
         if (!didSave) {
