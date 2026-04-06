@@ -532,19 +532,15 @@ export function ProductProvider({ children }) {
       return;
     }
 
-    const nextDraftRaw = updater(cloneProduct(currentDraft));
-    if (!nextDraftRaw) {
+    const nextDraft = updater(cloneProduct(currentDraft));
+    if (!nextDraft) {
       return;
     }
 
-    const nextDraft = prepareProductForSave({
-      ...nextDraftRaw,
-      updatedAt: currentDraft.updatedAt,
-    });
     const nextPreviewImageId =
-      nextDraft.images.find(image => image.id === state.editor.previewImageId)?.id ||
+      nextDraft.images?.find(image => image.id === state.editor.previewImageId)?.id ||
       nextDraft.featuredImageId ||
-      nextDraft.images[0]?.id ||
+      nextDraft.images?.[0]?.id ||
       null;
 
     setDraftState(nextDraft, nextPreviewImageId);
