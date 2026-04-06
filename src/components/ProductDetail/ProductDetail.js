@@ -1,215 +1,200 @@
 "use client";
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductDetail.module.css';
 
+const RANK_BY_CATEGORY = {
+  Electronics: '#04',
+  Wearables: '#07',
+  Footwear: '#09',
+  Mobile: '#02',
+};
+
 export default function ProductDetail({ onClose, product }) {
-  const { updateProductVariants } = useProductStore();
-  const [variants, setVariants] = useState(product?.variants || []);
+  const { updateProductDetails } = useProductStore();
+  const [draft, setDraft] = useState(() => ({
+    name: product?.name || '',
+    inventory: String(product?.inventory ?? 0),
+    description: product?.description || '',
+  }));
   const [isSaved, setIsSaved] = useState(true);
 
-  const addVariant = () => {
-    const newId = variants.length > 0 ? Math.max(...variants.map(v => v.id)) + 1 : 1;
-    setVariants([...variants, { id: newId, name: `Custom Variant ${newId}`, price: "0.00", available: 0 }]);
-    setIsSaved(false);
-  };
+  const warehouseCards = product?.warehouse || [];
+  const productPrice = product?.price || '0.00';
+  const categoryRank = RANK_BY_CATEGORY[product?.category] || '#11';
 
-  const removeVariant = (idToRemove) => {
-    setVariants(variants.filter(v => v.id !== idToRemove));
-    setIsSaved(false);
-  };
+  const totalUnits = useMemo(() => {
+    const parsedValue = Number.parseInt(draft.inventory, 10);
+    return Number.isNaN(parsedValue) ? 0 : Math.max(0, parsedValue);
+  }, [draft.inventory]);
 
-  const updateVariantField = (idToUpdate, field, value) => {
-    setVariants(variants.map(v => v.id === idToUpdate ? { ...v, [field]: value } : v));
+  const draftStatus = useMemo(() => {
+    if (totalUnits === 0) {
+      return { label: 'Out', type: 'error' };
+    }
+
+    if (totalUnits < 6) {
+      return { label: 'Low', type: 'warning' };
+    }
+
+    return { label: 'Available', type: 'success' };
+  }, [totalUnits]);
+
+  if (!product) {
+    return null;
+  }
+
+  const handleFieldChange = (field, value) => {
+    setDraft(current => ({ ...current, [field]: value }));
     setIsSaved(false);
   };
 
   const handleUpdateStore = () => {
-    if (product) {
-      updateProductVariants(product.id, variants);
-      setIsSaved(true);
-    }
+    updateProductDetails(product.id, draft);
+    setIsSaved(true);
   };
-
-  if (!product) {
-    return <div className={`custom-scrollbar refraction-edge ${styles.container}`}></div>;
-  }
 
   return (
     <div className={`custom-scrollbar refraction-edge ${styles.container}`}>
       <div className={styles.innerContent}>
-        
-        {/* Header Section */}
         <div className={styles.header}>
-          <div className={styles.headerInfo}>
-            <div className={styles.imageCard}>
-              <Image 
-                src={product.image} 
-                alt={product.name} 
-                fill
-                className={styles.image} 
-              />
-            </div>
-            <div>
-              <p className="font-label text-[0.65rem] uppercase tracking-widest text-on-surface-variant font-bold mb-2">
-                Selected Product
-              </p>
-              <h3 className="font-headline text-3xl font-extrabold tracking-tighter text-on-surface mb-2">
-                {product.name}
-              </h3>
-              <div className={styles.badges}>
-                <span className={styles.categoryBadge}>Electronics</span>
-                <span className={styles.skuBadge}>SKU: LX-2024-W1</span>
-              </div>
-            </div>
+          <div className={styles.headerCopy}>
+            <p className={styles.overline}>Selected Product</p>
+            <h3 className={`font-headline ${styles.headerTitle}`}>Product Details</h3>
+            <p className={styles.headerText}>Review and update the title, current stock, and narrative without leaving the catalog.</p>
           </div>
-          
-          <div className={styles.actionBtns}>
-            <button className={styles.iconBtn} onClick={onClose} title="Close Panel">
+
+          <div className={styles.headerActions}>
+            <button className={styles.iconBtn} onClick={onClose} title="Close panel" type="button">
               <span className="material-symbols-outlined">close</span>
             </button>
-            <button className={styles.iconBtn}>
-              <span className="material-symbols-outlined">edit</span>
-            </button>
-            <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`}>
-              <span className="material-symbols-outlined">delete</span>
-            </button>
-            <button 
-              className={`${styles.primaryBtn} font-bold font-headline transition-colors ${!isSaved ? 'bg-indigo-600' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
-              onClick={handleUpdateStore}
-              disabled={isSaved}
-            >
-              Update Inventory
-            </button>
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className={styles.statsGrid}>
-          <div className="glass-card rounded-2xl p-6 border border-white/60">
-            <p className="text-[0.65rem] uppercase tracking-widest text-slate-500 font-semibold mb-2">Current Price</p>
-            <p className="text-3xl font-headline font-bold text-slate-800">$299.00</p>
-          </div>
-          <div className="glass-card rounded-2xl p-6 border border-white/60">
-            <p className="text-[0.65rem] uppercase tracking-widest text-slate-500 font-semibold mb-2">Total Units</p>
-            <p className="text-3xl font-headline font-bold text-emerald-500">{product.inventory}</p>
-          </div>
-          <div className="glass-card rounded-2xl p-6 border border-white/60">
-            <p className="text-[0.65rem] uppercase tracking-widest text-slate-500 font-semibold mb-2">Category Rank</p>
-            <p className="text-3xl font-headline font-bold text-slate-800">#04</p>
-          </div>
-        </div>
+        <section className={styles.heroCard}>
+          <div className={styles.heroTopRow}>
+            <div className={styles.heroIdentity}>
+              <div className={styles.imageCard}>
+                <Image
+                  src={product.image}
+                  alt={product.name}
+                  fill
+                  className={styles.image}
+                />
+              </div>
 
-        <div className={styles.detailsGroup}>
-          {/* Variants Management */}
-          <section className={styles.variantsSection}>
-            <div className={styles.sectionHeader}>
-              <h4 className="text-base font-bold text-slate-800">Variants</h4>
-              <button className={styles.btnOutline} onClick={addVariant}>
-                <span className="material-symbols-outlined text-base">add</span> Add variant
+              <div className={styles.identityContent}>
+                <p className={styles.overline}>Selected Product</p>
+                <input
+                  className={`font-headline ${styles.nameInput}`}
+                  type="text"
+                  value={draft.name}
+                  onChange={event => handleFieldChange('name', event.target.value)}
+                  aria-label="Product title"
+                />
+                <div className={styles.badges}>
+                  <span className={styles.categoryBadge}>{product.category}</span>
+                  <span className={styles.skuBadge}>SKU: {product.sku}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.actionBtns}>
+              <button className={styles.iconBtn} type="button" title="Edit product">
+                <span className="material-symbols-outlined">edit</span>
+              </button>
+              <button className={`${styles.iconBtn} ${styles.iconBtnDanger}`} type="button" title="Delete product">
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+              <button
+                className={styles.primaryBtn}
+                onClick={handleUpdateStore}
+                disabled={isSaved}
+                type="button"
+              >
+                Update Inventory
               </button>
             </div>
-            
-            <div className={styles.variantsCard}>
-              {/* Options Group */}
-              <div className={styles.optionsGroup}>
-                <div className={styles.optionRow}>
-                  <span className="material-symbols-outlined text-slate-300 text-lg mt-1">drag_indicator</span>
-                  <div className={styles.optionContent}>
-                    <p className="text-sm font-semibold text-slate-800 mb-2">Size</p>
-                    <div className={styles.pillsContainer}>
-                      {variants.map(variant => (
-                        <span key={variant.id} className={styles.pill}>{variant.name}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.addOptionRow}>
-                  <button className={styles.addOptionBtn}>
-                    <span className="material-symbols-outlined text-lg">add_circle</span>
-                    Add another option
-                  </button>
-                </div>
-              </div>
+          </div>
 
-              {/* Toolbar */}
-              <div className={styles.toolbar}>
-                <div className={styles.toolbarActions}>
-                  <button className={styles.iconBtnSmall}><span className="material-symbols-outlined text-base">search</span></button>
-                  <button className={styles.iconBtnSmall}><span className="material-symbols-outlined text-base">filter_list</span></button>
-                </div>
-              </div>
-
-              {/* Table Header */}
-              <div className={styles.tableHeader}>
-                <div className={styles.colCheck}><input type="checkbox" className={styles.checkbox} /></div>
-                <div className={styles.colVariant}><span className={`text-sm text-slate-600 font-semibold ${styles.textUnderline}`}>Variant</span></div>
-                <div className={styles.colPrice}><span className={`text-sm text-slate-600 font-semibold ${styles.textUnderline}`}>Price</span></div>
-                <div className={styles.colAvail}><span className={`text-sm text-slate-600 font-semibold ${styles.textUnderline}`}>Available</span></div>
-                <div className={styles.colAction}></div>
-              </div>
-
-              {/* Table List */}
-              <div className={styles.tableList}>
-                {variants.map(variant => (
-                  <div key={variant.id} className={styles.tableRow}>
-                    <div className={styles.colCheck}><input type="checkbox" className={styles.checkbox} /></div>
-                    <div className={styles.colVariant}>
-                      <div className={styles.imgPlaceholder}>
-                        <span className={`material-symbols-outlined ${styles.themeIcon} text-lg`}>add_photo_alternate</span>
-                      </div>
-                      <input 
-                        type="text" 
-                        value={variant.name}
-                        onChange={(e) => updateVariantField(variant.id, 'name', e.target.value)}
-                        className={styles.inputFieldVariantName}
-                      />
-                    </div>
-                    <div className={styles.colPrice}>
-                      <div className={styles.inputWrapper}>
-                        <span className={styles.inputPrefix}>$</span>
-                        <input 
-                          type="text" 
-                          value={variant.price || "0.00"} 
-                          onChange={(e) => updateVariantField(variant.id, 'price', e.target.value)}
-                          className={styles.inputField} 
-                        />
-                      </div>
-                    </div>
-                    <div className={styles.colAvail}>
-                      <input 
-                        type="number" 
-                        value={variant.available} 
-                        onChange={(e) => updateVariantField(variant.id, 'available', parseInt(e.target.value) || 0)}
-                        className={styles.inputFieldAvail} 
-                      />
-                    </div>
-                    <div className={styles.colAction}>
-                      <button onClick={() => removeVariant(variant.id)} className={styles.removeBtn} title="Remove variant">
-                        <span className="material-symbols-outlined text-lg">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Footer */}
-              <div className={styles.variantsFooter}>
-                <p className="text-sm text-slate-700 font-body">Total inventory at Strands Co: {product.inventory} available</p>
+          <div className={styles.statsGrid}>
+            <div className={styles.statCard}>
+              <p className={styles.statLabel}>Current Price</p>
+              <p className={`font-headline ${styles.statValue}`}>${productPrice}</p>
+            </div>
+            <div className={styles.statCard}>
+              <p className={styles.statLabel}>Total Units</p>
+              <div className={styles.inventoryEditor}>
+                <input
+                  className={`font-headline ${styles.inventoryInput}`}
+                  type="number"
+                  min="0"
+                  value={draft.inventory}
+                  onChange={event => handleFieldChange('inventory', event.target.value)}
+                  aria-label="Inventory count"
+                />
+                <span className={`${styles.statusPill} ${styles[`status_${draftStatus.type}`]}`}>{draftStatus.label}</span>
               </div>
             </div>
-          </section>
+            <div className={styles.statCard}>
+              <p className={styles.statLabel}>Category Rank</p>
+              <p className={`font-headline ${styles.statValue}`}>{categoryRank}</p>
+            </div>
+          </div>
+        </section>
 
-          {/* Narrative */}
-          <section className="glass-card rounded-2xl p-8 border border-white/60">
-            <h4 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant mb-4">Product Narrative</h4>
-            <p className="text-base text-on-surface-variant leading-relaxed font-body">
-              The Lumix Pro Wireless headphones define the next generation of acoustic engineering. Featuring active noise cancellation and a refined silver-matte finish, these units are currently our best-sellers in the audio hardware category. Performance and aesthetic excellence combined.
-            </p>
-          </section>
-        </div>
+        <section className={styles.warehouseBreakdown}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>Warehouse Breakdown</p>
+              <h4 className={`font-headline ${styles.sectionTitle}`}>Live stock distribution</h4>
+            </div>
+            <button className={styles.manageLink} type="button">Manage Locations</button>
+          </div>
+
+          <div className={styles.breakdownCards}>
+            {warehouseCards.map((card, index) => (
+              <div key={card.title} className={styles.warehouseCard}>
+                <div className={styles.warehouseIcon}>
+                  <span className="material-symbols-outlined">
+                    {index === 2 ? 'local_shipping' : 'inventory_2'}
+                  </span>
+                </div>
+                <div className={styles.warehouseContent}>
+                  <div>
+                    <div className={styles.warehouseTitle}>{card.title}</div>
+                    <div className={styles.warehouseSubtitle}>{card.subtitle}</div>
+                  </div>
+                  <div className={styles.warehouseValue}>{card.value}</div>
+                </div>
+              </div>
+            ))}
+            <button className={styles.warehouseCardEmpty} type="button">
+              <span className="material-symbols-outlined">add_location_alt</span>
+              <span>Add Location</span>
+            </button>
+          </div>
+        </section>
+
+        <section className={styles.narrativeCard}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.sectionLabel}>Product Narrative</p>
+              <h4 className={`font-headline ${styles.sectionTitle}`}>Customer-facing description</h4>
+            </div>
+            <p className={styles.narrativeMeta}>{totalUnits} units currently available</p>
+          </div>
+
+          <textarea
+            className={styles.descriptionInput}
+            value={draft.description}
+            onChange={event => handleFieldChange('description', event.target.value)}
+            rows={6}
+            aria-label="Product description"
+          />
+        </section>
       </div>
     </div>
   );

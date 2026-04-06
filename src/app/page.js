@@ -17,8 +17,8 @@ export default function ProductsPage() {
 }
 
 function ProductsApp() {
-  const [selectedProductId, setSelectedProductId] = useState(null);
   const { products } = useProductStore();
+  const [selectedProductId, setSelectedProductId] = useState(() => products[0]?.id ?? null);
   const selectedProduct = products.find(p => p.id === selectedProductId) || null;
 
   return (
@@ -52,8 +52,10 @@ function ProductsApp() {
               selectedProductId={selectedProductId} 
             />
             
-            <div className={`${styles.detailPanel} ${selectedProduct ? styles.detailPanelOpen : ''}`}>
-              <ProductDetail key={selectedProduct?.id || 'empty'} onClose={() => setSelectedProductId(null)} product={selectedProduct} />
+            <div className={`${styles.detailDock} ${selectedProduct ? styles.detailDockOpen : ''}`}>
+              <div className={`${styles.detailPanel} ${selectedProduct ? styles.detailPanelOpen : ''}`}>
+                <ProductDetail key={selectedProduct?.id || 'empty'} onClose={() => setSelectedProductId(null)} product={selectedProduct} />
+              </div>
             </div>
           </div>
         </div>
