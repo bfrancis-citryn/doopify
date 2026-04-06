@@ -36,7 +36,6 @@ export default function ProductEditorDrawer() {
 
   const isSaveDisabled =
     editor.isSaving ||
-    !editor.isDraftValid ||
     (editor.mode === 'existing' && !editor.hasUnsavedChanges);
   const inventoryHealth = getProductStockLabel({
     variants: draftProduct.variants,
@@ -164,6 +163,8 @@ export default function ProductEditorDrawer() {
         </SectionCard>
 
         <SectionCard eyebrow="Variants" title="Options and combinations">
+          {editor.validationErrors.variants ? <p className={styles.fieldError}>{editor.validationErrors.variants}</p> : null}
+          {editor.validationErrors.options ? <p className={styles.fieldError}>{editor.validationErrors.options}</p> : null}
           <ProductVariantEditor />
         </SectionCard>
 

@@ -651,22 +651,12 @@ export function ProductProvider({ children }) {
       return;
     }
 
-    if (hasUnsavedChanges && state.editor.isOpen) {
-      if (state.editor.autosaveEnabled) {
-        const didSave = await saveDraft({ silent: true });
-        if (!didSave) {
-          pushToast('Resolve validation issues before switching products.', 'error');
-          return;
-        }
-        openExistingProduct(productId);
+    if (hasUnsavedChanges && state.editor.isOpen && state.editor.autosaveEnabled) {
+      const didSave = await saveDraft({ silent: true });
+      if (!didSave) {
+        pushToast('Resolve validation issues before switching products.', 'error');
         return;
       }
-
-      requestUnsavedResolution({
-        kind: 'switch-product',
-        productId,
-      });
-      return;
     }
 
     openExistingProduct(productId);

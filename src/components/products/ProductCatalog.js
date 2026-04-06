@@ -108,7 +108,11 @@ export default function ProductCatalog() {
             <button
               key={product.id}
               className={isSelected ? styles.productRowActive : styles.productRow}
-              onClick={() => actions.requestSelectProduct(product.id)}
+              onClick={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                actions.requestSelectProduct(product.id);
+              }}
               type="button"
             >
               <div className={styles.rowMedia}>
