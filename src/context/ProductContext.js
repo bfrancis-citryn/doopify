@@ -39,7 +39,7 @@ const initialState = {
     mode: initialProduct ? 'existing' : 'new',
     draftProduct: initialProduct ? cloneProduct(initialProduct) : null,
     baselineProduct: initialProduct ? cloneProduct(initialProduct) : null,
-    previewImageId: initialProduct?.featuredImageId || null,
+    previewImageId: initialProduct?.featuredImageId || initialProduct?.images?.[0]?.id || null,
     autosaveEnabled: false,
     isSaving: false,
     validationErrors: {},
@@ -171,18 +171,18 @@ function getComparableProduct(product) {
     basePrice: product.basePrice,
     compareAtPrice: product.compareAtPrice,
     featuredImageId: product.featuredImageId,
-    images: product.images.map(image => ({
+    images: (product.images || []).map(image => ({
       id: image.id,
       src: image.src,
       alt: image.alt,
       sortOrder: image.sortOrder,
     })),
-    options: product.options.map(option => ({
+    options: (product.options || []).map(option => ({
       id: option.id,
       name: option.name,
       values: option.values,
     })),
-    variants: product.variants.map(variant => ({
+    variants: (product.variants || []).map(variant => ({
       id: variant.id,
       title: variant.title,
       optionValues: variant.optionValues,
@@ -197,22 +197,18 @@ function getComparableProduct(product) {
   };
 }
 
-function openEditorState(state, product, mode = 'existing', selectedProductId = product?.id || null) {
+function makeEditorState(product, mode = 'existing') {
   const resolvedProduct = product ? prepareProductForSave(product) : null;
 
   return {
-    ...state,
-    selectedProductId,
-    editor: {
-      ...state.editor,
-      isOpen: true,
-      mode,
-      draftProduct: resolvedProduct ? cloneProduct(resolvedProduct) : null,
-      baselineProduct: resolvedProduct ? cloneProduct(resolvedProduct) : null,
-      previewImageId: resolvedProduct?.featuredImageId || resolvedProduct?.images?.[0]?.id || null,
-      validationErrors: {},
-      isSaving: false,
-    },
+    isOpen: Boolean(resolvedProduct),
+    mode,
+    draftProduct: resolvedProduct ? cloneProduct(resolvedProduct) : null,
+    baselineProduct: resolvedProduct ? cloneProduct(resolvedProduct) : null,
+    previewImageId: resolvedProduct?.featuredImageId || resolvedProduct?.images?.[0]?.id || null,
+    autosaveEnabled: false,
+    isSaving: false,
+    validationErrors: {},
   };
 }
 
@@ -235,7 +231,14 @@ function productReducer(state, action) {
         },
       };
     case 'OPEN_EDITOR':
-      return openEditorState(state, action.product, action.mode, action.selectedProductId);
+      return {
+        ...state,
+        selectedProductId: action.selectedProductId,
+        editor: {
+          ...makeEditorState(action.product, action.mode),
+          autosaveEnabled: state.editor.autosaveEnabled,
+        },
+      };
     case 'SET_DRAFT_STATE':
       return {
         ...state,
@@ -288,22 +291,14 @@ function productReducer(state, action) {
       const nextProducts = isExisting
         ? state.products.map(product => (product.id === action.product.id ? action.product : product))
         : [action.product, ...state.products];
-      const nextSelectedProductId = action.keepSelection === false ? state.selectedProductId : action.product.id;
-      const shouldKeepEditorOpen = action.keepEditorOpen !== false;
 
       return {
         ...state,
         products: nextProducts,
-        selectedProductId: nextSelectedProductId,
+        selectedProductId: action.product.id,
         editor: {
-          ...state.editor,
-          isOpen: shouldKeepEditorOpen,
-          mode: 'existing',
-          draftProduct: shouldKeepEditorOpen ? cloneProduct(action.product) : null,
-          baselineProduct: shouldKeepEditorOpen ? cloneProduct(action.product) : null,
-          previewImageId: shouldKeepEditorOpen ? action.product.featuredImageId || action.product.images?.[0]?.id || null : null,
-          validationErrors: {},
-          isSaving: false,
+          ...makeEditorState(action.product, 'existing'),
+          autosaveEnabled: state.editor.autosaveEnabled,
         },
       };
     }
@@ -311,49 +306,33 @@ function productReducer(state, action) {
       const nextProducts = state.products.filter(product => product.id !== action.productId);
       const fallbackProduct = nextProducts[0] || null;
 
-      if (state.selectedProductId !== action.productId && state.editor.draftProduct?.id !== action.productId) {
-        return {
-          ...state,
-          products: nextProducts,
-        };
-      }
-
-      if (!fallbackProduct) {
-        return {
-          ...state,
-          products: [],
-          selectedProductId: null,
-          editor: {
-            ...state.editor,
-            isOpen: false,
-            mode: 'new',
-            draftProduct: null,
-            baselineProduct: null,
-            previewImageId: null,
-            validationErrors: {},
-            isSaving: false,
-          },
-        };
-      }
-
-      return openEditorState(
-        {
-          ...state,
-          products: nextProducts,
-        },
-        fallbackProduct,
-        'existing',
-        fallbackProduct.id
-      );
+      return {
+        ...state,
+        products: nextProducts,
+        selectedProductId: fallbackProduct?.id || null,
+        editor: fallbackProduct
+          ? {
+              ...makeEditorState(fallbackProduct, 'existing'),
+              autosaveEnabled: state.editor.autosaveEnabled,
+            }
+          : {
+              ...state.editor,
+              isOpen: false,
+              mode: 'new',
+              draftProduct: null,
+              baselineProduct: null,
+              previewImageId: null,
+              validationErrors: {},
+              isSaving: false,
+            },
+      };
     }
     case 'CLOSE_EDITOR':
       return {
         ...state,
-        selectedProductId: action.keepSelection ? state.selectedProductId : null,
         editor: {
           ...state.editor,
           isOpen: false,
-          mode: 'existing',
           draftProduct: null,
           baselineProduct: null,
           previewImageId: null,
@@ -435,7 +414,6 @@ export function ProductProvider({ children }) {
     };
   }, [state.editor.draftProduct, state.products]);
 
-
   const pushToast = (message, tone = 'success') => {
     const toastId = createEntityId('toast');
 
@@ -477,7 +455,7 @@ export function ProductProvider({ children }) {
       type: 'OPEN_EDITOR',
       product: draftProduct,
       mode: 'new',
-      selectedProductId: null,
+      selectedProductId: draftProduct.id,
     });
   };
 
@@ -510,43 +488,7 @@ export function ProductProvider({ children }) {
     setDraftState(nextDraft, nextPreviewImageId);
   };
 
-  const executePendingAction = pendingAction => {
-    if (!pendingAction) {
-      return;
-    }
-
-    if (pendingAction.kind === 'switch-product') {
-      openExistingProduct(pendingAction.productId);
-      return;
-    }
-
-    if (pendingAction.kind === 'close-editor') {
-      dispatch({
-        type: 'CLOSE_EDITOR',
-        keepSelection: true,
-      });
-      return;
-    }
-
-    if (pendingAction.kind === 'create-product') {
-      openNewProduct();
-    }
-  };
-
-  const requestUnsavedResolution = pendingAction => {
-    dispatch({
-      type: 'SET_CONFIRM_DIALOG',
-      dialog: {
-        kind: 'unsaved-changes',
-        pendingAction,
-        title: 'You have unsaved changes',
-        description:
-          'Save your edits before leaving this product, or discard them and continue.',
-      },
-    });
-  };
-
-  const saveDraft = async ({ silent = false, keepEditorOpen = true, keepSelection = true } = {}) => {
+  const saveDraft = async ({ silent = false } = {}) => {
     if (!state.editor.draftProduct || state.editor.isSaving) {
       return false;
     }
@@ -568,33 +510,9 @@ export function ProductProvider({ children }) {
       return false;
     }
 
-    if (!draftValidation.isValid && !silent) {
-      dispatch({
-        type: 'SET_VALIDATION_ERRORS',
-        errors: draftValidation.errors,
-      });
-    }
-
-    if (!draftValidation.isValid && silent && Object.keys(draftValidation.errors).length && !Object.keys(mergedPreparedErrors).length) {
-      dispatch({
-        type: 'SET_VALIDATION_ERRORS',
-        errors: {},
-      });
-    }
-
-    dispatch({
-      type: 'SET_SAVING',
-      value: true,
-    });
-
-    await new Promise(resolve => setTimeout(resolve, 220));
-
-    dispatch({
-      type: 'COMMIT_PRODUCT',
-      product: preparedProduct,
-      keepEditorOpen,
-      keepSelection,
-    });
+    dispatch({ type: 'SET_SAVING', value: true });
+    await new Promise(resolve => setTimeout(resolve, 120));
+    dispatch({ type: 'COMMIT_PRODUCT', product: preparedProduct });
 
     if (!silent) {
       pushToast(`${preparedProduct.title} saved`, 'success');
@@ -603,117 +521,39 @@ export function ProductProvider({ children }) {
     return true;
   };
 
-  const requestSelectProduct = async productId => {
-    if (
-      productId === state.selectedProductId &&
-      state.editor.mode === 'existing' &&
-      state.editor.draftProduct?.id === productId
-    ) {
-      if (!state.editor.isOpen) {
-        openExistingProduct(productId);
-      }
-      return;
-    }
-
-    if (hasUnsavedChanges && state.editor.isOpen && state.editor.autosaveEnabled) {
-      const didSave = await saveDraft({ silent: true });
-      if (!didSave) {
-        pushToast('Resolve validation issues before switching products.', 'error');
-        return;
-      }
-    }
-
+  const requestSelectProduct = productId => {
     openExistingProduct(productId);
   };
 
-  const requestCreateProduct = async () => {
-    if (hasUnsavedChanges && state.editor.isOpen) {
-      if (state.editor.autosaveEnabled) {
-        const didSave = await saveDraft({ silent: true });
-        if (!didSave) {
-          pushToast('Resolve validation issues before creating another product.', 'error');
-          return;
-        }
-        openNewProduct();
-        return;
-      }
-
-      requestUnsavedResolution({
-        kind: 'create-product',
-      });
-      return;
-    }
-
+  const requestCreateProduct = () => {
     openNewProduct();
   };
 
-  const requestCloseEditor = async () => {
-    if (hasUnsavedChanges && state.editor.isOpen) {
-      if (state.editor.autosaveEnabled) {
-        const didSave = await saveDraft({ silent: true, keepEditorOpen: false, keepSelection: true });
-        if (!didSave) {
-          pushToast('Resolve validation issues before closing the editor.', 'error');
-          return;
-        }
-        return;
-      }
-
-      requestUnsavedResolution({
-        kind: 'close-editor',
-      });
-      return;
-    }
-
-    dispatch({
-      type: 'CLOSE_EDITOR',
-      keepSelection: true,
-    });
+  const requestCloseEditor = () => {
+    dispatch({ type: 'CLOSE_EDITOR' });
   };
 
   const cancelDraftChanges = () => {
-    if (!state.editor.baselineProduct) {
-      dispatch({
-        type: 'CLOSE_EDITOR',
-        keepSelection: false,
-      });
-      return;
-    }
-
     if (state.editor.mode === 'new') {
-      dispatch({
-        type: 'CLOSE_EDITOR',
-        keepSelection: false,
-      });
+      dispatch({ type: 'CLOSE_EDITOR' });
       pushToast('New product draft discarded', 'info');
       return;
     }
 
-    dispatch({
-      type: 'RESET_DRAFT',
-    });
+    dispatch({ type: 'RESET_DRAFT' });
     pushToast('Changes reverted', 'info');
   };
 
   const setSearchQuery = value => {
-    dispatch({
-      type: 'SET_SEARCH_QUERY',
-      value,
-    });
+    dispatch({ type: 'SET_SEARCH_QUERY', value });
   };
 
   const setActiveFilter = value => {
-    dispatch({
-      type: 'SET_ACTIVE_FILTER',
-      value,
-    });
+    dispatch({ type: 'SET_ACTIVE_FILTER', value });
   };
 
   const setAutosaveEnabled = value => {
-    dispatch({
-      type: 'SET_AUTOSAVE',
-      value,
-    });
-
+    dispatch({ type: 'SET_AUTOSAVE', value });
     pushToast(value ? 'Autosave enabled' : 'Autosave disabled', 'info');
   };
 
@@ -723,6 +563,7 @@ export function ProductProvider({ children }) {
         ...draftProduct,
         [field]: value,
       };
+
       const hasOnlyDefaultVariant =
         !draftProduct.options.length &&
         draftProduct.variants.length === 1 &&
@@ -734,13 +575,6 @@ export function ProductProvider({ children }) {
           sku: field === 'sku' ? value : variant.sku,
           price: field === 'basePrice' ? value : variant.price,
           compareAtPrice: field === 'compareAtPrice' ? value : variant.compareAtPrice,
-        }));
-      }
-
-      if (field === 'title' && !draftProduct.images.length) {
-        nextDraft.variants = (nextDraft.variants || []).map(variant => ({
-          ...variant,
-          title: variant.isDefault ? 'Default' : variant.title,
         }));
       }
 
@@ -819,23 +653,17 @@ export function ProductProvider({ children }) {
   };
 
   const replaceImageWithSample = imageId => {
-    updateDraftProduct(draftProduct => {
-      const nextImages = draftProduct.images.map(image =>
+    updateDraftProduct(draftProduct => ({
+      ...draftProduct,
+      images: draftProduct.images.map(image =>
         image.id === imageId
           ? {
               ...image,
               src: getNextSampleImage(image.src),
             }
           : image
-      );
-
-      pushToast('Image updated', 'success');
-
-      return {
-        ...draftProduct,
-        images: nextImages,
-      };
-    });
+      ),
+    }));
   };
 
   const replaceImageWithFile = (imageId, file) => {
@@ -843,8 +671,9 @@ export function ProductProvider({ children }) {
       return;
     }
 
-    updateDraftProduct(draftProduct => {
-      const nextImages = draftProduct.images.map(image =>
+    updateDraftProduct(draftProduct => ({
+      ...draftProduct,
+      images: draftProduct.images.map(image =>
         image.id === imageId
           ? {
               ...image,
@@ -852,23 +681,13 @@ export function ProductProvider({ children }) {
               alt: file.name || image.alt,
             }
           : image
-      );
-
-      pushToast('Image replaced', 'success');
-
-      return {
-        ...draftProduct,
-        images: nextImages,
-      };
-    });
+      ),
+    }));
   };
 
   const setFeaturedImage = imageId => {
     updateDraftProduct(draftProduct => {
       const mediaState = ensureMediaState(draftProduct.images, imageId);
-
-      pushToast('Featured image updated', 'success');
-
       return {
         ...draftProduct,
         images: mediaState.images,
@@ -881,7 +700,6 @@ export function ProductProvider({ children }) {
     updateDraftProduct(draftProduct => {
       const nextImages = reorderImage(draftProduct.images, imageId, direction);
       const mediaState = ensureMediaState(nextImages, draftProduct.featuredImageId);
-
       return {
         ...draftProduct,
         images: mediaState.images,
@@ -901,8 +719,6 @@ export function ProductProvider({ children }) {
         ...variant,
         imageId: variant.imageId === imageId ? mediaState.featuredImageId : variant.imageId,
       }));
-
-      pushToast(nextImages.length ? 'Image removed' : 'All product images removed', 'info');
 
       return {
         ...draftProduct,
@@ -1021,8 +837,6 @@ export function ProductProvider({ children }) {
         isActive: true,
       };
 
-      pushToast('Variant added', 'success');
-
       return {
         ...nextDraft,
         variants: [...nextDraft.variants, nextVariant],
@@ -1033,16 +847,14 @@ export function ProductProvider({ children }) {
   const updateVariantField = (variantId, field, value) => {
     updateDraftProduct(draftProduct => ({
       ...draftProduct,
-      variants: draftProduct.variants.map(variant => {
-        if (variant.id !== variantId) {
-          return variant;
-        }
-
-        return {
-          ...variant,
-          [field]: field === 'inventoryQty' ? value : value,
-        };
-      }),
+      variants: draftProduct.variants.map(variant =>
+        variant.id === variantId
+          ? {
+              ...variant,
+              [field]: value,
+            }
+          : variant
+      ),
     }));
   };
 
@@ -1065,8 +877,6 @@ export function ProductProvider({ children }) {
       }
 
       const nextOptions = syncOptionsWithVariants(draftProduct.options, nextVariants);
-
-      pushToast('Variant removed', 'info');
 
       return {
         ...draftProduct,
@@ -1113,76 +923,41 @@ export function ProductProvider({ children }) {
     });
   };
 
-  const confirmDialogAction = async resolution => {
+  const confirmDialogAction = resolution => {
     const dialog = state.confirmDialog;
     if (!dialog) {
       return;
     }
 
-    if (dialog.kind === 'unsaved-changes') {
-      if (resolution === 'keep-editing') {
-        dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
-        return;
-      }
-
-      if (resolution === 'discard') {
-        dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
-        executePendingAction(dialog.pendingAction);
-        return;
-      }
-
-      if (resolution === 'save') {
-        if (dialog.pendingAction?.kind === 'close-editor') {
-          const didSave = await saveDraft({ silent: true, keepEditorOpen: false, keepSelection: true });
-          if (didSave) {
-            dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
-          }
-          return;
-        }
-
-        const didSave = await saveDraft({ silent: true });
-        if (didSave) {
-          dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
-          executePendingAction(dialog.pendingAction);
-        }
-        return;
-      }
-    }
-
-    if (dialog.kind === 'delete-product') {
+    if (dialog.kind === 'delete-product' && resolution === 'confirm') {
       dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
 
       if (state.editor.mode === 'new') {
-        dispatch({ type: 'CLOSE_EDITOR', keepSelection: false });
+        dispatch({ type: 'CLOSE_EDITOR' });
         pushToast('New product draft discarded', 'info');
         return;
       }
 
-      dispatch({
-        type: 'DELETE_PRODUCT',
-        productId: dialog.productId,
-      });
+      dispatch({ type: 'DELETE_PRODUCT', productId: dialog.productId });
       pushToast('Product deleted', 'success');
       return;
     }
 
-    if (dialog.kind === 'delete-variant') {
+    if (dialog.kind === 'delete-variant' && resolution === 'confirm') {
       dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
       deleteVariant(dialog.variantId);
+      return;
     }
+
+    dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
   };
 
   const dismissConfirmDialog = () => {
-    dispatch({
-      type: 'CLEAR_CONFIRM_DIALOG',
-    });
+    dispatch({ type: 'CLEAR_CONFIRM_DIALOG' });
   };
 
   const dismissToast = toastId => {
-    dispatch({
-      type: 'REMOVE_TOAST',
-      toastId,
-    });
+    dispatch({ type: 'REMOVE_TOAST', toastId });
   };
 
   const value = {
