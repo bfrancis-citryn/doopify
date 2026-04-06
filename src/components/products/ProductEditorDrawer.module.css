@@ -1,0 +1,257 @@
+.drawerShell {
+  height: 100%;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 249, 251, 0.94));
+}
+
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 1.35rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+}
+
+.headerIdentity {
+  min-width: 0;
+}
+
+.overline,
+.sectionEyebrow,
+.metricLabel {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.headerTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: var(--slate-900);
+}
+
+.dirtyBadge,
+.cleanBadge {
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.dirtyBadge {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--amber-600);
+}
+
+.cleanBadge {
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--emerald-600);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.autosaveToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--slate-700);
+}
+
+.ghostButton,
+.primaryButton,
+.deleteButton,
+.statusButton,
+.statusButtonActive {
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.ghostButton {
+  background: rgba(226, 232, 240, 0.72);
+  color: var(--slate-700);
+}
+
+.primaryButton {
+  background: var(--primary);
+  color: white;
+}
+
+.primaryButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.deleteButton {
+  width: 2.7rem;
+  height: 2.7rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.drawerBody {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.sectionCard {
+  padding: 1.3rem;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+}
+
+.sectionHeader {
+  margin-bottom: 1rem;
+}
+
+.sectionTitle {
+  margin-top: 0.35rem;
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--slate-900);
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--slate-700);
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: white;
+  color: var(--slate-900);
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.fieldError {
+  color: var(--error);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.pricePreview,
+.inventoryGrid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.inventoryGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metricCard {
+  padding: 1rem;
+  border-radius: 1.15rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+}
+
+.metricValue,
+.metricSecondary {
+  margin-top: 0.55rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.metricValue {
+  color: var(--slate-900);
+}
+
+.metricSecondary {
+  color: var(--primary);
+}
+
+.statusRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.statusButton {
+  background: rgba(226, 232, 240, 0.62);
+  color: var(--slate-600);
+}
+
+.statusButtonActive {
+  background: var(--primary);
+  color: white;
+}
+
+@media (max-width: 900px) {
+  .stickyHeader,
+  .headerActions,
+  .gridTwo,
+  .pricePreview,
+  .inventoryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stickyHeader {
+    flex-direction: column;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

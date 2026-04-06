@@ -1,0 +1,112 @@
+"use client";
+
+import { useEffect, useEffectEvent } from 'react';
+import Header from '../Header/Header';
+import Sidebar from '../Sidebar/Sidebar';
+import { useProductStore } from '../../context/ProductContext';
+import ProductCatalog from './ProductCatalog';
+import ProductEditorDrawer from './ProductEditorDrawer';
+import ConfirmDialog from './ConfirmDialog';
+import ToastViewport from './ToastViewport';
+import styles from '../../app/page.module.css';
+
+export default function ProductsWorkspace() {
+  const { editor, confirmDialog, searchQuery, actions } = useProductStore();
+
+  const handleKeyDown = useEffectEvent(async event => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's' && editor.isOpen) {
+      event.preventDefault();
+      await actions.saveDraft();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+
+      if (confirmDialog) {
+        actions.dismissConfirmDialog();
+        return;
+      }
+
+      if (editor.isOpen) {
+        await actions.requestCloseEditor();
+      }
+    }
+  });
+
+  const handleAutosave = useEffectEvent(async () => {
+    await actions.saveDraft({ silent: true });
+  });
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!editor.isOpen || !editor.autosaveEnabled || !editor.hasUnsavedChanges || !editor.isDraftValid || editor.isSaving) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      handleAutosave();
+    }, 850);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [editor.autosaveEnabled, editor.hasUnsavedChanges, editor.isDraftValid, editor.isOpen, editor.isSaving]);
+
+  return (
+    <>
+      <div className={styles.appContainer}>
+        <Sidebar />
+        <div className={styles.mainCanvas}>
+          <Header
+            onCreateOrder={() => actions.showToast('Order creation is outside the catalog scope for now.', 'info')}
+            onNotificationsClick={() => actions.showToast('No new catalog alerts right now.', 'info')}
+            onQuickActionClick={() => actions.showToast('Quick actions are coming soon.', 'info')}
+            onSearchChange={event => actions.setSearchQuery(event.target.value)}
+            searchValue={searchQuery}
+          />
+
+          <div className={styles.viewContainer}>
+            <div className={styles.consoleHeader}>
+              <div>
+                <p className={styles.consoleOverline}>Inventory Console</p>
+                <h1 className={`font-headline ${styles.consoleTitle}`}>Products Catalog</h1>
+                <p className={styles.consoleCopy}>Manage the catalog, edit variants, and keep inventory in sync without leaving the page.</p>
+              </div>
+
+              <div className={styles.consoleActions}>
+                <button className={styles.actionBtn} onClick={() => actions.showToast('Import is queued for a future release.', 'info')} type="button">
+                  <span className="material-symbols-outlined text-base">file_upload</span>
+                  Import
+                </button>
+                <button className={styles.actionBtn} onClick={() => actions.showToast('Export is coming soon.', 'info')} type="button">
+                  <span className="material-symbols-outlined text-base">file_download</span>
+                  Export
+                </button>
+                <button className={styles.primaryActionBtn} onClick={() => actions.requestCreateProduct()} type="button">
+                  <span className="material-symbols-outlined text-base">add</span>
+                  New Product
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.splitView}>
+              <ProductCatalog />
+
+              <div className={editor.isOpen ? `${styles.detailDock} ${styles.detailDockOpen}` : styles.detailDock}>
+                <div className={editor.isOpen ? `${styles.detailPanel} ${styles.detailPanelOpen}` : styles.detailPanel}>
+                  <ProductEditorDrawer key={editor.draftProduct?.id || editor.mode} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ConfirmDialog />
+      <ToastViewport />
+    </>
+  );
+}

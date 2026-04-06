@@ -1,0 +1,28 @@
+"use client";
+
+import { useProductStore } from '../../context/ProductContext';
+import styles from './ToastViewport.module.css';
+
+export default function ToastViewport() {
+  const { toasts, actions } = useProductStore();
+
+  if (!toasts.length) {
+    return null;
+  }
+
+  return (
+    <div className={styles.viewport}>
+      {toasts.map(toast => (
+        <div key={toast.id} className={`${styles.toast} ${styles[`toast_${toast.tone}`] || ''}`}>
+          <div>
+            <p className={styles.toastLabel}>{toast.tone === 'error' ? 'Needs attention' : 'Product update'}</p>
+            <p className={styles.toastMessage}>{toast.message}</p>
+          </div>
+          <button className={styles.toastDismiss} onClick={() => actions.dismissToast(toast.id)} type="button">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}

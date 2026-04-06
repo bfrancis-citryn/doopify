@@ -39,14 +39,14 @@
 body {
   background-color: var(--background);
   color: var(--on-surface);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body), sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* Base utility classes & typography */
-.font-headline { font-family: 'Manrope', sans-serif; }
-.font-body { font-family: 'Inter', sans-serif; }
+.font-headline { font-family: var(--font-headline), sans-serif; }
+.font-body { font-family: var(--font-body), sans-serif; }
 .text-xs { font-size: 0.75rem; line-height: 1rem; }
 .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
 .text-base { font-size: 1rem; line-height: 1.5rem; }

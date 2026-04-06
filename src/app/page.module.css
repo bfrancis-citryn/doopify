@@ -2,7 +2,9 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background-color: var(--background);
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 18%),
+    linear-gradient(180deg, #f8fafc, #f1f5f9);
 }
 
 .mainCanvas {
@@ -21,31 +23,42 @@
 }
 
 .consoleHeader {
-  padding: 1rem 2rem;
-  border-bottom: 1px solid var(--slate-100);
+  padding: 1.25rem 2rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  background-color: rgba(247, 249, 251, 0.5); /* surface-bright/50 */
+  gap: 1rem;
+  background-color: rgba(248, 250, 252, 0.68);
+  backdrop-filter: blur(14px);
 }
 
 .consoleOverline {
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   color: var(--on-surface-variant);
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .consoleTitle {
-  font-size: 1.125rem;
+  margin-top: 0.35rem;
+  font-size: 1.6rem;
   font-weight: 800;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.05em;
   color: var(--on-surface);
+}
+
+.consoleCopy {
+  margin-top: 0.45rem;
+  max-width: 34rem;
+  line-height: 1.6;
+  color: var(--slate-500);
 }
 
 .consoleActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -53,34 +66,37 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  background-color: rgba(224, 227, 229, 0.5);
-  border-radius: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--on-surface);
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0.8rem 0.95rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--slate-700);
+  transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .actionBtn:hover {
-  background-color: var(--surface-container-highest);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .primaryActionBtn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  background-color: var(--primary-container);
-  color: var(--on-primary-container);
-  border-radius: 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0.8rem 1rem;
+  background-color: var(--primary);
+  color: var(--on-primary);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .primaryActionBtn:hover {
-  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.2);
 }
 
 .splitView {
@@ -88,6 +104,8 @@
   display: flex;
   overflow: hidden;
   position: relative;
+  min-height: 0;
+  isolation: isolate;
 }
 
 .detailDock {
@@ -98,15 +116,17 @@
   border-left: 1px solid transparent;
   background-color: rgba(255, 255, 255, 0.72);
   transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1), border-color 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .detailDockOpen {
-  width: min(100%, 720px);
-  border-left-color: var(--slate-200);
+  width: clamp(360px, 46vw, 680px);
+  max-width: calc(100% - 320px);
+  border-left-color: rgba(226, 232, 240, 0.9);
 }
 
 .detailPanel {
-  width: min(100vw, 720px);
+  width: 100%;
   height: 100%;
   background-color: var(--background);
   transform: translateX(100%);
@@ -114,6 +134,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  pointer-events: auto;
 }
 
 .detailPanelOpen {
@@ -127,8 +148,14 @@
 }
 
 @media (max-width: 767px) {
+  .consoleHeader {
+    padding: 1rem 1rem 0.9rem;
+    flex-direction: column;
+  }
+
   .splitView {
     position: relative;
+    flex-direction: column;
   }
 
   .detailDock {
@@ -141,6 +168,7 @@
 
   .detailDockOpen {
     width: 100%;
+    max-width: none;
   }
 
   .detailPanel {

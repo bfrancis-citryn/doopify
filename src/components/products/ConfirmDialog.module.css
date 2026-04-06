@@ -1,0 +1,79 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.dialog {
+  width: min(100%, 30rem);
+  padding: 1.5rem;
+  border-radius: 1.5rem;
+  background: white;
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.18);
+}
+
+.overline {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+}
+
+.title {
+  margin-top: 0.45rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--slate-900);
+}
+
+.description {
+  margin-top: 0.65rem;
+  line-height: 1.7;
+  color: var(--slate-500);
+}
+
+.actions {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+.ghostButton,
+.secondaryButton,
+.primaryButton,
+.dangerButton {
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.ghostButton {
+  background: rgba(226, 232, 240, 0.55);
+  color: var(--slate-700);
+}
+
+.secondaryButton {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber-600);
+}
+
+.primaryButton {
+  background: var(--primary);
+  color: white;
+}
+
+.dangerButton {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+}
