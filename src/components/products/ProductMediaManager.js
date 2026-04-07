@@ -60,7 +60,7 @@ export default function ProductMediaManager() {
         {draftProduct.images.map((image, index) => (
           <div
             key={image.id}
-            className={image.id === editor.previewImageId ? styles.thumbnailCardActive : styles.thumbnailCard}
+            className={image.id === editor.previewImageId ? styles.thumbnailTileActive : styles.thumbnailTile}
             draggable
             onClick={() => actions.selectPreviewImage(image.id)}
             onDragStart={() => {
@@ -98,18 +98,19 @@ export default function ProductMediaManager() {
             role="button"
             tabIndex={0}
           >
-            <div className={styles.thumbnailButton}>
+            <div className={styles.thumbnailTileImageWrap}>
               <Image alt={image.alt} className={styles.thumbnailImage} fill src={image.src} unoptimized />
             </div>
-
-            <div className={styles.thumbnailMeta}>
-              <span className={styles.thumbnailLabel}>
-                {image.id === draftProduct.featuredImageId ? 'Main image' : `Image ${index + 1}`}
-              </span>
-              <span className={styles.thumbnailHint}>Drag to reorder</span>
+            <div className={styles.tileFooter}>
+              <span className={styles.tilePosition}>{index + 1}</span>
+              {image.id === draftProduct.featuredImageId ? <span className={styles.tileBadge}>Featured</span> : null}
             </div>
           </div>
         ))}
+
+        <button className={styles.addTile} onClick={() => uploadInputRef.current?.click()} type="button">
+          <span className="material-symbols-outlined">add</span>
+        </button>
       </div>
     </div>
   );
