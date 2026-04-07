@@ -3,7 +3,6 @@
 import ProductMediaManager from './ProductMediaManager';
 import ProductVariantEditor from './ProductVariantEditor';
 import { useProductStore } from '../../context/ProductContext';
-import { getProductStockLabel } from '../../lib/productUtils';
 import styles from './ProductEditorDrawer.module.css';
 
 const STATUS_OPTIONS = [
@@ -37,10 +36,6 @@ export default function ProductEditorDrawer() {
   const isSaveDisabled =
     editor.isSaving ||
     (editor.mode === 'existing' && !editor.hasUnsavedChanges);
-  const inventoryHealth = getProductStockLabel({
-    variants: draftProduct.variants,
-    inventorySummary: editor.draftInventorySummary,
-  });
   const draftStateLabel =
     editor.mode === 'new'
       ? 'New draft'
@@ -141,23 +136,6 @@ export default function ProductEditorDrawer() {
             <div>
               <p className={styles.metricLabel}>Compare-at</p>
               <p className={`font-headline ${styles.metricSecondary}`}>{formatMoney(draftProduct.compareAtPrice)}</p>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard eyebrow="Inventory" title="Stock summary">
-          <div className={styles.inventoryGrid}>
-            <div className={styles.metricCard}>
-              <p className={styles.metricLabel}>Total available</p>
-              <p className={`font-headline ${styles.metricValue}`}>{editor.draftInventorySummary.totalAvailable}</p>
-            </div>
-            <div className={styles.metricCard}>
-              <p className={styles.metricLabel}>Inventory health</p>
-              <p className={`font-headline ${styles.metricSecondary}`}>{inventoryHealth}</p>
-            </div>
-            <div className={styles.metricCard}>
-              <p className={styles.metricLabel}>Tracked variants</p>
-              <p className={`font-headline ${styles.metricSecondary}`}>{draftProduct.variants.length}</p>
             </div>
           </div>
         </SectionCard>

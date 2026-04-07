@@ -4,102 +4,129 @@
   gap: 1rem;
 }
 
-.toolbar {
+.variantHeaderRow {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.toolbarTitle {
-  font-size: 0.95rem;
+.variantSectionTitle {
+  font-size: 1rem;
   font-weight: 800;
   color: var(--slate-900);
 }
 
-.toolbarText {
-  margin-top: 0.25rem;
-  max-width: 30rem;
-  line-height: 1.55;
-  color: var(--slate-500);
-}
-
-.addButton {
+.addVariantButton {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.7rem 0.95rem;
+  padding: 0.65rem 0.95rem;
   border-radius: 999px;
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--primary);
-  font-size: 0.78rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: white;
+  color: var(--slate-800);
+  font-size: 0.82rem;
   font-weight: 800;
 }
 
-.optionList {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.9rem;
-}
-
-.optionCard,
-.helperCard {
-  padding: 1rem;
+.optionPanel {
+  border: 1px solid rgba(226, 232, 240, 0.95);
   border-radius: 1.1rem;
-  border: 1px solid rgba(226, 232, 240, 0.9);
   background: white;
+  overflow: hidden;
 }
 
-.optionHeader {
+.optionCard {
+  padding: 1rem 1rem 0.85rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.optionHeaderRow {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
+  gap: 0.75rem;
 }
 
 .optionNameInput,
 .optionValuesInput,
-.tableInput,
-.tableSelect {
+.inlineSkuInput,
+.priceInput,
+.inventoryInput {
   width: 100%;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 0.9rem;
-  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  border-radius: 0.8rem;
+  padding: 0.72rem 0.85rem;
   background: white;
   color: var(--slate-900);
 }
 
-.optionValuesInput {
-  margin-top: 0.8rem;
-  resize: vertical;
-  min-height: 4.5rem;
+.optionNameInput {
+  max-width: 12rem;
+  font-weight: 800;
 }
 
 .optionDelete {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.1rem;
+  height: 2.1rem;
   border-radius: 999px;
-  background: rgba(248, 250, 252, 0.9);
+  background: rgba(248, 250, 252, 0.92);
   color: var(--slate-500);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.helperCard {
+.optionChipRow {
+  margin-top: 0.75rem;
   display: flex;
-  gap: 0.85rem;
-  align-items: flex-start;
-  color: var(--primary);
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
-.helperTitle {
-  font-size: 1rem;
+.optionChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.38rem 0.6rem;
+  border-radius: 0.55rem;
+  background: rgba(226, 232, 240, 0.75);
+  color: var(--slate-700);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.optionValuesInput {
+  margin-top: 0.85rem;
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.addOptionLink {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.9rem 1rem;
+  background: white;
+  color: var(--slate-700);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.emptyOptionState {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.emptyOptionTitle {
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--slate-900);
 }
 
-.helperText,
+.emptyOptionText,
 .errorText {
+  margin-top: 0.35rem;
   line-height: 1.55;
   color: var(--slate-500);
 }
@@ -110,54 +137,82 @@
   font-weight: 700;
 }
 
-.tableWrap {
-  overflow-x: auto;
+.matrixWrap {
+  border: 1px solid rgba(226, 232, 240, 0.95);
   border-radius: 1.1rem;
-  border: 1px solid rgba(226, 232, 240, 0.9);
   background: white;
+  overflow: hidden;
 }
 
-.table {
-  width: 100%;
-  min-width: 960px;
-  border-collapse: collapse;
+.matrixHeader,
+.variantRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(160px, 0.9fr) minmax(120px, 0.55fr);
+  gap: 0.75rem;
+  align-items: center;
 }
 
-.table thead th {
-  padding: 0.85rem 1rem;
-  text-align: left;
-  font-size: 0.72rem;
+.matrixHeader {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(248, 250, 252, 0.9);
+  font-size: 0.74rem;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--slate-500);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(248, 250, 252, 0.88);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
-.table tbody td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.74);
-  vertical-align: middle;
-}
-
-.variantTitle {
+.matrixBody {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  font-weight: 700;
-  color: var(--slate-900);
 }
 
-.variantTitle small {
-  color: var(--slate-500);
-  font-weight: 600;
+.variantRow {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
 }
 
-.cellField {
+.variantIdentityCell {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.variantThumbPlaceholder {
+  width: 3.7rem;
+  height: 3.7rem;
+  border-radius: 0.85rem;
+  border: 1px dashed rgba(203, 213, 225, 0.95);
+  background: rgba(248, 250, 252, 0.8);
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.variantIdentityText {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.variantName {
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--slate-800);
+}
+
+.inlineSkuInput {
+  max-width: 14rem;
+}
+
+.priceInput,
+.inventoryInput {
+  font-weight: 700;
 }
 
 .cellError {
@@ -167,28 +222,25 @@
   line-height: 1.35;
 }
 
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.82rem;
-  font-weight: 700;
+.matrixFooter {
+  padding: 0.9rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
   color: var(--slate-700);
+  background: rgba(248, 250, 252, 0.75);
 }
 
-.deleteVariant {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--error);
-  background: rgba(239, 68, 68, 0.08);
-}
-
-@media (max-width: 700px) {
-  .toolbar {
+@media (max-width: 860px) {
+  .variantHeaderRow {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .matrixHeader {
+    display: none;
+  }
+
+  .variantRow {
+    grid-template-columns: 1fr;
   }
 }
