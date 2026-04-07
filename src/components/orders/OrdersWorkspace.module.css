@@ -1,0 +1,263 @@
+.ordersPage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summaryCard {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.summaryCard span {
+  font-size: 0.72rem;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+
+.summaryCard strong {
+  font-size: 1.4rem;
+  color: var(--slate-900);
+}
+
+.viewBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.viewButton,
+.viewButtonActive {
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.viewButton {
+  background: rgba(226, 232, 240, 0.75);
+  color: var(--slate-600);
+}
+
+.viewButtonActive {
+  background: var(--primary);
+  color: white;
+}
+
+.ordersLayout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.9fr);
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.ordersTableWrap,
+.detailCard {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+}
+
+.tableHeader,
+.orderRow,
+.orderRowActive {
+  display: grid;
+  grid-template-columns: 1.1fr 0.7fr 1.2fr 0.9fr 1fr 1fr 0.65fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.tableHeader {
+  padding: 0.85rem 1rem;
+  background: rgba(248, 250, 252, 0.88);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+}
+
+.tableBody {
+  max-height: 100%;
+  overflow: auto;
+}
+
+.orderRow,
+.orderRowActive {
+  width: 100%;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  background: transparent;
+}
+
+.orderRowActive {
+  background: rgba(239, 246, 255, 0.65);
+}
+
+.orderNumberCell,
+.customerCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.orderNumberCell small,
+.customerCell small,
+.detailSection small {
+  color: var(--slate-500);
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.26rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tone_paid,
+.tone_fulfilled,
+.tone_delivered { background: rgba(16, 185, 129, 0.14); color: var(--emerald-600); }
+.tone_pending,
+.tone_scheduled,
+.tone_packed,
+.tone_in-transit,
+.tone_out-for-delivery,
+.tone_ready-for-pickup { background: rgba(245, 158, 11, 0.14); color: var(--amber-600); }
+.tone_unfulfilled,
+.tone_not-shipped,
+.tone_failed,
+.tone_returned,
+.tone_refunded,
+.tone_partially-refunded,
+.tone_partially-fulfilled { background: rgba(226, 232, 240, 0.92); color: var(--slate-600); }
+
+.orderDetailPane {
+  min-height: 0;
+  overflow: auto;
+}
+
+.detailCard {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detailHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.detailEyebrow {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+}
+
+.detailTitle {
+  margin-top: 0.35rem;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--slate-900);
+}
+
+.detailActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.primaryAction,
+.secondaryAction {
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.primaryAction { background: var(--primary); color: white; }
+.secondaryAction { background: rgba(226, 232, 240, 0.72); color: var(--slate-700); }
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.detailSection {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: 0.95rem;
+  background: rgba(248, 250, 252, 0.75);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.detailSection h3 {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.lineItemList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.lineItemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.lineItemRow div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+@media (max-width: 1200px) {
+  .summaryGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ordersLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+}

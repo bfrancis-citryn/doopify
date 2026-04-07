@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent } from 'react';
-import Header from '../Header/Header';
-import Sidebar from '../Sidebar/Sidebar';
+import AppShell from '../AppShell';
 import { useProductStore } from '../../context/ProductContext';
 import ProductCatalog from './ProductCatalog';
 import ProductEditorDrawer from './ProductEditorDrawer';
@@ -57,30 +56,23 @@ export default function ProductsWorkspace() {
 
   return (
     <>
-      <div className={styles.appContainer}>
-        <Sidebar />
-        <div className={styles.mainCanvas}>
-          <Header
-            onCreateOrder={() => actions.showToast('Order creation is outside the catalog scope for now.', 'info')}
-            onNotificationsClick={() => actions.showToast('No new catalog alerts right now.', 'info')}
-            onQuickActionClick={() => actions.showToast('Quick actions are coming soon.', 'info')}
-            onSearchChange={event => actions.setSearchQuery(event.target.value)}
-            searchValue={searchQuery}
-          />
+      <AppShell
+        onCreateOrder={() => actions.showToast('Order creation is on the Orders page now.', 'info')}
+        onNotificationsClick={() => actions.showToast('No new catalog alerts right now.', 'info')}
+        onQuickActionClick={() => actions.showToast('Quick actions are coming soon.', 'info')}
+        onSearchChange={event => actions.setSearchQuery(event.target.value)}
+        searchValue={searchQuery}
+      >
+        <div className={styles.splitView}>
+          <ProductCatalog />
 
-          <div className={styles.viewContainer}>
-            <div className={styles.splitView}>
-              <ProductCatalog />
-
-              <div className={editor.isOpen ? `${styles.detailDock} ${styles.detailDockOpen}` : styles.detailDock}>
-                <div className={editor.isOpen ? `${styles.detailPanel} ${styles.detailPanelOpen}` : styles.detailPanel}>
-                  <ProductEditorDrawer />
-                </div>
-              </div>
+          <div className={editor.isOpen ? `${styles.detailDock} ${styles.detailDockOpen}` : styles.detailDock}>
+            <div className={editor.isOpen ? `${styles.detailPanel} ${styles.detailPanelOpen}` : styles.detailPanel}>
+              <ProductEditorDrawer />
             </div>
           </div>
         </div>
-      </div>
+      </AppShell>
 
       <ConfirmDialog />
       <ToastViewport />

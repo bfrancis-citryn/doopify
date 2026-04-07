@@ -1,12 +1,5 @@
-"use client";
+import { redirect } from 'next/navigation';
 
-import ProductsWorkspace from '../components/products/ProductsWorkspace';
-import { ProductProvider } from '../context/ProductContext';
-
-export default function ProductsPage() {
-  return (
-    <ProductProvider>
-      <ProductsWorkspace />
-    </ProductProvider>
-  );
+export default function HomePage() {
+  redirect('/orders');
 }
