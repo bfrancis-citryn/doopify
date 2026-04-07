@@ -23,19 +23,39 @@
   gap: 0.35rem;
   padding: 0.6rem 0.9rem;
   border-radius: 0.8rem;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: white;
-  color: var(--slate-800);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
   font-size: 0.82rem;
   font-weight: 800;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.addVariantButton:hover,
+.deleteOptionButton:hover,
+.deleteVariantButton:hover,
+.addOptionLink:hover,
+.matrixToolButton:hover,
+.groupIdentityCell:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.addVariantButton:active,
+.deleteOptionButton:active,
+.deleteVariantButton:active,
+.addOptionLink:active,
+.matrixToolButton:active,
+.groupIdentityCell:active {
+  transform: translateY(0);
 }
 
 .optionPanel,
 .basicInventoryCard,
 .matrixWrap {
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   border-radius: 1rem;
-  background: white;
+  background: var(--surface-container-lowest);
   overflow: hidden;
 }
 
@@ -44,7 +64,7 @@
   grid-template-columns: 2rem minmax(0, 1fr);
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
 }
 
 .optionDragHandle {
@@ -72,11 +92,20 @@
 .priceInput,
 .inventoryInput {
   width: 100%;
-  border: 1px solid rgba(203, 213, 225, 0.95);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 0.75rem;
   padding: 0.7rem 0.8rem;
-  background: white;
-  color: var(--slate-900);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.optionNameInput:focus,
+.valueInput:focus,
+.priceInput:focus,
+.inventoryInput:focus {
+  border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
 .optionNameInputError {
@@ -92,9 +121,10 @@
 }
 
 .valueComposer {
-  border: 1px solid rgba(203, 213, 225, 0.95);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   border-radius: 0.85rem;
   padding: 0.7rem;
+  background: color-mix(in srgb, var(--surface-container-low) 70%, transparent);
 }
 
 .optionChipRow {
@@ -110,7 +140,7 @@
   gap: 0.2rem;
   padding: 0.32rem 0.45rem;
   border-radius: 0.45rem;
-  background: rgba(219, 234, 254, 0.7);
+  background: color-mix(in srgb, var(--secondary-container) 72%, transparent);
   color: var(--slate-700);
   font-size: 0.82rem;
   font-weight: 700;
@@ -124,15 +154,17 @@
   min-width: 8rem;
   border: none;
   padding: 0.35rem 0.1rem;
+  background: transparent;
 }
 
 .valueInput:focus {
   outline: none;
+  box-shadow: none;
 }
 
 .suggestionList {
   margin-top: 0.75rem;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
   padding-top: 0.75rem;
 }
 
@@ -166,6 +198,14 @@
 }
 
 .deleteOptionButton,
+.deleteVariantButton,
+.addOptionLink,
+.matrixToolButton,
+.groupIdentityCell {
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.deleteOptionButton,
 .deleteVariantButton {
   display: inline-flex;
   align-items: center;
@@ -185,7 +225,7 @@
   align-items: center;
   gap: 0.45rem;
   padding: 0.9rem 1rem;
-  background: white;
+  background: var(--surface-container-lowest);
   color: var(--slate-700);
   font-size: 0.86rem;
   font-weight: 700;
@@ -193,7 +233,7 @@
 
 .emptyOptionState {
   padding: 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
 }
 
 .emptyOptionTitle {
@@ -219,8 +259,8 @@
   margin-right: auto;
   padding: 0.45rem 0.7rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: white;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
+  background: var(--surface-container-lowest);
   color: var(--slate-700);
   font-size: 0.82rem;
   font-weight: 700;
@@ -230,8 +270,8 @@
   width: 2.2rem;
   height: 2.2rem;
   border-radius: 0.7rem;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: white;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
+  background: var(--surface-container-lowest);
   color: var(--slate-600);
   display: inline-flex;
   align-items: center;
@@ -250,8 +290,8 @@
 
 .matrixHeader {
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
-  background: rgba(248, 250, 252, 0.88);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
+  background: color-mix(in srgb, var(--surface-container-low) 82%, transparent);
   font-size: 0.74rem;
   font-weight: 800;
   color: var(--slate-500);
@@ -266,7 +306,7 @@
 .groupRow,
 .subVariantRow {
   padding: 0.85rem 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
 }
 
 .groupBlock {
@@ -277,7 +317,7 @@
 .subRowList {
   display: flex;
   flex-direction: column;
-  background: rgba(248, 250, 252, 0.42);
+  background: color-mix(in srgb, var(--surface-container-low) 58%, transparent);
 }
 
 .checkboxColumn {
@@ -309,9 +349,9 @@
   width: 3.8rem;
   height: 3.8rem;
   border-radius: 0.8rem;
-  border: 1px dashed rgba(203, 213, 225, 0.95);
-  background: rgba(248, 250, 252, 0.85);
-  color: #2563eb;
+  border: 1px dashed color-mix(in srgb, var(--slate-200) 80%, transparent);
+  background: color-mix(in srgb, var(--surface-container-low) 76%, transparent);
+  color: var(--blue-600);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -348,10 +388,17 @@
   transform: translateY(-50%);
   color: var(--slate-500);
   font-weight: 700;
+  pointer-events: none;
 }
 
 .priceInput {
   padding-left: 1.7rem;
+  font-weight: 700;
+}
+
+.priceInput[readonly] {
+  cursor: default;
+  opacity: 0.88;
 }
 
 .secondaryLine {
@@ -363,6 +410,7 @@
 
 .inventoryInput {
   max-width: 6rem;
+  font-weight: 700;
 }
 
 .matrixFooter {
@@ -370,12 +418,12 @@
   text-align: center;
   font-size: 0.9rem;
   color: var(--slate-700);
-  background: rgba(248, 250, 252, 0.78);
+  background: color-mix(in srgb, var(--surface-container-low) 74%, transparent);
 }
 
 .basicInventoryHeader {
   padding: 1rem 1rem 0.85rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -406,7 +454,7 @@
   gap: 1rem;
   align-items: center;
   padding: 0.9rem 0;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
   color: var(--slate-700);
 }
 
@@ -423,7 +471,8 @@
   .groupRow,
   .subVariantRow,
   .optionCard,
-  .basicInventoryRow {
+  .basicInventoryRow,
+  .shippingBuilderGrid {
     grid-template-columns: 1fr;
   }
 

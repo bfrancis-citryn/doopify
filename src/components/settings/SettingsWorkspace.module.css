@@ -55,6 +55,7 @@
   border-radius: 0.8rem;
   text-align: left;
   font-weight: 700;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
 .sectionButton {
@@ -64,6 +65,19 @@
 .sectionButtonActive {
   background: color-mix(in srgb, var(--secondary-container) 72%, transparent);
   color: var(--primary);
+}
+
+.sectionButton:hover,
+.sectionButtonActive:hover,
+.saveButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.sectionButton:active,
+.sectionButtonActive:active,
+.saveButton:active {
+  transform: translateY(0);
 }
 
 .detailCard {

@@ -65,6 +65,7 @@
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
   font-weight: 700;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
 }
 
 .viewButton {
@@ -75,6 +76,27 @@
 .viewButtonActive {
   background: var(--primary);
   color: white;
+}
+
+.viewButton:hover,
+.viewButtonActive:hover,
+.bulkActionButton:hover,
+.primaryAction:hover,
+.secondaryAction:hover,
+.inlineLinkButton:hover,
+.rowButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.viewButton:active,
+.viewButtonActive:active,
+.bulkActionButton:active,
+.primaryAction:active,
+.secondaryAction:active,
+.inlineLinkButton:active,
+.rowButton:active {
+  transform: translateY(0);
 }
 
 .filterSelect,
