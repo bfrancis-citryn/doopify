@@ -18,8 +18,8 @@ export default function Sidebar() {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
-        <h1 className={`text-xl font-bold tracking-tighter font-headline ${styles.brandTitle}`}>Aether</h1>
-        <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Next-Gen OS</p>
+        <h1 className={`text-xl font-bold tracking-tighter font-headline ${styles.brandTitle}`}>Doopify</h1>
+        <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Commerce OS</p>
       </div>
 
       <nav className={styles.nav}>

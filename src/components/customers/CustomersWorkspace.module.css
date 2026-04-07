@@ -9,9 +9,9 @@
 
 .listPanel,
 .detailCard {
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 1.1rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--surface-container-lowest) 90%, transparent);
   overflow: hidden;
 }
 
@@ -48,7 +48,7 @@
 }
 
 .customerRowActive {
-  background: rgba(239, 246, 255, 0.65);
+  background: color-mix(in srgb, var(--secondary-container) 72%, transparent);
 }
 
 .customerRow div,
@@ -86,9 +86,9 @@
 .metricCard,
 .infoCard {
   padding: 1rem;
-  border: 1px solid rgba(226, 232, 240, 0.88);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
   border-radius: 0.95rem;
-  background: rgba(248, 250, 252, 0.75);
+  background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
 }
 
 .metricCard span {
@@ -132,10 +132,10 @@
 
 .notesInput {
   width: 100%;
-  border: 1px solid rgba(203, 213, 225, 0.95);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 0.8rem;
   padding: 0.8rem;
-  background: white;
-  color: var(--slate-900);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
   resize: vertical;
 }

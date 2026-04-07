@@ -17,8 +17,8 @@ const manrope = Manrope({
 });
 
 export const metadata = {
-  title: 'Products | Aether Commerce OS',
-  description: 'Next-Gen OS',
+  title: 'Doopify | Commerce OS',
+  description: 'Doopify Commerce OS',
 };
 
 export default function RootLayout({ children }) {

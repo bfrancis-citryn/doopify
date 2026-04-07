@@ -2,8 +2,8 @@
   flex: 1 1 auto;
   width: 100%;
   min-width: 340px;
-  border-right: 1px solid rgba(226, 232, 240, 0.9);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.82));
+  border-right: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-container-lowest) 94%, transparent), color-mix(in srgb, var(--surface-container-low) 82%, transparent));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -14,7 +14,7 @@
 
 .catalogHeader {
   padding: 0.85rem 1rem 0.65rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
 }
 
 .catalogHeaderTopRow {
@@ -40,10 +40,10 @@
   width: 100%;
   padding: 0.68rem 0.9rem 0.68rem 2.5rem;
   border-radius: 999px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  background: white;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
+  background: var(--surface-container-lowest);
   font-size: 0.88rem;
-  color: var(--slate-900);
+  color: var(--on-surface);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .filterButton {
-  background: rgba(226, 232, 240, 0.62);
+  background: color-mix(in srgb, var(--surface-container) 72%, transparent);
   color: var(--slate-500);
 }
 
@@ -113,8 +113,8 @@
 }
 
 .productRow {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: color-mix(in srgb, var(--surface-container-lowest) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
 }
 
 .productRow:hover,
@@ -124,8 +124,8 @@
 }
 
 .productRowActive {
-  background: white;
-  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: var(--surface-container-lowest);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent);
 }
 
 .rowMedia {
