@@ -1,14 +1,14 @@
 .header {
   height: 4rem;
   z-index: 40;
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: color-mix(in srgb, var(--surface-container-lowest) 72%, transparent);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 2.5rem;
-  border-bottom: 1px solid var(--slate-100);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
 }
 
 .leftGroup {
@@ -30,7 +30,8 @@
 
 .searchInput {
   background-color: var(--surface-container-low);
-  border: none;
+  color: var(--on-surface);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 9999px;
   padding: 0.5rem 1rem 0.5rem 2.5rem;
   width: 20rem;
@@ -39,7 +40,7 @@
 
 .searchInput:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 79, 196, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .rightGroup {
@@ -53,7 +54,7 @@
   color: var(--on-primary);
   padding: 0.5rem 1.25rem;
   border-radius: 9999px;
-  box-shadow: 0 10px 15px -3px rgba(0, 79, 196, 0.2), 0 4px 6px -4px rgba(0, 79, 196, 0.2);
+  box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--primary) 24%, transparent), 0 4px 6px -4px color-mix(in srgb, var(--primary) 22%, transparent);
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -100,7 +101,7 @@
   width: 2rem;
   border-radius: 9999px;
   overflow: hidden;
-  border: 2px solid white;
+  border: 2px solid color-mix(in srgb, var(--surface-container-lowest) 88%, transparent);
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 

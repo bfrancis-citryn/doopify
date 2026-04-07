@@ -4,6 +4,7 @@ import { ThemeProvider } from '../context/ThemeContext';
 import { OrdersProvider } from '../context/OrdersContext';
 import { CustomersProvider } from '../context/CustomersContext';
 import { DiscountsProvider } from '../context/DiscountsContext';
+import { ProductsProvider } from '../context/ProductsContext';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -30,7 +31,9 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <CustomersProvider>
             <DiscountsProvider>
-              <OrdersProvider>{children}</OrdersProvider>
+              <ProductsProvider>
+                <OrdersProvider>{children}</OrdersProvider>
+              </ProductsProvider>
             </DiscountsProvider>
           </CustomersProvider>
         </ThemeProvider>

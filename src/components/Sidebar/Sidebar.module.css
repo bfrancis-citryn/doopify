@@ -1,10 +1,8 @@
 .sidebar {
-  --theme-color: var(--red);
   height: 100%;
   width: 16rem;
-  border-right: 1px solid var(--slate-100);
-  background-color: var(--slate-50); /* fallback */
-  background-color: rgba(248, 250, 252, 0.7);
+  border-right: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
+  background-color: color-mix(in srgb, var(--surface-container-lowest) 74%, transparent);
   backdrop-filter: blur(64px);
   -webkit-backdrop-filter: blur(64px);
   z-index: 50;
@@ -45,19 +43,19 @@
 }
 
 .navLink:hover {
-  background-color: rgba(255, 255, 255, 0.3);
+  background-color: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
 }
 
 .navLinkActive {
-  color: var(--theme-color);
-  background-color: rgba(255, 255, 255, 0.5);
-  transform: scale(.95);
+  color: var(--primary);
+  background-color: color-mix(in srgb, var(--surface-container) 92%, transparent);
+  transform: scale(.98);
 }
 
 .bottomNav {
   padding-top: 1.5rem;
   margin-top: auto;
-  border-top: 1px solid var(--slate-100);
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
