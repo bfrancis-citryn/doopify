@@ -236,158 +236,161 @@ export default function OrdersWorkspace() {
 
           <div className={styles.orderDetailPane}>
             {selectedOrder ? (
-              <div className={styles.detailCard}>
-                <div className={styles.detailHeader}>
+              <div className={styles.shopifyOrderShell}>
+                <div className={styles.shopifyOrderHeader}>
                   <div>
-                    <p className={styles.detailEyebrow}>Order details</p>
-                    <h2 className={styles.detailTitle}>{selectedOrder.orderNumber}</h2>
+                    <div className={styles.shopifyOrderTitleRow}>
+                      <h2 className={styles.detailTitle}>{selectedOrder.orderNumber}</h2>
+                      <StatusPill tone={selectedOrder.paymentStatus.replace(/\s+/g, '-')}>{selectedOrder.paymentStatus}</StatusPill>
+                      <StatusPill tone={selectedOrder.fulfillmentStatus.replace(/\s+/g, '-')}>{selectedOrder.fulfillmentStatus}</StatusPill>
+                    </div>
+                    <p className={styles.shopifyOrderMeta}>Created {new Date(selectedOrder.createdAt).toLocaleString()} from {selectedOrder.channel}</p>
                   </div>
                   <div className={styles.detailActions}>
-                    <button
-                      className={styles.secondaryAction}
-                      onClick={() =>
-                        updateOrder(selectedOrder.id, order =>
-                          appendTimeline(
-                            {
-                              ...order,
-                              fulfillmentStatus: 'fulfilled',
-                              deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
-                            },
-                            'Fulfillment updated',
-                            'Order marked fulfilled.'
-                          )
-                        )
-                      }
-                      type="button"
-                    >
-                      Mark fulfilled
-                    </button>
-                    <button
-                      className={styles.primaryAction}
-                      onClick={() =>
-                        updateOrder(selectedOrder.id, order =>
-                          appendTimeline(
-                            {
-                              ...order,
-                              trackingNumber: order.trackingNumber || `TRACK-${order.orderNumber.replace('#', '')}`,
-                              deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
-                            },
-                            'Tracking added',
-                            'Tracking number was added to the order.'
-                          )
-                        )
-                      }
-                      type="button"
-                    >
-                      Add tracking
-                    </button>
+                    <button className={styles.secondaryAction} type="button">Restock</button>
+                    <button className={styles.secondaryAction} type="button">Return</button>
+                    <button className={styles.secondaryAction} type="button">Edit</button>
+                    <button className={styles.secondaryAction} type="button">Print</button>
+                    <button className={styles.primaryAction} type="button">More actions</button>
                   </div>
                 </div>
 
-                <div className={styles.detailSection}>
-                  <h3>Customer</h3>
-                  <p>{selectedOrder.customer.name}</p>
-                  <p>{selectedOrder.customer.email}</p>
-                </div>
-
-                <div className={styles.detailGrid}>
-                  <div className={styles.detailSection}>
-                    <h3>Payment</h3>
-                    <select className={styles.detailSelect} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, paymentStatus: event.target.value }))} value={selectedOrder.paymentStatus}>
-                      {ORDER_PAYMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                  <div className={styles.detailSection}>
-                    <h3>Fulfillment</h3>
-                    <select className={styles.detailSelect} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, fulfillmentStatus: event.target.value }))} value={selectedOrder.fulfillmentStatus}>
-                      {ORDER_FULFILLMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                  <div className={styles.detailSection}>
-                    <h3>Delivery</h3>
-                    <select className={styles.detailSelect} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, deliveryStatus: event.target.value }))} value={selectedOrder.deliveryStatus}>
-                      {ORDER_DELIVERY_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                  <div className={styles.detailSection}>
-                    <h3>Return / refund</h3>
-                    <select className={styles.detailSelect} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, returnStatus: event.target.value }))} value={selectedOrder.returnStatus}>
-                      {ORDER_RETURN_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className={styles.detailGrid}>
-                  <div className={styles.detailSection}>
-                    <h3>Shipping method</h3>
-                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, deliveryMethod: event.target.value }))} type="text" value={selectedOrder.deliveryMethod} />
-                    <small>{selectedOrder.carrier} · {selectedOrder.trackingNumber || 'No tracking yet'}</small>
-                  </div>
-                  <div className={styles.detailSection}>
-                    <h3>Carrier + tracking</h3>
-                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, carrier: event.target.value }))} placeholder="Carrier" type="text" value={selectedOrder.carrier} />
-                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, trackingNumber: event.target.value }))} placeholder="Tracking number" type="text" value={selectedOrder.trackingNumber} />
-                  </div>
-                </div>
-
-                <div className={styles.detailSection}>
-                  <h3>Tags</h3>
-                  <div className={styles.tagComposer}>
-                    <div className={styles.tagList}>
-                      {selectedOrder.tags.map(tag => (
-                        <button key={`${selectedOrder.id}-${tag}`} className={styles.tagChip} onClick={() => updateOrder(selectedOrder.id, order => ({ ...order, tags: order.tags.filter(existingTag => existingTag !== tag) }))} type="button">
-                          <span>{tag}</span>
-                          <span className="material-symbols-outlined">close</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className={styles.tagInputRow}>
-                      <input className={styles.detailInput} onChange={event => setTagInput(event.target.value)} placeholder="Add tag" type="text" value={tagInput} />
-                      <button className={styles.secondaryAction} onClick={addTagToOrder} type="button">Add tag</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.detailSection}>
-                  <h3>Line items</h3>
-                  <div className={styles.lineItemList}>
-                    {selectedOrder.lineItems.map(item => (
-                      <div key={item.id} className={styles.lineItemRow}>
-                        <div>
-                          <strong>{item.title}</strong>
-                          <small>{item.variant}</small>
-                        </div>
-                        <div>{item.quantity} × {formatOrderMoney(item.price)}</div>
+                <div className={styles.shopifyDetailLayout}>
+                  <div className={styles.shopifyMainColumn}>
+                    <div className={styles.detailSection}>
+                      <div className={styles.sectionPillRow}>
+                        <StatusPill tone={selectedOrder.fulfillmentStatus.replace(/\s+/g, '-')}>{selectedOrder.fulfillmentStatus}</StatusPill>
+                        <strong>{selectedOrder.orderNumber}-F1</strong>
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                <div className={styles.detailGrid}>
-                  <div className={styles.detailSection}>
-                    <h3>Shipping address</h3>
-                    <p>{selectedOrder.shippingAddress}</p>
-                    <small>{selectedOrder.location}</small>
-                  </div>
-                  <div className={styles.detailSection}>
-                    <h3>Notes</h3>
-                    <textarea className={styles.notesInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, notes: event.target.value }))} rows={5} value={selectedOrder.notes} />
-                  </div>
-                </div>
-
-                <div className={styles.detailSection}>
-                  <h3>Timeline</h3>
-                  <div className={styles.timelineList}>
-                    {(selectedOrder.timeline || []).map(entry => (
-                      <div key={entry.id} className={styles.timelineItem}>
-                        <div className={styles.timelineDot} />
-                        <div>
-                          <strong>{entry.event}</strong>
-                          <p>{entry.detail}</p>
-                          <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                      <div className={styles.fulfillmentCard}>
+                        <StatusPill tone={selectedOrder.deliveryStatus.replace(/\s+/g, '-')}>{selectedOrder.deliveryStatus}</StatusPill>
+                        <div className={styles.fulfillmentMetaList}>
+                          <div>{new Date(selectedOrder.createdAt).toLocaleDateString()}</div>
+                          <div>Deliver by {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}</div>
+                          <div>{selectedOrder.carrier} tracking: {selectedOrder.trackingNumber || 'No tracking yet'}</div>
+                        </div>
+                        <div className={styles.shippingActionRow}>
+                          <button
+                            className={styles.secondaryAction}
+                            onClick={() =>
+                              updateOrder(selectedOrder.id, order =>
+                                appendTimeline(
+                                  {
+                                    ...order,
+                                    trackingNumber: order.trackingNumber || `LABEL-${order.orderNumber.replace('#', '')}`,
+                                    deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
+                                  },
+                                  'Shipping label purchased',
+                                  'Shipping label created and attached to the order.'
+                                )
+                              )
+                            }
+                            type="button"
+                          >
+                            Buy shipping label
+                          </button>
+                          <button className={styles.secondaryAction} type="button">Print packing slip</button>
                         </div>
                       </div>
-                    ))}
+
+                      <div className={styles.lineItemList}>
+                        {selectedOrder.lineItems.map(item => (
+                          <div key={item.id} className={styles.shopifyLineItemRow}>
+                            <div className={styles.shopifyLineItemThumb} />
+                            <div className={styles.shopifyLineItemInfo}>
+                              <strong>{item.title}</strong>
+                              <small>{item.variant}</small>
+                            </div>
+                            <div className={styles.shopifyLineItemPrice}>{formatOrderMoney(item.price)} × {item.quantity}</div>
+                            <div className={styles.shopifyLineItemTotal}>{formatOrderMoney(item.price * item.quantity)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <div className={styles.sectionPillRow}>
+                        <StatusPill tone={selectedOrder.paymentStatus.replace(/\s+/g, '-')}>{selectedOrder.paymentStatus}</StatusPill>
+                      </div>
+                      <div className={styles.paymentSummaryTable}>
+                        <div><span>Subtotal</span><strong>{formatOrderMoney(selectedOrder.total)}</strong></div>
+                        <div><span>Discount</span><strong>{selectedOrder.tags.includes('Draft converted') ? '- Custom discount' : '—'}</strong></div>
+                        <div className={styles.totalRow}><span>Total</span><strong>{formatOrderMoney(selectedOrder.total)}</strong></div>
+                        <div><span>Paid</span><strong>{selectedOrder.paymentStatus === 'paid' ? formatOrderMoney(selectedOrder.total) : '$0.00'}</strong></div>
+                      </div>
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <div className={styles.sectionCardHeader}><h3>Metafields</h3><button className={styles.inlineLinkButton} type="button">View all</button></div>
+                      <p>No metafields pinned</p>
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <h3>Timeline</h3>
+                      <div className={styles.timelineComposer}>Leave a comment…</div>
+                      <div className={styles.timelineList}>
+                        {(selectedOrder.timeline || []).map(entry => (
+                          <div key={entry.id} className={styles.timelineItem}>
+                            <div className={styles.timelineDot} />
+                            <div>
+                              <strong>{entry.event}</strong>
+                              <p>{entry.detail}</p>
+                              <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={styles.shopifySideColumn}>
+                    <div className={styles.detailSection}>
+                      <div className={styles.sectionCardHeader}><h3>Notes</h3><button className={styles.inlineLinkButton} type="button">Edit</button></div>
+                      <textarea className={styles.notesInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, notes: event.target.value }))} rows={4} value={selectedOrder.notes} />
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <div className={styles.sectionCardHeader}><h3>Customer</h3><button className={styles.inlineLinkButton} type="button">•••</button></div>
+                      <p>{selectedOrder.customer.name}</p>
+                      <small>{selectedOrder.customer.email}</small>
+                      <div className={styles.customerBlockSpacing}>
+                        <strong>Shipping address</strong>
+                        <p>{selectedOrder.shippingAddress}</p>
+                      </div>
+                      <div className={styles.customerBlockSpacing}>
+                        <strong>Billing address</strong>
+                        <p>{selectedOrder.billingAddress}</p>
+                      </div>
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <h3>Conversion summary</h3>
+                      <p>{selectedOrder.channel === 'Draft Orders' ? 'This order was converted from a draft order.' : "There aren't any conversion details available for this order."}</p>
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <h3>Order risk</h3>
+                      <p>{selectedOrder.riskLevel === 'medium' ? 'Review recommended before fulfillment.' : 'Analysis not available.'}</p>
+                    </div>
+
+                    <div className={styles.detailSection}>
+                      <h3>Tags</h3>
+                      <div className={styles.tagComposer}>
+                        <div className={styles.tagList}>
+                          {selectedOrder.tags.map(tag => (
+                            <button key={`${selectedOrder.id}-${tag}`} className={styles.tagChip} onClick={() => updateOrder(selectedOrder.id, order => ({ ...order, tags: order.tags.filter(existingTag => existingTag !== tag) }))} type="button">
+                              <span>{tag}</span>
+                              <span className="material-symbols-outlined">close</span>
+                            </button>
+                          ))}
+                        </div>
+                        <div className={styles.tagInputRow}>
+                          <input className={styles.detailInput} onChange={event => setTagInput(event.target.value)} placeholder="Add tag" type="text" value={tagInput} />
+                          <button className={styles.secondaryAction} onClick={addTagToOrder} type="button">Add tag</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
