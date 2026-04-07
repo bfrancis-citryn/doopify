@@ -3,19 +3,20 @@
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
 import { useOrders } from '../../context/OrdersContext';
+import { useCustomers } from '../../context/CustomersContext';
+import { useDiscounts } from '../../context/DiscountsContext';
 import { createSeedProducts } from '../../lib/productUtils';
-import { createSeedCustomers, formatCustomerMoney } from '../../lib/customersData';
-import { createSeedDiscounts } from '../../lib/discountsData';
+import { formatCustomerMoney } from '../../lib/customersData';
 import { calculateDraftTotals, convertDraftOrderToOrder, createDraftLineItemFromProduct, createDraftOrderSeed } from '../../lib/draftOrdersData';
 import styles from './DraftOrdersWorkspace.module.css';
 
 export default function DraftOrdersWorkspace() {
   const { orders, addOrder } = useOrders();
+  const { customers, updateCustomer } = useCustomers();
+  const { discounts, updateDiscount } = useDiscounts();
   const [products] = useState(createSeedProducts());
-  const [customers] = useState(createSeedCustomers());
-  const [discounts] = useState(createSeedDiscounts());
   const [convertedOrders, setConvertedOrders] = useState([]);
-  const [draftOrder, setDraftOrder] = useState(() => createDraftOrderSeed(createSeedProducts(), createSeedCustomers(), createSeedDiscounts()));
+  const [draftOrder, setDraftOrder] = useState(() => createDraftOrderSeed(createSeedProducts(), customers, discounts));
 
   const totals = useMemo(() => calculateDraftTotals(draftOrder, discounts), [draftOrder, discounts]);
   const selectedCustomer = customers.find(customer => customer.id === draftOrder.customerId) || null;
@@ -37,6 +38,24 @@ export default function DraftOrdersWorkspace() {
     const convertedOrder = convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, orders.length);
     addOrder(convertedOrder);
     setConvertedOrders(current => [convertedOrder, ...current]);
+
+    if (selectedCustomer) {
+      updateCustomer(selectedCustomer.id, customer => ({
+        ...customer,
+        totalSpent: Number(customer.totalSpent || 0) + convertedOrder.total,
+        orderCount: Number(customer.orderCount || 0) + 1,
+        lastOrderDate: convertedOrder.createdAt,
+        recentOrders: [convertedOrder.orderNumber, ...(customer.recentOrders || [])].slice(0, 5),
+      }));
+    }
+
+    if (draftOrder.discountId) {
+      updateDiscount(draftOrder.discountId, discount => ({
+        ...discount,
+        usageCount: Number(discount.usageCount || 0) + 1,
+      }));
+    }
+
     setDraftOrder(createDraftOrderSeed(products, customers, discounts));
   };
 

@@ -2,6 +2,8 @@ import './globals.css';
 import { Inter, Manrope } from 'next/font/google';
 import { ThemeProvider } from '../context/ThemeContext';
 import { OrdersProvider } from '../context/OrdersContext';
+import { CustomersProvider } from '../context/CustomersContext';
+import { DiscountsProvider } from '../context/DiscountsContext';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -26,7 +28,11 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${inter.variable} ${manrope.variable}`}>
         <ThemeProvider>
-          <OrdersProvider>{children}</OrdersProvider>
+          <CustomersProvider>
+            <DiscountsProvider>
+              <OrdersProvider>{children}</OrdersProvider>
+            </DiscountsProvider>
+          </CustomersProvider>
         </ThemeProvider>
       </body>
     </html>

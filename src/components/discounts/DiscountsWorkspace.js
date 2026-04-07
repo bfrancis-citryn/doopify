@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
-import { DISCOUNT_METHODS, DISCOUNT_STATUSES, DISCOUNT_TYPES, createSeedDiscounts } from '../../lib/discountsData';
+import { useDiscounts } from '../../context/DiscountsContext';
+import { DISCOUNT_METHODS, DISCOUNT_STATUSES, DISCOUNT_TYPES } from '../../lib/discountsData';
 import styles from './DiscountsWorkspace.module.css';
 
 function StatusPill({ children, tone }) {
@@ -34,7 +35,7 @@ function createDiscountDraft(type) {
 }
 
 export default function DiscountsWorkspace() {
-  const [discounts, setDiscounts] = useState(createSeedDiscounts());
+  const { discounts, addDiscount, updateDiscount } = useDiscounts();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -62,6 +63,12 @@ export default function DiscountsWorkspace() {
     setDraftDiscount(createDiscountDraft(type));
   };
 
+  const openEditor = discount => {
+    setBuilderMode(discount.type);
+    setDraftDiscount({ ...discount });
+    setSelectedDiscountId(discount.id);
+  };
+
   const saveDraftDiscount = () => {
     if (!draftDiscount?.title.trim()) {
       return;
@@ -76,7 +83,13 @@ export default function DiscountsWorkspace() {
       status: draftDiscount.startsAt ? 'scheduled' : 'active',
     };
 
-    setDiscounts(current => [nextDiscount, ...current]);
+    const isExisting = discounts.some(discount => discount.id === nextDiscount.id);
+    if (isExisting) {
+      updateDiscount(nextDiscount.id, () => nextDiscount);
+    } else {
+      addDiscount(nextDiscount);
+    }
+
     setSelectedDiscountId(nextDiscount.id);
     setBuilderMode(null);
     setDraftDiscount(null);
@@ -237,9 +250,14 @@ export default function DiscountsWorkspace() {
             </div>
           ) : selectedDiscount ? (
             <div className={styles.detailCard}>
-              <div>
-                <p className={styles.eyebrow}>Discount detail</p>
-                <h2 className={styles.detailTitle}>{selectedDiscount.title}</h2>
+              <div className={styles.builderHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Discount detail</p>
+                  <h2 className={styles.detailTitle}>{selectedDiscount.title}</h2>
+                </div>
+                <div className={styles.headerActions}>
+                  <button className={styles.secondaryButton} onClick={() => openEditor(selectedDiscount)} type="button">Edit discount</button>
+                </div>
               </div>
 
               <div className={styles.detailGrid}>

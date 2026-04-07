@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
-import { createSeedCustomers, formatCustomerMoney } from '../../lib/customersData';
+import { useCustomers } from '../../context/CustomersContext';
+import { formatCustomerMoney } from '../../lib/customersData';
 import styles from './CustomersWorkspace.module.css';
 
 export default function CustomersWorkspace() {
-  const [customers, setCustomers] = useState(createSeedCustomers());
+  const { customers, setCustomers } = useCustomers();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || null);
 
