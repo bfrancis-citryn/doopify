@@ -66,17 +66,17 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem);
-  gap: 4rem;
+  grid-template-columns: minmax(0, 0.9fr) minmax(28rem, 36rem);
+  gap: 3.25rem;
   align-items: center;
   min-height: 100vh;
-  width: min(1180px, calc(100% - 3rem));
+  width: min(1240px, calc(100% - 3rem));
   margin: 0 auto;
   padding: 4rem 0;
 }
 
 .portalCopy {
-  max-width: 34rem;
+  max-width: 28rem;
 }
 
 .eyebrow {
@@ -94,38 +94,38 @@
 }
 
 .portalTitle {
-  margin: 1.35rem 0 1rem;
-  font-size: clamp(2.4rem, 5vw, 4.3rem);
-  line-height: 0.97;
+  margin: 1.1rem 0 0.9rem;
+  font-size: clamp(2rem, 4.1vw, 3.45rem);
+  line-height: 1.01;
   letter-spacing: -0.04em;
   text-wrap: balance;
 }
 
 .portalText {
   margin: 0;
-  max-width: 32rem;
-  color: rgba(240, 235, 248, 0.72);
-  font-size: 1.05rem;
-  line-height: 1.75;
+  max-width: 27rem;
+  color: rgba(240, 235, 248, 0.68);
+  font-size: 0.96rem;
+  line-height: 1.68;
 }
 
 .securityPills {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.85rem;
-  margin-top: 1.6rem;
+  gap: 0.7rem;
+  margin-top: 1.35rem;
 }
 
 .securityPill {
   display: inline-flex;
   align-items: center;
-  min-height: 2.1rem;
-  padding: 0.45rem 0.85rem;
+  min-height: 1.95rem;
+  padding: 0.38rem 0.78rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
-  color: rgba(250, 247, 255, 0.74);
-  font-size: 0.86rem;
+  color: rgba(250, 247, 255, 0.72);
+  font-size: 0.8rem;
 }
 
 .cardStage {
@@ -135,10 +135,11 @@
 
 .cardTiltWrap {
   position: relative;
-  width: 100%;
+  width: min(100%, 35rem);
   transform-style: preserve-3d;
-  transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y));
+  transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) scale(1.08);
   transition: transform 160ms ease;
+  transform-origin: center;
 }
 
 .cardAurora,
@@ -208,12 +209,12 @@
 .loginCard {
   position: relative;
   overflow: hidden;
-  border-radius: 1.5rem;
+  border-radius: 1.65rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(16, 10, 22, 0.74), rgba(8, 5, 12, 0.82));
   backdrop-filter: blur(26px);
   -webkit-backdrop-filter: blur(26px);
-  padding: 1.7rem;
+  padding: 2rem;
 }
 
 .cardPattern {
