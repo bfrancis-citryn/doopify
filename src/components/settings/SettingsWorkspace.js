@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
+import { useSettings } from '../../context/SettingsContext';
 import styles from './SettingsWorkspace.module.css';
 
 const SETTINGS_SECTIONS = [
@@ -16,23 +17,7 @@ const SETTINGS_SECTIONS = [
 
 export default function SettingsWorkspace() {
   const [activeSection, setActiveSection] = useState('general');
-  const [settings, setSettings] = useState({
-    storeName: 'Doopify Demo Store',
-    supportEmail: 'support@doopify.com',
-    phone: '(310) 555-0100',
-    address: '4476 Santa Monica Blvd, Los Angeles, CA',
-    timezone: 'America/Los_Angeles',
-    currency: 'USD',
-    logoUrl: '',
-    brandPrimary: '#004fc4',
-    brandAccent: '#60a5fa',
-    orderPrefix: 'DPY',
-    defaultLocation: 'Los Angeles warehouse',
-    shippingOrigin: 'Los Angeles warehouse',
-    freeShippingThreshold: '100',
-    senderEmail: 'hello@doopify.com',
-    lowInventoryAlert: '5',
-  });
+  const { settings, updateSettings } = useSettings();
 
   const activeTitle = useMemo(() => SETTINGS_SECTIONS.find(section => section.id === activeSection)?.label || 'Settings', [activeSection]);
 
@@ -65,35 +50,35 @@ export default function SettingsWorkspace() {
 
             {activeSection === 'general' ? (
               <div className={styles.formGrid}>
-                <label className={styles.field}><span>Store name</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, storeName: event.target.value }))} value={settings.storeName} /></label>
-                <label className={styles.field}><span>Support email</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, supportEmail: event.target.value }))} value={settings.supportEmail} /></label>
-                <label className={styles.field}><span>Phone</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, phone: event.target.value }))} value={settings.phone} /></label>
-                <label className={styles.field}><span>Address</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, address: event.target.value }))} value={settings.address} /></label>
-                <label className={styles.field}><span>Timezone</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, timezone: event.target.value }))} value={settings.timezone} /></label>
-                <label className={styles.field}><span>Currency</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, currency: event.target.value }))} value={settings.currency} /></label>
+                <label className={styles.field}><span>Store name</span><input className={styles.input} onChange={event => updateSettings({ storeName: event.target.value })} value={settings.storeName} /></label>
+                <label className={styles.field}><span>Support email</span><input className={styles.input} onChange={event => updateSettings({ supportEmail: event.target.value })} value={settings.supportEmail} /></label>
+                <label className={styles.field}><span>Phone</span><input className={styles.input} onChange={event => updateSettings({ phone: event.target.value })} value={settings.phone} /></label>
+                <label className={styles.field}><span>Address</span><input className={styles.input} onChange={event => updateSettings({ address: event.target.value })} value={settings.address} /></label>
+                <label className={styles.field}><span>Timezone</span><input className={styles.input} onChange={event => updateSettings({ timezone: event.target.value })} value={settings.timezone} /></label>
+                <label className={styles.field}><span>Currency</span><input className={styles.input} onChange={event => updateSettings({ currency: event.target.value })} value={settings.currency} /></label>
               </div>
             ) : null}
 
             {activeSection === 'branding' ? (
               <div className={styles.formGrid}>
-                <label className={styles.field}><span>Logo URL</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, logoUrl: event.target.value }))} value={settings.logoUrl} /></label>
-                <label className={styles.field}><span>Primary brand color</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, brandPrimary: event.target.value }))} value={settings.brandPrimary} /></label>
-                <label className={styles.field}><span>Accent color</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, brandAccent: event.target.value }))} value={settings.brandAccent} /></label>
-                <label className={styles.field}><span>Order prefix</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, orderPrefix: event.target.value }))} value={settings.orderPrefix} /></label>
+                <label className={styles.field}><span>Logo URL</span><input className={styles.input} onChange={event => updateSettings({ logoUrl: event.target.value })} value={settings.logoUrl} /></label>
+                <label className={styles.field}><span>Primary brand color</span><input className={styles.input} onChange={event => updateSettings({ brandPrimary: event.target.value })} value={settings.brandPrimary} /></label>
+                <label className={styles.field}><span>Accent color</span><input className={styles.input} onChange={event => updateSettings({ brandAccent: event.target.value })} value={settings.brandAccent} /></label>
+                <label className={styles.field}><span>Order prefix</span><input className={styles.input} onChange={event => updateSettings({ orderPrefix: event.target.value })} value={settings.orderPrefix} /></label>
               </div>
             ) : null}
 
             {activeSection === 'locations' ? (
               <div className={styles.formGrid}>
-                <label className={styles.field}><span>Default location</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, defaultLocation: event.target.value }))} value={settings.defaultLocation} /></label>
-                <label className={styles.field}><span>Shipping origin</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, shippingOrigin: event.target.value }))} value={settings.shippingOrigin} /></label>
+                <label className={styles.field}><span>Default location</span><input className={styles.input} onChange={event => updateSettings({ defaultLocation: event.target.value })} value={settings.defaultLocation} /></label>
+                <label className={styles.field}><span>Shipping origin</span><input className={styles.input} onChange={event => updateSettings({ shippingOrigin: event.target.value })} value={settings.shippingOrigin} /></label>
               </div>
             ) : null}
 
             {activeSection === 'shipping' ? (
               <div className={styles.formGrid}>
-                <label className={styles.field}><span>Free shipping threshold</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, freeShippingThreshold: event.target.value }))} value={settings.freeShippingThreshold} /></label>
-                <label className={styles.field}><span>Low inventory alert</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, lowInventoryAlert: event.target.value }))} value={settings.lowInventoryAlert} /></label>
+                <label className={styles.field}><span>Free shipping threshold</span><input className={styles.input} onChange={event => updateSettings({ freeShippingThreshold: event.target.value })} value={settings.freeShippingThreshold} /></label>
+                <label className={styles.field}><span>Low inventory alert</span><input className={styles.input} onChange={event => updateSettings({ lowInventoryAlert: event.target.value })} value={settings.lowInventoryAlert} /></label>
               </div>
             ) : null}
 
@@ -103,7 +88,7 @@ export default function SettingsWorkspace() {
 
             {activeSection === 'notifications' ? (
               <div className={styles.formGrid}>
-                <label className={styles.field}><span>Sender email</span><input className={styles.input} onChange={event => setSettings(current => ({ ...current, senderEmail: event.target.value }))} value={settings.senderEmail} /></label>
+                <label className={styles.field}><span>Sender email</span><input className={styles.input} onChange={event => updateSettings({ senderEmail: event.target.value })} value={settings.senderEmail} /></label>
               </div>
             ) : null}
 

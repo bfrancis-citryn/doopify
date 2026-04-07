@@ -5,6 +5,7 @@ import { OrdersProvider } from '../context/OrdersContext';
 import { CustomersProvider } from '../context/CustomersContext';
 import { DiscountsProvider } from '../context/DiscountsContext';
 import { ProductsProvider } from '../context/ProductsContext';
+import { SettingsProvider } from '../context/SettingsContext';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -29,13 +30,15 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${inter.variable} ${manrope.variable}`}>
         <ThemeProvider>
-          <CustomersProvider>
-            <DiscountsProvider>
-              <ProductsProvider>
-                <OrdersProvider>{children}</OrdersProvider>
-              </ProductsProvider>
-            </DiscountsProvider>
-          </CustomersProvider>
+          <SettingsProvider>
+            <CustomersProvider>
+              <DiscountsProvider>
+                <ProductsProvider>
+                  <OrdersProvider>{children}</OrdersProvider>
+                </ProductsProvider>
+              </DiscountsProvider>
+            </CustomersProvider>
+          </SettingsProvider>
         </ThemeProvider>
       </body>
     </html>

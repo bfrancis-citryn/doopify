@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
 import { useOrders } from '../../context/OrdersContext';
+import { useSettings } from '../../context/SettingsContext';
 import {
   ORDER_DELIVERY_STATUSES,
   ORDER_FULFILLMENT_STATUSES,
@@ -40,6 +41,7 @@ function BulkActionsBar({ selectedCount, onAction }) {
 
 export default function OrdersWorkspace() {
   const { orders, setOrders, updateOrder } = useOrders();
+  const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState(orders[0]?.id || null);
@@ -288,7 +290,7 @@ export default function OrdersWorkspace() {
                         <StatusPill tone={selectedOrder.deliveryStatus.replace(/\s+/g, '-')}>{selectedOrder.deliveryStatus}</StatusPill>
                         <div className={styles.fulfillmentMetaList}>
                           <div>{new Date(selectedOrder.createdAt).toLocaleDateString()}</div>
-                          <div>Deliver by {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}</div>
+                          <div>Ship from {settings.shippingOrigin}</div>
                           <div>{selectedOrder.carrier} tracking: {selectedOrder.trackingNumber || 'No tracking yet'}</div>
                         </div>
                         <div className={styles.shippingBuilderGrid}>

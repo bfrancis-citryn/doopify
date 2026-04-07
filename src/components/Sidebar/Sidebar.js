@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSettings } from '../../context/SettingsContext';
 import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
@@ -14,11 +15,13 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { settings } = useSettings();
 
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
-        <h1 className={`text-xl font-bold tracking-tighter font-headline ${styles.brandTitle}`}>Doopify</h1>
+        {settings.logoUrl ? <img alt={settings.storeName} className={styles.brandLogo} src={settings.logoUrl} /> : null}
+        <h1 className={`text-xl font-bold tracking-tighter font-headline ${styles.brandTitle}`}>{settings.storeName}</h1>
         <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Commerce OS</p>
       </div>
 

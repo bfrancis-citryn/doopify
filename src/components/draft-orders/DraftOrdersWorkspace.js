@@ -5,6 +5,7 @@ import AppShell from '../AppShell';
 import { useOrders } from '../../context/OrdersContext';
 import { useCustomers } from '../../context/CustomersContext';
 import { useDiscounts } from '../../context/DiscountsContext';
+import { useSettings } from '../../context/SettingsContext';
 import { createSeedProducts } from '../../lib/productUtils';
 import { formatCustomerMoney } from '../../lib/customersData';
 import { calculateDraftTotals, convertDraftOrderToOrder, createDraftLineItemFromProduct, createDraftOrderSeed } from '../../lib/draftOrdersData';
@@ -14,6 +15,7 @@ export default function DraftOrdersWorkspace() {
   const { orders, addOrder } = useOrders();
   const { customers, updateCustomer } = useCustomers();
   const { discounts, updateDiscount } = useDiscounts();
+  const { settings } = useSettings();
   const [products] = useState(createSeedProducts());
   const [convertedOrders, setConvertedOrders] = useState([]);
   const [draftOrder, setDraftOrder] = useState(() => createDraftOrderSeed(createSeedProducts(), customers, discounts));
@@ -35,7 +37,13 @@ export default function DraftOrdersWorkspace() {
   };
 
   const convertToOrder = () => {
-    const convertedOrder = convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, orders.length);
+    const convertedOrder = {
+      ...convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, orders.length),
+      orderNumber: `#${settings.orderPrefix}${String(orders.length + 1).padStart(4, '0')}`,
+      location: settings.defaultLocation,
+      shippingAddress: selectedCustomer?.defaultAddress || settings.shippingOrigin,
+      billingAddress: selectedCustomer?.defaultAddress || settings.shippingOrigin,
+    };
     addOrder(convertedOrder);
     setConvertedOrders(current => [convertedOrder, ...current]);
 
@@ -177,7 +185,7 @@ export default function DraftOrdersWorkspace() {
               </label>
               <label className={styles.field}>
                 <span>Shipping</span>
-                <input className={styles.input} onChange={event => setDraftOrder(current => ({ ...current, shippingAmount: Number(event.target.value || 0) }))} type="number" value={draftOrder.shippingAmount} />
+                <input className={styles.input} onChange={event => setDraftOrder(current => ({ ...current, shippingAmount: Number(event.target.value || 0) }))} placeholder={`Free over $${settings.freeShippingThreshold}`} type="number" value={draftOrder.shippingAmount} />
               </label>
               <label className={styles.field}>
                 <span>Tax</span>
