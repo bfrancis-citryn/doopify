@@ -5,7 +5,7 @@ import { createContext, useContext, useMemo, useState } from 'react';
 const SettingsContext = createContext(null);
 
 const initialSettings = {
-  storeName: 'Doopify Demo Store',
+  storeName: 'Doopify',
   supportEmail: 'support@doopify.com',
   phone: '(310) 555-0100',
   address: '4476 Santa Monica Blvd, Los Angeles, CA',
