@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
+import { useOrders } from '../../context/OrdersContext';
 import {
   ORDER_DELIVERY_STATUSES,
   ORDER_FULFILLMENT_STATUSES,
   ORDER_PAYMENT_STATUSES,
   ORDER_RETURN_STATUSES,
   ORDER_VIEWS,
-  createSeedOrders,
   formatOrderMoney,
   getOrderViewMatch,
   searchOrder,
@@ -39,7 +39,7 @@ function BulkActionsBar({ selectedCount, onAction }) {
 }
 
 export default function OrdersWorkspace() {
-  const [orders, setOrders] = useState(createSeedOrders());
+  const { orders, setOrders, updateOrder } = useOrders();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState('all');
   const [selectedOrderId, setSelectedOrderId] = useState(orders[0]?.id || null);
@@ -67,10 +67,6 @@ export default function OrdersWorkspace() {
     visibleOrders[0] ||
     null;
   const summary = summarizeOrders(visibleOrders);
-
-  const updateOrder = (orderId, updater) => {
-    setOrders(currentOrders => currentOrders.map(order => (order.id === orderId ? updater(order) : order)));
-  };
 
   const appendTimeline = (order, event, detail) => ({
     ...order,

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
+import { useOrders } from '../../context/OrdersContext';
 import { createSeedProducts } from '../../lib/productUtils';
 import { createSeedCustomers, formatCustomerMoney } from '../../lib/customersData';
 import { createSeedDiscounts } from '../../lib/discountsData';
@@ -9,6 +10,7 @@ import { calculateDraftTotals, convertDraftOrderToOrder, createDraftLineItemFrom
 import styles from './DraftOrdersWorkspace.module.css';
 
 export default function DraftOrdersWorkspace() {
+  const { orders, addOrder } = useOrders();
   const [products] = useState(createSeedProducts());
   const [customers] = useState(createSeedCustomers());
   const [discounts] = useState(createSeedDiscounts());
@@ -32,7 +34,8 @@ export default function DraftOrdersWorkspace() {
   };
 
   const convertToOrder = () => {
-    const convertedOrder = convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, convertedOrders.length);
+    const convertedOrder = convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, orders.length);
+    addOrder(convertedOrder);
     setConvertedOrders(current => [convertedOrder, ...current]);
     setDraftOrder(createDraftOrderSeed(products, customers, discounts));
   };
