@@ -751,6 +751,11 @@ export function ProductProvider({ children }) {
       const cleanOptions = sanitizeOptions(nextOptions);
       const nextVariants = generateVariantsFromOptions(draftProduct, cleanOptions, draftProduct.variants);
 
+      dispatch({
+        type: 'SET_VALIDATION_ERRORS',
+        errors: {},
+      });
+
       return {
         ...draftProduct,
         options: nextOptions,

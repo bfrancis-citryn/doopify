@@ -97,6 +97,145 @@ function OptionEditor({ option, actions, errorMessage }) {
               </div>
             </div>
           ) : null}
+
+          <div className={styles.optionFooter}>
+            <button className={styles.deleteOptionButton} onClick={() => actions.removeOptionGroup(option.id)} type="button">
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GroupedVariantRows({ draftProduct, actions, formatMoney }) {
+  const [expandedGroupKey, setExpandedGroupKey] = useState(null);
+  const primaryOption = draftProduct.options[0];
+  const secondaryOption = draftProduct.options[1];
+  const grouped = primaryOption
+    ? primaryOption.values.map(value => {
+        const variants = draftProduct.variants.filter(variant => variant.optionValues?.[primaryOption.name] === value);
+        return {
+          key: value,
+          label: value,
+          variants,
+        };
+      })
+    : [];
+
+  return (
+    <>
+      {grouped.map(group => {
+        const totalAvailable = group.variants.reduce((sum, variant) => sum + (Number.parseInt(variant.inventoryQty, 10) || 0), 0);
+        const groupPrice = group.variants[0]?.price || draftProduct.basePrice;
+        const isExpanded = expandedGroupKey === group.key;
+
+        return (
+          <div key={group.key} className={styles.groupBlock}>
+            <div className={styles.groupRow}>
+              <div className={styles.checkboxColumn}>
+                <input type="checkbox" />
+              </div>
+              <button className={styles.groupIdentityCell} onClick={() => setExpandedGroupKey(isExpanded ? null : group.key)} type="button">
+                <div className={styles.variantThumbPlaceholder}>
+                  <span className="material-symbols-outlined">add_photo_alternate</span>
+                </div>
+                <div className={styles.variantIdentityText}>
+                  <div className={styles.variantName}>{group.label}</div>
+                  <div className={styles.groupMeta}>
+                    {group.variants.length} variant{group.variants.length > 1 ? 's' : ''}
+                    <span className="material-symbols-outlined">{isExpanded ? 'expand_less' : 'expand_more'}</span>
+                  </div>
+                </div>
+              </button>
+              <div className={styles.variantPriceCell}>
+                <div className={styles.currencyInputWrap}>
+                  <span className={styles.currencyPrefix}>$</span>
+                  <input className={styles.priceInput} readOnly type="text" value={groupPrice} />
+                </div>
+                <small className={styles.secondaryLine}>{formatMoney(groupPrice)}</small>
+              </div>
+              <div className={styles.variantInventoryCell}>
+                <input className={styles.inventoryInput} readOnly type="number" value={totalAvailable} />
+              </div>
+            </div>
+
+            {isExpanded && secondaryOption ? (
+              <div className={styles.subRowList}>
+                {group.variants.map(variant => (
+                  <div key={variant.id} className={styles.subVariantRow}>
+                    <div className={styles.checkboxColumn}>
+                      <input type="checkbox" />
+                    </div>
+                    <div className={styles.subVariantIdentity}>
+                      <div className={styles.subVariantSpacer} />
+                      <div className={styles.variantIdentityText}>
+                        <div className={styles.variantName}>{variant.optionValues?.[secondaryOption.name] || variant.title}</div>
+                      </div>
+                      <button className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} type="button">
+                        Delete
+                      </button>
+                    </div>
+                    <div className={styles.variantPriceCell}>
+                      <div className={styles.currencyInputWrap}>
+                        <span className={styles.currencyPrefix}>$</span>
+                        <input
+                          className={styles.priceInput}
+                          onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
+                          type="text"
+                          value={variant.price}
+                        />
+                      </div>
+                    </div>
+                    <div className={styles.variantInventoryCell}>
+                      <input
+                        className={styles.inventoryInput}
+                        min="0"
+                        onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
+                        type="number"
+                        value={variant.inventoryQty}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function BasicInventoryCard({ draftProduct, actions }) {
+  const baseVariant = draftProduct.variants[0];
+  const inventoryQty = baseVariant?.inventoryQty ?? 0;
+
+  return (
+    <div className={styles.basicInventoryCard}>
+      <div className={styles.basicInventoryHeader}>
+        <h4 className={styles.basicInventoryTitle}>Inventory</h4>
+        <label className={styles.inventoryTrackedToggle}>
+          <span>Inventory tracked</span>
+          <input checked readOnly type="checkbox" />
+        </label>
+      </div>
+
+      <div className={styles.basicInventoryTable}>
+        <div className={styles.basicInventoryRow}>
+          <span>Quantity</span>
+          <span>Quantity</span>
+        </div>
+        <div className={styles.basicInventoryRow}>
+          <span>{draftProduct.vendor || 'Default location'}</span>
+          <input
+            className={styles.inventoryInput}
+            min="0"
+            onChange={event => actions.updateVariantField(baseVariant.id, 'inventoryQty', event.target.value)}
+            type="number"
+            value={inventoryQty}
+          />
         </div>
       </div>
     </div>
@@ -114,6 +253,9 @@ export default function ProductVariantEditor() {
   if (!draftProduct) {
     return null;
   }
+
+  const hasRealVariants = draftProduct.options.length > 0;
+  const canGroupVariants = draftProduct.options.length > 1;
 
   return (
     <div className={styles.variantShell}>
@@ -153,67 +295,81 @@ export default function ProductVariantEditor() {
       ) : null}
       {editor.validationErrors.variants ? <p className={styles.errorText}>{editor.validationErrors.variants}</p> : null}
 
-      <div className={styles.matrixTools}>
-        <button className={styles.matrixToolButton} type="button">
-          <span className="material-symbols-outlined">search</span>
-        </button>
-        <button className={styles.matrixToolButton} type="button">
-          <span className="material-symbols-outlined">filter_list</span>
-        </button>
-      </div>
+      {hasRealVariants ? (
+        <>
+          <div className={styles.matrixTools}>
+            {canGroupVariants ? <div className={styles.groupByChip}>Group by {draftProduct.options[0].name}</div> : null}
+            <button className={styles.matrixToolButton} type="button">
+              <span className="material-symbols-outlined">search</span>
+            </button>
+            <button className={styles.matrixToolButton} type="button">
+              <span className="material-symbols-outlined">filter_list</span>
+            </button>
+          </div>
 
-      <div className={styles.matrixWrap}>
-        <div className={styles.matrixHeader}>
-          <div className={styles.checkboxColumn}><input type="checkbox" /></div>
-          <div className={styles.variantColumn}>Variant</div>
-          <div className={styles.priceColumn}>Price</div>
-          <div className={styles.inventoryColumn}>Available</div>
-        </div>
-
-        <div className={styles.matrixBody}>
-          {draftProduct.variants.map(variant => (
-            <div key={variant.id} className={styles.variantRow}>
-              <div className={styles.checkboxColumn}>
-                <input type="checkbox" />
-              </div>
-
-              <div className={styles.variantIdentityCell}>
-                <div className={styles.variantThumbPlaceholder}>
-                  <span className="material-symbols-outlined">add_photo_alternate</span>
-                </div>
-                <div className={styles.variantIdentityText}>
-                  <div className={styles.variantName}>{variant.title}</div>
-                </div>
-              </div>
-
-              <div className={styles.variantPriceCell}>
-                <div className={styles.currencyInputWrap}>
-                  <span className={styles.currencyPrefix}>$</span>
-                  <input
-                    className={styles.priceInput}
-                    onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
-                    type="text"
-                    value={variant.price}
-                  />
-                </div>
-                <small className={styles.secondaryLine}>{formatMoney(variant.price)}</small>
-              </div>
-
-              <div className={styles.variantInventoryCell}>
-                <input
-                  className={styles.inventoryInput}
-                  min="0"
-                  onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
-                  type="number"
-                  value={variant.inventoryQty}
-                />
-              </div>
+          <div className={styles.matrixWrap}>
+            <div className={styles.matrixHeader}>
+              <div className={styles.checkboxColumn}><input type="checkbox" /></div>
+              <div className={styles.variantColumn}>Variant</div>
+              <div className={styles.priceColumn}>Price</div>
+              <div className={styles.inventoryColumn}>Available</div>
             </div>
-          ))}
-        </div>
 
-        <div className={styles.matrixFooter}>Total inventory available: {totalInventory}</div>
-      </div>
+            <div className={styles.matrixBody}>
+              {canGroupVariants ? (
+                <GroupedVariantRows draftProduct={draftProduct} actions={actions} formatMoney={formatMoney} />
+              ) : (
+                draftProduct.variants.map(variant => (
+                  <div key={variant.id} className={styles.variantRow}>
+                    <div className={styles.checkboxColumn}>
+                      <input type="checkbox" />
+                    </div>
+
+                    <div className={styles.variantIdentityCell}>
+                      <div className={styles.variantThumbPlaceholder}>
+                        <span className="material-symbols-outlined">add_photo_alternate</span>
+                      </div>
+                      <div className={styles.variantIdentityText}>
+                        <div className={styles.variantName}>{variant.title}</div>
+                      </div>
+                      <button className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} type="button">
+                        Delete
+                      </button>
+                    </div>
+
+                    <div className={styles.variantPriceCell}>
+                      <div className={styles.currencyInputWrap}>
+                        <span className={styles.currencyPrefix}>$</span>
+                        <input
+                          className={styles.priceInput}
+                          onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
+                          type="text"
+                          value={variant.price}
+                        />
+                      </div>
+                      <small className={styles.secondaryLine}>{formatMoney(variant.price)}</small>
+                    </div>
+
+                    <div className={styles.variantInventoryCell}>
+                      <input
+                        className={styles.inventoryInput}
+                        min="0"
+                        onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
+                        type="number"
+                        value={variant.inventoryQty}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className={styles.matrixFooter}>Total inventory available: {totalInventory}</div>
+          </div>
+        </>
+      ) : (
+        <BasicInventoryCard draftProduct={draftProduct} actions={actions} />
+      )}
     </div>
   );
 }
