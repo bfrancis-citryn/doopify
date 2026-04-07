@@ -135,9 +135,9 @@
 
 .cardTiltWrap {
   position: relative;
-  width: min(100%, 35rem);
+  width: min(100%, 38rem);
   transform-style: preserve-3d;
-  transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) scale(1.08);
+  transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) scale(1.04);
   transition: transform 160ms ease;
   transform-origin: center;
 }
@@ -150,36 +150,37 @@
 .cardBeamLeft {
   pointer-events: none;
   position: absolute;
-  inset: -1px;
-  border-radius: 1.6rem;
+  inset: 0;
+  border-radius: 1.9rem;
 }
 
 .cardAurora {
-  background: radial-gradient(circle at 20% 20%, rgba(193, 157, 255, 0.16), transparent 34%),
-    radial-gradient(circle at 80% 24%, rgba(255, 255, 255, 0.08), transparent 22%),
-    radial-gradient(circle at 50% 100%, rgba(122, 58, 255, 0.16), transparent 38%);
-  filter: blur(18px);
-  opacity: 0.85;
+  overflow: hidden;
+  background: radial-gradient(circle at 20% 20%, rgba(193, 157, 255, 0.13), transparent 32%),
+    radial-gradient(circle at 80% 24%, rgba(255, 255, 255, 0.06), transparent 18%),
+    radial-gradient(circle at 50% 100%, rgba(122, 58, 255, 0.12), transparent 34%);
+  filter: blur(14px);
+  opacity: 0.7;
 }
 
 .cardGlowRing {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 20px 70px rgba(0, 0, 0, 0.5), 0 0 42px rgba(178, 132, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 22px 70px rgba(0, 0, 0, 0.46), 0 0 24px rgba(178, 132, 255, 0.08);
 }
 
 .cardBeamTop,
 .cardBeamBottom {
   height: 2px;
-  width: 44%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
-  filter: blur(1px);
+  width: 38%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  filter: blur(0.8px);
 }
 
 .cardBeamLeft,
 .cardBeamRight {
   width: 2px;
-  height: 42%;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.88), transparent);
-  filter: blur(1px);
+  height: 36%;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.56), transparent);
+  filter: blur(0.8px);
 }
 
 .cardBeamTop {
@@ -209,12 +210,12 @@
 .loginCard {
   position: relative;
   overflow: hidden;
-  border-radius: 1.65rem;
+  border-radius: 1.9rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(16, 10, 22, 0.74), rgba(8, 5, 12, 0.82));
+  background: linear-gradient(180deg, rgba(20, 12, 29, 0.76), rgba(8, 5, 12, 0.84));
   backdrop-filter: blur(26px);
   -webkit-backdrop-filter: blur(26px);
-  padding: 2rem;
+  padding: 2.35rem;
 }
 
 .cardPattern {
@@ -297,23 +298,24 @@
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 3.25rem;
+  min-height: 3.5rem;
   border-radius: 0.95rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   transition: border-color 180ms ease, background 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
 .field:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .fieldActive {
-  border-color: rgba(210, 188, 255, 0.48);
-  background: rgba(255, 255, 255, 0.075);
-  box-shadow: 0 0 0 4px rgba(162, 104, 255, 0.11);
+  border-color: rgba(210, 188, 255, 0.28);
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 0 3px rgba(162, 104, 255, 0.08);
 }
 
 .inputIcon {
@@ -334,14 +336,14 @@
   flex: 1;
   border: 0;
   background: transparent;
-  color: #ffffff;
-  padding: 0.95rem 0.35rem 0.95rem 0;
-  font-size: 0.98rem;
+  color: #f7f3ff;
+  padding: 1rem 0.65rem 1rem 0;
+  font-size: 1rem;
   outline: none;
 }
 
 .input::placeholder {
-  color: rgba(255, 255, 255, 0.34);
+  color: rgba(255, 255, 255, 0.46);
 }
 
 .eyeButton {
@@ -539,7 +541,7 @@
   .portalFrame {
     grid-template-columns: 1fr;
     gap: 2rem;
-    width: min(34rem, calc(100% - 2rem));
+    width: min(40rem, calc(100% - 2rem));
     padding: 2rem 0 3rem;
   }
 
