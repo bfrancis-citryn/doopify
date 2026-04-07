@@ -13,6 +13,14 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.themeToggleDock {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 30;
 }
 
 .viewContainer {

@@ -1,0 +1,28 @@
+.toggleWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.toggleButton,
+.toggleButtonActive {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-500);
+  transition: all 150ms ease;
+}
+
+.toggleButtonActive {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--slate-900);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}

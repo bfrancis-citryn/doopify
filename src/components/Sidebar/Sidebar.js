@@ -4,6 +4,7 @@ import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
   { href: '/orders', label: 'Orders', icon: 'shopping_cart' },
+  { href: '/draft-orders', label: 'Draft Orders', icon: 'edit_document' },
   { href: '/products', label: 'Products', icon: 'inventory_2' },
   { href: '#', label: 'Inventory', icon: 'warehouse' },
   { href: '/customers', label: 'Customers', icon: 'groups' },
