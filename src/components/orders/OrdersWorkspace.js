@@ -48,6 +48,7 @@ export default function OrdersWorkspace() {
   const [fulfillmentFilter, setFulfillmentFilter] = useState('all');
   const [deliveryFilter, setDeliveryFilter] = useState('all');
   const [tagInput, setTagInput] = useState('');
+  const [shippingLabelDraft, setShippingLabelDraft] = useState({ packageType: 'Small box', carrierService: 'UPS Ground', weight: '1.0 lb' });
 
   const visibleOrders = useMemo(
     () =>
@@ -150,6 +151,26 @@ export default function OrdersWorkspace() {
       tags: [...new Set([...(order.tags || []), normalizedTag])],
     }));
     setTagInput('');
+  };
+
+  const buyShippingLabel = () => {
+    if (!selectedOrder) {
+      return;
+    }
+
+    updateOrder(selectedOrder.id, order =>
+      appendTimeline(
+        {
+          ...order,
+          trackingNumber: order.trackingNumber || `LBL-${order.orderNumber.replace('#', '')}`,
+          carrier: shippingLabelDraft.carrierService,
+          deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
+          fulfillmentStatus: order.fulfillmentStatus === 'unfulfilled' ? 'packed' : order.fulfillmentStatus,
+        },
+        'Shipping label purchased',
+        `${shippingLabelDraft.carrierService} label created for ${shippingLabelDraft.packageType} (${shippingLabelDraft.weight}).`
+      )
+    );
   };
 
   return (
@@ -270,27 +291,25 @@ export default function OrdersWorkspace() {
                           <div>Deliver by {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}</div>
                           <div>{selectedOrder.carrier} tracking: {selectedOrder.trackingNumber || 'No tracking yet'}</div>
                         </div>
+                        <div className={styles.shippingBuilderGrid}>
+                          <select className={styles.detailSelect} onChange={event => setShippingLabelDraft(current => ({ ...current, packageType: event.target.value }))} value={shippingLabelDraft.packageType}>
+                            <option>Small box</option>
+                            <option>Medium box</option>
+                            <option>Large box</option>
+                            <option>Padded envelope</option>
+                          </select>
+                          <select className={styles.detailSelect} onChange={event => setShippingLabelDraft(current => ({ ...current, carrierService: event.target.value }))} value={shippingLabelDraft.carrierService}>
+                            <option>UPS Ground</option>
+                            <option>UPS 2nd Day Air</option>
+                            <option>USPS Priority Mail</option>
+                            <option>FedEx Home Delivery</option>
+                          </select>
+                          <input className={styles.detailInput} onChange={event => setShippingLabelDraft(current => ({ ...current, weight: event.target.value }))} placeholder="Weight" type="text" value={shippingLabelDraft.weight} />
+                        </div>
                         <div className={styles.shippingActionRow}>
-                          <button
-                            className={styles.secondaryAction}
-                            onClick={() =>
-                              updateOrder(selectedOrder.id, order =>
-                                appendTimeline(
-                                  {
-                                    ...order,
-                                    trackingNumber: order.trackingNumber || `LABEL-${order.orderNumber.replace('#', '')}`,
-                                    deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
-                                  },
-                                  'Shipping label purchased',
-                                  'Shipping label created and attached to the order.'
-                                )
-                              )
-                            }
-                            type="button"
-                          >
-                            Buy shipping label
-                          </button>
+                          <button className={styles.secondaryAction} onClick={buyShippingLabel} type="button">Buy shipping label</button>
                           <button className={styles.secondaryAction} type="button">Print packing slip</button>
+                          <button className={styles.secondaryAction} type="button">Print label</button>
                         </div>
                       </div>
 

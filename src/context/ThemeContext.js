@@ -17,7 +17,7 @@ export function ThemeProvider({ children }) {
   const [resolvedTheme, setResolvedTheme] = useState('light');
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem('aether-theme');
+    const savedTheme = window.localStorage.getItem('doopify-theme');
     if (savedTheme) {
       setTheme(savedTheme);
     }
@@ -31,7 +31,7 @@ export function ThemeProvider({ children }) {
     };
 
     applyTheme(theme);
-    window.localStorage.setItem('aether-theme', theme);
+    window.localStorage.setItem('doopify-theme', theme);
 
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => applyTheme(theme);

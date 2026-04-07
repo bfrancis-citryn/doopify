@@ -23,9 +23,9 @@
 .metricCard,
 .card {
   padding: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
   border-radius: 1rem;
-  background: var(--surface-container-low);
+  background: color-mix(in srgb, var(--surface-container-lowest) 90%, transparent);
   color: var(--on-surface);
 }
 
@@ -60,5 +60,5 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 0.8rem 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 40%, transparent);
 }

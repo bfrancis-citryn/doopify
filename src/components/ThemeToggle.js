@@ -4,8 +4,8 @@ import { useTheme } from '../context/ThemeContext';
 import styles from './ThemeToggle.module.css';
 
 const OPTIONS = [
+  { id: 'system', icon: 'desktop_windows', label: 'System' },
   { id: 'light', icon: 'light_mode', label: 'Light' },
-  { id: 'system', icon: 'contrast', label: 'System' },
   { id: 'dark', icon: 'dark_mode', label: 'Dark' },
 ];
 
