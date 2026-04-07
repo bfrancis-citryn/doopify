@@ -9,16 +9,16 @@
 
 .listPanel,
 .detailCard {
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   border-radius: 1.1rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--surface-container-lowest) 90%, transparent);
   overflow: hidden;
 }
 
 .headerRow,
 .builderHeader {
   padding: 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -67,20 +67,20 @@
 }
 
 .secondaryButton {
-  background: rgba(226, 232, 240, 0.72);
+  background: color-mix(in srgb, var(--surface-container) 82%, transparent);
   color: var(--slate-700);
 }
 
 .filterRow {
   padding: 0.85rem 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
 }
 
 .filterSelect,
 .formInput {
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: white;
-  color: var(--slate-900);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
 }
 
 .discountList {
@@ -91,7 +91,7 @@
 .discountRow,
 .discountRowActive {
   padding: 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -100,7 +100,7 @@
 }
 
 .discountRowActive {
-  background: rgba(239, 246, 255, 0.65);
+  background: color-mix(in srgb, var(--secondary-container) 72%, transparent);
 }
 
 .discountMain,
@@ -153,9 +153,9 @@
 
 .infoCard {
   padding: 1rem;
-  border: 1px solid rgba(226, 232, 240, 0.88);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
   border-radius: 0.95rem;
-  background: rgba(248, 250, 252, 0.75);
+  background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
   display: flex;
   flex-direction: column;
   gap: 0.55rem;

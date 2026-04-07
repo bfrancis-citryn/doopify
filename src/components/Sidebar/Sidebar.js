@@ -9,7 +9,7 @@ const NAV_ITEMS = [
   { href: '/customers', label: 'Customers', icon: 'groups' },
   { href: '/discounts', label: 'Discounts', icon: 'sell' },
   { href: '/analytics', label: 'Analytics', icon: 'analytics' },
-  { href: '#', label: 'Settings', icon: 'settings' },
+  { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
 
 export default function Sidebar() {
