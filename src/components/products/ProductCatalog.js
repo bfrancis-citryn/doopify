@@ -45,21 +45,22 @@ export default function ProductCatalog() {
   return (
     <section className={styles.catalogShell}>
       <div className={styles.catalogHeader}>
-        <div>
-          <p className={styles.overline}>Products</p>
-          <h2 className={`font-headline ${styles.title}`}>Catalog</h2>
-        </div>
+        <div className={styles.catalogHeaderTopRow}>
+          <div className={styles.searchField}>
+            <span className="material-symbols-outlined">search</span>
+            <input
+              aria-label="Search products"
+              className={styles.searchInput}
+              onChange={event => actions.setSearchQuery(event.target.value)}
+              placeholder="Search products, SKUs, vendors, tags..."
+              type="text"
+              value={searchQuery}
+            />
+          </div>
 
-        <div className={styles.searchField}>
-          <span className="material-symbols-outlined">search</span>
-          <input
-            aria-label="Search products"
-            className={styles.searchInput}
-            onChange={event => actions.setSearchQuery(event.target.value)}
-            placeholder="Search products, SKUs, vendors, tags..."
-            type="text"
-            value={searchQuery}
-          />
+          <button className={styles.newProductButton} onClick={() => actions.requestCreateProduct()} type="button">
+            <span className="material-symbols-outlined">add</span>
+          </button>
         </div>
       </div>
 

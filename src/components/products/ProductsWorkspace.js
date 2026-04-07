@@ -69,21 +69,6 @@ export default function ProductsWorkspace() {
           />
 
           <div className={styles.viewContainer}>
-            <div className={styles.consoleHeader}>
-              <div>
-                <p className={styles.consoleOverline}>Inventory Console</p>
-                <h1 className={`font-headline ${styles.consoleTitle}`}>Products Catalog</h1>
-                <p className={styles.consoleCopy}>Manage the catalog, edit variants, and keep inventory in sync without leaving the page.</p>
-              </div>
-
-              <div className={styles.consoleActions}>
-                <button className={styles.primaryActionBtn} onClick={() => actions.requestCreateProduct()} type="button">
-                  <span className="material-symbols-outlined text-base">add</span>
-                  New Product
-                </button>
-              </div>
-            </div>
-
             <div className={styles.splitView}>
               <ProductCatalog />
 
