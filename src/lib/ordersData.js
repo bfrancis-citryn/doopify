@@ -11,6 +11,11 @@ export const ORDER_VIEWS = [
 export const ORDER_PAYMENT_STATUSES = ['paid', 'pending', 'refunded', 'partially refunded', 'failed'];
 export const ORDER_FULFILLMENT_STATUSES = ['unfulfilled', 'scheduled', 'packed', 'fulfilled', 'partially fulfilled', 'returned'];
 export const ORDER_DELIVERY_STATUSES = ['not-shipped', 'in-transit', 'out-for-delivery', 'delivered', 'ready-for-pickup', 'returned'];
+export const ORDER_RETURN_STATUSES = ['none', 'requested', 'approved', 'received', 'refunded'];
+
+function timeline(event, detail, createdAt) {
+  return { id: `${event}-${detail}-${createdAt}`, event, detail, createdAt };
+}
 
 export function createSeedOrders() {
   return [
@@ -25,6 +30,7 @@ export function createSeedOrders() {
       paymentStatus: 'paid',
       fulfillmentStatus: 'unfulfilled',
       deliveryStatus: 'not-shipped',
+      returnStatus: 'none',
       deliveryMethod: 'Standard shipping',
       tags: ['VIP', 'Priority'],
       riskLevel: 'low',
@@ -34,6 +40,10 @@ export function createSeedOrders() {
       shippingAddress: '4476 Santa Monica Blvd, Los Angeles, CA',
       billingAddress: '4476 Santa Monica Blvd, Los Angeles, CA',
       notes: 'Requested gift wrap on headphones.',
+      timeline: [
+        timeline('Order created', 'Order was placed online.', '2026-04-06T14:12:00Z'),
+        timeline('Payment captured', 'Customer payment was authorized and captured.', '2026-04-06T14:13:00Z'),
+      ],
       lineItems: [
         { id: 'li_1', title: 'Lumix Pro Wireless', variant: 'Midnight', quantity: 1, price: 299 },
         { id: 'li_2', title: 'Velox Run Trainer', variant: '10 / Flare Red', quantity: 1, price: 120 },
@@ -51,6 +61,7 @@ export function createSeedOrders() {
       paymentStatus: 'pending',
       fulfillmentStatus: 'scheduled',
       deliveryStatus: 'not-shipped',
+      returnStatus: 'none',
       deliveryMethod: 'Express shipping',
       tags: ['Fraud review'],
       riskLevel: 'medium',
@@ -60,6 +71,10 @@ export function createSeedOrders() {
       shippingAddress: '9833 Grant Ave, Austin, TX',
       billingAddress: '9833 Grant Ave, Austin, TX',
       notes: 'Payment auth delayed; watch before packing.',
+      timeline: [
+        timeline('Order created', 'Order was imported from Instagram checkout.', '2026-04-06T12:48:00Z'),
+        timeline('Risk flagged', 'Payment auth delayed; manual review recommended.', '2026-04-06T12:49:00Z'),
+      ],
       lineItems: [{ id: 'li_4', title: 'Aether Chrono S1', variant: 'Leather / Black', quantity: 1, price: 349 }],
     },
     {
@@ -73,6 +88,7 @@ export function createSeedOrders() {
       paymentStatus: 'paid',
       fulfillmentStatus: 'fulfilled',
       deliveryStatus: 'delivered',
+      returnStatus: 'none',
       deliveryMethod: 'Local pickup',
       tags: ['Pickup'],
       riskLevel: 'low',
@@ -82,6 +98,11 @@ export function createSeedOrders() {
       shippingAddress: 'In-store pickup',
       billingAddress: '14 Canon Perdido St, Santa Barbara, CA',
       notes: 'Picked up same day.',
+      timeline: [
+        timeline('Order created', 'POS order placed in store.', '2026-04-05T21:05:00Z'),
+        timeline('Ready for pickup', 'Order is ready at Santa Barbara retail.', '2026-04-05T21:15:00Z'),
+        timeline('Picked up', 'Customer collected order in person.', '2026-04-05T21:42:00Z'),
+      ],
       lineItems: [{ id: 'li_5', title: 'Velox Run Trainer', variant: '9 / Flare Red', quantity: 1, price: 120 }],
     },
     {
@@ -95,6 +116,7 @@ export function createSeedOrders() {
       paymentStatus: 'paid',
       fulfillmentStatus: 'fulfilled',
       deliveryStatus: 'in-transit',
+      returnStatus: 'none',
       deliveryMethod: '2-day shipping',
       tags: ['Signature required'],
       riskLevel: 'low',
@@ -104,6 +126,11 @@ export function createSeedOrders() {
       shippingAddress: '1600 Market St, San Francisco, CA',
       billingAddress: '1600 Market St, San Francisco, CA',
       notes: 'Leave at front desk after signature.',
+      timeline: [
+        timeline('Order created', 'Order was placed online.', '2026-04-05T18:27:00Z'),
+        timeline('Packed', 'Packed at Nevada warehouse.', '2026-04-05T20:01:00Z'),
+        timeline('Shipped', 'Tracking number added with UPS.', '2026-04-05T20:20:00Z'),
+      ],
       lineItems: [{ id: 'li_6', title: 'Titan X-Phone', variant: '256 GB / Black', quantity: 1, price: 999 }],
     },
     {
@@ -117,6 +144,7 @@ export function createSeedOrders() {
       paymentStatus: 'partially refunded',
       fulfillmentStatus: 'returned',
       deliveryStatus: 'returned',
+      returnStatus: 'received',
       deliveryMethod: 'Standard shipping',
       tags: ['Return'],
       riskLevel: 'low',
@@ -126,6 +154,12 @@ export function createSeedOrders() {
       shippingAddress: '88 Mission Bay Blvd, San Diego, CA',
       billingAddress: '88 Mission Bay Blvd, San Diego, CA',
       notes: 'Customer returned one damaged item.',
+      timeline: [
+        timeline('Order created', 'Order was placed online.', '2026-04-05T15:02:00Z'),
+        timeline('Delivered', 'Order delivered to customer.', '2026-04-06T09:20:00Z'),
+        timeline('Return requested', 'Customer reported damaged item.', '2026-04-06T13:15:00Z'),
+        timeline('Return received', 'Warehouse scanned returned parcel.', '2026-04-06T19:05:00Z'),
+      ],
       lineItems: [
         { id: 'li_7', title: 'Lumix Pro Wireless', variant: 'Silver', quantity: 1, price: 299 },
         { id: 'li_8', title: 'Lumix Pro Wireless', variant: 'Midnight', quantity: 1, price: 299 },
@@ -147,7 +181,7 @@ export function getOrderViewMatch(order, viewId) {
     case 'open':
       return !['delivered', 'returned'].includes(order.deliveryStatus);
     case 'returns':
-      return order.fulfillmentStatus === 'returned' || order.deliveryStatus === 'returned';
+      return order.fulfillmentStatus === 'returned' || order.deliveryStatus === 'returned' || order.returnStatus !== 'none';
     case 'delivered':
       return order.deliveryStatus === 'delivered';
     case 'local-pickup':
@@ -173,6 +207,7 @@ export function searchOrder(order, query) {
     order.paymentStatus,
     order.fulfillmentStatus,
     order.deliveryStatus,
+    order.returnStatus,
     ...(order.tags || []),
   ]
     .join(' ')
@@ -184,7 +219,7 @@ export function summarizeOrders(orders) {
   return {
     orders: orders.length,
     itemsOrdered: orders.reduce((sum, order) => sum + order.itemCount, 0),
-    returns: orders.filter(order => order.fulfillmentStatus === 'returned' || order.deliveryStatus === 'returned').length,
+    returns: orders.filter(order => order.fulfillmentStatus === 'returned' || order.deliveryStatus === 'returned' || order.returnStatus !== 'none').length,
     fulfilled: orders.filter(order => ['fulfilled', 'partially fulfilled'].includes(order.fulfillmentStatus)).length,
     delivered: orders.filter(order => order.deliveryStatus === 'delivered').length,
     toFulfill: orders.filter(order => ['unfulfilled', 'scheduled', 'packed'].includes(order.fulfillmentStatus)).length,

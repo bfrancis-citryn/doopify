@@ -6,6 +6,7 @@ import {
   ORDER_DELIVERY_STATUSES,
   ORDER_FULFILLMENT_STATUSES,
   ORDER_PAYMENT_STATUSES,
+  ORDER_RETURN_STATUSES,
   ORDER_VIEWS,
   createSeedOrders,
   formatOrderMoney,
@@ -46,6 +47,7 @@ export default function OrdersWorkspace() {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [fulfillmentFilter, setFulfillmentFilter] = useState('all');
   const [deliveryFilter, setDeliveryFilter] = useState('all');
+  const [tagInput, setTagInput] = useState('');
 
   const visibleOrders = useMemo(
     () =>
@@ -70,6 +72,19 @@ export default function OrdersWorkspace() {
     setOrders(currentOrders => currentOrders.map(order => (order.id === orderId ? updater(order) : order)));
   };
 
+  const appendTimeline = (order, event, detail) => ({
+    ...order,
+    timeline: [
+      {
+        id: `${event}-${Date.now()}`,
+        event,
+        detail,
+        createdAt: new Date().toISOString(),
+      },
+      ...(order.timeline || []),
+    ],
+  });
+
   const handleBulkAction = action => {
     setOrders(currentOrders =>
       currentOrders.map(order => {
@@ -78,18 +93,26 @@ export default function OrdersWorkspace() {
         }
 
         if (action === 'fulfilled') {
-          return {
-            ...order,
-            fulfillmentStatus: 'fulfilled',
-            deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
-          };
+          return appendTimeline(
+            {
+              ...order,
+              fulfillmentStatus: 'fulfilled',
+              deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
+            },
+            'Fulfillment updated',
+            'Bulk action: marked fulfilled.'
+          );
         }
 
         if (action === 'packed') {
-          return {
-            ...order,
-            fulfillmentStatus: 'packed',
-          };
+          return appendTimeline(
+            {
+              ...order,
+              fulfillmentStatus: 'packed',
+            },
+            'Packing updated',
+            'Bulk action: marked packed.'
+          );
         }
 
         if (action === 'tag-priority') {
@@ -118,6 +141,19 @@ export default function OrdersWorkspace() {
 
   const toggleSelectAllVisible = checked => {
     setSelectedIds(checked ? visibleOrders.map(order => order.id) : []);
+  };
+
+  const addTagToOrder = () => {
+    const normalizedTag = tagInput.trim();
+    if (!selectedOrder || !normalizedTag) {
+      return;
+    }
+
+    updateOrder(selectedOrder.id, order => ({
+      ...order,
+      tags: [...new Set([...(order.tags || []), normalizedTag])],
+    }));
+    setTagInput('');
   };
 
   return (
@@ -211,8 +247,44 @@ export default function OrdersWorkspace() {
                     <h2 className={styles.detailTitle}>{selectedOrder.orderNumber}</h2>
                   </div>
                   <div className={styles.detailActions}>
-                    <button className={styles.secondaryAction} onClick={() => updateOrder(selectedOrder.id, order => ({ ...order, fulfillmentStatus: 'fulfilled', deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus }))} type="button">Mark fulfilled</button>
-                    <button className={styles.primaryAction} onClick={() => updateOrder(selectedOrder.id, order => ({ ...order, trackingNumber: order.trackingNumber || `TRACK-${order.orderNumber.replace('#', '')}`, deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus }))} type="button">Add tracking</button>
+                    <button
+                      className={styles.secondaryAction}
+                      onClick={() =>
+                        updateOrder(selectedOrder.id, order =>
+                          appendTimeline(
+                            {
+                              ...order,
+                              fulfillmentStatus: 'fulfilled',
+                              deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
+                            },
+                            'Fulfillment updated',
+                            'Order marked fulfilled.'
+                          )
+                        )
+                      }
+                      type="button"
+                    >
+                      Mark fulfilled
+                    </button>
+                    <button
+                      className={styles.primaryAction}
+                      onClick={() =>
+                        updateOrder(selectedOrder.id, order =>
+                          appendTimeline(
+                            {
+                              ...order,
+                              trackingNumber: order.trackingNumber || `TRACK-${order.orderNumber.replace('#', '')}`,
+                              deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
+                            },
+                            'Tracking added',
+                            'Tracking number was added to the order.'
+                          )
+                        )
+                      }
+                      type="button"
+                    >
+                      Add tracking
+                    </button>
                   </div>
                 </div>
 
@@ -242,20 +314,41 @@ export default function OrdersWorkspace() {
                     </select>
                   </div>
                   <div className={styles.detailSection}>
-                    <h3>Shipping method</h3>
-                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, deliveryMethod: event.target.value }))} type="text" value={selectedOrder.deliveryMethod} />
-                    <small>{selectedOrder.carrier} · {selectedOrder.trackingNumber || 'No tracking yet'}</small>
+                    <h3>Return / refund</h3>
+                    <select className={styles.detailSelect} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, returnStatus: event.target.value }))} value={selectedOrder.returnStatus}>
+                      {ORDER_RETURN_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+                    </select>
                   </div>
                 </div>
 
                 <div className={styles.detailGrid}>
                   <div className={styles.detailSection}>
-                    <h3>Carrier</h3>
-                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, carrier: event.target.value }))} type="text" value={selectedOrder.carrier} />
+                    <h3>Shipping method</h3>
+                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, deliveryMethod: event.target.value }))} type="text" value={selectedOrder.deliveryMethod} />
+                    <small>{selectedOrder.carrier} · {selectedOrder.trackingNumber || 'No tracking yet'}</small>
                   </div>
                   <div className={styles.detailSection}>
-                    <h3>Tracking number</h3>
-                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, trackingNumber: event.target.value }))} type="text" value={selectedOrder.trackingNumber} />
+                    <h3>Carrier + tracking</h3>
+                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, carrier: event.target.value }))} placeholder="Carrier" type="text" value={selectedOrder.carrier} />
+                    <input className={styles.detailInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, trackingNumber: event.target.value }))} placeholder="Tracking number" type="text" value={selectedOrder.trackingNumber} />
+                  </div>
+                </div>
+
+                <div className={styles.detailSection}>
+                  <h3>Tags</h3>
+                  <div className={styles.tagComposer}>
+                    <div className={styles.tagList}>
+                      {selectedOrder.tags.map(tag => (
+                        <button key={`${selectedOrder.id}-${tag}`} className={styles.tagChip} onClick={() => updateOrder(selectedOrder.id, order => ({ ...order, tags: order.tags.filter(existingTag => existingTag !== tag) }))} type="button">
+                          <span>{tag}</span>
+                          <span className="material-symbols-outlined">close</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className={styles.tagInputRow}>
+                      <input className={styles.detailInput} onChange={event => setTagInput(event.target.value)} placeholder="Add tag" type="text" value={tagInput} />
+                      <button className={styles.secondaryAction} onClick={addTagToOrder} type="button">Add tag</button>
+                    </div>
                   </div>
                 </div>
 
@@ -283,7 +376,22 @@ export default function OrdersWorkspace() {
                   <div className={styles.detailSection}>
                     <h3>Notes</h3>
                     <textarea className={styles.notesInput} onChange={event => updateOrder(selectedOrder.id, order => ({ ...order, notes: event.target.value }))} rows={5} value={selectedOrder.notes} />
-                    <small>Tags: {selectedOrder.tags.join(', ') || 'None'}</small>
+                  </div>
+                </div>
+
+                <div className={styles.detailSection}>
+                  <h3>Timeline</h3>
+                  <div className={styles.timelineList}>
+                    {(selectedOrder.timeline || []).map(entry => (
+                      <div key={entry.id} className={styles.timelineItem}>
+                        <div className={styles.timelineDot} />
+                        <div>
+                          <strong>{entry.event}</strong>
+                          <p>{entry.detail}</p>
+                          <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
