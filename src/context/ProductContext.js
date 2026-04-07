@@ -761,6 +761,22 @@ export function ProductProvider({ children }) {
 
   const updateOptionName = (optionId, value) => {
     updateDraftProduct(draftProduct => {
+      const normalizedName = value.trim();
+      const duplicateOption = draftProduct.options.find(
+        option => option.id !== optionId && option.name.trim().toLowerCase() === normalizedName.toLowerCase()
+      );
+
+      if (normalizedName && duplicateOption) {
+        dispatch({
+          type: 'SET_VALIDATION_ERRORS',
+          errors: {
+            ...state.editor.validationErrors,
+            options: `You've already used the option name "${normalizedName}".`,
+          },
+        });
+        return draftProduct;
+      }
+
       const nextOptions = draftProduct.options.map(option =>
         option.id === optionId
           ? {
@@ -771,6 +787,14 @@ export function ProductProvider({ children }) {
       );
       const cleanOptions = sanitizeOptions(nextOptions);
       const nextVariants = generateVariantsFromOptions(draftProduct, cleanOptions, draftProduct.variants);
+
+      dispatch({
+        type: 'SET_VALIDATION_ERRORS',
+        errors: {
+          ...state.editor.validationErrors,
+          options: undefined,
+        },
+      });
 
       return {
         ...draftProduct,
@@ -795,6 +819,61 @@ export function ProductProvider({ children }) {
             }
           : option
       );
+      const cleanOptions = sanitizeOptions(nextOptions);
+      const nextVariants = generateVariantsFromOptions(draftProduct, cleanOptions, draftProduct.variants);
+
+      return {
+        ...draftProduct,
+        options: nextOptions,
+        variants: nextVariants,
+      };
+    });
+  };
+
+  const addOptionValue = (optionId, value) => {
+    const normalizedValue = String(value ?? '').trim();
+    if (!normalizedValue) {
+      return;
+    }
+
+    updateDraftProduct(draftProduct => {
+      const nextOptions = draftProduct.options.map(option => {
+        if (option.id !== optionId) {
+          return option;
+        }
+
+        if (option.values.some(existingValue => existingValue.toLowerCase() === normalizedValue.toLowerCase())) {
+          return option;
+        }
+
+        return {
+          ...option,
+          values: [...option.values, normalizedValue],
+        };
+      });
+
+      const cleanOptions = sanitizeOptions(nextOptions);
+      const nextVariants = generateVariantsFromOptions(draftProduct, cleanOptions, draftProduct.variants);
+
+      return {
+        ...draftProduct,
+        options: nextOptions,
+        variants: nextVariants,
+      };
+    });
+  };
+
+  const removeOptionValue = (optionId, value) => {
+    updateDraftProduct(draftProduct => {
+      const nextOptions = draftProduct.options.map(option =>
+        option.id === optionId
+          ? {
+              ...option,
+              values: option.values.filter(existingValue => existingValue !== value),
+            }
+          : option
+      );
+
       const cleanOptions = sanitizeOptions(nextOptions);
       const nextVariants = generateVariantsFromOptions(draftProduct, cleanOptions, draftProduct.variants);
 
@@ -1002,6 +1081,8 @@ export function ProductProvider({ children }) {
       removeOptionGroup,
       updateOptionName,
       updateOptionValues,
+      addOptionValue,
+      removeOptionValue,
       addVariant,
       updateVariantField,
       requestDeleteVariant,

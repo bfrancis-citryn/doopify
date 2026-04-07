@@ -1,49 +1,111 @@
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductVariantEditor.module.css';
 
-function OptionValueChips({ option, actions }) {
+const DEFAULT_OPTION_SUGGESTIONS = {
+  Size: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'],
+  Color: ['Black', 'White', 'Blue', 'Red', 'Green'],
+  Material: ['Cotton', 'Wool', 'Leather'],
+  Style: ['Classic', 'Modern'],
+};
+
+function OptionEditor({ option, actions, errorMessage }) {
+  const [draftValue, setDraftValue] = useState('');
+  const suggestions = DEFAULT_OPTION_SUGGESTIONS[option.name] || [];
+
+  const submitValue = value => {
+    const normalizedValue = value.trim();
+    if (!normalizedValue) {
+      return;
+    }
+
+    actions.addOptionValue(option.id, normalizedValue);
+    setDraftValue('');
+  };
+
   return (
     <div className={styles.optionCard}>
-      <div className={styles.optionHeaderRow}>
+      <div className={styles.optionDragHandle}>
+        <span className="material-symbols-outlined">drag_indicator</span>
+      </div>
+
+      <div className={styles.optionBody}>
+        <div className={styles.optionNameLabel}>Option name</div>
         <input
           aria-label="Option name"
-          className={styles.optionNameInput}
+          className={errorMessage ? `${styles.optionNameInput} ${styles.optionNameInputError}` : styles.optionNameInput}
           onChange={event => actions.updateOptionName(option.id, event.target.value)}
           placeholder="Size"
           type="text"
           value={option.name}
         />
-        <button className={styles.optionDelete} onClick={() => actions.removeOptionGroup(option.id)} type="button">
-          <span className="material-symbols-outlined">close</span>
-        </button>
+        {errorMessage ? <p className={styles.optionError}>{errorMessage}</p> : null}
+
+        <div className={styles.valueComposer}>
+          <div className={styles.optionChipRow}>
+            {option.values.map(value => (
+              <button
+                key={`${option.id}-${value}`}
+                className={styles.optionChip}
+                onClick={() => actions.removeOptionValue(option.id, value)}
+                type="button"
+              >
+                <span>{value}</span>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            ))}
+            <input
+              className={styles.valueInput}
+              onChange={event => setDraftValue(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ',') {
+                  event.preventDefault();
+                  submitValue(draftValue);
+                }
+              }}
+              placeholder={`Add ${option.name.toLowerCase() || 'value'}`}
+              type="text"
+              value={draftValue}
+            />
+          </div>
+
+          {suggestions.length ? (
+            <div className={styles.suggestionList}>
+              <p className={styles.suggestionTitle}>Default entries</p>
+              <div className={styles.suggestionGrid}>
+                {suggestions.map(suggestion => {
+                  const isSelected = option.values.includes(suggestion);
+                  return (
+                    <label key={`${option.id}-${suggestion}`} className={styles.suggestionItem}>
+                      <input
+                        checked={isSelected}
+                        onChange={event => {
+                          if (event.target.checked) {
+                            actions.addOptionValue(option.id, suggestion);
+                          } else {
+                            actions.removeOptionValue(option.id, suggestion);
+                          }
+                        }}
+                        type="checkbox"
+                      />
+                      <span>{suggestion}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div className={styles.optionChipRow}>
-        {option.values.map(value => (
-          <span key={`${option.id}-${value}`} className={styles.optionChip}>
-            {value}
-          </span>
-        ))}
-      </div>
-      <textarea
-        aria-label="Option values"
-        className={styles.optionValuesInput}
-        onChange={event => actions.updateOptionValues(option.id, event.target.value)}
-        placeholder="Small, Medium, Large"
-        rows={2}
-        value={option.values.join(', ')}
-      />
     </div>
   );
 }
 
 export default function ProductVariantEditor() {
-  const { editor, actions } = useProductStore();
+  const { editor, actions, formatMoney } = useProductStore();
   const draftProduct = editor.draftProduct;
-  const variantRowErrors = editor.validationErrors.variantRows || {};
-
   const totalInventory = useMemo(
     () => draftProduct?.variants?.reduce((sum, variant) => sum + (Number.parseInt(variant.inventoryQty, 10) || 0), 0) || 0,
     [draftProduct]
@@ -65,11 +127,18 @@ export default function ProductVariantEditor() {
 
       <div className={styles.optionPanel}>
         {draftProduct.options.length ? (
-          draftProduct.options.map(option => <OptionValueChips key={option.id} option={option} actions={actions} />)
+          draftProduct.options.map(option => (
+            <OptionEditor
+              key={option.id}
+              option={option}
+              actions={actions}
+              errorMessage={editor.validationErrors.options?.includes(option.name) ? editor.validationErrors.options : ''}
+            />
+          ))
         ) : (
           <div className={styles.emptyOptionState}>
             <p className={styles.emptyOptionTitle}>Single default variant</p>
-            <p className={styles.emptyOptionText}>Add an option like Size or Color to generate variant rows.</p>
+            <p className={styles.emptyOptionText}>Add an option like Size, Color, or Material to generate Shopify-style variants.</p>
           </div>
         )}
 
@@ -79,44 +148,55 @@ export default function ProductVariantEditor() {
         </button>
       </div>
 
-      {editor.validationErrors.options ? <p className={styles.errorText}>{editor.validationErrors.options}</p> : null}
+      {editor.validationErrors.options && !draftProduct.options.some(option => editor.validationErrors.options?.includes(option.name)) ? (
+        <p className={styles.errorText}>{editor.validationErrors.options}</p>
+      ) : null}
       {editor.validationErrors.variants ? <p className={styles.errorText}>{editor.validationErrors.variants}</p> : null}
+
+      <div className={styles.matrixTools}>
+        <button className={styles.matrixToolButton} type="button">
+          <span className="material-symbols-outlined">search</span>
+        </button>
+        <button className={styles.matrixToolButton} type="button">
+          <span className="material-symbols-outlined">filter_list</span>
+        </button>
+      </div>
 
       <div className={styles.matrixWrap}>
         <div className={styles.matrixHeader}>
-          <div className={styles.matrixColumnVariant}>Variant</div>
-          <div className={styles.matrixColumnPrice}>Price</div>
-          <div className={styles.matrixColumnInventory}>Available</div>
+          <div className={styles.checkboxColumn}><input type="checkbox" /></div>
+          <div className={styles.variantColumn}>Variant</div>
+          <div className={styles.priceColumn}>Price</div>
+          <div className={styles.inventoryColumn}>Available</div>
         </div>
 
         <div className={styles.matrixBody}>
           {draftProduct.variants.map(variant => (
             <div key={variant.id} className={styles.variantRow}>
+              <div className={styles.checkboxColumn}>
+                <input type="checkbox" />
+              </div>
+
               <div className={styles.variantIdentityCell}>
                 <div className={styles.variantThumbPlaceholder}>
-                  <span className="material-symbols-outlined">image</span>
+                  <span className="material-symbols-outlined">add_photo_alternate</span>
                 </div>
                 <div className={styles.variantIdentityText}>
                   <div className={styles.variantName}>{variant.title}</div>
-                  <input
-                    className={styles.inlineSkuInput}
-                    onChange={event => actions.updateVariantField(variant.id, 'sku', event.target.value)}
-                    placeholder="SKU"
-                    type="text"
-                    value={variant.sku}
-                  />
-                  {variantRowErrors[variant.id]?.sku ? <small className={styles.cellError}>{variantRowErrors[variant.id].sku}</small> : null}
                 </div>
               </div>
 
               <div className={styles.variantPriceCell}>
-                <input
-                  className={styles.priceInput}
-                  onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
-                  type="text"
-                  value={variant.price}
-                />
-                {variantRowErrors[variant.id]?.price ? <small className={styles.cellError}>{variantRowErrors[variant.id].price}</small> : null}
+                <div className={styles.currencyInputWrap}>
+                  <span className={styles.currencyPrefix}>$</span>
+                  <input
+                    className={styles.priceInput}
+                    onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
+                    type="text"
+                    value={variant.price}
+                  />
+                </div>
+                <small className={styles.secondaryLine}>{formatMoney(variant.price)}</small>
               </div>
 
               <div className={styles.variantInventoryCell}>
@@ -127,13 +207,12 @@ export default function ProductVariantEditor() {
                   type="number"
                   value={variant.inventoryQty}
                 />
-                {variantRowErrors[variant.id]?.inventoryQty ? <small className={styles.cellError}>{variantRowErrors[variant.id].inventoryQty}</small> : null}
               </div>
             </div>
           ))}
         </div>
 
-        <div className={styles.matrixFooter}>Total inventory: {totalInventory} available</div>
+        <div className={styles.matrixFooter}>Total inventory available: {totalInventory}</div>
       </div>
     </div>
   );
