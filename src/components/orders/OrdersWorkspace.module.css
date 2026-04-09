@@ -2,8 +2,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0.9rem;
+  padding: 1rem 1rem 1.25rem;
 }
 
 .ordersPageHeader {
@@ -16,7 +16,7 @@
 .ordersPageHeading {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.25rem;
 }
 
 .ordersEyebrow {
@@ -27,11 +27,21 @@
   color: var(--slate-500);
 }
 
-.ordersPageHeading h1 {
+.ordersPageHeading h1,
+.detailTitle {
   margin: 0;
-  font-size: 1.7rem;
-  line-height: 1.05;
   color: var(--slate-900);
+}
+
+.ordersPageHeading h1 {
+  font-size: 1.65rem;
+  line-height: 1.05;
+}
+
+.detailTitle {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .ordersPageHeading p,
@@ -59,7 +69,8 @@
 .shopifyHeaderTitleRow,
 .shopifyHeaderActions,
 .shopifyHeaderBar,
-.shopifyPanelHeaderRight {
+.shopifyPanelHeaderRight,
+.timelineHeaderRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
@@ -81,14 +92,14 @@
 
 .viewButton,
 .viewButtonActive {
-  padding: 0.45rem 0.8rem;
+  padding: 0.42rem 0.78rem;
   border-radius: 999px;
   font-weight: 700;
   transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .viewButton {
-  background: color-mix(in srgb, var(--surface-container-low) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-container-low) 84%, transparent);
   color: var(--slate-600);
   border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
 }
@@ -96,7 +107,7 @@
 .viewButtonActive {
   background: color-mix(in srgb, var(--primary) 92%, black 8%);
   color: white;
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--primary) 24%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--primary) 22%, transparent);
 }
 
 .viewButton:hover,
@@ -107,7 +118,7 @@
 .inlineLinkButton:hover,
 .textActionButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
 }
 
 .viewButton:active,
@@ -127,7 +138,7 @@
   width: 100%;
   border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 0.8rem;
-  padding: 0.72rem 0.85rem;
+  padding: 0.68rem 0.82rem;
   background: var(--surface-container-lowest);
   color: var(--on-surface);
 }
@@ -143,10 +154,10 @@
 }
 
 .bulkBar {
-  padding: 0.8rem 1rem;
-  border-radius: 1rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 0.95rem;
   background: color-mix(in srgb, var(--secondary-container) 82%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -163,18 +174,18 @@
 .secondaryAction,
 .inlineLinkButton,
 .textActionButton {
-  padding: 0.65rem 0.9rem;
+  padding: 0.62rem 0.86rem;
   border-radius: 0.8rem;
-  font-weight: 800;
+  font-weight: 700;
   border: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
   background: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
   color: var(--slate-700);
 }
 
 .primaryAction {
-  padding: 0.65rem 0.95rem;
+  padding: 0.62rem 0.92rem;
   border-radius: 0.8rem;
-  font-weight: 800;
+  font-weight: 700;
   border: 1px solid transparent;
   background: var(--primary);
   color: white;
@@ -183,7 +194,7 @@
 .textActionButton {
   background: transparent;
   border-color: transparent;
-  padding-inline: 0.25rem;
+  padding-inline: 0.2rem;
 }
 
 .ordersIndexWrap {
@@ -193,12 +204,18 @@
   flex-direction: column;
 }
 
+.ordersTableWrap,
+.shopifyPanel,
+.shopifySidePanel,
+.shopifyCommentBox {
+  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 98%, transparent);
+}
+
 .ordersTableWrap {
   flex: 1;
   min-height: 0;
-  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -209,8 +226,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.95rem 1rem 0.85rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
+  padding: 0.9rem 1rem 0.8rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
 }
 
 .ordersTableTopbar h2,
@@ -223,7 +240,7 @@
 }
 
 .ordersTableTopbar p {
-  margin: 0.2rem 0 0;
+  margin: 0.18rem 0 0;
   color: var(--slate-500);
 }
 
@@ -237,9 +254,9 @@
 
 .tableHeader {
   grid-template-columns: 2rem 1.15fr 0.7fr 1.25fr 0.95fr 1fr 1fr 0.7fr;
-  padding: 0.85rem 1rem;
+  padding: 0.8rem 1rem;
   background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -257,8 +274,8 @@
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
+  padding: 0.82rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
   transition: background-color 140ms ease;
 }
 
@@ -288,7 +305,7 @@
 .orderStat {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.18rem;
 }
 
 .orderNumberPrimary {
@@ -303,7 +320,7 @@
 .mutedBadge {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.45rem;
+  padding: 0.18rem 0.44rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-container-low) 90%, transparent);
   color: var(--slate-600);
@@ -324,7 +341,7 @@
 .tagChip {
   display: inline-flex;
   align-items: center;
-  padding: 0.26rem 0.55rem;
+  padding: 0.24rem 0.54rem;
   border-radius: 999px;
   font-size: 0.68rem;
   font-weight: 800;
@@ -333,7 +350,7 @@
 
 .shopifyQtyBadge {
   justify-content: center;
-  min-width: 1.85rem;
+  min-width: 1.8rem;
 }
 
 .tagChip {
@@ -367,8 +384,8 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0.9rem;
+  padding: 0.9rem 1rem 1.25rem;
 }
 
 .orderDetailBreadcrumbs {
@@ -385,29 +402,22 @@
 .shopifyHeaderIdentity {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
-.shopifyHeaderTitleRow {
+.shopifyHeaderTitleRow,
+.shopifyHeaderActions {
   align-items: center;
 }
 
 .shopifyHeaderTitleRow .material-symbols-outlined {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: var(--slate-500);
-}
-
-.detailTitle {
-  margin: 0;
-  font-size: 1.8rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--slate-900);
 }
 
 .shopifyDetailGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.28fr) 320px;
+  grid-template-columns: minmax(0, 1.3fr) 340px;
   gap: 1rem;
   align-items: start;
 }
@@ -420,16 +430,8 @@
 }
 
 .shopifyPanel,
-.shopifySidePanel,
-.shopifyCommentBox {
-  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
-}
-
-.shopifyPanel,
 .shopifySidePanel {
-  padding: 1rem;
+  padding: 0.95rem;
 }
 
 .shopifyPanelHeader,
@@ -441,10 +443,10 @@
 
 .shopifyInsetPanel,
 .shopifyCommentBox {
-  padding: 0.95rem 1rem;
-  border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
-  border-radius: 0.85rem;
-  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
 }
 
 .shopifyLineItemList,
@@ -454,16 +456,24 @@
 .timelineListClean {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.7rem;
+}
+
+.infoListTight {
+  gap: 0.45rem;
+}
+
+.shopifyLineItemList {
+  margin-top: 0.15rem;
 }
 
 .shopifyLineItemRow {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 3rem minmax(0, 1fr) 92px 42px 92px;
   gap: 0.75rem;
   align-items: center;
-  padding: 0.8rem 0;
-  border-top: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
+  padding: 0.82rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 60%, transparent);
 }
 
 .shopifyLineItemRow:first-child {
@@ -485,19 +495,20 @@
 .shopifyLineItemInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.12rem;
 }
 
 .shopifyLineItemPrice,
 .shopifyLineItemTotal {
   font-weight: 700;
   color: var(--slate-700);
+  text-align: right;
 }
 
 .shopifyPaymentTable {
   display: flex;
   flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
   border-radius: 0.85rem;
   overflow: hidden;
 }
@@ -507,8 +518,8 @@
   grid-template-columns: 140px minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  padding: 0.85rem 1rem;
-  border-top: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
+  padding: 0.82rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 60%, transparent);
 }
 
 .shopifyPaymentRow:first-child {
@@ -520,13 +531,13 @@
 }
 
 .shopifyPaymentPaidRow {
-  border-top: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
 }
 
 .addressBlock {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.22rem;
 }
 
 .addressBlock p,
@@ -537,7 +548,7 @@
 .shippingBuilderGridCompact {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.65rem;
+  gap: 0.6rem;
 }
 
 .customerLink {
@@ -553,35 +564,28 @@
 
 .timelineRowClean {
   display: grid;
-  grid-template-columns: 2.2rem minmax(0, 1fr);
-  gap: 0.75rem;
+  grid-template-columns: 2.15rem minmax(0, 1fr);
+  gap: 0.7rem;
   align-items: flex-start;
 }
 
 .timelineAvatar {
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 0.7rem;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.65rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: color-mix(in srgb, var(--primary) 88%, transparent);
   color: white;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
 .timelineContent {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-}
-
-.timelineHeaderRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  gap: 0.18rem;
 }
 
 .notesInput {
@@ -619,9 +623,9 @@
   .shopifyHeaderBar,
   .filterToolbar,
   .ordersTableTopbar,
-  .timelineHeaderRow,
   .shopifyPanelHeader,
-  .shopifyPanelHeaderRight {
+  .shopifyPanelHeaderRight,
+  .timelineHeaderRow {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -649,13 +653,14 @@
   }
 
   .shopifyLineItemRow {
-    grid-template-columns: 3rem minmax(0, 1fr) auto;
+    grid-template-columns: 3rem minmax(0, 1fr);
   }
 
   .shopifyLineItemPrice,
   .shopifyQtyBadge,
   .shopifyLineItemTotal {
-    grid-column: 2 / span 2;
+    grid-column: 2;
+    text-align: left;
   }
 
   .shopifyPaymentRow {
