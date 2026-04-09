@@ -4,22 +4,19 @@
   flex-direction: column;
   gap: 1rem;
   padding: 1rem;
-  overflow: hidden;
 }
 
-.ordersPageHeader,
-.orderDetailHeaderBand {
+.ordersPageHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.ordersPageHeading,
-.orderDetailHeaderCopy {
+.ordersPageHeading {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .ordersEyebrow {
@@ -30,73 +27,35 @@
   color: var(--slate-500);
 }
 
-.ordersPageHeading h1,
-.orderDetailHeaderCopy h1 {
+.ordersPageHeading h1 {
   margin: 0;
-  font-size: 1.9rem;
+  font-size: 1.7rem;
   line-height: 1.05;
   color: var(--slate-900);
 }
 
 .ordersPageHeading p,
-.orderDetailHeaderCopy p,
+.shopifyOrderMeta,
+.cardSubtext,
 .emptyState p,
-.fulfillmentMetaMuted,
-.orderStatMeta {
+.lineItemSubtext,
+.timelineContent p {
   margin: 0;
   color: var(--slate-500);
 }
 
 .ordersPageActions,
-.orderHeaderActions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.summaryGrid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.summaryCard {
-  padding: 1rem 1rem 1.05rem;
-  border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 94%, transparent);
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
-}
-
-.summaryCard span {
-  font-size: 0.72rem;
-  color: var(--slate-500);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 800;
-}
-
-.summaryCard strong {
-  font-size: 1.5rem;
-  line-height: 1;
-  color: var(--slate-900);
-}
-
+.orderHeaderActions,
 .viewBar,
 .filterToolbar,
+.filterToolbarInner,
 .bulkActions,
-.detailActions,
 .tagInputRow,
 .shippingActionRow,
 .shopifyOrderTitleRow,
 .sectionPillRow,
 .sectionCardHeader,
-.orderActionBar,
-.orderHeaderMeta {
+.shopifyCardHeaderInline {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
@@ -118,7 +77,7 @@
 
 .viewButton,
 .viewButtonActive {
-  padding: 0.5rem 0.85rem;
+  padding: 0.45rem 0.8rem;
   border-radius: 999px;
   font-weight: 700;
   transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;
@@ -174,13 +133,6 @@
   justify-content: space-between;
 }
 
-.filterToolbarInner {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
 .filterSelect {
   width: auto;
   min-width: 11rem;
@@ -230,15 +182,6 @@
   padding-inline: 0.25rem;
 }
 
-.ordersLayout {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.9fr);
-  gap: 1rem;
-  overflow: hidden;
-}
-
 .ordersIndexWrap {
   flex: 1;
   min-height: 0;
@@ -250,12 +193,11 @@
   flex: 1;
   min-height: 0;
   border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
-  border-radius: 1.15rem;
+  border-radius: 1rem;
   background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
 }
 
 .ordersTableTopbar {
@@ -263,14 +205,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 1rem 0.9rem;
+  padding: 0.95rem 1rem 0.85rem;
   border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
-  background: color-mix(in srgb, var(--surface-container-lowest) 92%, transparent);
 }
 
 .ordersTableTopbar h2,
-.detailSection h3,
-.sectionCardHeader h3,
+.timelineSection h3,
+.shopifySideCard h3,
+.shopifyCard h3,
 .emptyState h2 {
   margin: 0;
   color: var(--slate-900);
@@ -291,7 +233,7 @@
 
 .tableHeader {
   grid-template-columns: 2rem 1.15fr 0.7fr 1.25fr 0.95fr 1fr 1fr 0.7fr;
-  padding: 0.9rem 1rem;
+  padding: 0.85rem 1rem;
   background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   font-size: 0.72rem;
@@ -302,31 +244,21 @@
 }
 
 .tableBody {
-  max-height: 100%;
+  flex: 1;
   overflow: auto;
 }
 
-.ordersIndexWrap .tableBody {
-  max-height: none;
-  flex: 1;
-}
-
-.orderRow,
-.orderRowActive {
+.orderRow {
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
-  padding: 0.9rem 1rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   transition: background-color 140ms ease;
 }
 
-.orderRowActive {
-  background: color-mix(in srgb, var(--secondary-container) 72%, transparent);
-}
-
-.ordersIndexWrap .orderRow:hover {
+.orderRow:hover {
   background: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
 }
 
@@ -335,7 +267,6 @@
   text-align: left;
   background: transparent;
   color: inherit;
-  transition: transform 140ms ease;
 }
 
 .rowButton:hover {
@@ -375,19 +306,13 @@
   text-transform: uppercase;
 }
 
-.orderNumberCell small,
-.customerCell small,
-.detailSection small,
-.timelineItem small,
-.shopifyOrderMeta,
-.orderStatMeta,
-.lineItemSubtext,
-.cardSubtext {
+.orderStatMeta {
   color: var(--slate-500);
 }
 
 .statusPill,
-.tagChip {
+.tagChip,
+.shopifyQtyBadge {
   display: inline-flex;
   align-items: center;
   padding: 0.26rem 0.55rem;
@@ -395,6 +320,13 @@
   font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.shopifyQtyBadge {
+  justify-content: center;
+  min-width: 1.85rem;
+  background: color-mix(in srgb, var(--surface-container-low) 92%, transparent);
+  color: var(--slate-600);
 }
 
 .tagChip {
@@ -424,11 +356,6 @@
 .tone_approved,
 .tone_received { background: rgba(226, 232, 240, 0.92); color: var(--slate-600); }
 
-.orderDetailPane {
-  min-height: 0;
-  overflow: auto;
-}
-
 .orderDetailPage {
   flex: 1;
   display: flex;
@@ -443,35 +370,32 @@
   gap: 0.75rem;
 }
 
-.shopifyOrderShell {
+.shopifyOrderHeaderSlim {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 1rem;
 }
 
-.shopifyOrderHeader {
+.orderIdentityBlock {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.1rem 1.15rem;
-  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
-  border-radius: 1.15rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
+  gap: 0.35rem;
 }
 
-.shopifyOrderTitleRow {
-  align-items: center;
+.detailTitle {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--slate-900);
 }
 
-.orderHeaderMeta {
-  align-items: center;
-}
-
-.shopifyDetailLayout {
+.shopifyDetailLayoutClean {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) 320px;
+  grid-template-columns: minmax(0, 1.28fr) 320px;
   gap: 1rem;
+  align-items: start;
 }
 
 .shopifyMainColumn,
@@ -481,93 +405,60 @@
   gap: 1rem;
 }
 
-.detailCard,
-.detailSection {
+.shopifyCard,
+.shopifySideCard,
+.shopifyCommentBox {
   border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
-  border-radius: 1.05rem;
+  border-radius: 1rem;
   background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.04);
 }
 
-.detailSection {
+.shopifyCard,
+.shopifySideCard {
   padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
 }
 
-.detailSectionTight {
-  gap: 0.65rem;
-}
-
-.detailTitle {
-  margin: 0;
-  font-size: 1.7rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--slate-900);
-}
-
-.orderActionBar {
+.shopifyCardHeaderInline,
+.sectionCardHeader {
   align-items: center;
   justify-content: space-between;
 }
 
-.fulfillmentCard,
-.timelineComposer,
-.customerSummaryCard {
-  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
-  border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
-  padding: 1rem;
+.shopifyInsetCard,
+.shopifyTotalsCard,
+.shopifyCommentBox {
+  padding: 0.95rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
 }
 
-.fulfillmentHeader,
-.lineItemHeader,
-.paymentHeader,
-.sidebarCardHeader {
+.shopifyLineItemCompactList,
+.infoList,
+.addressList,
+.tagComposer,
+.timelineListClean {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 0.75rem;
 }
 
-.fulfillmentMetaList,
-.paymentSummaryTable,
-.timelineList,
-.tagComposer,
-.lineItemList,
-.addressList,
-.infoList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-
-.shippingBuilderGrid,
-.orderStatsGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.65rem;
-}
-
-.orderStatsGrid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.fulfillmentMetaList {
-  gap: 0.45rem;
-}
-
-.shopifyLineItemRow {
+.shopifyLineItemCompactRow {
   display: grid;
   grid-template-columns: 3rem minmax(0, 1fr) auto auto;
-  gap: 0.85rem;
+  gap: 0.75rem;
   align-items: center;
-  padding: 0.9rem;
-  border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
-  border-radius: 0.9rem;
-  background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
+  padding: 0.8rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
+}
+
+.shopifyLineItemCompactRow:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.shopifyLineItemCompactRow:last-child {
+  padding-bottom: 0;
 }
 
 .shopifyLineItemThumb {
@@ -580,16 +471,14 @@
 .shopifyLineItemInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
 }
 
-.shopifyLineItemPrice,
 .shopifyLineItemTotal {
   font-weight: 700;
   color: var(--slate-700);
 }
 
-.paymentSummaryTable div,
 .infoRow {
   display: flex;
   align-items: center;
@@ -598,45 +487,74 @@
 }
 
 .totalRow {
-  padding-top: 0.75rem;
-  border-top: 1px solid color-mix(in srgb, var(--slate-200) 65%, transparent);
+  padding-top: 0.7rem;
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
 }
 
-.customerBlockSpacing,
 .addressBlock {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.timelineItem {
+.addressBlock p,
+.timelineContent p {
+  margin: 0;
+}
+
+.shippingBuilderGridCompact {
   display: grid;
-  grid-template-columns: 0.8rem minmax(0, 1fr);
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+.customerLink {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.timelineSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.timelineRowClean {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
   gap: 0.75rem;
   align-items: flex-start;
 }
 
-.timelineItem p {
-  margin: 0.2rem 0 0;
-  color: var(--slate-700);
+.timelineAvatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary) 88%, transparent);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
-.timelineDot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 999px;
-  margin-top: 0.35rem;
-  background: var(--primary);
+.timelineContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-.sectionCardHeader {
+.timelineHeaderRow {
+  display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
 }
 
 .notesInput {
   resize: vertical;
-  min-height: 7rem;
+  min-height: 6rem;
 }
 
 .emptyState {
@@ -659,27 +577,17 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .ordersLayout,
-  .shopifyDetailLayout {
+  .shopifyDetailLayoutClean {
     grid-template-columns: 1fr;
-  }
-
-  .orderStatsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 980px) {
   .ordersPageHeader,
-  .orderDetailHeaderBand,
+  .shopifyOrderHeaderSlim,
   .filterToolbar,
   .ordersTableTopbar,
-  .orderActionBar,
-  .fulfillmentHeader,
-  .lineItemHeader,
-  .paymentHeader,
-  .sidebarCardHeader,
-  .shopifyOrderHeader {
+  .timelineHeaderRow {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -702,18 +610,15 @@
     display: none;
   }
 
-  .shippingBuilderGrid,
-  .orderStatsGrid,
   .summaryGrid {
     grid-template-columns: 1fr;
   }
 
-  .shopifyLineItemRow {
-    grid-template-columns: 3rem minmax(0, 1fr);
+  .shopifyLineItemCompactRow {
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
   }
 
-  .shopifyLineItemPrice,
   .shopifyLineItemTotal {
-    grid-column: 2;
+    grid-column: 2 / span 2;
   }
 }
