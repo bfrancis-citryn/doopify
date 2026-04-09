@@ -103,7 +103,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </Link>
       </div>
 
-      <div className={styles.shopifyHeaderBar}>
+      <div className={styles.shopifyHeaderBarClean}> 
         <div className={styles.shopifyHeaderIdentity}>
           <div className={styles.shopifyHeaderTitleRow}>
             <span className="material-symbols-outlined">draft_orders</span>
@@ -114,7 +114,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
           </div>
           <p className={styles.shopifyOrderMeta}>Created {new Date(order.createdAt).toLocaleString()} from {order.channel}</p>
         </div>
-        <div className={styles.shopifyHeaderActions}>
+        <div className={styles.shopifyHeaderActionsClean}>
           <button className={styles.secondaryAction} type="button">Refund</button>
           <button className={styles.secondaryAction} type="button">Return</button>
           <button className={styles.secondaryAction} type="button">Edit</button>
@@ -123,20 +123,18 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </div>
       </div>
 
-      <div className={styles.shopifyDetailGrid}>
+      <div className={styles.shopifyDetailGridClean}>
         <div className={styles.shopifyMainColumn}>
-          <div className={styles.shopifyPanel}>
-            <div className={styles.shopifyPanelHeader}>
+          <div className={styles.shopifyPanelClean}>
+            <div className={styles.shopifyPanelHeaderClean}>
               <div className={styles.sectionPillRow}>
                 <StatusPill tone={order.fulfillmentStatus.replace(/\s+/g, '-')}>{order.fulfillmentStatus}</StatusPill>
-              </div>
-              <div className={styles.shopifyPanelHeaderRight}>
                 <strong>{order.orderNumber}-F1</strong>
-                <button className={styles.textActionButton} type="button">•••</button>
               </div>
+              <button className={styles.textActionButton} type="button">•••</button>
             </div>
 
-            <div className={styles.shopifyInsetPanel}>
+            <div className={styles.shopifyInsetPanelClean}>
               <div className={styles.sectionPillRow}>
                 <StatusPill tone={order.deliveryStatus.replace(/\s+/g, '-')}>{order.deliveryStatus}</StatusPill>
               </div>
@@ -147,15 +145,15 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
               </div>
             </div>
 
-            <div className={styles.shopifyLineItemList}>
+            <div className={styles.shopifyLineItemTable}>
               {order.lineItems.map(item => (
-                <div key={item.id} className={styles.shopifyLineItemRow}>
+                <div key={item.id} className={styles.shopifyLineItemRowClean}>
                   <div className={styles.shopifyLineItemThumb} />
                   <div className={styles.shopifyLineItemInfo}>
                     <strong>{item.title}</strong>
                     <small className={styles.lineItemSubtext}>{item.variant}</small>
                   </div>
-                  <div className={styles.shopifyLineItemPrice}>{formatOrderMoney(item.price)}</div>
+                  <div className={styles.shopifyLineItemMeta}>{formatOrderMoney(item.price)}</div>
                   <div className={styles.shopifyQtyBadge}>{item.quantity}</div>
                   <div className={styles.shopifyLineItemTotal}>{formatOrderMoney(item.price * item.quantity)}</div>
                 </div>
@@ -163,35 +161,33 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifyPanel}>
-            <div className={styles.shopifyPanelHeader}>
-              <div className={styles.sectionPillRow}>
-                <StatusPill tone={order.paymentStatus.replace(/\s+/g, '-')}>{order.paymentStatus}</StatusPill>
-              </div>
+          <div className={styles.shopifyPanelClean}>
+            <div className={styles.shopifyPanelHeaderClean}>
+              <StatusPill tone={order.paymentStatus.replace(/\s+/g, '-')}>{order.paymentStatus}</StatusPill>
             </div>
 
-            <div className={styles.shopifyPaymentTable}>
-              <div className={styles.shopifyPaymentRow}>
+            <div className={styles.shopifyPaymentTableClean}>
+              <div className={styles.shopifyPaymentRowClean}>
                 <span>Subtotal</span>
                 <span>{order.itemCount} item{order.itemCount === 1 ? '' : 's'}</span>
                 <strong>{formatOrderMoney(order.total)}</strong>
               </div>
-              <div className={styles.shopifyPaymentRow}>
+              <div className={styles.shopifyPaymentRowClean}>
                 <span>Shipping</span>
                 <span>{shippingLabelDraft.carrierService} ({shippingLabelDraft.weight})</span>
                 <strong>$8.00</strong>
               </div>
-              <div className={styles.shopifyPaymentRow}>
+              <div className={styles.shopifyPaymentRowClean}>
                 <span>Taxes</span>
                 <span>Tax details</span>
                 <strong>$3.26</strong>
               </div>
-              <div className={`${styles.shopifyPaymentRow} ${styles.shopifyPaymentTotalRow}`}>
+              <div className={`${styles.shopifyPaymentRowClean} ${styles.shopifyPaymentTotalRow}`}>
                 <span>Total</span>
                 <span></span>
                 <strong>{formatOrderMoney(order.total + 8 + 3.26)}</strong>
               </div>
-              <div className={`${styles.shopifyPaymentRow} ${styles.shopifyPaymentPaidRow}`}>
+              <div className={`${styles.shopifyPaymentRowClean} ${styles.shopifyPaymentPaidRow}`}>
                 <span>Paid</span>
                 <span></span>
                 <strong>{order.paymentStatus === 'paid' ? formatOrderMoney(order.total + 8 + 3.26) : '$0.00'}</strong>
@@ -199,7 +195,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifyPanel}>
+          <div className={styles.shopifyPanelClean}>
             <div className={styles.sectionCardHeader}>
               <h3>Metafields</h3>
               <button className={styles.inlineLinkButton} type="button">View all</button>
@@ -207,9 +203,11 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             <p className={styles.cardSubtext}>No metafields pinned</p>
           </div>
 
-          <div className={styles.timelineSection}>
-            <h3>Timeline</h3>
-            <div className={styles.shopifyCommentBox}>Leave a comment…</div>
+          <div className={styles.timelineSectionClean}>
+            <div className={styles.sectionCardHeader}>
+              <h3>Timeline</h3>
+            </div>
+            <div className={styles.shopifyCommentBoxClean}>Leave a comment…</div>
             <div className={styles.timelineListClean}>
               {(order.timeline || []).map(entry => (
                 <div key={entry.id} className={styles.timelineRowClean}>
@@ -227,8 +225,8 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
           </div>
         </div>
 
-        <div className={styles.shopifySideColumn}>
-          <div className={styles.shopifySidePanel}>
+        <div className={styles.shopifySideColumnCompact}>
+          <div className={styles.shopifySidePanelClean}>
             <div className={styles.sectionCardHeader}>
               <h3>Notes</h3>
               <button className={styles.textActionButton} type="button">✎</button>
@@ -236,7 +234,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             <textarea className={styles.notesInput} onChange={event => onUpdateOrder(order.id, currentOrder => ({ ...currentOrder, notes: event.target.value }))} rows={4} value={order.notes} />
           </div>
 
-          <div className={styles.shopifySidePanel}>
+          <div className={styles.shopifySidePanelClean}>
             <div className={styles.sectionCardHeader}>
               <h3>Additional details</h3>
               <button className={styles.textActionButton} type="button">✎</button>
@@ -267,7 +265,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifySidePanel}>
+          <div className={styles.shopifySidePanelClean}>
             <div className={styles.sectionCardHeader}>
               <h3>Customer</h3>
               <button className={styles.textActionButton} type="button">•••</button>
@@ -288,7 +286,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifySidePanel}>
+          <div className={styles.shopifySidePanelClean}>
             <div className={styles.sectionCardHeader}>
               <h3>Tags</h3>
             </div>
