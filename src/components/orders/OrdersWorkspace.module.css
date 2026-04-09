@@ -7,6 +7,54 @@
   overflow: hidden;
 }
 
+.ordersPageHeader,
+.orderDetailHeaderBand {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ordersPageHeading,
+.orderDetailHeaderCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ordersEyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--slate-500);
+}
+
+.ordersPageHeading h1,
+.orderDetailHeaderCopy h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  line-height: 1.05;
+  color: var(--slate-900);
+}
+
+.ordersPageHeading p,
+.orderDetailHeaderCopy p,
+.emptyState p,
+.fulfillmentMetaMuted,
+.orderStatMeta {
+  margin: 0;
+  color: var(--slate-500);
+}
+
+.ordersPageActions,
+.orderHeaderActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -14,13 +62,14 @@
 }
 
 .summaryCard {
-  padding: 0.9rem 1rem;
+  padding: 1rem 1rem 1.05rem;
   border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-container-lowest) 94%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
 }
 
 .summaryCard span {
@@ -32,7 +81,8 @@
 }
 
 .summaryCard strong {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
+  line-height: 1;
   color: var(--slate-900);
 }
 
@@ -44,7 +94,9 @@
 .shippingActionRow,
 .shopifyOrderTitleRow,
 .sectionPillRow,
-.sectionCardHeader {
+.sectionCardHeader,
+.orderActionBar,
+.orderHeaderMeta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
@@ -56,26 +108,32 @@
 .filterSelect,
 .detailSelect,
 .detailInput,
-.notesInput {
+.notesInput,
+.primaryAction,
+.secondaryAction,
+.inlineLinkButton,
+.textActionButton {
   font-size: 0.8rem;
 }
 
 .viewButton,
 .viewButtonActive {
-  padding: 0.45rem 0.8rem;
+  padding: 0.5rem 0.85rem;
   border-radius: 999px;
   font-weight: 700;
-  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .viewButton {
-  background: rgba(226, 232, 240, 0.75);
+  background: color-mix(in srgb, var(--surface-container-low) 82%, transparent);
   color: var(--slate-600);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
 }
 
 .viewButtonActive {
-  background: var(--primary);
+  background: color-mix(in srgb, var(--primary) 92%, black 8%);
   color: white;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--primary) 24%, transparent);
 }
 
 .viewButton:hover,
@@ -84,7 +142,7 @@
 .primaryAction:hover,
 .secondaryAction:hover,
 .inlineLinkButton:hover,
-.rowButton:hover {
+.textActionButton:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
@@ -95,7 +153,7 @@
 .primaryAction:active,
 .secondaryAction:active,
 .inlineLinkButton:active,
-.rowButton:active {
+.textActionButton:active {
   transform: translateY(0);
 }
 
@@ -106,9 +164,21 @@
   width: 100%;
   border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
   border-radius: 0.8rem;
-  padding: 0.7rem 0.8rem;
+  padding: 0.72rem 0.85rem;
   background: var(--surface-container-lowest);
   color: var(--on-surface);
+}
+
+.filterToolbar {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filterToolbarInner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
 }
 
 .filterSelect {
@@ -134,24 +204,30 @@
 }
 
 .bulkActionButton,
-.primaryAction,
 .secondaryAction,
-.inlineLinkButton {
+.inlineLinkButton,
+.textActionButton {
   padding: 0.65rem 0.9rem;
   border-radius: 0.8rem;
   font-weight: 800;
-}
-
-.bulkActionButton,
-.secondaryAction,
-.inlineLinkButton {
-  background: rgba(226, 232, 240, 0.72);
+  border: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
+  background: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
   color: var(--slate-700);
 }
 
 .primaryAction {
+  padding: 0.65rem 0.95rem;
+  border-radius: 0.8rem;
+  font-weight: 800;
+  border: 1px solid transparent;
   background: var(--primary);
   color: white;
+}
+
+.textActionButton {
+  background: transparent;
+  border-color: transparent;
+  padding-inline: 0.25rem;
 }
 
 .ordersLayout {
@@ -171,24 +247,52 @@
 }
 
 .ordersTableWrap {
+  flex: 1;
+  min-height: 0;
   border: 1px solid color-mix(in srgb, var(--slate-200) 72%, transparent);
-  border-radius: 1.1rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 90%, transparent);
+  border-radius: 1.15rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
+}
+
+.ordersTableTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.9rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
+  background: color-mix(in srgb, var(--surface-container-lowest) 92%, transparent);
+}
+
+.ordersTableTopbar h2,
+.detailSection h3,
+.sectionCardHeader h3,
+.emptyState h2 {
+  margin: 0;
+  color: var(--slate-900);
+}
+
+.ordersTableTopbar p {
+  margin: 0.2rem 0 0;
+  color: var(--slate-500);
 }
 
 .tableHeader,
 .rowButton {
   display: grid;
-  grid-template-columns: 1.1fr 0.7fr 1.2fr 0.9fr 1fr 1fr 0.65fr;
-  gap: 0.75rem;
+  grid-template-columns: 1.15fr 0.7fr 1.25fr 0.95fr 1fr 1fr 0.7fr;
+  gap: 0.8rem;
   align-items: center;
 }
 
 .tableHeader {
-  grid-template-columns: 2rem 1.1fr 0.7fr 1.2fr 0.9fr 1fr 1fr 0.65fr;
-  padding: 0.85rem 1rem;
-  background: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
+  grid-template-columns: 2rem 1.15fr 0.7fr 1.25fr 0.95fr 1fr 1fr 0.7fr;
+  padding: 0.9rem 1rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
   font-size: 0.72rem;
   font-weight: 800;
@@ -213,8 +317,9 @@
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
+  transition: background-color 140ms ease;
 }
 
 .orderRowActive {
@@ -229,6 +334,12 @@
   width: 100%;
   text-align: left;
   background: transparent;
+  color: inherit;
+  transition: transform 140ms ease;
+}
+
+.rowButton:hover {
+  box-shadow: none;
 }
 
 .checkboxCell {
@@ -238,17 +349,40 @@
 }
 
 .orderNumberCell,
-.customerCell {
+.customerCell,
+.orderStat {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.orderNumberPrimary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.orderChannelBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-container-low) 90%, transparent);
+  color: var(--slate-600);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .orderNumberCell small,
 .customerCell small,
 .detailSection small,
 .timelineItem small,
-.shopifyOrderMeta {
+.shopifyOrderMeta,
+.orderStatMeta,
+.lineItemSubtext,
+.cardSubtext {
   color: var(--slate-500);
 }
 
@@ -256,7 +390,7 @@
 .tagChip {
   display: inline-flex;
   align-items: center;
-  padding: 0.26rem 0.5rem;
+  padding: 0.26rem 0.55rem;
   border-radius: 999px;
   font-size: 0.68rem;
   font-weight: 800;
@@ -317,14 +451,26 @@
 
 .shopifyOrderHeader {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 1rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
+  border-radius: 1.15rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
+}
+
+.shopifyOrderTitleRow {
+  align-items: center;
+}
+
+.orderHeaderMeta {
+  align-items: center;
 }
 
 .shopifyDetailLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) 320px;
+  grid-template-columns: minmax(0, 1.3fr) 320px;
   gap: 1rem;
 }
 
@@ -338,45 +484,75 @@
 .detailCard,
 .detailSection {
   border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--surface-container-lowest) 92%, transparent);
+  border-radius: 1.05rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.04);
 }
 
 .detailSection {
   padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.9rem;
+}
+
+.detailSectionTight {
+  gap: 0.65rem;
 }
 
 .detailTitle {
-  font-size: 1.45rem;
+  margin: 0;
+  font-size: 1.7rem;
   font-weight: 800;
+  letter-spacing: -0.03em;
   color: var(--slate-900);
 }
 
+.orderActionBar {
+  align-items: center;
+  justify-content: space-between;
+}
+
 .fulfillmentCard,
-.timelineComposer {
+.timelineComposer,
+.customerSummaryCard {
   border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
   border-radius: 0.9rem;
   background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
   padding: 1rem;
 }
 
+.fulfillmentHeader,
+.lineItemHeader,
+.paymentHeader,
+.sidebarCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .fulfillmentMetaList,
 .paymentSummaryTable,
 .timelineList,
 .tagComposer,
-.lineItemList {
+.lineItemList,
+.addressList,
+.infoList {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
 }
 
-.shippingBuilderGrid {
+.shippingBuilderGrid,
+.orderStatsGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.65rem;
+}
+
+.orderStatsGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .fulfillmentMetaList {
@@ -386,11 +562,11 @@
 .shopifyLineItemRow {
   display: grid;
   grid-template-columns: 3rem minmax(0, 1fr) auto auto;
-  gap: 0.75rem;
+  gap: 0.85rem;
   align-items: center;
-  padding: 0.8rem;
+  padding: 0.9rem;
   border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
-  border-radius: 0.85rem;
+  border-radius: 0.9rem;
   background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
 }
 
@@ -413,7 +589,8 @@
   color: var(--slate-700);
 }
 
-.paymentSummaryTable div {
+.paymentSummaryTable div,
+.infoRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -425,7 +602,8 @@
   border-top: 1px solid color-mix(in srgb, var(--slate-200) 65%, transparent);
 }
 
-.customerBlockSpacing {
+.customerBlockSpacing,
+.addressBlock {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -439,7 +617,7 @@
 }
 
 .timelineItem p {
-  margin-top: 0.2rem;
+  margin: 0.2rem 0 0;
   color: var(--slate-700);
 }
 
@@ -458,6 +636,22 @@
 
 .notesInput {
   resize: vertical;
+  min-height: 7rem;
+}
+
+.emptyState {
+  flex: 1;
+  min-height: 22rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 2rem;
+  text-align: center;
+  border: 1px dashed color-mix(in srgb, var(--slate-200) 70%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
 }
 
 @media (max-width: 1400px) {
@@ -469,9 +663,27 @@
   .shopifyDetailLayout {
     grid-template-columns: 1fr;
   }
+
+  .orderStatsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 980px) {
+  .ordersPageHeader,
+  .orderDetailHeaderBand,
+  .filterToolbar,
+  .ordersTableTopbar,
+  .orderActionBar,
+  .fulfillmentHeader,
+  .lineItemHeader,
+  .paymentHeader,
+  .sidebarCardHeader,
+  .shopifyOrderHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .tableHeader,
   .rowButton {
     grid-template-columns: 1.1fr 0.9fr 1.15fr 0.95fr;
@@ -490,7 +702,18 @@
     display: none;
   }
 
-  .shippingBuilderGrid {
+  .shippingBuilderGrid,
+  .orderStatsGrid,
+  .summaryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .shopifyLineItemRow {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+
+  .shopifyLineItemPrice,
+  .shopifyLineItemTotal {
+    grid-column: 2;
   }
 }

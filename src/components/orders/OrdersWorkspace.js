@@ -120,6 +120,18 @@ export default function OrdersWorkspace() {
       searchValue={searchQuery}
     >
       <div className={styles.ordersPage}>
+        <div className={styles.ordersPageHeader}>
+          <div className={styles.ordersPageHeading}>
+            <span className={styles.ordersEyebrow}>Orders</span>
+            <h1>Order management</h1>
+            <p>Track fulfillment, payment status, returns, and customer activity without the clutter.</p>
+          </div>
+          <div className={styles.ordersPageActions}>
+            <button className={styles.secondaryAction} type="button">Export</button>
+            <button className={styles.primaryAction} type="button">Create order</button>
+          </div>
+        </div>
+
         <div className={styles.summaryGrid}>
           <div className={styles.summaryCard}><span>Orders</span><strong>{summary.orders}</strong></div>
           <div className={styles.summaryCard}><span>Items ordered</span><strong>{summary.itemsOrdered}</strong></div>
@@ -138,24 +150,38 @@ export default function OrdersWorkspace() {
         </div>
 
         <div className={styles.filterToolbar}>
-          <select className={styles.filterSelect} onChange={event => setPaymentFilter(event.target.value)} value={paymentFilter}>
-            <option value="all">All payments</option>
-            {ORDER_PAYMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-          </select>
-          <select className={styles.filterSelect} onChange={event => setFulfillmentFilter(event.target.value)} value={fulfillmentFilter}>
-            <option value="all">All fulfillment</option>
-            {ORDER_FULFILLMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-          </select>
-          <select className={styles.filterSelect} onChange={event => setDeliveryFilter(event.target.value)} value={deliveryFilter}>
-            <option value="all">All delivery</option>
-            {ORDER_DELIVERY_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-          </select>
+          <div className={styles.filterToolbarInner}>
+            <select className={styles.filterSelect} onChange={event => setPaymentFilter(event.target.value)} value={paymentFilter}>
+              <option value="all">All payments</option>
+              {ORDER_PAYMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+            </select>
+            <select className={styles.filterSelect} onChange={event => setFulfillmentFilter(event.target.value)} value={fulfillmentFilter}>
+              <option value="all">All fulfillment</option>
+              {ORDER_FULFILLMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+            </select>
+            <select className={styles.filterSelect} onChange={event => setDeliveryFilter(event.target.value)} value={deliveryFilter}>
+              <option value="all">All delivery</option>
+              {ORDER_DELIVERY_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+          <button className={styles.textActionButton} type="button">Reset filters</button>
         </div>
 
         <BulkActionsBar onAction={handleBulkAction} selectedCount={selectedIds.length} />
 
         <div className={styles.ordersIndexWrap}>
           <div className={styles.ordersTableWrap}>
+            <div className={styles.ordersTableTopbar}>
+              <div>
+                <h2>All orders</h2>
+                <p>{visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} matching your current view</p>
+              </div>
+              <div className={styles.ordersPageActions}>
+                <button className={styles.secondaryAction} type="button">Saved views</button>
+                <button className={styles.secondaryAction} type="button">Columns</button>
+              </div>
+            </div>
+
             <div className={styles.tableHeader}>
               <span><input checked={visibleOrders.length > 0 && selectedIds.length === visibleOrders.length} onChange={event => toggleSelectAllVisible(event.target.checked)} type="checkbox" /></span>
               <span>Order</span>
@@ -168,17 +194,23 @@ export default function OrdersWorkspace() {
             </div>
 
             <div className={styles.tableBody}>
-              {visibleOrders.map(order => (
+              {visibleOrders.length ? visibleOrders.map(order => (
                 <div key={order.id} className={styles.orderRow}>
                   <div className={styles.checkboxCell}>
                     <input checked={selectedIds.includes(order.id)} onChange={() => toggleSelectedRow(order.id)} type="checkbox" />
                   </div>
                   <Link className={styles.rowButton} href={`/orders/${encodeURIComponent(order.orderNumber.replace('#', ''))}`}>
                     <div className={styles.orderNumberCell}>
-                      <strong>{order.orderNumber}</strong>
-                      <small>{order.channel}</small>
+                      <div className={styles.orderNumberPrimary}>
+                        <strong>{order.orderNumber}</strong>
+                        <span className={styles.orderChannelBadge}>{order.channel}</span>
+                      </div>
+                      <small>{order.itemCount} item{order.itemCount === 1 ? '' : 's'}</small>
                     </div>
-                    <div>{new Date(order.createdAt).toLocaleDateString()}</div>
+                    <div className={styles.orderStat}>
+                      <strong>{new Date(order.createdAt).toLocaleDateString()}</strong>
+                      <small className={styles.orderStatMeta}>{new Date(order.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small>
+                    </div>
                     <div className={styles.customerCell}>
                       <strong>{order.customer.name}</strong>
                       <small>{order.customer.email}</small>
@@ -186,10 +218,26 @@ export default function OrdersWorkspace() {
                     <div><StatusPill tone={order.paymentStatus.replace(/\s+/g, '-')}>{order.paymentStatus}</StatusPill></div>
                     <div><StatusPill tone={order.fulfillmentStatus.replace(/\s+/g, '-')}>{order.fulfillmentStatus}</StatusPill></div>
                     <div><StatusPill tone={order.deliveryStatus.replace(/\s+/g, '-')}>{order.deliveryStatus}</StatusPill></div>
-                    <div>{formatOrderMoney(order.total)}</div>
+                    <div className={styles.orderStat}>
+                      <strong>{formatOrderMoney(order.total)}</strong>
+                      <small className={styles.orderStatMeta}>{order.tags?.[0] || '—'}</small>
+                    </div>
                   </Link>
                 </div>
-              ))}
+              )) : (
+                <div className={styles.emptyState}>
+                  <h2>No orders match these filters</h2>
+                  <p>Try a different view or reset your filters to bring the orders back.</p>
+                  <button className={styles.secondaryAction} onClick={() => {
+                    setActiveView('all');
+                    setPaymentFilter('all');
+                    setFulfillmentFilter('all');
+                    setDeliveryFilter('all');
+                    setSearchQuery('');
+                    setSelectedIds([]);
+                  }} type="button">Reset everything</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
