@@ -84,7 +84,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
       <div className={styles.orderDetailPage}>
         <div className={styles.orderDetailBreadcrumbs}>
           <Link className={styles.inlineLinkButton} href="/orders">
-            ← Back to orders
+            ← Orders
           </Link>
         </div>
         <div className={styles.emptyState}>
@@ -103,16 +103,18 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </Link>
       </div>
 
-      <div className={styles.shopifyOrderHeaderSlim}>
-        <div className={styles.orderIdentityBlock}>
-          <div className={styles.shopifyOrderTitleRow}>
+      <div className={styles.shopifyHeaderBar}>
+        <div className={styles.shopifyHeaderIdentity}>
+          <div className={styles.shopifyHeaderTitleRow}>
+            <span className="material-symbols-outlined">draft_orders</span>
             <h1 className={styles.detailTitle}>{order.orderNumber}</h1>
             <StatusPill tone={order.paymentStatus.replace(/\s+/g, '-')}>{order.paymentStatus}</StatusPill>
             <StatusPill tone={order.fulfillmentStatus.replace(/\s+/g, '-')}>{order.fulfillmentStatus}</StatusPill>
+            <span className={styles.archivedBadge}>Archived</span>
           </div>
           <p className={styles.shopifyOrderMeta}>Created {new Date(order.createdAt).toLocaleString()} from {order.channel}</p>
         </div>
-        <div className={styles.orderHeaderActions}>
+        <div className={styles.shopifyHeaderActions}>
           <button className={styles.secondaryAction} type="button">Refund</button>
           <button className={styles.secondaryAction} type="button">Return</button>
           <button className={styles.secondaryAction} type="button">Edit</button>
@@ -121,36 +123,39 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </div>
       </div>
 
-      <div className={styles.shopifyDetailLayoutClean}>
+      <div className={styles.shopifyDetailGrid}>
         <div className={styles.shopifyMainColumn}>
-          <div className={styles.shopifyCard}>
-            <div className={styles.shopifyCardHeaderInline}>
+          <div className={styles.shopifyPanel}>
+            <div className={styles.shopifyPanelHeader}>
               <div className={styles.sectionPillRow}>
                 <StatusPill tone={order.fulfillmentStatus.replace(/\s+/g, '-')}>{order.fulfillmentStatus}</StatusPill>
-                <strong>{order.orderNumber}-F1</strong>
               </div>
-              <button className={styles.textActionButton} type="button">•••</button>
+              <div className={styles.shopifyPanelHeaderRight}>
+                <strong>{order.orderNumber}-F1</strong>
+                <button className={styles.textActionButton} type="button">•••</button>
+              </div>
             </div>
 
-            <div className={styles.shopifyInsetCard}>
+            <div className={styles.shopifyInsetPanel}>
               <div className={styles.sectionPillRow}>
                 <StatusPill tone={order.deliveryStatus.replace(/\s+/g, '-')}>{order.deliveryStatus}</StatusPill>
               </div>
-              <div className={styles.infoList}>
+              <div className={styles.infoListTight}>
                 <div>{new Date(order.createdAt).toLocaleDateString()}</div>
-                <div>Deliver via {order.carrier}</div>
-                <div>{order.trackingNumber ? `${order.carrier} tracking: ${order.trackingNumber}` : 'No tracking number yet'}</div>
+                <div>Deliver by Friday, April 10, 2026</div>
+                <div>{order.carrier} tracking: {order.trackingNumber || 'No tracking number yet'}</div>
               </div>
             </div>
 
-            <div className={styles.shopifyLineItemCompactList}>
+            <div className={styles.shopifyLineItemList}>
               {order.lineItems.map(item => (
-                <div key={item.id} className={styles.shopifyLineItemCompactRow}>
+                <div key={item.id} className={styles.shopifyLineItemRow}>
                   <div className={styles.shopifyLineItemThumb} />
                   <div className={styles.shopifyLineItemInfo}>
                     <strong>{item.title}</strong>
                     <small className={styles.lineItemSubtext}>{item.variant}</small>
                   </div>
+                  <div className={styles.shopifyLineItemPrice}>{formatOrderMoney(item.price)}</div>
                   <div className={styles.shopifyQtyBadge}>{item.quantity}</div>
                   <div className={styles.shopifyLineItemTotal}>{formatOrderMoney(item.price * item.quantity)}</div>
                 </div>
@@ -158,23 +163,43 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifyCard}>
-            <div className={styles.shopifyCardHeaderInline}>
+          <div className={styles.shopifyPanel}>
+            <div className={styles.shopifyPanelHeader}>
               <div className={styles.sectionPillRow}>
                 <StatusPill tone={order.paymentStatus.replace(/\s+/g, '-')}>{order.paymentStatus}</StatusPill>
               </div>
             </div>
 
-            <div className={styles.shopifyTotalsCard}>
-              <div className={styles.infoRow}><span>Subtotal</span><strong>{formatOrderMoney(order.total)}</strong></div>
-              <div className={styles.infoRow}><span>Shipping</span><strong>—</strong></div>
-              <div className={styles.infoRow}><span>Taxes</span><strong>—</strong></div>
-              <div className={`${styles.infoRow} ${styles.totalRow}`}><span>Total</span><strong>{formatOrderMoney(order.total)}</strong></div>
-              <div className={styles.infoRow}><span>Paid</span><strong>{order.paymentStatus === 'paid' ? formatOrderMoney(order.total) : '$0.00'}</strong></div>
+            <div className={styles.shopifyPaymentTable}>
+              <div className={styles.shopifyPaymentRow}>
+                <span>Subtotal</span>
+                <span>{order.itemCount} item{order.itemCount === 1 ? '' : 's'}</span>
+                <strong>{formatOrderMoney(order.total)}</strong>
+              </div>
+              <div className={styles.shopifyPaymentRow}>
+                <span>Shipping</span>
+                <span>{shippingLabelDraft.carrierService} ({shippingLabelDraft.weight})</span>
+                <strong>$8.00</strong>
+              </div>
+              <div className={styles.shopifyPaymentRow}>
+                <span>Taxes</span>
+                <span>Tax details</span>
+                <strong>$3.26</strong>
+              </div>
+              <div className={`${styles.shopifyPaymentRow} ${styles.shopifyPaymentTotalRow}`}>
+                <span>Total</span>
+                <span></span>
+                <strong>{formatOrderMoney(order.total + 8 + 3.26)}</strong>
+              </div>
+              <div className={`${styles.shopifyPaymentRow} ${styles.shopifyPaymentPaidRow}`}>
+                <span>Paid</span>
+                <span></span>
+                <strong>{order.paymentStatus === 'paid' ? formatOrderMoney(order.total + 8 + 3.26) : '$0.00'}</strong>
+              </div>
             </div>
           </div>
 
-          <div className={styles.shopifyCard}>
+          <div className={styles.shopifyPanel}>
             <div className={styles.sectionCardHeader}>
               <h3>Metafields</h3>
               <button className={styles.inlineLinkButton} type="button">View all</button>
@@ -203,22 +228,22 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </div>
 
         <div className={styles.shopifySideColumn}>
-          <div className={styles.shopifySideCard}>
+          <div className={styles.shopifySidePanel}>
             <div className={styles.sectionCardHeader}>
               <h3>Notes</h3>
-              <button className={styles.inlineLinkButton} type="button">Edit</button>
+              <button className={styles.textActionButton} type="button">✎</button>
             </div>
             <textarea className={styles.notesInput} onChange={event => onUpdateOrder(order.id, currentOrder => ({ ...currentOrder, notes: event.target.value }))} rows={4} value={order.notes} />
           </div>
 
-          <div className={styles.shopifySideCard}>
+          <div className={styles.shopifySidePanel}>
             <div className={styles.sectionCardHeader}>
               <h3>Additional details</h3>
-              <button className={styles.inlineLinkButton} type="button">Edit</button>
+              <button className={styles.textActionButton} type="button">✎</button>
             </div>
-            <div className={styles.infoList}>
-              <div>{shippingLabelDraft.packageType}</div>
-              <div>{shippingLabelDraft.weight}</div>
+            <div className={styles.infoListTight}>
+              <div>#{shippingLabelDraft.packageType} ({shippingLabelDraft.weight})</div>
+              <div>{order.lineItems.map(item => item.title).join(', ')}</div>
               <div>Ship from {settings.shippingOrigin}</div>
             </div>
             <div className={styles.shippingBuilderGridCompact}>
@@ -242,13 +267,13 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifySideCard}>
+          <div className={styles.shopifySidePanel}>
             <div className={styles.sectionCardHeader}>
               <h3>Customer</h3>
               <button className={styles.textActionButton} type="button">•••</button>
             </div>
-            <div className={styles.infoList}>
-              <strong>{order.customer.name}</strong>
+            <div className={styles.infoListTight}>
+              <a className={styles.customerLink} href={`mailto:${order.customer.email}`}>{order.customer.name}</a>
               <a className={styles.customerLink} href={`mailto:${order.customer.email}`}>{order.customer.email}</a>
             </div>
             <div className={styles.addressList}>
@@ -263,7 +288,7 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <div className={styles.shopifySideCard}>
+          <div className={styles.shopifySidePanel}>
             <div className={styles.sectionCardHeader}>
               <h3>Tags</h3>
             </div>

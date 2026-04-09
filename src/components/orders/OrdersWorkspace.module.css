@@ -55,7 +55,11 @@
 .shopifyOrderTitleRow,
 .sectionPillRow,
 .sectionCardHeader,
-.shopifyCardHeaderInline {
+.shopifyPanelHeader,
+.shopifyHeaderTitleRow,
+.shopifyHeaderActions,
+.shopifyHeaderBar,
+.shopifyPanelHeaderRight {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
@@ -211,8 +215,8 @@
 
 .ordersTableTopbar h2,
 .timelineSection h3,
-.shopifySideCard h3,
-.shopifyCard h3,
+.shopifySidePanel h3,
+.shopifyPanel h3,
 .emptyState h2 {
   margin: 0;
   color: var(--slate-900);
@@ -293,7 +297,10 @@
   gap: 0.45rem;
 }
 
-.orderChannelBadge {
+.orderChannelBadge,
+.archivedBadge,
+.shopifyQtyBadge,
+.mutedBadge {
   display: inline-flex;
   align-items: center;
   padding: 0.2rem 0.45rem;
@@ -302,6 +309,9 @@
   color: var(--slate-600);
   font-size: 0.66rem;
   font-weight: 800;
+}
+
+.orderChannelBadge {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -311,8 +321,7 @@
 }
 
 .statusPill,
-.tagChip,
-.shopifyQtyBadge {
+.tagChip {
   display: inline-flex;
   align-items: center;
   padding: 0.26rem 0.55rem;
@@ -325,8 +334,6 @@
 .shopifyQtyBadge {
   justify-content: center;
   min-width: 1.85rem;
-  background: color-mix(in srgb, var(--surface-container-low) 92%, transparent);
-  color: var(--slate-600);
 }
 
 .tagChip {
@@ -370,17 +377,24 @@
   gap: 0.75rem;
 }
 
-.shopifyOrderHeaderSlim {
-  display: flex;
+.shopifyHeaderBar {
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
 }
 
-.orderIdentityBlock {
+.shopifyHeaderIdentity {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.shopifyHeaderTitleRow {
+  align-items: center;
+}
+
+.shopifyHeaderTitleRow .material-symbols-outlined {
+  font-size: 1.1rem;
+  color: var(--slate-500);
 }
 
 .detailTitle {
@@ -391,7 +405,7 @@
   color: var(--slate-900);
 }
 
-.shopifyDetailLayoutClean {
+.shopifyDetailGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.28fr) 320px;
   gap: 1rem;
@@ -405,27 +419,27 @@
   gap: 1rem;
 }
 
-.shopifyCard,
-.shopifySideCard,
+.shopifyPanel,
+.shopifySidePanel,
 .shopifyCommentBox {
   border: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
   border-radius: 1rem;
   background: color-mix(in srgb, var(--surface-container-lowest) 96%, transparent);
 }
 
-.shopifyCard,
-.shopifySideCard {
+.shopifyPanel,
+.shopifySidePanel {
   padding: 1rem;
 }
 
-.shopifyCardHeaderInline,
-.sectionCardHeader {
+.shopifyPanelHeader,
+.sectionCardHeader,
+.shopifyPanelHeaderRight {
   align-items: center;
   justify-content: space-between;
 }
 
-.shopifyInsetCard,
-.shopifyTotalsCard,
+.shopifyInsetPanel,
 .shopifyCommentBox {
   padding: 0.95rem 1rem;
   border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
@@ -433,8 +447,8 @@
   background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
 }
 
-.shopifyLineItemCompactList,
-.infoList,
+.shopifyLineItemList,
+.infoListTight,
 .addressList,
 .tagComposer,
 .timelineListClean {
@@ -443,21 +457,21 @@
   gap: 0.75rem;
 }
 
-.shopifyLineItemCompactRow {
+.shopifyLineItemRow {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) auto auto;
+  grid-template-columns: 3rem minmax(0, 1fr) auto auto auto;
   gap: 0.75rem;
   align-items: center;
   padding: 0.8rem 0;
   border-top: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
 }
 
-.shopifyLineItemCompactRow:first-child {
+.shopifyLineItemRow:first-child {
   border-top: none;
   padding-top: 0;
 }
 
-.shopifyLineItemCompactRow:last-child {
+.shopifyLineItemRow:last-child {
   padding-bottom: 0;
 }
 
@@ -474,21 +488,39 @@
   gap: 0.15rem;
 }
 
+.shopifyLineItemPrice,
 .shopifyLineItemTotal {
   font-weight: 700;
   color: var(--slate-700);
 }
 
-.infoRow {
+.shopifyPaymentTable {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  border: 1px solid color-mix(in srgb, var(--slate-200) 66%, transparent);
+  border-radius: 0.85rem;
+  overflow: hidden;
 }
 
-.totalRow {
-  padding-top: 0.7rem;
-  border-top: 1px solid color-mix(in srgb, var(--slate-200) 64%, transparent);
+.shopifyPaymentRow {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 62%, transparent);
+}
+
+.shopifyPaymentRow:first-child {
+  border-top: none;
+}
+
+.shopifyPaymentTotalRow {
+  font-weight: 800;
+}
+
+.shopifyPaymentPaidRow {
+  border-top: 1px solid color-mix(in srgb, var(--slate-200) 68%, transparent);
 }
 
 .addressBlock {
@@ -577,17 +609,19 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .shopifyDetailLayoutClean {
+  .shopifyDetailGrid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 980px) {
   .ordersPageHeader,
-  .shopifyOrderHeaderSlim,
+  .shopifyHeaderBar,
   .filterToolbar,
   .ordersTableTopbar,
-  .timelineHeaderRow {
+  .timelineHeaderRow,
+  .shopifyPanelHeader,
+  .shopifyPanelHeaderRight {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -614,11 +648,17 @@
     grid-template-columns: 1fr;
   }
 
-  .shopifyLineItemCompactRow {
+  .shopifyLineItemRow {
     grid-template-columns: 3rem minmax(0, 1fr) auto;
   }
 
+  .shopifyLineItemPrice,
+  .shopifyQtyBadge,
   .shopifyLineItemTotal {
     grid-column: 2 / span 2;
+  }
+
+  .shopifyPaymentRow {
+    grid-template-columns: 1fr;
   }
 }
