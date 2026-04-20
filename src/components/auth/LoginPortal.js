@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './LoginPortal.module.css';
@@ -63,6 +63,10 @@ export default function LoginPortal() {
   const nextPath = searchParams.get('next') || '/orders';
   const isReady = useMemo(() => email.trim().length > 0 && password.trim().length > 0, [email, password]);
 
+  useEffect(() => {
+    router.prefetch(nextPath);
+  }, [nextPath, router]);
+
   const handleMouseMove = event => {
     const rect = event.currentTarget.getBoundingClientRect();
     const offsetX = event.clientX - rect.left - rect.width / 2;
@@ -104,8 +108,7 @@ export default function LoginPortal() {
         return;
       }
 
-      router.push(nextPath);
-      router.refresh();
+      window.location.assign(nextPath);
     } catch {
       setErrorMessage('Unable to reach the sign-in service right now. Try again in a sec.');
       setIsLoading(false);

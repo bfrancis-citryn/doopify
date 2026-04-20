@@ -7,9 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+<<<<<<< HEAD
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "node prisma/seed.mjs",
+    "postinstall": "prisma generate"
+=======
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed:bootstrap": "node ./scripts/bootstrap-store.mjs"
+>>>>>>> b95823d47187774868be39beed3675a228baa48b
   },
   "dependencies": {
     "@prisma/client": "^7.6.0",
@@ -18,11 +26,26 @@
     "next": "16.2.2",
     "prisma": "^7.6.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "@prisma/client": "^6.6.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.23.8",
+    "swr": "^2.3.3"
   },
   "devDependencies": {
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+<<<<<<< HEAD
+    "prisma": "^6.6.0",
+    "typescript": "^5.8.3",
+    "@types/node": "^22.14.1",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.9"
+=======
     "typescript": "^5.9.3"
+>>>>>>> b95823d47187774868be39beed3675a228baa48b
   }
 }

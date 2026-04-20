@@ -3,6 +3,12 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const ThemeContext = createContext(null);
+const THEME_STORAGE_KEY = 'doopify-theme';
+const VALID_THEMES = new Set(['system', 'light', 'dark']);
+
+function normalizeTheme(value) {
+  return VALID_THEMES.has(value) ? value : 'system';
+}
 
 function resolveTheme(nextTheme) {
   if (nextTheme === 'system') {
@@ -12,26 +18,32 @@ function resolveTheme(nextTheme) {
   return nextTheme;
 }
 
-export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('system');
-  const [resolvedTheme, setResolvedTheme] = useState('light');
+function getInitialResolvedTheme(initialTheme) {
+  return initialTheme === 'dark' ? 'dark' : 'light';
+}
 
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem('doopify-theme');
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-  }, []);
+function persistTheme(nextTheme) {
+  window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${THEME_STORAGE_KEY}=${nextTheme}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+}
+
+export function ThemeProvider({ children, initialTheme = 'system' }) {
+  const normalizedInitialTheme = normalizeTheme(initialTheme);
+  const [theme, setTheme] = useState(normalizedInitialTheme);
+  const [resolvedTheme, setResolvedTheme] = useState(() => getInitialResolvedTheme(normalizedInitialTheme));
 
   useEffect(() => {
     const applyTheme = nextTheme => {
       const nextResolvedTheme = resolveTheme(nextTheme);
       setResolvedTheme(nextResolvedTheme);
       document.documentElement.dataset.theme = nextResolvedTheme;
+      document.documentElement.style.colorScheme = nextResolvedTheme;
     };
 
     applyTheme(theme);
-    window.localStorage.setItem('doopify-theme', theme);
+    persistTheme(theme);
 
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => applyTheme(theme);

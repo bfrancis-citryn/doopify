@@ -20,6 +20,20 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment Files
+
+This repo currently uses two local env files:
+
+- `.env`: shared values Prisma needs by default, especially `DATABASE_URL` and `DIRECT_URL`.
+- `.env.local`: optional Next.js runtime secrets and local overrides.
+
+You do not need to duplicate database variables in both files. The clean split is:
+
+- keep `DATABASE_URL` and `DIRECT_URL` in `.env`
+- keep app/runtime-only values such as `JWT_SECRET`, `NEXT_PUBLIC_*`, and third-party API keys in `.env.local`
+
+Next.js reads both files, and `.env.local` wins if the same key exists in both.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
