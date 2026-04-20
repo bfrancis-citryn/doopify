@@ -55,6 +55,8 @@ export async function POST(req: Request) {
     const discount = await prisma.discount.create({
       data: {
         ...parsed.data,
+        // Normalize to uppercase so validation is always case-insensitive
+        code: parsed.data.code ? parsed.data.code.toUpperCase() : undefined,
         startsAt: parsed.data.startsAt ? new Date(parsed.data.startsAt) : undefined,
         endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : undefined,
       },

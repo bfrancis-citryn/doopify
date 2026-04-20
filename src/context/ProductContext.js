@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useReducer } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import {
   buildVariantTitle,
   cloneProduct,
@@ -24,22 +24,19 @@ import {
 
 const ProductContext = createContext(null);
 
-const seededProducts = createSeedProducts();
-const initialProduct = seededProducts[0] || null;
-
 const initialState = {
-  products: seededProducts,
-  selectedProductId: initialProduct?.id || null,
+  products: [],
+  selectedProductId: null,
   catalog: {
     searchQuery: '',
     activeFilter: 'all',
   },
   editor: {
-    isOpen: Boolean(initialProduct),
-    mode: initialProduct ? 'existing' : 'new',
-    draftProduct: initialProduct ? cloneProduct(initialProduct) : null,
-    baselineProduct: initialProduct ? cloneProduct(initialProduct) : null,
-    previewImageId: initialProduct?.featuredImageId || initialProduct?.images?.[0]?.id || null,
+    isOpen: false,
+    mode: 'new',
+    draftProduct: null,
+    baselineProduct: null,
+    previewImageId: null,
     autosaveEnabled: false,
     isSaving: false,
     validationErrors: {},
@@ -47,6 +44,66 @@ const initialState = {
   confirmDialog: null,
   toasts: [],
 };
+
+// ── Transform API product → UI shape ─────────────────────────────────────────
+function transformApiProduct(product) {
+  const images = (product.media || []).map(m => ({
+    id: m.id,
+    url: m.asset?.url || '',
+    altText: m.asset?.altText || '',
+    isFeatured: m.isFeatured,
+    position: m.position ?? 0,
+  }));
+  const featuredImageId = images.find(i => i.isFeatured)?.id || images[0]?.id || null;
+
+  const options = (product.options || []).map(opt => ({
+    id: opt.id,
+    name: opt.name,
+    position: opt.position ?? 0,
+    values: (opt.values || []).map(v => v.value),
+  }));
+
+  const variants = (product.variants || []).map(v => ({
+    id: v.id,
+    title: v.title,
+    sku: v.sku || '',
+    price: String(v.price ?? '0.00'),
+    compareAtPrice: v.compareAtPrice != null ? String(v.compareAtPrice) : '',
+    inventoryQty: v.inventory ?? 0,
+    weight: v.weight || null,
+    weightUnit: v.weightUnit || 'kg',
+    position: v.position ?? 0,
+    optionValues: {},
+    imageId: featuredImageId,
+    isDefault: options.length === 0,
+    isActive: true,
+  }));
+
+  const firstVariant = variants[0];
+  const inventorySummary = deriveInventorySummary(variants);
+
+  return {
+    id: product.id,
+    title: product.title,
+    handle: product.handle,
+    status: (product.status || 'DRAFT').toLowerCase(),
+    description: product.description || '',
+    vendor: product.vendor || '',
+    productType: product.productType || '',
+    category: product.productType || '',
+    tags: product.tags || [],
+    options,
+    variants,
+    images,
+    featuredImageId,
+    basePrice: firstVariant?.price || '0.00',
+    compareAtPrice: firstVariant?.compareAtPrice || '',
+    sku: firstVariant?.sku || '',
+    inventorySummary,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+  };
+}
 
 function normalizeSkuValue(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -214,6 +271,17 @@ function makeEditorState(product, mode = 'existing') {
 
 function productReducer(state, action) {
   switch (action.type) {
+    case 'LOAD_PRODUCTS': {
+      const first = action.products[0] || null;
+      return {
+        ...state,
+        products: action.products,
+        selectedProductId: first?.id || null,
+        editor: first
+          ? { ...makeEditorState(first, 'existing'), autosaveEnabled: state.editor.autosaveEnabled }
+          : state.editor,
+      };
+    }
     case 'SET_SEARCH_QUERY':
       return {
         ...state,
@@ -368,6 +436,19 @@ function productReducer(state, action) {
 export function ProductProvider({ children }) {
   const [state, dispatch] = useReducer(productReducer, initialState);
 
+  // ── Fetch products from API on mount ────────────────────────────────────────
+  useEffect(() => {
+    fetch('/api/products?pageSize=100')
+      .then(r => r.json())
+      .then(json => {
+        if (json.success) {
+          const products = (json.data.products || []).map(transformApiProduct);
+          dispatch({ type: 'LOAD_PRODUCTS', products });
+        }
+      })
+      .catch(err => console.error('[ProductContext] fetch failed', err));
+  }, []);
+
   const selectedProduct = useMemo(
     () => state.products.find(product => product.id === state.selectedProductId) || null,
     [state.products, state.selectedProductId]
@@ -513,8 +594,52 @@ export function ProductProvider({ children }) {
     }
 
     dispatch({ type: 'SET_SAVING', value: true });
-    await new Promise(resolve => setTimeout(resolve, 120));
-    dispatch({ type: 'COMMIT_PRODUCT', product: preparedProduct });
+
+    try {
+      const isNew = state.editor.mode === 'new';
+      const url = isNew ? '/api/products' : `/api/products/${preparedProduct.id}`;
+      const method = isNew ? 'POST' : 'PATCH';
+
+      const body = {
+        title: preparedProduct.title,
+        handle: preparedProduct.handle,
+        status: preparedProduct.status?.toUpperCase() || 'DRAFT',
+        description: preparedProduct.description,
+        vendor: preparedProduct.vendor,
+        productType: preparedProduct.productType || preparedProduct.category,
+        tags: preparedProduct.tags,
+        variants: (preparedProduct.variants || []).map(v => ({
+          title: v.title || 'Default Title',
+          sku: v.sku || undefined,
+          price: Number(v.price) || 0,
+          compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+          inventory: v.inventoryQty ?? 0,
+        })),
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!json.success) {
+        pushToast(json.error || 'Save failed', 'error');
+        dispatch({ type: 'SET_SAVING', value: false });
+        return false;
+      }
+
+      // Use the server-returned product so IDs are real DB IDs
+      const savedProduct = transformApiProduct(json.data);
+      const finalProduct = prepareProductForSave({ ...preparedProduct, id: savedProduct.id });
+      dispatch({ type: 'COMMIT_PRODUCT', product: finalProduct });
+    } catch (e) {
+      console.error('[ProductContext] save failed', e);
+      pushToast('Save failed — check your connection', 'error');
+      dispatch({ type: 'SET_SAVING', value: false });
+      return false;
+    }
 
     if (!silent) {
       pushToast(`${preparedProduct.title} saved`, 'success');

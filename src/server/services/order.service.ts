@@ -103,77 +103,95 @@ export async function createOrder(data: {
   currency?: string
   stripePaymentIntentId?: string
 }) {
-  const order = await prisma.order.create({
-    data: {
-      customerId: data.customerId,
-      email: data.email,
-      status: 'OPEN',
-      paymentStatus: 'PAID',
-      fulfillmentStatus: 'UNFULFILLED',
-      subtotal: data.subtotal,
-      taxAmount: data.taxAmount ?? 0,
-      shippingAmount: data.shippingAmount ?? 0,
-      discountAmount: data.discountAmount ?? 0,
-      total: data.total,
-      currency: data.currency ?? 'USD',
-      items: {
-        create: data.items.map((item) => ({
-          productId: item.productId,
-          variantId: item.variantId,
-          title: item.title,
-          variantTitle: item.variantTitle,
-          sku: item.sku,
-          price: item.price,
-          quantity: item.quantity,
-          total: item.price * item.quantity,
-        })),
-      },
-      addresses: data.shippingAddress
-        ? {
-            create: {
-              type: 'SHIPPING',
-              ...data.shippingAddress,
-            },
-          }
-        : undefined,
-      payments: data.stripePaymentIntentId
-        ? {
-            create: {
-              provider: 'stripe',
-              amount: data.total,
-              currency: data.currency ?? 'USD',
-              status: 'PAID',
-              stripePaymentIntentId: data.stripePaymentIntentId,
-            },
-          }
-        : undefined,
-      events: {
-        create: {
-          type: 'ORDER_PLACED',
-          title: 'Order placed',
-          detail: 'Order was created via online checkout',
-          actorType: 'SYSTEM',
+  const order = await prisma.$transaction(async (tx) => {
+    // 1. Decrement inventory atomically for each variant — throws if stock is insufficient
+    for (const item of data.items) {
+      if (item.variantId) {
+        const updated = await tx.productVariant.updateMany({
+          where: { id: item.variantId, inventory: { gte: item.quantity } },
+          data: { inventory: { decrement: item.quantity } },
+        })
+        if (updated.count === 0) {
+          throw new Error(`Insufficient inventory for variant ${item.variantId}`)
+        }
+      }
+    }
+
+    // 2. Create the order with all related records in one shot
+    const order = await tx.order.create({
+      data: {
+        customerId: data.customerId,
+        email: data.email,
+        status: 'OPEN',
+        paymentStatus: 'PAID',
+        fulfillmentStatus: 'UNFULFILLED',
+        subtotal: data.subtotal,
+        taxAmount: data.taxAmount ?? 0,
+        shippingAmount: data.shippingAmount ?? 0,
+        discountAmount: data.discountAmount ?? 0,
+        total: data.total,
+        currency: data.currency ?? 'USD',
+        items: {
+          create: data.items.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            title: item.title,
+            variantTitle: item.variantTitle,
+            sku: item.sku,
+            price: item.price,
+            quantity: item.quantity,
+            total: item.price * item.quantity,
+          })),
+        },
+        addresses: data.shippingAddress
+          ? {
+              create: {
+                type: 'SHIPPING',
+                ...data.shippingAddress,
+              },
+            }
+          : undefined,
+        payments: data.stripePaymentIntentId
+          ? {
+              create: {
+                provider: 'stripe',
+                amount: data.total,
+                currency: data.currency ?? 'USD',
+                status: 'PAID',
+                stripePaymentIntentId: data.stripePaymentIntentId,
+              },
+            }
+          : undefined,
+        events: {
+          create: {
+            type: 'ORDER_PLACED',
+            title: 'Order placed',
+            detail: 'Order was created via online checkout',
+            actorType: 'SYSTEM',
+          },
         },
       },
-    },
-    include: {
-      items: true,
-      addresses: true,
-      payments: true,
-      events: true,
-    },
-  })
-
-  // Update customer totals
-  if (data.customerId) {
-    await prisma.customer.update({
-      where: { id: data.customerId },
-      data: {
-        orderCount: { increment: 1 },
-        totalSpent: { increment: data.total },
+      include: {
+        items: true,
+        addresses: true,
+        payments: true,
+        events: true,
       },
     })
-  }
+
+    // 3. Update customer totals atomically within the same transaction
+    if (data.customerId) {
+      await tx.customer.update({
+        where: { id: data.customerId },
+        data: {
+          orderCount: { increment: 1 },
+          totalSpent: { increment: data.total },
+        },
+      })
+    }
+
+    return order
+  })
 
   return order
 }
@@ -235,37 +253,43 @@ export async function createFulfillment(data: {
   trackingNumber?: string
   trackingUrl?: string
 }) {
-  const fulfillment = await prisma.fulfillment.create({
-    data: {
-      orderId: data.orderId,
-      status: 'SUCCESS',
-      carrier: data.carrier,
-      trackingNumber: data.trackingNumber,
-      trackingUrl: data.trackingUrl,
-      shippedAt: new Date(),
-      items: {
-        create: data.items.map((item) => ({
-          orderItemId: item.orderItemId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-        })),
+  const fulfillment = await prisma.$transaction(async (tx) => {
+    const fulfillment = await tx.fulfillment.create({
+      data: {
+        orderId: data.orderId,
+        status: 'SUCCESS',
+        carrier: data.carrier,
+        trackingNumber: data.trackingNumber,
+        trackingUrl: data.trackingUrl,
+        shippedAt: new Date(),
+        items: {
+          create: data.items.map((item) => ({
+            orderItemId: item.orderItemId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+          })),
+        },
       },
-    },
-    include: { items: true },
-  })
+      include: { items: true },
+    })
 
-  // Update order fulfillment status
-  await prisma.order.update({
-    where: { id: data.orderId },
-    data: { fulfillmentStatus: 'FULFILLED' },
-  })
+    await tx.order.update({
+      where: { id: data.orderId },
+      data: { fulfillmentStatus: 'FULFILLED' },
+    })
 
-  await createOrderEvent(data.orderId, {
-    type: 'FULFILLMENT_CREATED',
-    title: data.trackingNumber
-      ? `Fulfillment created with tracking ${data.trackingNumber}`
-      : 'Fulfillment created',
-    actorType: 'STAFF',
+    await tx.orderEvent.create({
+      data: {
+        orderId: data.orderId,
+        type: 'FULFILLMENT_CREATED',
+        title: data.trackingNumber
+          ? `Fulfillment created with tracking ${data.trackingNumber}`
+          : 'Fulfillment created',
+        actorType: 'STAFF',
+      },
+    })
+
+    return fulfillment
   })
 
   return fulfillment

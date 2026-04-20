@@ -1,0 +1,61 @@
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { verifyToken } from '@/lib/auth'
+
+// Routes that do NOT require authentication
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/api/auth',
+  '/api/storefront',
+  '/api/webhooks',
+  '/_next',
+  '/favicon',
+  '/images',
+  '/public',
+]
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Allow public routes through
+  const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  if (isPublic) return NextResponse.next()
+
+  // For all other routes, require a valid auth token
+  const token = request.cookies.get('doopify_token')?.value
+
+  if (\!token) {
+    // API requests get a 401; page requests get redirected to /login
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  const payload = verifyToken(token)
+  if (\!payload) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ success: false, error: 'Invalid or expired session' }, { status: 401 })
+    }
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Attach user info as headers so route handlers can read them without re-verifying
+  const res = NextResponse.next()
+  res.headers.set('x-user-id', payload.userId)
+  res.headers.set('x-user-role', payload.role)
+  res.headers.set('x-user-email', payload.email)
+  return res
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths EXCEPT:
+     * - _next/static (static files)
+     * - _next/image (image optimization)
+     * - favicon.ico
+     */
+    '/((?\!_next/static|_next/image|favicon.ico).*)',
+  ],
+}

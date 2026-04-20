@@ -41,18 +41,23 @@ export default async function RootLayout({ children }) {
   return (
     <html lang="en" data-theme={initialResolvedTheme} style={{ colorScheme: initialResolvedTheme }}>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+          rel="stylesheet"
+        />
       </head>
-      <body className={`${inter.variable} ${manrope.variable}`}>
-        <ThemeProvider initialTheme={initialTheme}>
+      <body className={`${inter.variable} ${manrope.variable}`} suppressHydrationWarning>
+        <ThemeProvider initialTheme={initialTheme} initialResolvedTheme={initialResolvedTheme}>
           <SettingsProvider>
-            <CustomersProvider>
-              <DiscountsProvider>
-                <ProductsProvider>
-                  <OrdersProvider>{children}</OrdersProvider>
-                </ProductsProvider>
-              </DiscountsProvider>
-            </CustomersProvider>
+            <ProductsProvider>
+              <OrdersProvider>
+                <CustomersProvider>
+                  <DiscountsProvider>
+                    {children}
+                  </DiscountsProvider>
+                </CustomersProvider>
+              </OrdersProvider>
+            </ProductsProvider>
           </SettingsProvider>
         </ThemeProvider>
       </body>
