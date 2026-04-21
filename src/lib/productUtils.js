@@ -149,9 +149,10 @@ export function buildVariantTitle(optionValues = {}, optionNames = []) {
   return optionNames.map(name => trimString(optionValues[name]) || 'Unset').join(' / ');
 }
 
-function createImage(src, alt, sortOrder) {
+function createImage(src, alt, sortOrder, metadata = {}) {
   return {
-    id: createId('image'),
+    id: metadata.id || createId('image'),
+    assetId: metadata.assetId || null,
     src,
     alt: trimString(alt) || 'Product media',
     isFeatured: false,
@@ -159,8 +160,8 @@ function createImage(src, alt, sortOrder) {
   };
 }
 
-export function createImageAsset(src, alt, sortOrder) {
-  return createImage(src, alt, sortOrder);
+export function createImageAsset(src, alt, sortOrder, metadata = {}) {
+  return createImage(src, alt, sortOrder, metadata);
 }
 
 function sortImages(images = []) {
@@ -176,6 +177,7 @@ export function ensureMediaState(images = [], featuredImageId = null) {
     .filter(image => image?.src)
     .map((image, index) => ({
       id: image.id || createId('image'),
+      assetId: image.assetId || null,
       src: image.src,
       alt: trimString(image.alt) || 'Product media',
       isFeatured: false,

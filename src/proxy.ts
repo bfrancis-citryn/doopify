@@ -66,6 +66,7 @@ function isAdminPage(pathname: string) {
     '/analytics',
     '/settings',
     '/draft-orders',
+    '/media',
   ]
 
   return adminPaths.some((prefix) => pathname.startsWith(prefix))

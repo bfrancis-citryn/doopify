@@ -4,13 +4,52 @@
   gap: 1rem;
 }
 
+.tabRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.tabButton,
+.tabButtonActive {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.tabButton {
+  background: transparent;
+  color: var(--slate-400);
+}
+
+.tabButtonActive {
+  background: rgba(255, 255, 255, 0.94);
+  color: #101010;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
 .previewPanel {
-  min-height: 16rem;
-  border-radius: 1.1rem;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  min-height: 18rem;
+  border-radius: 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)),
+    rgba(255, 255, 255, 0.04);
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(32px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .previewImage {
@@ -19,7 +58,7 @@
 
 .previewEmpty {
   height: 100%;
-  min-height: 16rem;
+  min-height: 18rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -33,12 +72,12 @@
   margin-top: 0.85rem;
   font-size: 1.15rem;
   font-weight: 800;
-  color: var(--slate-700);
+  color: var(--slate-50);
 }
 
 .previewEmptyText {
   margin-top: 0.45rem;
-  max-width: 18rem;
+  max-width: 22rem;
   line-height: 1.6;
   color: var(--slate-500);
 }
@@ -49,17 +88,56 @@
   gap: 0.75rem;
 }
 
-.actionButtonPrimary {
+.actionButtonPrimary,
+.actionButton,
+.actionButtonDanger,
+.actionButtonLink,
+.libraryButton,
+.libraryButtonAdded {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.45rem;
-  padding: 0.7rem 0.95rem;
-  border-radius: 0.8rem;
-  font-size: 0.8rem;
+  min-height: 2.9rem;
+  padding: 0.82rem 1rem;
+  border-radius: 999px;
+  font-size: 0.79rem;
   font-weight: 800;
-  background: white;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  color: var(--slate-800);
+  border: 1px solid transparent;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.actionButtonPrimary {
+  background: rgba(255, 255, 255, 0.96);
+  color: #111111;
+}
+
+.actionButton {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--slate-200);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.actionButtonDanger {
+  background: rgba(255, 122, 122, 0.1);
+  color: #ffd1d1;
+  border-color: rgba(255, 122, 122, 0.24);
+}
+
+.actionButtonLink {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--slate-200);
+  border-color: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.actionButton:disabled,
+.actionButtonDanger:disabled,
+.actionButtonLink:disabled,
+.libraryButton:disabled,
+.libraryButtonAdded:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .thumbnailGrid {
@@ -71,11 +149,12 @@
 .thumbnailTile,
 .thumbnailTileActive,
 .addTile {
-  border-radius: 0.9rem;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: white;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   overflow: hidden;
   min-height: 96px;
+  backdrop-filter: blur(24px);
 }
 
 .thumbnailTile,
@@ -84,23 +163,24 @@
 }
 
 .thumbnailTileActive {
-  border-color: rgba(37, 99, 235, 0.35);
-  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 18px 32px rgba(0, 0, 0, 0.28);
 }
 
 .thumbnailTileImageWrap {
   width: 100%;
   aspect-ratio: 1 / 1;
   position: relative;
-  background: rgba(226, 232, 240, 0.55);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.thumbnailImage {
+.thumbnailImage,
+.libraryImage {
   object-fit: cover;
 }
 
 .tileFooter {
-  padding: 0.4rem 0.5rem;
+  padding: 0.42rem 0.55rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -110,19 +190,132 @@
 .tilePosition {
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--slate-500);
+  color: var(--slate-400);
 }
 
 .tileBadge {
   font-size: 0.68rem;
   font-weight: 800;
-  color: var(--primary);
+  color: var(--slate-100);
 }
 
 .addTile {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--slate-300);
+}
+
+.libraryIntro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.libraryEyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-300);
+}
+
+.libraryText {
+  margin-top: 0.35rem;
+  max-width: 34rem;
   color: var(--slate-500);
-  background: rgba(248, 250, 252, 0.8);
+  line-height: 1.55;
+}
+
+.libraryError,
+.libraryState {
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--slate-400);
+}
+
+.libraryError {
+  color: #ffd1d1;
+  border-color: rgba(255, 122, 122, 0.22);
+}
+
+.libraryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.9rem;
+}
+
+.libraryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.8rem;
+  border-radius: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
+    rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(30px);
+}
+
+.libraryImageWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.libraryMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.libraryName {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--slate-100);
+  word-break: break-word;
+}
+
+.libraryMetaRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.74rem;
+  color: var(--slate-500);
+}
+
+.libraryButton {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--slate-100);
+}
+
+.libraryButtonAdded {
+  width: 100%;
+  background: rgba(114, 245, 202, 0.12);
+  border-color: rgba(114, 245, 202, 0.24);
+  color: #cffff0;
+}
+
+@media (max-width: 720px) {
+  .libraryGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .previewPanel {
+    min-height: 14rem;
+  }
 }

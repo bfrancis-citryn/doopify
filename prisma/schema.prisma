@@ -213,13 +213,13 @@ model ProductOptionValue {
 
 model MediaAsset {
   id           String         @id @default(cuid())
-  url          String
+  filename     String
   altText      String?
-  mimeType     String?
+  mimeType     String         @default("application/octet-stream")
   size         Int?
   width        Int?
   height       Int?
-  storageKey   String?
+  data         Bytes
   createdAt    DateTime       @default(now())
   productMedia ProductMedia[]
 

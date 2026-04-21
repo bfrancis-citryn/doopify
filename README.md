@@ -1,50 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Doopify
 
-## Getting Started
+Doopify is a headless commerce app built in Next.js 16 with a shared admin and storefront backed by Prisma and PostgreSQL.
 
-First, run the development server:
+The repo now includes a real persistence layer, protected admin routes, DB-backed product/catalog operations, storefront product reads, and a standalone media library for asset management.
+
+## Current Product Status
+
+### Working now
+
+- Protected admin login flow with JWT cookie session checks
+- Glassmorphism admin shell with route-based workspaces
+- DB-backed products, variants, product options, media, customers, discounts, settings, analytics, and orders
+- Storefront catalog pages at `/shop` and `/shop/[handle]`
+- Product editor that saves real product data and syncs to the storefront
+- Standalone media library at `/media`
+  - upload images to Prisma/Postgres
+  - reuse assets across products
+  - edit alt text for SEO
+  - delete assets
+  - inspect linked products
+
+### Still to build
+
+- Stripe checkout and webhook-driven payment/order creation
+- DB-backed draft order lifecycle
+- Collections authoring and collection storefront routes
+- Customer account portal
+- Transactional email
+- Role-based auth hardening and login rate limiting
+- Production-grade media delivery strategy beyond DB-stored binaries
+
+## Stack
+
+- Next.js 16.2.2
+- React 19
+- Prisma 7
+- PostgreSQL via `@prisma/adapter-pg`
+- Zod
+- bcryptjs
+- jsonwebtoken
+
+## Key Routes
+
+### Admin pages
+
+- `/orders`
+- `/draft-orders`
+- `/products`
+- `/media`
+- `/customers`
+- `/discounts`
+- `/analytics`
+- `/settings`
+
+### Storefront pages
+
+- `/`
+- `/shop`
+- `/shop/[handle]`
+
+### Core API routes
+
+- `/api/auth/*`
+- `/api/products`
+- `/api/orders`
+- `/api/customers`
+- `/api/discounts`
+- `/api/settings`
+- `/api/analytics`
+- `/api/media`
+- `/api/storefront/products`
+
+## Development
+
+Run the app locally:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create a production build:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Database And Environment
 
-## Environment Files
+This repo expects PostgreSQL through Prisma.
 
-This repo currently uses two local env files:
+- Put `DATABASE_URL` and `DIRECT_URL` in `.env`
+- Put app/runtime secrets in `.env.local`
 
-- `.env`: shared values Prisma needs by default, especially `DATABASE_URL` and `DIRECT_URL`.
-- `.env.local`: optional Next.js runtime secrets and local overrides.
+Common commands:
 
-You do not need to duplicate database variables in both files. The clean split is:
+```bash
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run db:seed:bootstrap
+```
 
-- keep `DATABASE_URL` and `DIRECT_URL` in `.env`
-- keep app/runtime-only values such as `JWT_SECRET`, `NEXT_PUBLIC_*`, and third-party API keys in `.env.local`
+## Notes On Media
 
-Next.js reads both files, and `.env.local` wins if the same key exists in both.
+Media is currently stored directly in Postgres through the `MediaAsset.data` field and served by `/api/media/[assetId]`.
 
-## Learn More
+That works well for local development and functional admin workflows. For production scale, we may still want to move asset delivery to object storage or a CDN-backed image service later.
 
-To learn more about Next.js, take a look at the following resources:
+## Current Priority
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The highest-value next step is turning the existing storefront catalog into a real purchase flow:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Stripe checkout creation
+2. webhook-based order creation
+3. inventory validation and decrement during checkout
+4. confirmation email
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

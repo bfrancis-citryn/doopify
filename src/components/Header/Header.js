@@ -6,28 +6,35 @@ export default function Header({
   onNotificationsClick,
   onQuickActionClick,
   onSearchChange,
+  primaryActionLabel = 'New order',
+  searchPlaceholder = 'Search orders, products, customers...',
   searchValue = '',
 }) {
   return (
     <header className={styles.header}>
       <div className={styles.leftGroup}>
+        <div className={`font-headline ${styles.consoleBadge}`}>
+          <span className="material-symbols-outlined">blur_on</span>
+          <span>Live operations</span>
+        </div>
+
         <div className={styles.searchContainer}>
           <span className={`material-symbols-outlined ${styles.searchIcon} text-lg text-slate-400`}>search</span>
-          <input 
+          <input
             className={`${styles.searchInput} text-sm`}
             onChange={onSearchChange}
-            placeholder="Search orders, products, customers..." 
+            placeholder={searchPlaceholder}
             type="text"
             value={searchValue}
           />
         </div>
       </div>
-      
+
       <div className={styles.rightGroup}>
         <button className={`${styles.createBtn} text-sm font-bold tracking-tight font-headline`} onClick={onCreateOrder} type="button">
-          Create Order
+          {primaryActionLabel}
         </button>
-        
+
         <div className={styles.actionsGroup}>
           <button className={styles.iconBtn} onClick={onQuickActionClick} type="button">
             <span className="material-symbols-outlined">bolt</span>

@@ -1,42 +1,64 @@
 .appContainer {
-  display: flex;
-  height: 100vh;
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1rem;
   overflow: hidden;
+}
+
+.appContainer::before,
+.appContainer::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.appContainer::before {
+  inset: 0;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 18%),
-    linear-gradient(180deg, #f8fafc, #f1f5f9);
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.08), transparent 24%),
+    radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.045), transparent 22%),
+    radial-gradient(circle at 58% 88%, rgba(255, 255, 255, 0.04), transparent 26%);
+  filter: blur(18px);
+  opacity: 0.95;
+}
+
+.appContainer::after {
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.075) 1px, transparent 1.15px);
+  background-size: 18px 18px;
+  opacity: 0.26;
 }
 
 .mainCanvas {
-  flex: 1;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  gap: 1rem;
   overflow: hidden;
-  position: relative;
-}
-
-.themeToggleDock {
-  position: absolute;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  z-index: 30;
 }
 
 .viewContainer {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   overflow: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .splitView {
   flex: 1;
-  display: flex;
-  overflow: hidden;
-  position: relative;
   min-height: 0;
+  display: flex;
+  gap: 1rem;
+  overflow: hidden;
 }
 
 .detailDock {
@@ -46,22 +68,29 @@
   flex: 0 0 0;
   flex-shrink: 0;
   overflow: hidden;
-  border-left: 1px solid transparent;
-  background-color: rgba(255, 255, 255, 0.72);
-  transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1), max-width 300ms cubic-bezier(0.4, 0, 0.2, 1), border-color 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    width 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    flex-basis 320ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .detailDockOpen {
-  width: clamp(360px, 46vw, 680px);
+  width: clamp(380px, 44vw, 720px);
   max-width: calc(100% - 320px);
-  flex: 0 0 clamp(360px, 46vw, 680px);
-  border-left-color: rgba(226, 232, 240, 0.9);
+  flex: 0 0 clamp(380px, 44vw, 720px);
 }
 
 .detailPanel {
   width: 100%;
   height: 100%;
-  background-color: var(--background);
+  border-radius: 1.5rem;
+  border: 1px solid var(--glass-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
+    rgba(15, 15, 15, 0.88);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -71,38 +100,35 @@
   transform: translateX(0);
 }
 
-@media (min-width: 768px) {
-  .detailPanel {
-    box-shadow: -18px 0 40px rgba(15, 23, 42, 0.08);
-  }
-}
-
-@media (max-width: 767px) {
-  .consoleHeader {
-    padding: 1rem 1rem 0.9rem;
-    flex-direction: column;
+@media (max-width: 1100px) {
+  .appContainer {
+    grid-template-columns: 1fr;
   }
 
   .splitView {
-    position: relative;
     flex-direction: column;
-  }
-
-  .detailDock {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
   }
 
   .detailDockOpen {
     width: 100%;
     max-width: none;
+    flex-basis: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .appContainer {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .detailDock {
+    width: 100%;
+    max-width: none;
+    flex: 0 0 auto;
   }
 
   .detailPanel {
-    width: 100vw;
-    box-shadow: -18px 0 40px rgba(15, 23, 42, 0.12);
+    min-height: 60vh;
   }
 }

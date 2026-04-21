@@ -1,12 +1,13 @@
 import { ok, err } from '@/lib/api'
 import { getProductByHandle } from '@/server/services/product.service'
 
-interface Params { params: Promise<{ handle: string }> }
-
 // Public — no auth required
-export async function GET(_req: Request, { params }: Params) {
-  const { handle } = await params
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ handle: string }> }
+) {
   try {
+    const { handle } = await params
     const product = await getProductByHandle(handle)
     if (!product) return err('Product not found', 404)
     return ok(product)

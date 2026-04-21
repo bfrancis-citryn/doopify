@@ -7,12 +7,12 @@ import type { UserRole } from '@prisma/client'
 export async function loginUser(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email } })
 
-  if (\!user || \!user.isActive) {
+  if (!user || !user.isActive) {
     throw new Error('Invalid email or password')
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash)
-  if (\!valid) {
+  if (!valid) {
     throw new Error('Invalid email or password')
   }
 
@@ -98,7 +98,7 @@ export async function createUser(data: {
 
 // ── Get token from request cookies ───────────────────────────────────────────
 export function getTokenFromCookieHeader(cookieHeader: string | null): string | null {
-  if (\!cookieHeader) return null
+  if (!cookieHeader) return null
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${AUTH_COOKIE}=([^;]+)`))
   return match ? match[1] : null
 }

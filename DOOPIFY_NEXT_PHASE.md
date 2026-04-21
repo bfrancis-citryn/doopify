@@ -1,44 +1,70 @@
 # Doopify Next Phase
 
-## Current state
-### Completed
-- Orders UI moved to route-based detail pages.
-- Initial Shopify-style layout passes were pushed.
-- Order system architecture was documented.
-- Prisma schema was upgraded for a real commerce order system.
-- Prisma Client generation now works in this repo.
-- Local `.env` was created from `.env.example`.
+## What Just Landed
 
-### Current blocker
-`prisma db push` is failing because PostgreSQL is not reachable at:
-- `localhost:5432`
+- Prisma/Postgres is active as the main persistence layer.
+- Admin auth is real and private routes are protected through `src/proxy.ts`.
+- Product CRUD, product variants, options, media linking, and storefront publishing are working.
+- Storefront product listing and product detail pages read real data.
+- The admin shell has been redesigned into the Obsidian glass system.
+- Media now has a standalone admin workspace at `/media` with upload, browse, alt text editing, and delete support.
 
-Error seen:
-- `P1001: Can't reach database server at localhost:5432`
+## Immediate Next Phase
 
-That means schema + seed scaffolding are ready, but the actual database instance is not available yet in this environment.
+### Phase: Checkout And Order Creation
 
-## Immediate next phase
-### Phase: Infrastructure + DB-backed Orders
-1. Bring up a PostgreSQL database reachable from the app.
-2. Confirm/update `DATABASE_URL`.
-3. Run:
-   - `npm run db:generate`
-   - `npm run db:push`
-   - `npm run db:seed:bootstrap`
-4. Wire `/orders` to `src/lib/orders/queries.js`.
-5. Wire `/orders/[orderNumber]` to DB-backed order detail queries.
-6. Replace mock Orders context for admin order routes.
+The next highest-value milestone is a real customer purchase path.
 
-## Follow-on phase
-### Phase: Storefront commerce integration
-1. Publishable product query layer
-2. Product detail route contract
-3. Cart contract
-4. Checkout creation flow
-5. Stripe payment intent flow
-6. Order creation from storefront
-7. Inventory reduction + order event creation
+### Goals
 
-## Practical recommendation
-Do not keep over-polishing the Orders UI against mock data. The next highest-value move is making Orders read from the new persistence model as soon as Postgres is available.
+1. Build a real `/checkout` experience.
+2. Create Stripe PaymentIntents from the current cart.
+3. Create orders from a Stripe webhook, not the browser redirect.
+4. Decrement inventory safely when payment succeeds.
+5. Trigger order confirmation email after successful payment.
+
+### Why This Is Next
+
+The catalog and admin are now connected enough that the missing value is no longer "save a product." The missing value is "buy a product."
+
+Until checkout exists:
+
+- storefront traffic cannot convert
+- order creation is mostly admin-seeded/admin-managed
+- payments are not real
+- post-purchase automation cannot be finished
+
+## Secondary Next Phase
+
+### Phase: Operations Hardening
+
+Once checkout is live, the next follow-up should be:
+
+1. Persist draft orders in the database.
+2. Add collection management and storefront collection routes.
+3. Add role-based permissions and login rate limiting.
+4. Add transactional email and customer account views.
+
+## Current Blockers
+
+These are the biggest functional gaps still open:
+
+- no Stripe integration
+- no checkout route
+- no webhook pipeline
+- no customer account area
+- no DB-backed draft order conversion flow
+- no collection CRUD and collection storefront pages
+
+## Practical Recommendation
+
+Do not spend the next pass polishing static storefront details or adding more admin chrome first.
+
+The best next move is:
+
+1. connect cart to checkout
+2. connect checkout to Stripe
+3. connect Stripe success to order creation
+4. connect order creation to email and inventory updates
+
+That gives Doopify its first real end-to-end commerce transaction.

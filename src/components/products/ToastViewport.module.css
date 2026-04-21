@@ -18,21 +18,25 @@
   gap: 1rem;
   padding: 1rem 1.1rem;
   border-radius: 1.2rem;
-  background: white;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(10, 10, 10, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--glass-shadow-soft);
+  backdrop-filter: blur(calc(var(--glass-blur) - 8px));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) - 8px));
 }
 
 .toast_success {
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(125, 227, 188, 0.2);
 }
 
 .toast_error {
-  border-color: rgba(239, 68, 68, 0.18);
+  border-color: rgba(255, 154, 154, 0.2);
 }
 
 .toast_info {
-  border-color: rgba(37, 99, 235, 0.18);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .toastLabel {
@@ -40,13 +44,13 @@
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--slate-500);
+  color: rgba(255, 255, 255, 0.48);
 }
 
 .toastMessage {
   margin-top: 0.35rem;
   line-height: 1.5;
-  color: var(--slate-800);
+  color: var(--slate-100);
 }
 
 .toastDismiss {

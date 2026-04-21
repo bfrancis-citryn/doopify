@@ -1,8 +1,64 @@
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
-import { getProduct, updateProduct, archiveProduct } from '@/server/services/product.service'
+import { getProduct, updateProduct, archiveProduct, upsertOptions } from '@/server/services/product.service'
 
-interface Params { params: Promise<{ id: string }> }
+interface Params {
+  params: Promise<{ id: string }>
+}
+
+const optionValueSchema = z.object({
+  value: z.string().min(1),
+  position: z.number().int().optional(),
+})
+
+const optionSchema = z.object({
+  name: z.string().min(1),
+  position: z.number().int().optional(),
+  values: z.array(optionValueSchema).min(1),
+})
+
+const variantSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+  sku: z.string().optional(),
+  price: z.number().min(0),
+  compareAtPrice: z.number().optional(),
+  inventory: z.number().int().min(0).optional(),
+  weight: z.number().optional(),
+  weightUnit: z.string().optional(),
+  position: z.number().int().optional(),
+})
+
+const mediaSchema = z.object({
+  assetId: z.string().min(1),
+  position: z.number().int().optional(),
+  isFeatured: z.boolean().optional(),
+})
+
+const updateSchema = z.object({
+  title: z.string().min(1).optional(),
+  handle: z.string().optional(),
+  status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
+  description: z.string().optional(),
+  vendor: z.string().optional(),
+  productType: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  options: z.array(optionSchema).optional(),
+  variants: z.array(variantSchema).optional(),
+  media: z.array(mediaSchema).optional(),
+})
+
+function revalidateProductPaths(handle?: string) {
+  revalidatePath('/')
+  revalidatePath('/shop')
+  revalidatePath('/api/storefront/products')
+
+  if (handle) {
+    revalidatePath(`/shop/${handle}`)
+    revalidatePath(`/api/storefront/products/${handle}`)
+  }
+}
 
 export async function GET(_req: Request, { params }: Params) {
   const { id } = await params
@@ -16,16 +72,6 @@ export async function GET(_req: Request, { params }: Params) {
   }
 }
 
-const updateSchema = z.object({
-  title: z.string().min(1).optional(),
-  handle: z.string().optional(),
-  status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
-  description: z.string().optional(),
-  vendor: z.string().optional(),
-  productType: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-})
-
 export async function PATCH(req: Request, { params }: Params) {
   const { id } = await params
   const body = await parseBody(req)
@@ -35,7 +81,26 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
-    const product = await updateProduct(id, parsed.data)
+    const { options, variants, media, ...productFields } = parsed.data
+    let product = await updateProduct(id, {
+      ...productFields,
+      variants,
+      media,
+    })
+
+    if (!product) {
+      return err('Product not found', 404)
+    }
+
+    if (options) {
+      product = await upsertOptions(id, options)
+    }
+
+    if (!product) {
+      return err('Product not found', 404)
+    }
+
+    revalidateProductPaths(product.handle)
     return ok(product)
   } catch (e) {
     console.error('[PATCH /api/products/[id]]', e)
@@ -46,7 +111,11 @@ export async function PATCH(req: Request, { params }: Params) {
 export async function DELETE(_req: Request, { params }: Params) {
   const { id } = await params
   try {
+    const existingProduct = await getProduct(id)
+    if (!existingProduct) return err('Product not found', 404)
+
     await archiveProduct(id)
+    revalidateProductPaths(existingProduct.handle)
     return ok({ message: 'Product archived' })
   } catch (e) {
     console.error('[DELETE /api/products/[id]]', e)

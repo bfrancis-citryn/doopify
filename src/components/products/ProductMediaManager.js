@@ -1,27 +1,133 @@
 "use client";
 
 import Image from 'next/image';
-import { useRef } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductMediaManager.module.css';
+
+function mergeLibraryAssets(currentAssets, incomingAssets) {
+  const assetMap = new Map(currentAssets.map(asset => [asset.id, asset]));
+  incomingAssets.forEach(asset => {
+    if (!asset?.id) {
+      return;
+    }
+
+    assetMap.set(asset.id, {
+      ...assetMap.get(asset.id),
+      ...asset,
+    });
+  });
+
+  return [...assetMap.values()].sort((first, second) => {
+    const firstDate = first?.createdAt ? new Date(first.createdAt).getTime() : 0;
+    const secondDate = second?.createdAt ? new Date(second.createdAt).getTime() : 0;
+    return secondDate - firstDate;
+  });
+}
+
+function formatAssetDate(value) {
+  if (!value) {
+    return 'Recently added';
+  }
+
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(value));
+  } catch {
+    return 'Recently added';
+  }
+}
 
 export default function ProductMediaManager() {
   const { editor, actions } = useProductStore();
   const uploadInputRef = useRef(null);
   const draggedImageIdRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('gallery');
+  const [libraryAssets, setLibraryAssets] = useState([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(true);
+  const [libraryError, setLibraryError] = useState('');
   const draftProduct = editor.draftProduct;
+
+  const previewImage =
+    draftProduct?.images.find(image => image.id === editor.previewImageId) ||
+    editor.draftFeaturedImage ||
+    null;
+
+  const assetIdsInGallery = useMemo(
+    () => new Set((draftProduct?.images || []).map(image => image.assetId).filter(Boolean)),
+    [draftProduct?.images]
+  );
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadLibrary() {
+      setIsLibraryLoading(true);
+      setLibraryError('');
+
+      try {
+        const res = await fetch('/api/media?pageSize=72');
+        const json = await res.json();
+
+        if (!isActive) {
+          return;
+        }
+
+        if (!json.success) {
+          setLibraryError(json.error || 'Could not load the media library.');
+          return;
+        }
+
+        setLibraryAssets(json.data.assets || []);
+      } catch (error) {
+        console.error('[ProductMediaManager] media library fetch failed', error);
+        if (isActive) {
+          setLibraryError('Could not load the media library.');
+        }
+      } finally {
+        if (isActive) {
+          setIsLibraryLoading(false);
+        }
+      }
+    }
+
+    loadLibrary();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   if (!draftProduct) {
     return null;
   }
 
-  const previewImage =
-    draftProduct.images.find(image => image.id === editor.previewImageId) ||
-    editor.draftFeaturedImage ||
-    null;
+  const handleUploadSelection = async event => {
+    const files = event.target.files;
+    const uploadedAssets = await actions.addImagesFromFiles(files);
 
-  return (
-    <div className={styles.mediaShell}>
+    if (uploadedAssets?.length) {
+      setLibraryAssets(currentAssets =>
+        mergeLibraryAssets(
+          currentAssets,
+          uploadedAssets.map(asset => ({
+            ...asset,
+            createdAt: asset.createdAt || new Date().toISOString(),
+            linkedProducts: asset.linkedProducts || 0,
+          }))
+        )
+      );
+      setActiveTab('gallery');
+    }
+
+    event.target.value = '';
+  };
+
+  const renderGalleryTab = () => (
+    <>
       <div className={styles.previewPanel}>
         {previewImage ? (
           <Image
@@ -35,7 +141,7 @@ export default function ProductMediaManager() {
           <div className={styles.previewEmpty}>
             <span className="material-symbols-outlined">image</span>
             <p className={`font-headline ${styles.previewEmptyTitle}`}>No media yet</p>
-            <p className={styles.previewEmptyText}>Upload files to start building the gallery.</p>
+            <p className={styles.previewEmptyText}>Upload files or pull from your media library to build the gallery.</p>
           </div>
         )}
       </div>
@@ -43,18 +149,31 @@ export default function ProductMediaManager() {
       <div className={styles.actionRow}>
         <button className={styles.actionButtonPrimary} onClick={() => uploadInputRef.current?.click()} type="button">
           <span className="material-symbols-outlined">upload</span>
-          Upload photo
+          Upload to library
+        </button>
+        <button className={styles.actionButton} onClick={() => setActiveTab('library')} type="button">
+          <span className="material-symbols-outlined">photo_library</span>
+          Open library
+        </button>
+        <button
+          className={styles.actionButton}
+          disabled={!previewImage || previewImage.id === draftProduct.featuredImageId}
+          onClick={() => previewImage && actions.setFeaturedImage(previewImage.id)}
+          type="button"
+        >
+          <span className="material-symbols-outlined">star</span>
+          Set featured
+        </button>
+        <button
+          className={styles.actionButtonDanger}
+          disabled={!previewImage}
+          onClick={() => previewImage && actions.removeImage(previewImage.id)}
+          type="button"
+        >
+          <span className="material-symbols-outlined">delete</span>
+          Remove
         </button>
       </div>
-
-      <input
-        accept="image/*"
-        hidden
-        multiple
-        onChange={event => actions.addImagesFromFiles(event.target.files)}
-        ref={uploadInputRef}
-        type="file"
-      />
 
       <div className={styles.thumbnailGrid}>
         {draftProduct.images.map((image, index) => (
@@ -63,11 +182,14 @@ export default function ProductMediaManager() {
             className={image.id === editor.previewImageId ? styles.thumbnailTileActive : styles.thumbnailTile}
             draggable
             onClick={() => actions.selectPreviewImage(image.id)}
-            onDragStart={() => {
-              draggedImageIdRef.current = image.id;
+            onDragEnd={() => {
+              draggedImageIdRef.current = null;
             }}
             onDragOver={event => {
               event.preventDefault();
+            }}
+            onDragStart={() => {
+              draggedImageIdRef.current = image.id;
             }}
             onDrop={event => {
               event.preventDefault();
@@ -92,9 +214,6 @@ export default function ProductMediaManager() {
 
               draggedImageIdRef.current = null;
             }}
-            onDragEnd={() => {
-              draggedImageIdRef.current = null;
-            }}
             role="button"
             tabIndex={0}
           >
@@ -112,6 +231,133 @@ export default function ProductMediaManager() {
           <span className="material-symbols-outlined">add</span>
         </button>
       </div>
+    </>
+  );
+
+  const renderLibraryTab = () => (
+    <>
+      <div className={styles.libraryIntro}>
+        <div>
+          <p className={styles.libraryEyebrow}>Neon Media Library</p>
+          <p className={styles.libraryText}>Uploads live in Prisma-backed storage so you can reuse them across products or manage everything on the dedicated Media page.</p>
+        </div>
+        <div className={styles.actionRow}>
+          <button className={styles.actionButtonPrimary} onClick={() => uploadInputRef.current?.click()} type="button">
+            <span className="material-symbols-outlined">upload</span>
+            Upload image
+          </button>
+          <button
+            className={styles.actionButton}
+            onClick={() => {
+              setIsLibraryLoading(true);
+              setLibraryError('');
+              fetch('/api/media?pageSize=72')
+                .then(res => res.json())
+                .then(json => {
+                  if (!json.success) {
+                    setLibraryError(json.error || 'Could not refresh the media library.');
+                    return;
+                  }
+
+                  setLibraryAssets(json.data.assets || []);
+                })
+                .catch(error => {
+                  console.error('[ProductMediaManager] media refresh failed', error);
+                  setLibraryError('Could not refresh the media library.');
+                })
+                .finally(() => {
+                  setIsLibraryLoading(false);
+                });
+            }}
+            type="button"
+          >
+            <span className="material-symbols-outlined">refresh</span>
+            Refresh
+          </button>
+          <Link className={styles.actionButtonLink} href="/media">
+            <span className="material-symbols-outlined">open_in_new</span>
+            Open media page
+          </Link>
+        </div>
+      </div>
+
+      {libraryError ? <p className={styles.libraryError}>{libraryError}</p> : null}
+
+      {isLibraryLoading ? (
+        <div className={styles.libraryState}>Loading media library...</div>
+      ) : libraryAssets.length ? (
+        <div className={styles.libraryGrid}>
+          {libraryAssets.map(asset => {
+            const isInGallery = assetIdsInGallery.has(asset.id);
+
+            return (
+              <div className={styles.libraryCard} key={asset.id}>
+                <div className={styles.libraryImageWrap}>
+                  <Image
+                    alt={asset.altText || asset.filename || 'Media library image'}
+                    className={styles.libraryImage}
+                    fill
+                    src={asset.url}
+                    unoptimized
+                  />
+                </div>
+                <div className={styles.libraryMeta}>
+                  <p className={styles.libraryName}>{asset.filename || 'Untitled asset'}</p>
+                  <div className={styles.libraryMetaRow}>
+                    <span>{formatAssetDate(asset.createdAt)}</span>
+                    <span>{asset.linkedProducts ? `${asset.linkedProducts} linked` : 'Unlinked'}</span>
+                  </div>
+                </div>
+                <button
+                  className={isInGallery ? styles.libraryButtonAdded : styles.libraryButton}
+                  disabled={isInGallery}
+                  onClick={() => {
+                    actions.addImagesFromLibrary(asset);
+                    setActiveTab('gallery');
+                  }}
+                  type="button"
+                >
+                  {isInGallery ? 'In gallery' : 'Add to gallery'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className={styles.libraryState}>No uploads yet. Add your first product image to start the library.</div>
+      )}
+    </>
+  );
+
+  return (
+    <div className={styles.mediaShell}>
+      <div className={styles.tabRow}>
+        <button
+          className={activeTab === 'gallery' ? styles.tabButtonActive : styles.tabButton}
+          onClick={() => setActiveTab('gallery')}
+          type="button"
+        >
+          Gallery
+        </button>
+        <button
+          className={activeTab === 'library' ? styles.tabButtonActive : styles.tabButton}
+          onClick={() => setActiveTab('library')}
+          type="button"
+        >
+          Media Library
+        </button>
+      </div>
+
+      <input
+        accept="image/*"
+        hidden
+        multiple
+        onChange={handleUploadSelection}
+        ref={uploadInputRef}
+        type="file"
+      />
+
+      {activeTab === 'gallery' ? renderGalleryTab() : renderLibraryTab()}
     </div>
   );
 }

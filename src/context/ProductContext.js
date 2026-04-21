@@ -8,7 +8,6 @@ import {
   createEmptyProductDraft,
   createEntityId,
   createImageAsset,
-  createSeedProducts,
   deriveInventorySummary,
   ensureMediaState,
   formatMoney,
@@ -49,10 +48,11 @@ const initialState = {
 function transformApiProduct(product) {
   const images = (product.media || []).map(m => ({
     id: m.id,
-    url: m.asset?.url || '',
-    altText: m.asset?.altText || '',
+    assetId: m.assetId || m.asset?.id || null,
+    src: m.asset?.url || '',
+    alt: m.asset?.altText || m.asset?.url || '',
     isFeatured: m.isFeatured,
-    position: m.position ?? 0,
+    sortOrder: m.position ?? 0,
   }));
   const featuredImageId = images.find(i => i.isFeatured)?.id || images[0]?.id || null;
 
@@ -73,7 +73,17 @@ function transformApiProduct(product) {
     weight: v.weight || null,
     weightUnit: v.weightUnit || 'kg',
     position: v.position ?? 0,
-    optionValues: {},
+    optionValues: options.reduce((values, option, index) => {
+      const parts = String(v.title || '')
+        .split('/')
+        .map(part => part.trim())
+        .filter(Boolean);
+      const inferredValue = parts[index] || (option.values.length === 1 ? option.values[0] : '');
+      if (inferredValue) {
+        values[option.name] = inferredValue;
+      }
+      return values;
+    }, {}),
     imageId: featuredImageId,
     isDefault: options.length === 0,
     isActive: true,
@@ -103,6 +113,53 @@ function transformApiProduct(product) {
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
+}
+
+function getEditorLocationState() {
+  if (typeof window === 'undefined') {
+    return { productId: null, isNew: false };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return {
+    productId: params.get('product'),
+    isNew: params.get('new') === '1',
+  };
+}
+
+function syncEditorLocation({ productId = null, isNew = false } = {}, history = 'replace') {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+
+  if (productId) {
+    url.searchParams.set('product', productId);
+    url.searchParams.delete('new');
+  } else if (isNew) {
+    url.searchParams.set('new', '1');
+    url.searchParams.delete('product');
+  } else {
+    url.searchParams.delete('product');
+    url.searchParams.delete('new');
+  }
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+  if (nextUrl === currentUrl) {
+    return;
+  }
+
+  if (history === 'push') {
+    window.history.pushState(null, '', nextUrl);
+    return;
+  }
+
+  if (history === 'replace') {
+    window.history.replaceState(null, '', nextUrl);
+  }
 }
 
 function normalizeSkuValue(value) {
@@ -230,6 +287,7 @@ function getComparableProduct(product) {
     featuredImageId: product.featuredImageId,
     images: (product.images || []).map(image => ({
       id: image.id,
+      assetId: image.assetId || null,
       src: image.src,
       alt: image.alt,
       sortOrder: image.sortOrder,
@@ -438,15 +496,57 @@ export function ProductProvider({ children }) {
 
   // ── Fetch products from API on mount ────────────────────────────────────────
   useEffect(() => {
+    let isActive = true;
+
     fetch('/api/products?pageSize=100')
       .then(r => r.json())
       .then(json => {
-        if (json.success) {
-          const products = (json.data.products || []).map(transformApiProduct);
-          dispatch({ type: 'LOAD_PRODUCTS', products });
+        if (!isActive || !json.success) {
+          return;
+        }
+
+        const products = (json.data.products || []).map(transformApiProduct);
+        dispatch({ type: 'LOAD_PRODUCTS', products });
+
+        const locationState = getEditorLocationState();
+        if (locationState.isNew) {
+          const draftProduct = createEmptyProductDraft();
+          dispatch({
+            type: 'OPEN_EDITOR',
+            product: draftProduct,
+            mode: 'new',
+            selectedProductId: draftProduct.id,
+          });
+          syncEditorLocation({ isNew: true }, 'replace');
+          return;
+        }
+
+        if (locationState.productId) {
+          const matchedProduct = products.find(product => product.id === locationState.productId);
+          if (matchedProduct) {
+            const preparedProduct = prepareProductForSave(matchedProduct);
+            dispatch({
+              type: 'OPEN_EDITOR',
+              product: preparedProduct,
+              mode: 'existing',
+              selectedProductId: preparedProduct.id,
+            });
+            syncEditorLocation({ productId: preparedProduct.id }, 'replace');
+            return;
+          }
+        }
+
+        if (products[0]) {
+          syncEditorLocation({ productId: products[0].id }, 'replace');
+        } else {
+          syncEditorLocation({}, 'replace');
         }
       })
       .catch(err => console.error('[ProductContext] fetch failed', err));
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const selectedProduct = useMemo(
@@ -518,7 +618,7 @@ export function ProductProvider({ children }) {
   const openExistingProduct = productId => {
     const product = state.products.find(item => item.id === productId);
     if (!product) {
-      return;
+      return false;
     }
 
     const preparedProduct = prepareProductForSave(product);
@@ -529,6 +629,8 @@ export function ProductProvider({ children }) {
       mode: 'existing',
       selectedProductId: preparedProduct.id,
     });
+
+    return true;
   };
 
   const openNewProduct = () => {
@@ -540,7 +642,33 @@ export function ProductProvider({ children }) {
       mode: 'new',
       selectedProductId: draftProduct.id,
     });
+
+    return draftProduct;
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handlePopState = () => {
+      const locationState = getEditorLocationState();
+
+      if (locationState.isNew) {
+        openNewProduct();
+        return;
+      }
+
+      if (locationState.productId && openExistingProduct(locationState.productId)) {
+        return;
+      }
+
+      dispatch({ type: 'CLOSE_EDITOR' });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [state.products]);
 
   const setDraftState = (draftProduct, previewImageId, clearValidation = false) => {
     dispatch({
@@ -606,14 +734,33 @@ export function ProductProvider({ children }) {
         status: preparedProduct.status?.toUpperCase() || 'DRAFT',
         description: preparedProduct.description,
         vendor: preparedProduct.vendor,
-        productType: preparedProduct.productType || preparedProduct.category,
+        productType: preparedProduct.category || preparedProduct.productType,
         tags: preparedProduct.tags,
+        options: (preparedProduct.options || []).map((option, optionIndex) => ({
+          name: option.name,
+          position: option.position ?? optionIndex,
+          values: (option.values || []).map((value, valueIndex) => ({
+            value,
+            position: valueIndex,
+          })),
+        })),
+        media: (preparedProduct.images || [])
+          .filter(image => image.assetId)
+          .map((image, imageIndex) => ({
+            assetId: image.assetId,
+            position: image.sortOrder ?? imageIndex,
+            isFeatured: image.id === preparedProduct.featuredImageId,
+          })),
         variants: (preparedProduct.variants || []).map(v => ({
+          id: v.id,
           title: v.title || 'Default Title',
           sku: v.sku || undefined,
           price: Number(v.price) || 0,
           compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
-          inventory: v.inventoryQty ?? 0,
+          inventory: Number(v.inventoryQty) || 0,
+          weight: v.weight != null ? Number(v.weight) : undefined,
+          weightUnit: v.weightUnit || undefined,
+          position: v.position,
         })),
       };
 
@@ -632,8 +779,8 @@ export function ProductProvider({ children }) {
 
       // Use the server-returned product so IDs are real DB IDs
       const savedProduct = transformApiProduct(json.data);
-      const finalProduct = prepareProductForSave({ ...preparedProduct, id: savedProduct.id });
-      dispatch({ type: 'COMMIT_PRODUCT', product: finalProduct });
+      dispatch({ type: 'COMMIT_PRODUCT', product: savedProduct });
+      syncEditorLocation({ productId: savedProduct.id }, 'replace');
     } catch (e) {
       console.error('[ProductContext] save failed', e);
       pushToast('Save failed — check your connection', 'error');
@@ -649,20 +796,25 @@ export function ProductProvider({ children }) {
   };
 
   const requestSelectProduct = productId => {
-    openExistingProduct(productId);
+    if (openExistingProduct(productId)) {
+      syncEditorLocation({ productId }, 'push');
+    }
   };
 
   const requestCreateProduct = () => {
     openNewProduct();
+    syncEditorLocation({ isNew: true }, 'push');
   };
 
   const requestCloseEditor = () => {
     dispatch({ type: 'CLOSE_EDITOR' });
+    syncEditorLocation({}, 'replace');
   };
 
   const cancelDraftChanges = () => {
     if (state.editor.mode === 'new') {
       dispatch({ type: 'CLOSE_EDITOR' });
+      syncEditorLocation({}, 'replace');
       pushToast('New product draft discarded', 'info');
       return;
     }
@@ -750,26 +902,144 @@ export function ProductProvider({ children }) {
     });
   };
 
-  const addImagesFromFiles = fileList => {
+  const addImagesFromFiles = async fileList => {
     const files = Array.from(fileList || []);
-    if (!files.length) {
-      return;
-    }
+    if (!files.length) return [];
 
+    const optimisticImages = [];
+
+    // Optimistic preview using blob URLs while upload is in flight
     updateDraftProduct(draftProduct => {
-      const uploadedImages = files.map((file, index) =>
-        createImageAsset(
-          URL.createObjectURL(file),
-          file.name || `${draftProduct.title || 'Product'} image ${draftProduct.images.length + index + 1}`,
-          draftProduct.images.length + index
+      optimisticImages.push(
+        ...files.map((file, index) =>
+          createImageAsset(
+            URL.createObjectURL(file),
+            file.name || `${draftProduct.title || 'Product'} image ${draftProduct.images.length + index + 1}`,
+            draftProduct.images.length + index
+          )
         )
       );
       const mediaState = ensureMediaState(
-        [...draftProduct.images, ...uploadedImages],
-        draftProduct.featuredImageId || uploadedImages[0]?.id || null
+        [...draftProduct.images, ...optimisticImages],
+        draftProduct.featuredImageId || optimisticImages[0]?.id || null
       );
+      return {
+        ...draftProduct,
+        images: mediaState.images,
+        featuredImageId: mediaState.featuredImageId,
+      };
+    });
 
-      pushToast(`${uploadedImages.length} image${uploadedImages.length > 1 ? 's' : ''} added`, 'success');
+    const uploadedAssets = [];
+
+    for (const [fileIndex, file] of files.entries()) {
+      const optimisticImage = optimisticImages[fileIndex];
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('altText', file.name);
+
+        const res = await fetch('/api/media/upload', { method: 'POST', body: form });
+        const json = await res.json();
+
+        if (json.success) {
+          uploadedAssets.push(json.data);
+          updateDraftProduct(draftProduct => {
+            const nextImages = draftProduct.images.map(image =>
+              image.id === optimisticImage.id
+                ? {
+                    ...image,
+                    assetId: json.data.id,
+                    src: json.data.url,
+                    alt: json.data.altText || image.alt,
+                  }
+                : image
+            );
+            const mediaState = ensureMediaState(nextImages, draftProduct.featuredImageId || optimisticImage.id);
+
+            return {
+              ...draftProduct,
+              images: mediaState.images,
+              featuredImageId: mediaState.featuredImageId,
+            };
+          });
+        } else {
+          updateDraftProduct(draftProduct => {
+            const nextImages = draftProduct.images.filter(image => image.id !== optimisticImage.id);
+            const mediaState = ensureMediaState(
+              nextImages,
+              draftProduct.featuredImageId === optimisticImage.id ? null : draftProduct.featuredImageId
+            );
+
+            return {
+              ...draftProduct,
+              images: mediaState.images,
+              featuredImageId: mediaState.featuredImageId,
+            };
+          });
+          pushToast(json.error || 'Upload failed', 'error');
+        }
+      } catch (e) {
+        console.error('[addImagesFromFiles] upload error', e);
+        updateDraftProduct(draftProduct => {
+          const nextImages = draftProduct.images.filter(image => image.id !== optimisticImage.id);
+          const mediaState = ensureMediaState(
+            nextImages,
+            draftProduct.featuredImageId === optimisticImage.id ? null : draftProduct.featuredImageId
+          );
+
+          return {
+            ...draftProduct,
+            images: mediaState.images,
+            featuredImageId: mediaState.featuredImageId,
+          };
+        });
+        pushToast('Upload failed — check Cloudinary credentials', 'error');
+      }
+    }
+
+    if (uploadedAssets.length) {
+      pushToast(`${uploadedAssets.length} image${uploadedAssets.length > 1 ? 's' : ''} uploaded`, 'success');
+    }
+
+    return uploadedAssets;
+  };
+
+  const addImagesFromLibrary = mediaAssets => {
+    const assets = Array.isArray(mediaAssets) ? mediaAssets : [mediaAssets];
+    const normalizedAssets = assets.filter(asset => asset?.id && asset?.url);
+
+    if (!normalizedAssets.length) {
+      return 0;
+    }
+
+    let addedCount = 0;
+
+    updateDraftProduct(draftProduct => {
+      const existingAssetIds = new Set(draftProduct.images.map(image => image.assetId).filter(Boolean));
+      const nextImages = [...draftProduct.images];
+
+      normalizedAssets.forEach((asset, assetIndex) => {
+        if (existingAssetIds.has(asset.id)) {
+          return;
+        }
+
+        nextImages.push(
+          createImageAsset(
+            asset.url,
+            asset.altText || asset.filename || `${draftProduct.title || 'Product'} image ${nextImages.length + 1}`,
+            draftProduct.images.length + assetIndex,
+            { assetId: asset.id }
+          )
+        );
+        existingAssetIds.add(asset.id);
+        addedCount += 1;
+      });
+
+      const mediaState = ensureMediaState(
+        nextImages,
+        draftProduct.featuredImageId || nextImages[0]?.id || null
+      );
 
       return {
         ...draftProduct,
@@ -777,6 +1047,14 @@ export function ProductProvider({ children }) {
         featuredImageId: mediaState.featuredImageId,
       };
     });
+
+    if (addedCount) {
+      pushToast(`${addedCount} image${addedCount > 1 ? 's' : ''} added from the media library`, 'success');
+    } else {
+      pushToast('Those images are already in the product gallery.', 'info');
+    }
+
+    return addedCount;
   };
 
   const replaceImageWithSample = imageId => {
@@ -1134,7 +1412,7 @@ export function ProductProvider({ children }) {
     });
   };
 
-  const confirmDialogAction = resolution => {
+  const confirmDialogAction = async resolution => {
     const dialog = state.confirmDialog;
     if (!dialog) {
       return;
@@ -1145,12 +1423,29 @@ export function ProductProvider({ children }) {
 
       if (state.editor.mode === 'new') {
         dispatch({ type: 'CLOSE_EDITOR' });
+        syncEditorLocation({}, 'replace');
         pushToast('New product draft discarded', 'info');
         return;
       }
 
-      dispatch({ type: 'DELETE_PRODUCT', productId: dialog.productId });
-      pushToast('Product deleted', 'success');
+      try {
+        const res = await fetch(`/api/products/${dialog.productId}`, { method: 'DELETE' });
+        const json = await res.json();
+
+        if (!json.success) {
+          pushToast(json.error || 'Delete failed', 'error');
+          return;
+        }
+
+        const fallbackProduct = state.products.find(product => product.id !== dialog.productId) || null;
+        dispatch({ type: 'DELETE_PRODUCT', productId: dialog.productId });
+        syncEditorLocation(fallbackProduct ? { productId: fallbackProduct.id } : {}, 'replace');
+        pushToast('Product deleted', 'success');
+      } catch (e) {
+        console.error('[ProductContext] delete failed', e);
+        pushToast('Delete failed', 'error');
+      }
+
       return;
     }
 
@@ -1201,6 +1496,7 @@ export function ProductProvider({ children }) {
       setDraftTagsFromText,
       addSampleImage,
       addImagesFromFiles,
+      addImagesFromLibrary,
       replaceImageWithSample,
       replaceImageWithFile,
       selectPreviewImage,

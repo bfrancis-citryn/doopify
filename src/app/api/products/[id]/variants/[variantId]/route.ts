@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
-import { updateVariant } from '@/server/services/product.service'
+import { updateVariant, deleteVariant } from '@/server/services/product.service'
 
 interface Params { params: Promise<{ id: string; variantId: string }> }
 
@@ -27,5 +27,16 @@ export async function PATCH(req: Request, { params }: Params) {
   } catch (e) {
     console.error('[PATCH /api/products/[id]/variants/[variantId]]', e)
     return err('Failed to update variant', 500)
+  }
+}
+
+export async function DELETE(_req: Request, { params }: Params) {
+  const { variantId } = await params
+  try {
+    await deleteVariant(variantId)
+    return new Response(null, { status: 204 })
+  } catch (e) {
+    console.error('[DELETE /api/products/[id]/variants/[variantId]]', e)
+    return err('Failed to delete variant', 500)
   }
 }

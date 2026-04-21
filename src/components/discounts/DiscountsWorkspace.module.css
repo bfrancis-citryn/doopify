@@ -63,7 +63,7 @@
 
 .primaryButton {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
 }
 
 .secondaryButton {
