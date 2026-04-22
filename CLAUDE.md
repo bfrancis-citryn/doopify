@@ -1,5 +1,7 @@
 # Doopify Repo Brief
 
+> **⚠️ Heads-up for AI agents:** Next.js in this repo may have breaking changes vs. your training data — APIs, conventions, and file structure. Read the relevant guide in `node_modules/next/dist/docs/` before writing code. Heed deprecation notices.
+
 ## Overview
 
 Doopify is a headless commerce platform built in Next.js with:

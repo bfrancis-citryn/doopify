@@ -7,7 +7,7 @@ import ProductCatalog from './ProductCatalog';
 import ProductEditorDrawer from './ProductEditorDrawer';
 import ConfirmDialog from './ConfirmDialog';
 import ToastViewport from './ToastViewport';
-import styles from '../../app/page.module.css';
+import styles from '../layout/AppShell.module.css';
 
 export default function ProductsWorkspace() {
   const { editor, confirmDialog, searchQuery, actions } = useProductStore();

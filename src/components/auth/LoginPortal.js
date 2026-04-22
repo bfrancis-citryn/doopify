@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './LoginPortal.module.css';
-
-const SECURITY_NOTES = ['Private deployment', 'Staff access only', 'Stripe-ready commerce ops'];
 
 function MailIcon() {
   return (
@@ -60,7 +57,7 @@ export default function LoginPortal() {
   const [activeField, setActiveField] = useState(null);
   const [tiltStyle, setTiltStyle] = useState({ '--rotate-x': '0deg', '--rotate-y': '0deg' });
 
-  const nextPath = searchParams.get('next') || '/orders';
+  const nextPath = searchParams.get('next') || '/admin';
   const isReady = useMemo(() => email.trim().length > 0 && password.trim().length > 0, [email, password]);
 
   useEffect(() => {
@@ -124,22 +121,9 @@ export default function LoginPortal() {
       <div className={styles.sideGlowRight} />
 
       <section className={styles.portalFrame}>
-        <div className={styles.portalCopy}>
-          <div className={styles.eyebrow}>Phase 17 secure access direction</div>
-          <h1 className={styles.portalTitle}>Private commerce operations for one store, one team, one clean command center.</h1>
-          <p className={styles.portalText}>
-            This login portal should feel premium and modern, but still trustworthy enough for daily store ops, payments, and staff access.
-          </p>
-          <div className={styles.securityPills}>
-            {SECURITY_NOTES.map(note => (
-              <span key={note} className={styles.securityPill}>
-                {note}
-              </span>
-            ))}
-          </div>
-        </div>
-
         <div className={styles.cardStage}>
+          <div className={styles.portalBadge}>Secure admin access</div>
+
           <div className={styles.cardTiltWrap} style={tiltStyle} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
             <div className={styles.cardAurora} />
             <div className={styles.cardBeamTop} />
@@ -206,9 +190,7 @@ export default function LoginPortal() {
                     <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(current => !current)} className={styles.checkbox} />
                     <span>Remember me</span>
                   </label>
-                  <Link href="/forgot-password" className={styles.metaLink}>
-                    Forgot password?
-                  </Link>
+                  <span className={styles.metaNote}>Private staff portal</span>
                 </div>
 
                 {errorMessage ? <div className={styles.errorBanner}>{errorMessage}</div> : null}
@@ -217,14 +199,14 @@ export default function LoginPortal() {
                   <span className={styles.submitGlow} />
                   <span className={styles.submitInner}>
                     {isLoading ? <span className={styles.spinner} aria-hidden="true" /> : null}
-                    <span>{isLoading ? 'Signing in…' : 'Sign in'}</span>
-                    {!isLoading ? <span className={styles.arrow}>→</span> : null}
+                    <span>{isLoading ? 'Signing in...' : 'Sign in'}</span>
+                    {!isLoading ? <span className={styles.arrow}>-&gt;</span> : null}
                   </span>
                 </button>
               </form>
 
               <div className={styles.footerNote}>
-                Authorized staff only · Secure store operations access · Stripe-ready private deployment
+                Authorized staff only. Secure store operations access for your private Doopify admin.
               </div>
             </div>
           </div>

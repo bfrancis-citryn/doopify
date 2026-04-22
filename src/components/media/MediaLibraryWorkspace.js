@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../AppShell';
-import layoutStyles from '../../app/page.module.css';
+import layoutStyles from '../layout/AppShell.module.css';
 import styles from './MediaLibraryWorkspace.module.css';
 
 function mergeAssets(currentAssets, incomingAssets) {

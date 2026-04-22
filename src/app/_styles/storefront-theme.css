@@ -1,0 +1,13 @@
+:root {
+  --storefront-background: #080808;
+  --storefront-text: #f2ede4;
+}
+
+html {
+  background: var(--storefront-background);
+}
+
+body.storefront-body {
+  color: var(--storefront-text);
+  background: var(--storefront-background);
+}

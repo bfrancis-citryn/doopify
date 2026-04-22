@@ -33,7 +33,7 @@ export function proxy(req: NextRequest) {
       )
     }
 
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(createLoginUrl(req))
   }
 
   const payload = verifyToken(token)
@@ -45,7 +45,7 @@ export function proxy(req: NextRequest) {
       )
     }
 
-    const res = NextResponse.redirect(new URL('/login', req.url))
+    const res = NextResponse.redirect(createLoginUrl(req))
     res.cookies.delete('doopify_token')
     return res
   }
@@ -59,6 +59,7 @@ export function proxy(req: NextRequest) {
 
 function isAdminPage(pathname: string) {
   const adminPaths = [
+    '/admin',
     '/orders',
     '/products',
     '/customers',
@@ -70,6 +71,17 @@ function isAdminPage(pathname: string) {
   ]
 
   return adminPaths.some((prefix) => pathname.startsWith(prefix))
+}
+
+function createLoginUrl(req: NextRequest) {
+  const loginUrl = new URL('/login', req.url)
+  const nextPath = `${req.nextUrl.pathname}${req.nextUrl.search}`
+
+  if (nextPath && nextPath !== '/login') {
+    loginUrl.searchParams.set('next', nextPath)
+  }
+
+  return loginUrl
 }
 
 export const config = {

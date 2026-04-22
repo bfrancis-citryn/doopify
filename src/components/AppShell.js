@@ -2,7 +2,7 @@
 
 import Header from './Header/Header';
 import Sidebar from './Sidebar/Sidebar';
-import styles from '../app/page.module.css';
+import styles from './layout/AppShell.module.css';
 
 export default function AppShell({
   children,

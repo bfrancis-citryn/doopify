@@ -1,11 +1,13 @@
 "use client";
 
+import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
+  { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
   { href: '/orders', label: 'Orders', icon: 'shopping_cart' },
   { href: '/draft-orders', label: 'Draft Orders', icon: 'edit_document' },
   { href: '/products', label: 'Products', icon: 'inventory_2' },
@@ -13,13 +15,16 @@ const NAV_ITEMS = [
   { href: '/customers', label: 'Customers', icon: 'groups' },
   { href: '/discounts', label: 'Discounts', icon: 'sell' },
   { href: '/analytics', label: 'Analytics', icon: 'analytics' },
-  { href: '/settings', label: 'Settings', icon: 'settings' },
 ];
+
+const emptySubscribe = () => () => {};
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { settings } = useSettings();
+  const activePathname = useSyncExternalStore(emptySubscribe, () => pathname, () => '');
+  const isSettingsActive = activePathname === '/settings' || activePathname.startsWith('/settings/');
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -48,7 +53,7 @@ export default function Sidebar() {
         {NAV_ITEMS.map(item => {
           const isActive =
             item.href !== '#' &&
-            (pathname === item.href || pathname.startsWith(`${item.href}/`));
+            (activePathname === item.href || activePathname.startsWith(`${item.href}/`));
           return (
             <Link key={item.label} href={item.href} className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''} text-sm font-semibold font-headline tracking-tight`}>
               <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
@@ -59,9 +64,12 @@ export default function Sidebar() {
       </nav>
 
       <div className={styles.bottomNav}>
-        <Link href="#" className={`${styles.navLink} text-sm font-semibold font-headline tracking-tight`}>
-          <span className="material-symbols-outlined">help_outline</span>
-          <span>Support</span>
+        <Link
+          href="/settings"
+          className={`${styles.navLink} ${isSettingsActive ? styles.navLinkActive : ''} text-sm font-semibold font-headline tracking-tight`}
+        >
+          <span className="material-symbols-outlined" style={isSettingsActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>settings</span>
+          <span>Settings</span>
         </Link>
         <button className={`${styles.navLink} text-sm font-semibold font-headline tracking-tight`} onClick={handleLogout} type="button">
           <span className="material-symbols-outlined">logout</span>

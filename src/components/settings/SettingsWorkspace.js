@@ -17,7 +17,7 @@ const SETTINGS_SECTIONS = [
 
 export default function SettingsWorkspace() {
   const [activeSection, setActiveSection] = useState('general');
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loading, error } = useSettings();
 
   const activeTitle = useMemo(() => SETTINGS_SECTIONS.find(section => section.id === activeSection)?.label || 'Settings', [activeSection]);
 
@@ -31,7 +31,13 @@ export default function SettingsWorkspace() {
           </div>
           <div className={styles.sectionList}>
             {SETTINGS_SECTIONS.map(section => (
-              <button key={section.id} className={activeSection === section.id ? styles.sectionButtonActive : styles.sectionButton} onClick={() => setActiveSection(section.id)} type="button">
+              <button
+                key={section.id}
+                className={activeSection === section.id ? styles.sectionButtonActive : styles.sectionButton}
+                disabled={loading}
+                onClick={() => setActiveSection(section.id)}
+                type="button"
+              >
                 {section.label}
               </button>
             ))}
@@ -39,16 +45,32 @@ export default function SettingsWorkspace() {
         </div>
 
         <div className={styles.detailPanel}>
-          <div className={styles.detailCard}>
+          <div aria-busy={loading} className={styles.detailCard}>
             <div className={styles.detailHeader}>
               <div>
                 <p className={styles.eyebrow}>Settings</p>
                 <h2 className={styles.title}>{activeTitle}</h2>
               </div>
-              <button className={styles.saveButton} type="button">Save</button>
+              <button className={styles.saveButton} disabled={loading || Boolean(error)} type="button">Save</button>
             </div>
 
-            {activeSection === 'general' ? (
+            {loading ? (
+              <div className={styles.statusBlock}>
+                <div className={styles.loadingLine} />
+                <div className={styles.loadingLine} />
+                <div className={`${styles.loadingLine} ${styles.loadingLineShort}`} />
+                <p className={styles.statusText}>Loading store settings...</p>
+              </div>
+            ) : null}
+
+            {!loading && error ? (
+              <div className={styles.statusBlock}>
+                <p className={styles.statusTitle}>Settings could not be loaded.</p>
+                <p className={styles.statusText}>{error}</p>
+              </div>
+            ) : null}
+
+            {!loading && !error && activeSection === 'general' ? (
               <div className={styles.formGrid}>
                 <label className={styles.field}><span>Store name</span><input className={styles.input} onChange={event => updateSettings({ storeName: event.target.value })} value={settings.storeName} /></label>
                 <label className={styles.field}><span>Support email</span><input className={styles.input} onChange={event => updateSettings({ supportEmail: event.target.value })} value={settings.supportEmail} /></label>
@@ -59,7 +81,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {activeSection === 'branding' ? (
+            {!loading && !error && activeSection === 'branding' ? (
               <div className={styles.formGrid}>
                 <label className={styles.field}><span>Logo URL</span><input className={styles.input} onChange={event => updateSettings({ logoUrl: event.target.value })} value={settings.logoUrl} /></label>
                 <label className={styles.field}><span>Primary brand color</span><input className={styles.input} onChange={event => updateSettings({ brandPrimary: event.target.value })} value={settings.brandPrimary} /></label>
@@ -68,31 +90,31 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {activeSection === 'locations' ? (
+            {!loading && !error && activeSection === 'locations' ? (
               <div className={styles.formGrid}>
                 <label className={styles.field}><span>Default location</span><input className={styles.input} onChange={event => updateSettings({ defaultLocation: event.target.value })} value={settings.defaultLocation} /></label>
                 <label className={styles.field}><span>Shipping origin</span><input className={styles.input} onChange={event => updateSettings({ shippingOrigin: event.target.value })} value={settings.shippingOrigin} /></label>
               </div>
             ) : null}
 
-            {activeSection === 'shipping' ? (
+            {!loading && !error && activeSection === 'shipping' ? (
               <div className={styles.formGrid}>
                 <label className={styles.field}><span>Free shipping threshold</span><input className={styles.input} onChange={event => updateSettings({ freeShippingThreshold: event.target.value })} value={settings.freeShippingThreshold} /></label>
                 <label className={styles.field}><span>Low inventory alert</span><input className={styles.input} onChange={event => updateSettings({ lowInventoryAlert: event.target.value })} value={settings.lowInventoryAlert} /></label>
               </div>
             ) : null}
 
-            {activeSection === 'payments' ? (
+            {!loading && !error && activeSection === 'payments' ? (
               <div className={styles.infoBlock}>Set payment providers, capture mode, manual payment methods, and refund rules here next.</div>
             ) : null}
 
-            {activeSection === 'notifications' ? (
+            {!loading && !error && activeSection === 'notifications' ? (
               <div className={styles.formGrid}>
                 <label className={styles.field}><span>Sender email</span><input className={styles.input} onChange={event => updateSettings({ senderEmail: event.target.value })} value={settings.senderEmail} /></label>
               </div>
             ) : null}
 
-            {activeSection === 'users' ? (
+            {!loading && !error && activeSection === 'users' ? (
               <div className={styles.infoBlock}>Staff accounts, roles, permissions, and approval rules should live here.</div>
             ) : null}
           </div>

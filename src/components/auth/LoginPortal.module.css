@@ -65,79 +65,44 @@
 .portalFrame {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(28rem, 36rem);
-  gap: 3.25rem;
-  align-items: center;
-  min-height: 100vh;
-  width: min(1240px, calc(100% - 3rem));
-  margin: 0 auto;
-  padding: 4rem 0;
-}
-
-.portalCopy {
-  max-width: 28rem;
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0.35rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(247, 243, 255, 0.72);
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.portalTitle {
-  margin: 1.1rem 0 0.9rem;
-  font-size: clamp(2rem, 4.1vw, 3.45rem);
-  line-height: 1.01;
-  letter-spacing: -0.04em;
-  text-wrap: balance;
-}
-
-.portalText {
-  margin: 0;
-  max-width: 27rem;
-  color: rgba(240, 235, 248, 0.68);
-  font-size: 0.96rem;
-  line-height: 1.68;
-}
-
-.securityPills {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
-  margin-top: 1.35rem;
-}
-
-.securityPill {
-  display: inline-flex;
   align-items: center;
-  min-height: 1.95rem;
-  padding: 0.38rem 0.78rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.035);
-  color: rgba(250, 247, 255, 0.72);
-  font-size: 0.8rem;
+  justify-content: center;
+  min-height: 100vh;
+  width: min(100%, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0;
 }
 
 .cardStage {
   display: flex;
+  flex-direction: column;
   justify-content: center;
+  width: min(100%, 34rem);
+}
+
+.portalBadge {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  min-height: 2.1rem;
+  margin-bottom: 1rem;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(247, 243, 255, 0.76);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .cardTiltWrap {
   position: relative;
-  width: min(100%, 38rem);
+  width: 100%;
   transform-style: preserve-3d;
-  transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) scale(1.04);
+  transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y));
   transition: transform 160ms ease;
   transform-origin: center;
 }
@@ -156,7 +121,8 @@
 
 .cardAurora {
   overflow: hidden;
-  background: radial-gradient(circle at 20% 20%, rgba(193, 157, 255, 0.13), transparent 32%),
+  background:
+    radial-gradient(circle at 20% 20%, rgba(193, 157, 255, 0.13), transparent 32%),
     radial-gradient(circle at 80% 24%, rgba(255, 255, 255, 0.06), transparent 18%),
     radial-gradient(circle at 50% 100%, rgba(122, 58, 255, 0.12), transparent 34%);
   filter: blur(14px);
@@ -241,6 +207,10 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.cardTitleBlock {
+  min-width: 0;
 }
 
 .logoBadge {
@@ -382,13 +352,11 @@
   accent-color: #ffffff;
 }
 
-.metaLink {
-  color: rgba(255, 255, 255, 0.76);
-  text-decoration: none;
-}
-
-.metaLink:hover {
-  color: #ffffff;
+.metaNote {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .errorBanner {
@@ -539,14 +507,7 @@
 
 @media (max-width: 980px) {
   .portalFrame {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-    width: min(40rem, calc(100% - 2rem));
-    padding: 2rem 0 3rem;
-  }
-
-  .portalCopy {
-    max-width: none;
+    width: min(40rem, calc(100% - 1.5rem));
   }
 }
 
@@ -561,10 +522,6 @@
 
   .loginCard {
     padding: 1.2rem;
-  }
-
-  .portalTitle {
-    font-size: clamp(2rem, 10vw, 3rem);
   }
 
   .formMeta {

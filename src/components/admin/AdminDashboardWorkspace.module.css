@@ -1,0 +1,405 @@
+.dashboardPage {
+  position: relative;
+  min-height: 100%;
+  border-radius: 1.55rem;
+  border: 1px solid var(--glass-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(9, 9, 9, 0.88);
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+}
+
+.dashboardPage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 25%),
+    radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.06), transparent 20%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%);
+  background-size: 25% 100%, auto, auto;
+  opacity: 0.55;
+}
+
+.hero,
+.dashboardGrid {
+  position: relative;
+  z-index: 1;
+}
+
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 2rem 2rem 1.25rem;
+}
+
+.heroCopy {
+  max-width: 38rem;
+}
+
+.eyebrow,
+.cardEyebrow {
+  margin-bottom: 0.35rem;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: clamp(2.1rem, 3vw, 2.9rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.subtitle {
+  margin-top: 0.65rem;
+  max-width: 34rem;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.liveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.1rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.liveDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #8cffc6;
+  box-shadow: 0 0 0 0.25rem rgba(140, 255, 198, 0.08);
+}
+
+.dashboardGrid {
+  display: grid;
+  grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+  grid-template-areas:
+    'metrics activity'
+    'metrics status';
+  gap: 1.25rem;
+  padding: 0 2rem 2rem;
+}
+
+.metricRail,
+.activityCard,
+.statusCard {
+  position: relative;
+  border-radius: 1.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.035)),
+    linear-gradient(135deg, rgba(124, 189, 255, 0.13), rgba(255, 255, 255, 0.02) 42%, rgba(120, 255, 211, 0.08)),
+    rgba(10, 12, 16, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+    0 30px 64px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(calc(var(--glass-blur) + 12px)) saturate(155%);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 12px)) saturate(155%);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.activityCard::before,
+.activityCard::after,
+.statusCard::before,
+.statusCard::after,
+.metricCard::before,
+.metricCard::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.activityCard::before,
+.statusCard::before,
+.metricCard::before {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.22), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 26%);
+  opacity: 0.85;
+}
+
+.activityCard::after,
+.statusCard::after,
+.metricCard::after {
+  inset: auto 8% 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  opacity: 0.75;
+}
+
+.metricRail {
+  grid-area: metrics;
+  display: grid;
+  gap: 1rem;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.metricCard {
+  min-height: 10.5rem;
+  padding: 1.15rem;
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.03)),
+    linear-gradient(140deg, rgba(128, 170, 255, 0.12), rgba(255, 255, 255, 0.015) 48%, rgba(120, 255, 212, 0.06)),
+    rgba(12, 14, 18, 0.5);
+  display: grid;
+  gap: 0.65rem;
+  align-content: start;
+}
+
+.metricIcon {
+  position: relative;
+  z-index: 1;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.76);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 18px 30px rgba(0, 0, 0, 0.18);
+}
+
+.metricLabel {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.metricValue {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(1.9rem, 2.2vw, 2.6rem);
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.metricMeta {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.activityCard {
+  grid-area: activity;
+  padding: 1.35rem;
+}
+
+.statusCard {
+  grid-area: status;
+  padding: 1.35rem;
+}
+
+.cardHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.cardTitle {
+  font-size: 1.45rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.cardTag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.activityList {
+  position: relative;
+  z-index: 1;
+  display: grid;
+}
+
+.activityRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: center;
+  min-height: 5.1rem;
+  padding: 0.95rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background-color 180ms ease;
+}
+
+.activityRow:first-child {
+  border-top: 0;
+  padding-top: 0.2rem;
+}
+
+.activityRow:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.activityIcon {
+  width: 2.65rem;
+  height: 2.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.activityCopy {
+  min-width: 0;
+}
+
+.activityCopy strong {
+  display: block;
+  color: var(--slate-50);
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.activityCopy p {
+  margin-top: 0.24rem;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.activityTime {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.statusText {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.statusBarTrack {
+  position: relative;
+  z-index: 1;
+  height: 0.3rem;
+  margin: 1.25rem 0 1.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.statusBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.24));
+}
+
+.statusMetrics {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.statusMetrics span {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.statusMetrics strong {
+  font-size: 1.15rem;
+  line-height: 1.1;
+  color: var(--slate-50);
+}
+
+@media (max-width: 1100px) {
+  .dashboardGrid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'metrics'
+      'activity'
+      'status';
+  }
+
+  .metricRail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .hero,
+  .dashboardGrid {
+    padding-inline: 1rem;
+  }
+
+  .hero {
+    flex-direction: column;
+  }
+
+  .metricRail,
+  .statusMetrics {
+    grid-template-columns: 1fr;
+  }
+
+  .activityRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .activityTime {
+    grid-column: 2;
+  }
+}

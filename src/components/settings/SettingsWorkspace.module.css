@@ -67,6 +67,15 @@
   color: var(--primary);
 }
 
+.sectionButton:disabled,
+.sectionButtonActive:disabled,
+.saveButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
+  box-shadow: none;
+}
+
 .sectionButton:hover,
 .sectionButtonActive:hover,
 .saveButton:hover {
@@ -83,6 +92,37 @@
 .detailCard {
   display: flex;
   flex-direction: column;
+}
+
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.statusTitle {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--slate-900);
+}
+
+.statusText {
+  color: var(--slate-600);
+}
+
+.loadingLine {
+  width: 100%;
+  height: 0.95rem;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.34), rgba(148, 163, 184, 0.18));
+  background-size: 200% 100%;
+  animation: settingsPulse 1.2s ease-in-out infinite;
+}
+
+.loadingLineShort {
+  width: 62%;
 }
 
 .formGrid {
@@ -130,5 +170,15 @@
   .page,
   .formGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@keyframes settingsPulse {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
   }
 }
