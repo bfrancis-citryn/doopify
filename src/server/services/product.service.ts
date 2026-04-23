@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto'
+
 import { prisma } from '@/lib/prisma'
+import { emitInternalEvent } from '@/server/events/dispatcher'
 import type { ProductStatus, Prisma } from '@prisma/client'
 
 const productInclude = {
@@ -55,6 +58,45 @@ function attachMediaUrlsToList(products: any[] = []) {
   return products.map(attachMediaUrls)
 }
 
+export function toStorefrontProduct(product: any) {
+  return {
+    id: product.id,
+    handle: product.handle,
+    title: product.title,
+    description: product.description,
+    vendor: product.vendor,
+    productType: product.productType,
+    media: (product.media || []).map((media: any) => ({
+      id: media.id,
+      position: media.position,
+      isFeatured: media.isFeatured,
+      url: media.asset?.url || null,
+      altText: media.asset?.altText || null,
+      width: media.asset?.width || null,
+      height: media.asset?.height || null,
+    })),
+    options: (product.options || []).map((option: any) => ({
+      id: option.id,
+      name: option.name,
+      position: option.position,
+      values: (option.values || []).map((value: any) => ({
+        id: value.id,
+        value: value.value,
+        position: value.position,
+      })),
+    })),
+    variants: (product.variants || []).map((variant: any) => ({
+      id: variant.id,
+      title: variant.title,
+      price: variant.price,
+      compareAtPrice: variant.compareAtPrice,
+      inventory: variant.inventory,
+      weight: variant.weight,
+      weightUnit: variant.weightUnit,
+    })),
+  }
+}
+
 function normalizeProductMedia(media: ProductMediaPayload[] = []) {
   const seenAssetIds = new Set<string>()
 
@@ -84,6 +126,26 @@ function createFallbackVariant(variant?: Partial<ProductVariantPayload>): Produc
     weight: variant?.weight,
     weightUnit: variant?.weightUnit ?? 'kg',
     position: variant?.position ?? 0,
+  }
+}
+
+async function ensureUniqueHandle(baseHandle: string, excludeProductId?: string) {
+  const sanitizedBase = baseHandle || `product-${randomUUID().slice(0, 8)}`
+  let candidate = sanitizedBase
+  let suffix = 2
+
+  while (true) {
+    const existing = await prisma.product.findUnique({
+      where: { handle: candidate },
+      select: { id: true },
+    })
+
+    if (!existing || existing.id === excludeProductId) {
+      return candidate
+    }
+
+    candidate = `${sanitizedBase}-${suffix}`
+    suffix += 1
   }
 }
 
@@ -238,13 +300,13 @@ export async function getProduct(id: string) {
   return product ? attachMediaUrls(product) : null
 }
 
-export async function getProductByHandle(handle: string) {
+export async function getStorefrontProductByHandle(handle: string) {
   const product = await prisma.product.findFirst({
     where: { handle, status: 'ACTIVE' },
     include: productInclude,
   })
 
-  return product ? attachMediaUrls(product) : null
+  return product ? toStorefrontProduct(attachMediaUrls(product)) : null
 }
 
 export async function createProduct(data: {
@@ -267,7 +329,7 @@ export async function createProduct(data: {
   }>
   media?: ProductMediaPayload[]
 }) {
-  const handle = data.handle ?? slugify(data.title)
+  const handle = await ensureUniqueHandle(data.handle ?? slugify(data.title))
   const variants = data.variants?.length ? data.variants : [createFallbackVariant()]
 
   const product = await prisma.$transaction(async (tx) => {
@@ -306,7 +368,18 @@ export async function createProduct(data: {
     })
   })
 
-  return product ? attachMediaUrls(product) : null
+  const hydratedProduct = product ? attachMediaUrls(product) : null
+
+  if (hydratedProduct) {
+    await emitInternalEvent('product.created', {
+      productId: hydratedProduct.id,
+      handle: hydratedProduct.handle,
+      title: hydratedProduct.title,
+      status: hydratedProduct.status,
+    })
+  }
+
+  return hydratedProduct
 }
 
 export async function updateProduct(
@@ -324,11 +397,16 @@ export async function updateProduct(
   }>
 ) {
   const { variants, media, ...productFields } = data
+  const nextProductFields = { ...productFields }
+
+  if (typeof nextProductFields.handle === 'string') {
+    nextProductFields.handle = await ensureUniqueHandle(slugify(nextProductFields.handle), id)
+  }
 
   const product = await prisma.$transaction(async (tx) => {
     await tx.product.update({
       where: { id },
-      data: productFields,
+      data: nextProductFields,
     })
 
     if (variants) {
@@ -345,7 +423,18 @@ export async function updateProduct(
     })
   })
 
-  return product ? attachMediaUrls(product) : null
+  const hydratedProduct = product ? attachMediaUrls(product) : null
+
+  if (hydratedProduct) {
+    await emitInternalEvent('product.updated', {
+      productId: hydratedProduct.id,
+      handle: hydratedProduct.handle,
+      title: hydratedProduct.title,
+      status: hydratedProduct.status,
+    })
+  }
+
+  return hydratedProduct
 }
 
 export async function updateVariant(
@@ -427,7 +516,18 @@ export async function upsertOptions(
     })
   })
 
-  return product ? attachMediaUrls(product) : null
+  const hydratedProduct = product ? attachMediaUrls(product) : null
+
+  if (hydratedProduct) {
+    await emitInternalEvent('product.updated', {
+      productId: hydratedProduct.id,
+      handle: hydratedProduct.handle,
+      title: hydratedProduct.title,
+      status: hydratedProduct.status,
+    })
+  }
+
+  return hydratedProduct
 }
 
 export async function decrementInventory(variantId: string, quantity: number) {
@@ -444,10 +544,19 @@ export async function decrementInventory(variantId: string, quantity: number) {
 }
 
 export async function archiveProduct(id: string) {
-  return prisma.product.update({
+  const product = await prisma.product.update({
     where: { id },
     data: { status: 'ARCHIVED' },
   })
+
+  await emitInternalEvent('product.updated', {
+    productId: product.id,
+    handle: product.handle,
+    title: product.title,
+    status: product.status,
+  })
+
+  return product
 }
 
 export async function getStorefrontProducts(params: {
@@ -456,11 +565,20 @@ export async function getStorefrontProducts(params: {
   page?: number
   pageSize?: number
 }) {
-  const { search, page = 1, pageSize = 24 } = params
+  const { collectionHandle, search, page = 1, pageSize = 24 } = params
 
   const where: Prisma.ProductWhereInput = {
     status: 'ACTIVE',
     variants: { some: { inventory: { gt: 0 } } },
+    ...(collectionHandle && {
+      collections: {
+        some: {
+          collection: {
+            handle: collectionHandle,
+          },
+        },
+      },
+    }),
     ...(search && {
       OR: [
         { title: { contains: search, mode: 'insensitive' } },
@@ -481,14 +599,16 @@ export async function getStorefrontProducts(params: {
   ])
 
   return {
-    products: attachMediaUrlsToList(products),
+    products: attachMediaUrlsToList(products).map(toStorefrontProduct),
     pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
   }
 }
 
 function slugify(text: string): string {
-  return text
+  const slug = text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
+
+  return slug || `product-${randomUUID().slice(0, 8)}`
 }

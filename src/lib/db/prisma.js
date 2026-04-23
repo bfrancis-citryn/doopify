@@ -3,6 +3,22 @@ import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis;
 
+function normalizePgConnectionString(connectionString) {
+  try {
+    const url = new URL(connectionString);
+    const sslmode = url.searchParams.get('sslmode');
+
+    if (sslmode && ['prefer', 'require', 'verify-ca'].includes(sslmode)) {
+      url.searchParams.set('sslmode', 'verify-full');
+      return url.toString();
+    }
+  } catch {
+    // Keep the original value when parsing fails.
+  }
+
+  return connectionString;
+}
+
 function getPrismaAdapter() {
   const connectionString = process.env.DATABASE_URL;
 
@@ -10,7 +26,7 @@ function getPrismaAdapter() {
     throw new Error('DATABASE_URL is not set');
   }
 
-  return globalForPrisma.prismaAdapter || new PrismaPg({ connectionString });
+  return globalForPrisma.prismaAdapter || new PrismaPg({ connectionString: normalizePgConnectionString(connectionString) });
 }
 
 const adapter = getPrismaAdapter();

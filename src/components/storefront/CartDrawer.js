@@ -1,5 +1,7 @@
 "use client";
 
+import Link from 'next/link';
+
 import { useCart } from '../../context/CartContext';
 
 export default function CartDrawer() {
@@ -37,7 +39,7 @@ export default function CartDrawer() {
         .cdr-total-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px}
         .cdr-total-label{font-size:12px;letter-spacing:0.15em;text-transform:uppercase;color:#6a6058}
         .cdr-total-val{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:400;color:#f2ede4}
-        .cdr-checkout{width:100%;padding:16px;background:#c9a86c;border:none;color:#080808;font-size:12px;font-weight:500;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;transition:background 0.2s}
+        .cdr-checkout{width:100%;padding:16px;background:#c9a86c;border:none;color:#080808;font-size:12px;font-weight:500;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;transition:background 0.2s;text-decoration:none;display:flex;align-items:center;justify-content:center}
         .cdr-checkout:hover{background:#dbb97e}
         .cdr-clear{width:100%;padding:10px;background:none;border:none;color:#3a3830;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;margin-top:10px;transition:color 0.15s}
         .cdr-clear:hover{color:#6a6058}
@@ -87,7 +89,7 @@ export default function CartDrawer() {
               <span className="cdr-total-label">Subtotal</span>
               <span className="cdr-total-val">${total.toFixed(2)}</span>
             </div>
-            <button className="cdr-checkout">Proceed to Checkout</button>
+            <Link className="cdr-checkout" href="/checkout" onClick={closeCart}>Proceed to Checkout</Link>
             <button className="cdr-clear" onClick={clearCart}>Clear bag</button>
           </div>
         )}

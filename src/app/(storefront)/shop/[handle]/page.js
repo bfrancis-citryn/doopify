@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 import ProductDetail from './ProductDetail';
-import { getProductByHandle } from '@/server/services/product.service';
+import { getStorefrontProductByHandle } from '@/server/services/product.service';
 
 export async function generateMetadata({ params }) {
   const { handle } = await params;
-  const product = await getProductByHandle(handle);
+  const product = await getStorefrontProductByHandle(handle);
 
   if (!product) {
     return { title: 'Not Found' };
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }) {
 
 export default async function ProductPage({ params }) {
   const { handle } = await params;
-  const product = await getProductByHandle(handle);
+  const product = await getStorefrontProductByHandle(handle);
 
   if (!product) {
     notFound();

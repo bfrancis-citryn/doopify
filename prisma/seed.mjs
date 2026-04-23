@@ -228,6 +228,78 @@ async function main() {
   console.log(`✅ Collections: ${collections.length} upserted`)
 
   // ── Customers ──────────────────────────────────────────────────────────────
+  const collectionRecords = await prisma.collection.findMany({
+    where: {
+      handle: {
+        in: collections.map(collection => collection.handle),
+      },
+    },
+    select: {
+      id: true,
+      handle: true,
+    },
+  })
+
+  const collectionIdByHandle = Object.fromEntries(
+    collectionRecords.map(collection => [collection.handle, collection.id])
+  )
+
+  const collectionAssignments = createdProducts.flatMap(product => {
+    const tags = product.tags || []
+    const handles = new Set()
+
+    if (tags.includes('apparel') || tags.includes('bottoms')) {
+      handles.add('apparel')
+    }
+
+    if (
+      tags.includes('home') ||
+      tags.includes('decor') ||
+      tags.includes('coffee') ||
+      tags.includes('candles') ||
+      tags.includes('wellness')
+    ) {
+      handles.add('home-living')
+    }
+
+    if (
+      tags.includes('accessories') ||
+      tags.includes('bags') ||
+      tags.includes('eco') ||
+      tags.includes('hydration') ||
+      tags.includes('charging')
+    ) {
+      handles.add('accessories')
+    }
+
+    if (
+      tags.includes('activewear') ||
+      tags.includes('running') ||
+      product.vendor === 'Doopify Active'
+    ) {
+      handles.add('active')
+    }
+
+    return Array.from(handles)
+      .filter(handle => collectionIdByHandle[handle])
+      .map(handle => ({
+        collectionId: collectionIdByHandle[handle],
+        productId: product.id,
+      }))
+  })
+
+  if (collectionAssignments.length) {
+    await prisma.collectionProduct.createMany({
+      data: collectionAssignments.map((assignment, index) => ({
+        ...assignment,
+        position: index,
+      })),
+      skipDuplicates: true,
+    })
+  }
+
+  console.log(`âœ… Collection assignments: ${collectionAssignments.length} synced`)
+
   const customers = [
     { email: 'alex.johnson@example.com', firstName: 'Alex', lastName: 'Johnson', phone: '+1 555-0101' },
     { email: 'maria.chen@example.com', firstName: 'Maria', lastName: 'Chen', phone: '+1 555-0102' },

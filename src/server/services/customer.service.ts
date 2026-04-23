@@ -1,6 +1,20 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
+}
+
+function normalizeTags(tags: string[] = []) {
+  return Array.from(
+    new Set(
+      tags
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    )
+  )
+}
+
 // ── List customers ────────────────────────────────────────────────────────────
 export async function getCustomers(params: {
   search?: string
@@ -55,7 +69,7 @@ export async function getCustomer(id: string) {
 // ── Get customer by email ─────────────────────────────────────────────────────
 export async function getCustomerByEmail(email: string) {
   return prisma.customer.findUnique({
-    where: { email },
+    where: { email: normalizeEmail(email) },
     include: { addresses: true },
   })
 }
@@ -72,12 +86,12 @@ export async function createCustomer(data: {
 }) {
   return prisma.customer.create({
     data: {
-      email: data.email,
+      email: normalizeEmail(data.email),
       firstName: data.firstName,
       lastName: data.lastName,
       phone: data.phone,
       acceptsMarketing: data.acceptsMarketing ?? false,
-      tags: data.tags ?? [],
+      tags: normalizeTags(data.tags),
       note: data.note,
     },
     include: { addresses: true },
@@ -99,7 +113,11 @@ export async function updateCustomer(
 ) {
   return prisma.customer.update({
     where: { id },
-    data,
+    data: {
+      ...data,
+      ...(data.email ? { email: normalizeEmail(data.email) } : {}),
+      ...(data.tags ? { tags: normalizeTags(data.tags) } : {}),
+    },
     include: { addresses: true },
   })
 }

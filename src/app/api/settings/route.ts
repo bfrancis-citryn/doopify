@@ -1,14 +1,10 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
-import { prisma } from '@/lib/prisma'
-
-async function getStore() {
-  return prisma.store.findFirst()
-}
+import { getStoreSettings, updateStoreSettings } from '@/server/services/settings.service'
 
 export async function GET() {
   try {
-    const store = await getStore()
+    const store = await getStoreSettings()
     if (!store) return err('Store not configured', 404)
     return ok(store)
   } catch (e) {
@@ -24,7 +20,7 @@ const updateSchema = z.object({
   domain: z.string().optional(),
   currency: z.string().length(3).optional(),
   timezone: z.string().optional(),
-  logoUrl: z.string().url().optional(),
+  logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),
   address1: z.string().optional(),
@@ -43,12 +39,12 @@ export async function PATCH(req: Request) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
-    const store = await getStore()
+    const store = await getStoreSettings()
     if (!store) return err('Store not found', 404)
 
-    const updated = await prisma.store.update({
-      where: { id: store.id },
-      data: parsed.data,
+    const updated = await updateStoreSettings(store.id, {
+      ...parsed.data,
+      logoUrl: parsed.data.logoUrl || undefined,
     })
     return ok(updated)
   } catch (e) {

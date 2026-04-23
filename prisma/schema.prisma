@@ -88,6 +88,13 @@ enum ReturnStatus {
   DECLINED
 }
 
+enum CheckoutSessionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
 model Store {
   id                String   @id @default(cuid())
   name              String
@@ -284,6 +291,7 @@ model Customer {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   addresses        CustomerAddress[]
+  checkoutSessions CheckoutSession[]
   orders           Order[]
 
   @@index([email])
@@ -421,6 +429,31 @@ model Payment {
   @@index([orderId])
   @@index([stripePaymentIntentId])
   @@map("payments")
+}
+
+model CheckoutSession {
+  id              String                @id @default(cuid())
+  paymentIntentId String                @unique
+  customerId      String?
+  email           String?
+  status          CheckoutSessionStatus @default(PENDING)
+  currency        String                @default("USD")
+  subtotal        Float                 @default(0)
+  taxAmount       Float                 @default(0)
+  shippingAmount  Float                 @default(0)
+  discountAmount  Float                 @default(0)
+  total           Float                 @default(0)
+  payload         Json
+  failureReason   String?
+  completedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  customer        Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("checkout_sessions")
 }
 
 model Fulfillment {

@@ -1,5 +1,5 @@
 import { ok, err } from '@/lib/api'
-import { getProductByHandle } from '@/server/services/product.service'
+import { getStorefrontProductByHandle } from '@/server/services/product.service'
 
 // Public — no auth required
 export async function GET(
@@ -8,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { handle } = await params
-    const product = await getProductByHandle(handle)
+    const product = await getStorefrontProductByHandle(handle)
     if (!product) return err('Product not found', 404)
     return ok(product)
   } catch (e) {

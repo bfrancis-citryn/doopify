@@ -2,10 +2,20 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { signToken, AUTH_COOKIE } from '@/lib/auth'
 import type { UserRole } from '@prisma/client'
+import { getCookieValue } from '@/lib/cookies'
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
+}
 
 // ── Login ─────────────────────────────────────────────────────────────────────
-export async function loginUser(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email } })
+export async function loginUser(
+  email: string,
+  password: string,
+  context?: { ip?: string | null; userAgent?: string | null }
+) {
+  const normalizedEmail = normalizeEmail(email)
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
 
   if (!user || !user.isActive) {
     throw new Error('Invalid email or password')
@@ -34,6 +44,8 @@ export async function loginUser(email: string, password: string) {
       token: tempToken,
       userId: user.id,
       expiresAt,
+      ip: context?.ip ?? undefined,
+      userAgent: context?.userAgent ?? undefined,
     },
   })
 
@@ -72,7 +84,7 @@ export async function loginUser(email: string, password: string) {
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 export async function logoutUser(token: string) {
-  await prisma.session.deleteMany({ where: { token } }).catch(() => null)
+  await prisma.session.deleteMany({ where: { token } })
 }
 
 // ── Create admin user (used in seed) ─────────────────────────────────────────
@@ -87,7 +99,7 @@ export async function createUser(data: {
 
   return prisma.user.create({
     data: {
-      email: data.email,
+      email: normalizeEmail(data.email),
       passwordHash,
       firstName: data.firstName,
       lastName: data.lastName,
@@ -98,7 +110,5 @@ export async function createUser(data: {
 
 // ── Get token from request cookies ───────────────────────────────────────────
 export function getTokenFromCookieHeader(cookieHeader: string | null): string | null {
-  if (!cookieHeader) return null
-  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${AUTH_COOKIE}=([^;]+)`))
-  return match ? match[1] : null
+  return getCookieValue(cookieHeader, AUTH_COOKIE)
 }

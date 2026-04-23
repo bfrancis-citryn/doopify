@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import CartDrawer from '@/components/storefront/CartDrawer';
 
@@ -440,12 +441,13 @@ const styles = `
 `;
 
 export default function ProductDetail({ product }) {
+  const router = useRouter();
   const { addItem, count, openCart } = useCart();
 
   // Build option map for variant matching
   const options = product.options || [];
   const variants = product.variants || [];
-  const images = product.media?.map(m => m.asset) || [];
+  const images = product.media || [];
 
   // Selected option values — init with first value of each option
   const [selected, setSelected] = useState(() => {
@@ -662,7 +664,13 @@ export default function ProductDetail({ product }) {
             >
               {added ? '✓ Added to Bag' : inStock ? 'Add to Bag' : 'Out of Stock'}
             </button>
-            <button className="pd-buy-btn" onClick={() => { handleAddToCart(); openCart(); }}>
+            <button
+              className="pd-buy-btn"
+              onClick={() => {
+                handleAddToCart();
+                router.push('/checkout');
+              }}
+            >
               Buy Now
             </button>
           </div>

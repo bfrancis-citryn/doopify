@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { AUTH_COOKIE } from '@/lib/auth'
+import { getCookieValue } from '@/lib/cookies'
+
 // ── Standard success response ──────────────────────────────────────────────────
 export function ok<T>(data: T, status = 200) {
   return NextResponse.json({ success: true, data }, { status })
@@ -8,6 +11,13 @@ export function ok<T>(data: T, status = 200) {
 // ── Standard error response ───────────────────────────────────────────────────
 export function err(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status })
+}
+
+export function unprocessable(message: string, details?: unknown) {
+  return NextResponse.json(
+    { success: false, error: message, details },
+    { status: 422 }
+  )
 }
 
 // ── Parse JSON body safely ────────────────────────────────────────────────────
@@ -21,7 +31,5 @@ export async function parseBody<T>(req: Request): Promise<T | null> {
 
 // ── Get token from cookie header ──────────────────────────────────────────────
 export function getToken(req: Request): string | null {
-  const cookie = req.headers.get('cookie') ?? ''
-  const match = cookie.match(/doopify_token=([^;]+)/)
-  return match ? match[1] : null
+  return getCookieValue(req.headers.get('cookie'), AUTH_COOKIE)
 }

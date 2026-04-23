@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth'
 const PUBLIC_PREFIXES = [
   '/login',
   '/api/auth',
+  '/api/checkout',
   '/api/storefront',
   '/api/webhooks',
   '/_next',
@@ -14,10 +15,10 @@ const PUBLIC_PREFIXES = [
   '/public',
 ]
 
-export function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   if (isPublic) return NextResponse.next()
 
   if (!pathname.startsWith('/api/') && !isAdminPage(pathname)) {
@@ -36,7 +37,7 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(createLoginUrl(req))
   }
 
-  const payload = verifyToken(token)
+  const payload = await verifyToken(token)
   if (!payload) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json(
@@ -70,7 +71,7 @@ function isAdminPage(pathname: string) {
     '/media',
   ]
 
-  return adminPaths.some((prefix) => pathname.startsWith(prefix))
+  return adminPaths.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 function createLoginUrl(req: NextRequest) {

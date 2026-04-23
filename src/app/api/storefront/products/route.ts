@@ -6,6 +6,10 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const result = await getStorefrontProducts({
+      collectionHandle:
+        searchParams.get('collectionHandle') ||
+        searchParams.get('collection') ||
+        undefined,
       search: searchParams.get('search') || undefined,
       page: Number(searchParams.get('page') || 1),
       pageSize: Number(searchParams.get('pageSize') || 24),

@@ -7,15 +7,21 @@ import CartDrawer from '@/components/storefront/CartDrawer';
 
 export default function ShopPage() {
   const [products, setProducts] = useState([]);
+  const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [added, setAdded] = useState({});
   const { addItem, count, openCart } = useCart();
 
   useEffect(() => {
-    fetch('/api/storefront/products?pageSize=50')
-      .then(r => r.json())
-      .then(json => { if (json.success) setProducts(json.data.products || []); })
+    Promise.all([
+      fetch('/api/storefront/products?pageSize=50').then(r => r.json()),
+      fetch('/api/storefront/collections').then(r => r.json()),
+    ])
+      .then(([productsJson, collectionsJson]) => {
+        if (productsJson.success) setProducts(productsJson.data.products || []);
+        if (collectionsJson.success) setCollections(collectionsJson.data || []);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -41,7 +47,7 @@ export default function ShopPage() {
       title: product.title,
       variantTitle,
       price: variant.price,
-      image: product.media?.[0]?.asset?.url || null,
+      image: product.media?.[0]?.url || null,
     });
     setAdded(prev => ({ ...prev, [product.id]: true }));
     setTimeout(() => setAdded(prev => ({ ...prev, [product.id]: false })), 1800);
@@ -63,6 +69,10 @@ export default function ShopPage() {
         .shop-header { padding:64px 48px 48px;border-bottom:1px solid rgba(255,255,255,0.08); }
         .page-eyebrow { font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#4a4540;margin-bottom:12px; }
         .page-title { font-family:var(--font-headline),sans-serif;font-size:52px;font-weight:700;letter-spacing:-0.05em;color:#f2ede4; }
+        .collection-rail { display:flex;gap:10px;overflow-x:auto;padding:0 48px 24px;border-bottom:1px solid rgba(255,255,255,0.08);scrollbar-width:none; }
+        .collection-rail::-webkit-scrollbar { display:none; }
+        .collection-chip { flex-shrink:0;border-radius:999px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#f2ede4;text-decoration:none;padding:10px 16px;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;transition:border-color 0.2s,transform 0.2s; }
+        .collection-chip:hover { transform:translateY(-1px);border-color:rgba(255,255,255,0.2); }
         .shop-toolbar { display:flex;align-items:center;justify-content:space-between;padding:20px 48px;border-bottom:1px solid rgba(255,255,255,0.08); }
         .search-wrap { position:relative; }
         .search-input { background:linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03)),rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:999px;color:#f2ede4;padding:12px 18px 12px 42px;font-size:13px;font-family:var(--font-body),sans-serif;width:280px;outline:none;transition:border-color 0.2s,background 0.2s;backdrop-filter:blur(18px) saturate(120%);-webkit-backdrop-filter:blur(18px) saturate(120%); }
@@ -115,6 +125,7 @@ export default function ShopPage() {
           <Link className="nav-logo" href="/">Doopify</Link>
           <div className="nav-right">
             <Link className="nav-link" href="/">Home</Link>
+            <Link className="nav-link" href="/collections">Collections</Link>
             <button className="cart-btn" onClick={openCart}>
               Bag
               {count > 0 && <span className="cart-count">{count}</span>}
@@ -124,8 +135,18 @@ export default function ShopPage() {
 
         <header className="shop-header">
           <p className="page-eyebrow">All products</p>
-          <h1 className="page-title">The Collection</h1>
+          <h1 className="page-title">Shop Everything</h1>
         </header>
+
+        {collections.length ? (
+          <div className="collection-rail">
+            {collections.map(collection => (
+              <Link className="collection-chip" href={`/collections/${collection.handle}`} key={collection.id}>
+                {collection.title}
+              </Link>
+            ))}
+          </div>
+        ) : null}
 
         <div className="shop-toolbar">
           <div className="search-wrap">
@@ -165,7 +186,7 @@ export default function ShopPage() {
           <div className="shop-grid">
             {visible.map(product => {
               const variant = product.variants?.[0];
-              const image = product.media?.[0]?.asset?.url;
+              const image = product.media?.[0]?.url;
               const isAdded = added[product.id];
               return (
                 <Link className="p-card" href={`/shop/${product.handle}`} key={product.id}>

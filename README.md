@@ -1,50 +1,48 @@
 # Doopify
 
-Doopify is a headless commerce app built in Next.js 16 with a shared admin and storefront backed by Prisma and PostgreSQL.
+Doopify is a developer-first commerce app built with Next.js 16, Prisma, and PostgreSQL. It ships a shared admin and storefront, a Stripe-backed checkout flow, and typed server-side extension seams for first-party integrations.
 
-The repo now includes a real persistence layer, protected admin routes, DB-backed product/catalog operations, storefront product reads, and a standalone media library for asset management.
-
-## Current Product Status
+## Current Status
 
 ### Working now
 
-- Protected admin login flow with JWT cookie session checks
-- Glassmorphism admin shell with route-based workspaces
-- DB-backed products, variants, product options, media, customers, discounts, settings, analytics, and orders
-- Storefront catalog pages at `/shop` and `/shop/[handle]`
-- Product editor that saves real product data and syncs to the storefront
-- Standalone media library at `/media`
-  - upload images to Prisma/Postgres
-  - reuse assets across products
-  - edit alt text for SEO
-  - delete assets
-  - inspect linked products
+- Protected admin auth with session-backed JWT validation
+- DB-backed products, variants, media, customers, discounts, settings, analytics, and orders
+- Storefront catalog routes at `/`, `/shop`, and `/shop/[handle]`
+- Collection browsing at `/collections` and `/collections/[handle]`
+- Checkout flow at `/checkout` with `POST /api/checkout/create`
+- Verified Stripe webhook handling at `POST /api/webhooks/stripe`
+- Checkout status reconciliation at `GET /api/checkout/status`
+- Idempotent paid-order creation and inventory decrement on verified payment success
+- Typed internal event dispatch plus first-party confirmation email handling
+- Admin collection management at `/admin/collections`
 
-### Still to build
+### Active phase
 
-- Stripe checkout and webhook-driven payment/order creation
-- DB-backed draft order lifecycle
-- Collections authoring and collection storefront routes
-- Customer account portal
-- Transactional email
-- Role-based auth hardening and login rate limiting
-- Production-grade media delivery strategy beyond DB-stored binaries
+The current active product phase is **Phase 3: Merchant Readiness And Storefront Differentiation**.
 
-## Stack
+Current priorities:
 
-- Next.js 16.2.2
-- React 19
-- Prisma 7
-- PostgreSQL via `@prisma/adapter-pg`
-- Zod
-- bcryptjs
-- jsonwebtoken
+- collections admin CRUD and storefront browsing
+- stronger merchandising on the storefront
+- checkout pricing hardening for discounts, shipping, and tax handling
+- automated coverage for the revenue path
+- launch and marketing proof points for the developer-first story
+
+## Active Planning Docs
+
+- [features-roadmap.md](./features-roadmap.md) - the single source of truth for product phases and priorities
+- [HARDENING.md](./HARDENING.md) - security, trust, correctness, and production-readiness work
+- [docs/phase-3-kickoff.md](./docs/phase-3-kickoff.md) - the execution brief for the active Phase 3 workstream
+- [docs/launch-rollout.md](./docs/launch-rollout.md) - launch positioning, claims, and marketing rollout notes
+- [docs/archive/README.md](./docs/archive/README.md) - historical planning docs that were removed from the active root workflow
 
 ## Key Routes
 
 ### Admin pages
 
 - `/orders`
+- `/admin/collections`
 - `/draft-orders`
 - `/products`
 - `/media`
@@ -58,11 +56,16 @@ The repo now includes a real persistence layer, protected admin routes, DB-backe
 - `/`
 - `/shop`
 - `/shop/[handle]`
+- `/collections`
+- `/collections/[handle]`
+- `/checkout`
+- `/checkout/success`
 
 ### Core API routes
 
 - `/api/auth/*`
 - `/api/products`
+- `/api/collections`
 - `/api/orders`
 - `/api/customers`
 - `/api/discounts`
@@ -70,6 +73,11 @@ The repo now includes a real persistence layer, protected admin routes, DB-backe
 - `/api/analytics`
 - `/api/media`
 - `/api/storefront/products`
+- `/api/storefront/collections`
+- `/api/storefront/settings`
+- `/api/checkout/create`
+- `/api/checkout/status`
+- `/api/webhooks/stripe`
 
 ## Development
 
@@ -104,16 +112,6 @@ npm run db:seed:bootstrap
 
 ## Notes On Media
 
-Media is currently stored directly in Postgres through the `MediaAsset.data` field and served by `/api/media/[assetId]`.
+Media is currently stored in Postgres through `MediaAsset.data` and served by `/api/media/[assetId]`.
 
-That works well for local development and functional admin workflows. For production scale, we may still want to move asset delivery to object storage or a CDN-backed image service later.
-
-## Current Priority
-
-The highest-value next step is turning the existing storefront catalog into a real purchase flow:
-
-1. Stripe checkout creation
-2. webhook-based order creation
-3. inventory validation and decrement during checkout
-4. confirmation email
-
+That is fine for local development and current admin workflows. Moving to object storage or a CDN-backed image service remains a later production-readiness task.

@@ -1,7 +1,49 @@
-import { prisma } from '@/lib/prisma'
-import type { OrderStatus, PaymentStatus, FulfillmentStatus, Prisma } from '@prisma/client'
+import { Prisma, type FulfillmentStatus, type OrderStatus, type PaymentStatus } from '@prisma/client'
 
-// ── List orders ───────────────────────────────────────────────────────────────
+import { prisma } from '@/lib/prisma'
+import { emitInternalEvent } from '@/server/events/dispatcher'
+
+function roundCurrency(value: number) {
+  return Number(value.toFixed(2))
+}
+
+function parseOrderNumberSearch(search?: string) {
+  const query = search?.trim()
+  if (!query || !/^\d+$/.test(query)) {
+    return undefined
+  }
+
+  const value = Number(query)
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function buildOrderTotals(input: {
+  items: Array<{ price: number; quantity: number }>
+  taxAmount?: number
+  shippingAmount?: number
+  discountAmount?: number
+}) {
+  const subtotal = roundCurrency(
+    input.items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0)
+  )
+  const taxAmount = roundCurrency(input.taxAmount ?? 0)
+  const shippingAmount = roundCurrency(input.shippingAmount ?? 0)
+  const discountAmount = roundCurrency(input.discountAmount ?? 0)
+  const total = roundCurrency(subtotal + taxAmount + shippingAmount - discountAmount)
+
+  return {
+    subtotal,
+    taxAmount,
+    shippingAmount,
+    discountAmount,
+    total,
+  }
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+}
+
 export async function getOrders(params: {
   status?: OrderStatus
   paymentStatus?: PaymentStatus
@@ -11,18 +53,20 @@ export async function getOrders(params: {
   pageSize?: number
 }) {
   const { status, paymentStatus, fulfillmentStatus, search, page = 1, pageSize = 20 } = params
+  const orderNumber = parseOrderNumberSearch(search)
+  const trimmedSearch = search?.trim()
 
   const where: Prisma.OrderWhereInput = {
     ...(status && { status }),
     ...(paymentStatus && { paymentStatus }),
     ...(fulfillmentStatus && { fulfillmentStatus }),
-    ...(search && {
+    ...(trimmedSearch && {
       OR: [
-        { email: { contains: search, mode: 'insensitive' } },
-        { customer: { email: { contains: search, mode: 'insensitive' } } },
-        { customer: { firstName: { contains: search, mode: 'insensitive' } } },
-        { orderNumber: isNaN(Number(search)) ? undefined : { equals: Number(search) } },
-      ].filter(Boolean) as Prisma.OrderWhereInput['OR'],
+        { email: { contains: trimmedSearch, mode: 'insensitive' } },
+        { customer: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
+        { customer: { firstName: { contains: trimmedSearch, mode: 'insensitive' } } },
+        ...(orderNumber ? [{ orderNumber: { equals: orderNumber } }] : []),
+      ],
     }),
   }
 
@@ -48,7 +92,6 @@ export async function getOrders(params: {
   }
 }
 
-// ── Get single order by orderNumber ──────────────────────────────────────────
 export async function getOrder(orderNumber: number) {
   return prisma.order.findUnique({
     where: { orderNumber },
@@ -71,7 +114,36 @@ export async function getOrder(orderNumber: number) {
   })
 }
 
-// ── Create order (called from Stripe webhook) ─────────────────────────────────
+export async function getOrderById(id: string) {
+  return prisma.order.findUnique({
+    where: { id },
+    include: {
+      items: true,
+      addresses: true,
+      payments: true,
+      events: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+
+export async function getOrderByPaymentIntentId(paymentIntentId: string) {
+  return prisma.order.findFirst({
+    where: {
+      payments: {
+        some: {
+          stripePaymentIntentId: paymentIntentId,
+        },
+      },
+    },
+    include: {
+      items: true,
+      addresses: true,
+      payments: true,
+      events: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+}
+
 export async function createOrder(data: {
   customerId?: string
   email?: string
@@ -87,6 +159,7 @@ export async function createOrder(data: {
   shippingAddress?: {
     firstName?: string
     lastName?: string
+    company?: string
     address1?: string
     address2?: string
     city?: string
@@ -95,108 +168,224 @@ export async function createOrder(data: {
     country?: string
     phone?: string
   }
-  subtotal: number
+  billingAddress?: {
+    firstName?: string
+    lastName?: string
+    company?: string
+    address1?: string
+    address2?: string
+    city?: string
+    province?: string
+    postalCode?: string
+    country?: string
+    phone?: string
+  }
   taxAmount?: number
   shippingAmount?: number
   discountAmount?: number
-  total: number
   currency?: string
   stripePaymentIntentId?: string
+  stripeChargeId?: string
+  paymentStatus?: PaymentStatus
+  fulfillmentStatus?: FulfillmentStatus
+  status?: OrderStatus
 }) {
-  const order = await prisma.$transaction(async (tx) => {
-    // 1. Decrement inventory atomically for each variant — throws if stock is insufficient
-    for (const item of data.items) {
-      if (item.variantId) {
+  if (!data.items.length) {
+    throw new Error('Cannot create an order without line items')
+  }
+
+  if (data.stripePaymentIntentId) {
+    const existingOrder = await getOrderByPaymentIntentId(data.stripePaymentIntentId)
+    if (existingOrder) {
+      return existingOrder
+    }
+  }
+
+  const totals = buildOrderTotals({
+    items: data.items,
+    taxAmount: data.taxAmount,
+    shippingAmount: data.shippingAmount,
+    discountAmount: data.discountAmount,
+  })
+
+  const paymentStatus = data.paymentStatus ?? 'PAID'
+  const fulfillmentStatus = data.fulfillmentStatus ?? 'UNFULFILLED'
+  const orderStatus = data.status ?? 'OPEN'
+
+  try {
+    const order = await prisma.$transaction(async (tx) => {
+      for (const item of data.items) {
+        if (!item.variantId) continue
+
         const updated = await tx.productVariant.updateMany({
           where: { id: item.variantId, inventory: { gte: item.quantity } },
           data: { inventory: { decrement: item.quantity } },
         })
+
         if (updated.count === 0) {
           throw new Error(`Insufficient inventory for variant ${item.variantId}`)
         }
       }
-    }
 
-    // 2. Create the order with all related records in one shot
-    const order = await tx.order.create({
-      data: {
-        customerId: data.customerId,
-        email: data.email,
-        status: 'OPEN',
-        paymentStatus: 'PAID',
-        fulfillmentStatus: 'UNFULFILLED',
-        subtotal: data.subtotal,
-        taxAmount: data.taxAmount ?? 0,
-        shippingAmount: data.shippingAmount ?? 0,
-        discountAmount: data.discountAmount ?? 0,
-        total: data.total,
-        currency: data.currency ?? 'USD',
-        items: {
-          create: data.items.map((item) => ({
-            productId: item.productId,
-            variantId: item.variantId,
-            title: item.title,
-            variantTitle: item.variantTitle,
-            sku: item.sku,
-            price: item.price,
-            quantity: item.quantity,
-            total: item.price * item.quantity,
-          })),
-        },
-        addresses: data.shippingAddress
-          ? {
-              create: {
-                type: 'SHIPPING',
-                ...data.shippingAddress,
+      const createdOrder = await tx.order.create({
+        data: {
+          customerId: data.customerId,
+          email: data.email,
+          status: orderStatus,
+          paymentStatus,
+          fulfillmentStatus,
+          subtotal: totals.subtotal,
+          taxAmount: totals.taxAmount,
+          shippingAmount: totals.shippingAmount,
+          discountAmount: totals.discountAmount,
+          total: totals.total,
+          currency: (data.currency ?? 'USD').toUpperCase(),
+          channel: 'online',
+          items: {
+            create: data.items.map((item) => ({
+              productId: item.productId,
+              variantId: item.variantId,
+              title: item.title,
+              variantTitle: item.variantTitle,
+              sku: item.sku,
+              price: item.price,
+              quantity: item.quantity,
+              total: roundCurrency(item.price * item.quantity),
+            })),
+          },
+          addresses:
+            data.shippingAddress || data.billingAddress
+              ? {
+                  create: [
+                    ...(data.shippingAddress
+                      ? [
+                          {
+                            type: 'SHIPPING' as const,
+                            ...data.shippingAddress,
+                          },
+                        ]
+                      : []),
+                    ...(data.billingAddress
+                      ? [
+                          {
+                            type: 'BILLING' as const,
+                            ...data.billingAddress,
+                          },
+                        ]
+                      : []),
+                  ],
+                }
+              : undefined,
+          payments: data.stripePaymentIntentId
+            ? {
+                create: {
+                  provider: 'stripe',
+                  amount: totals.total,
+                  currency: (data.currency ?? 'USD').toUpperCase(),
+                  status: paymentStatus,
+                  stripePaymentIntentId: data.stripePaymentIntentId,
+                  stripeChargeId: data.stripeChargeId,
+                },
+              }
+            : undefined,
+          events: {
+            create: [
+              {
+                type: 'ORDER_PLACED',
+                title: 'Order placed',
+                detail: 'Order was created via online checkout',
+                actorType: 'SYSTEM',
               },
-            }
-          : undefined,
-        payments: data.stripePaymentIntentId
-          ? {
-              create: {
-                provider: 'stripe',
-                amount: data.total,
-                currency: data.currency ?? 'USD',
-                status: 'PAID',
-                stripePaymentIntentId: data.stripePaymentIntentId,
-              },
-            }
-          : undefined,
-        events: {
-          create: {
-            type: 'ORDER_PLACED',
-            title: 'Order placed',
-            detail: 'Order was created via online checkout',
-            actorType: 'SYSTEM',
+              ...(paymentStatus === 'PAID'
+                ? [
+                    {
+                      type: 'PAYMENT_RECEIVED',
+                      title: 'Payment received',
+                      detail: data.stripePaymentIntentId
+                        ? `Stripe payment intent ${data.stripePaymentIntentId} succeeded`
+                        : 'Payment received',
+                      actorType: 'SYSTEM' as const,
+                    },
+                  ]
+                : []),
+            ],
           },
         },
-      },
-      include: {
-        items: true,
-        addresses: true,
-        payments: true,
-        events: true,
-      },
+        include: {
+          items: true,
+          addresses: true,
+          payments: true,
+          events: true,
+        },
+      })
+
+      if (data.customerId) {
+        await tx.customer.update({
+          where: { id: data.customerId },
+          data: {
+            orderCount: { increment: 1 },
+            ...(paymentStatus === 'PAID'
+              ? {
+                  totalSpent: { increment: totals.total },
+                }
+              : {}),
+          },
+        })
+      }
+
+      return createdOrder
     })
 
-    // 3. Update customer totals atomically within the same transaction
-    if (data.customerId) {
-      await tx.customer.update({
-        where: { id: data.customerId },
-        data: {
-          orderCount: { increment: 1 },
-          totalSpent: { increment: data.total },
-        },
+    await emitInternalEvent('order.created', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      email: order.email,
+      total: order.total,
+      currency: order.currency,
+    })
+
+    if (order.paymentStatus === 'PAID') {
+      const shippingAddress = order.addresses.find((address) => address.type === 'SHIPPING')
+
+      await emitInternalEvent('order.paid', {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        email: order.email,
+        total: order.total,
+        currency: order.currency,
+        items: order.items.map((item) => ({
+          title: item.title,
+          variantTitle: item.variantTitle,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        shippingAddress: shippingAddress
+          ? {
+              firstName: shippingAddress.firstName,
+              lastName: shippingAddress.lastName,
+              address1: shippingAddress.address1,
+              city: shippingAddress.city,
+              province: shippingAddress.province,
+              postalCode: shippingAddress.postalCode,
+              country: shippingAddress.country,
+            }
+          : undefined,
       })
     }
 
     return order
-  })
+  } catch (error) {
+    if (data.stripePaymentIntentId && isUniqueConstraintError(error)) {
+      const existingOrder = await getOrderByPaymentIntentId(data.stripePaymentIntentId)
+      if (existingOrder) {
+        return existingOrder
+      }
+    }
 
-  return order
+    throw error
+  }
 }
 
-// ── Add an event to the order timeline ───────────────────────────────────────
 export async function createOrderEvent(
   orderId: string,
   data: { type: string; title: string; detail?: string; actorType?: 'SYSTEM' | 'STAFF' | 'CUSTOMER'; actorId?: string }
@@ -213,11 +402,14 @@ export async function createOrderEvent(
   })
 }
 
-// ── Update payment status ─────────────────────────────────────────────────────
 export async function updatePaymentStatus(orderId: string, paymentStatus: PaymentStatus) {
   const order = await prisma.order.update({
     where: { id: orderId },
     data: { paymentStatus },
+    include: {
+      items: true,
+      addresses: true,
+    },
   })
 
   await createOrderEvent(orderId, {
@@ -226,10 +418,38 @@ export async function updatePaymentStatus(orderId: string, paymentStatus: Paymen
     actorType: 'STAFF',
   })
 
+  if (paymentStatus === 'PAID') {
+    const shippingAddress = order.addresses.find((address) => address.type === 'SHIPPING')
+
+    await emitInternalEvent('order.paid', {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      email: order.email,
+      total: order.total,
+      currency: order.currency,
+      items: order.items.map((item) => ({
+        title: item.title,
+        variantTitle: item.variantTitle,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      shippingAddress: shippingAddress
+        ? {
+            firstName: shippingAddress.firstName,
+            lastName: shippingAddress.lastName,
+            address1: shippingAddress.address1,
+            city: shippingAddress.city,
+            province: shippingAddress.province,
+            postalCode: shippingAddress.postalCode,
+            country: shippingAddress.country,
+          }
+        : undefined,
+    })
+  }
+
   return order
 }
 
-// ── Update fulfillment status ─────────────────────────────────────────────────
 export async function updateFulfillmentStatus(orderId: string, fulfillmentStatus: FulfillmentStatus) {
   const order = await prisma.order.update({
     where: { id: orderId },
@@ -245,7 +465,6 @@ export async function updateFulfillmentStatus(orderId: string, fulfillmentStatus
   return order
 }
 
-// ── Create fulfillment ────────────────────────────────────────────────────────
 export async function createFulfillment(data: {
   orderId: string
   items: Array<{ orderItemId: string; variantId?: string; quantity: number }>
@@ -254,7 +473,7 @@ export async function createFulfillment(data: {
   trackingUrl?: string
 }) {
   const fulfillment = await prisma.$transaction(async (tx) => {
-    const fulfillment = await tx.fulfillment.create({
+    const createdFulfillment = await tx.fulfillment.create({
       data: {
         orderId: data.orderId,
         status: 'SUCCESS',
@@ -289,20 +508,20 @@ export async function createFulfillment(data: {
       },
     })
 
-    return fulfillment
+    return createdFulfillment
+  })
+
+  await emitInternalEvent('fulfillment.created', {
+    fulfillmentId: fulfillment.id,
+    orderId: data.orderId,
+    trackingNumber: data.trackingNumber,
   })
 
   return fulfillment
 }
 
-// ── Analytics aggregates ──────────────────────────────────────────────────────
 export async function getAnalytics() {
-  const [
-    totalRevenue,
-    orderCount,
-    customerCount,
-    topProducts,
-  ] = await Promise.all([
+  const [totalRevenue, orderCount, customerCount, topProducts] = await Promise.all([
     prisma.order.aggregate({
       where: { paymentStatus: 'PAID' },
       _sum: { total: true },

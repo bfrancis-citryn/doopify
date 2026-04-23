@@ -7,7 +7,8 @@ import { useSettings } from '../../context/SettingsContext';
 import styles from './Sidebar.module.css';
 
 const NAV_ITEMS = [
-  { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
+  { href: '/admin', label: 'Dashboard', icon: 'dashboard', exact: true },
+  { href: '/admin/collections', label: 'Collections', icon: 'dashboard_customize' },
   { href: '/orders', label: 'Orders', icon: 'shopping_cart' },
   { href: '/draft-orders', label: 'Draft Orders', icon: 'edit_document' },
   { href: '/products', label: 'Products', icon: 'inventory_2' },
@@ -53,7 +54,9 @@ export default function Sidebar() {
         {NAV_ITEMS.map(item => {
           const isActive =
             item.href !== '#' &&
-            (activePathname === item.href || activePathname.startsWith(`${item.href}/`));
+            (item.exact
+              ? activePathname === item.href
+              : activePathname === item.href || activePathname.startsWith(`${item.href}/`));
           return (
             <Link key={item.label} href={item.href} className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''} text-sm font-semibold font-headline tracking-tight`}>
               <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>

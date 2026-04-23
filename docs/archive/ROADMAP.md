@@ -1,3 +1,6 @@
+> Archived on April 22, 2026.
+> Historical reference only. Use `features-roadmap.md` for the active product plan.
+
 # Doopify Roadmap
 
 > Last updated: April 20, 2026
