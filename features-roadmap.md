@@ -1,8 +1,9 @@
-# Doopify - Features Roadmap
+# Doopify Features Roadmap
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Last updated: April 22, 2026
+> Documentation refresh: April 25, 2026  
+> Last repo verification recorded in active docs: April 22, 2026  
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -10,18 +11,22 @@
 Active planning docs:
 
 - `README.md` for onboarding and repo orientation
+- `STATUS.md` for the current shipped/active/pending/deferred snapshot
+- `PROJECT_INTENT.md` for product intent and architecture principles
 - `features-roadmap.md` for product phases and priorities
 - `HARDENING.md` for cross-cutting trust, security, and operational work
-- `docs/phase-3-kickoff.md` for Phase 3 execution sequencing and implementation context
-- `docs/launch-rollout.md` for launch positioning and marketing rollout guidance
+- `CONTRIBUTING.md` for implementation rules and definition of done
+- `AGENTS.md` for AI-agent instructions
+- `PHASE_3_KICKOFF.md` for Phase 3 execution sequencing and implementation context
+- `LAUNCH_ROLLOUT.md` for launch positioning and marketing rollout guidance
 
-Historical planning docs now live in `docs/archive/`.
+Historical planning docs are intentionally omitted from this active handoff pack. Do not use old `CLAUDE.md` or legacy `skill.md` content as current repo status.
 
 ## Snapshot
 
-### Shipped in the repo
+### Shipped In The Repo
 
-- Prisma/Postgres-backed commerce schema with admin auth, sessions, catalog, customers, orders, discounts, media, and settings
+- Prisma/Postgres-backed commerce schema with admin auth, sessions, catalog, customers, orders, discounts, media, settings, payments, fulfillments, refunds, and returns
 - Next.js App Router API surface with protected admin routes and public storefront routes
 - Hardened auth flow with session-backed JWT validation, safe cookie parsing, env validation, and login rate limiting
 - Storefront catalog pages at `/`, `/shop`, and `/shop/[handle]`
@@ -31,11 +36,15 @@ Historical planning docs now live in `docs/archive/`.
 - `GET /api/checkout/status` for success-page reconciliation
 - Idempotent order creation from verified Stripe payment success
 - Checkout session persistence plus paid and failed status tracking
+- Inventory decrement only after verified payment success
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
 - Public storefront settings endpoint for branding-safe store data
+- Collection service layer and storefront-safe collection DTOs
+- Admin collection workspace at `/admin/collections`
+- Storefront collection browsing at `/collections` and `/collections/[handle]`
 
-### Explicitly deferred
+### Explicitly Deferred
 
 - Public plugin marketplace positioning
 - Runtime `fs` plus `require()` plugin loading
@@ -45,29 +54,43 @@ Historical planning docs now live in `docs/archive/`.
 
 ## Architecture Decisions
 
-### 1. Foundation is already here
+### 1. Foundation Is Already Here
 
-The repo already has the schema, route handlers, admin shell, storefront catalog, auth, and DB-backed services. We are not planning a new foundation phase.
+The repo already has the schema, route handlers, admin shell, storefront catalog, auth, checkout entry point, Stripe webhook path, collections, and DB-backed services.
 
-### 2. Checkout creates the payment intent first
+Do not plan another foundation phase unless source inspection proves the implementation is broken.
 
-The browser starts checkout by calling `POST /api/checkout/create`. That route validates live variant data, recalculates totals, and creates the Stripe PaymentIntent plus a `CheckoutSession` row.
+### 2. Checkout Creates The Payment Intent First
 
-### 3. Verified webhooks create the order
+The browser starts checkout by calling `POST /api/checkout/create`.
 
-Orders, payments, inventory decrements, and order events are created only after Stripe confirms success through `POST /api/webhooks/stripe`. Browser redirects are not the source of truth.
+That route should:
 
-### 4. Integrations are explicit, not magical
+- validate live variant data
+- validate inventory
+- recompute totals server-side
+- create the Stripe PaymentIntent
+- persist a `CheckoutSession`
 
-The repo uses a typed internal event map plus a static server-side integration registry. That is the right intermediate step before a public plugin platform.
+### 3. Verified Webhooks Create The Order
 
-### 5. The admin stays handcrafted
+Orders, payments, inventory decrements, and order events are created only after Stripe confirms success through `POST /api/webhooks/stripe`.
+
+Browser redirects are not the source of truth.
+
+### 4. Integrations Are Explicit, Not Magical
+
+The repo uses a typed internal event map plus a static server-side integration registry.
+
+That is the right intermediate step before a public plugin platform.
+
+### 5. The Admin Stays Handcrafted
 
 Code generation can help later with scaffolding, but the current admin is already product-specific and useful. Replacing it now would create churn instead of value.
 
 ## Phase Plan
 
-## Phase 1 - Finish the commerce loop
+## Phase 1 - Finish The Commerce Loop
 
 Status: shipped foundation, still expanding
 
@@ -84,14 +107,14 @@ Status: shipped foundation, still expanding
 - inventory decrement only after verified payment success
 - order confirmation email trigger after `order.paid`
 
-### Remaining follow-up
+### Remaining Follow-Up
 
 - discount application inside checkout totals
 - more complete tax logic
 - configurable shipping zones and rates
 - refund and return flows connected to payments and inventory
 
-## Phase 2 - Add internal extension seams
+## Phase 2 - Add Internal Extension Seams
 
 Status: shipped initial implementation
 
@@ -101,9 +124,9 @@ Status: shipped initial implementation
 - server-only dispatcher in `src/server/events/dispatcher.ts`
 - static integration registry in `src/server/integrations/registry.ts`
 - first-party consumers for logging and confirmation email delivery
-- event emission from product, order, fulfillment, and failed checkout flows
+- event emission from product, order, fulfillment, and failed-checkout flows
 
-### Next expansion
+### Next Expansion
 
 - outbound merchant webhooks
 - audit log consumers
@@ -114,7 +137,7 @@ Status: shipped initial implementation
 
 Status: active now
 
-### Current slice shipped
+### Current Slice Shipped
 
 - collection service layer and storefront-safe collection DTOs
 - summary and detail collection query split for admin and storefront reads
@@ -134,7 +157,7 @@ Status: active now
 - add automated coverage for the revenue path
 - package the strongest developer-first proof points for launch and marketing
 
-### Phase 3 product work
+### Phase 3 Product Work
 
 - collections admin CRUD with product assignment and ordering
 - storefront collection listing and collection detail pages
@@ -142,7 +165,7 @@ Status: active now
 - reusable storefront content blocks and branding driven further by settings and tokens
 - clearer failed-payment, empty-state, and out-of-stock handling around checkout
 
-### Phase 3 kickoff notes
+### Phase 3 Kickoff Notes
 
 - the Prisma `Collection` and `CollectionProduct` models already exist, so this phase starts at the service and UI layer rather than schema discovery
 - seed data already contains starter collections, which is useful for UI development and storefront demos
@@ -150,7 +173,7 @@ Status: active now
 - collection list surfaces now use summary payloads while nested product data is reserved for detail reads
 - the recommended build order is collections first, then checkout pricing hardening, then storefront merchandising, then automated coverage
 
-### Planned interfaces
+### Planned Interfaces
 
 - `GET /api/collections`
 - `POST /api/collections`
@@ -164,7 +187,7 @@ Status: active now
 - service-layer collection assignment and ordering logic
 - checkout pricing interfaces that support discounts, shipping, and tax evolution without moving logic client-side
 
-### Acceptance checks
+### Acceptance Checks
 
 - a merchant can create, edit, delete, and assign products to collections
 - storefront collection routes expose only storefront-safe data
@@ -174,12 +197,12 @@ Status: active now
 - build and typecheck stay green after collections and pricing changes
 - the launch narrative is backed by working product proof, not roadmap-only claims
 
-### Explicit follow-up gaps
+### Explicit Follow-Up Gaps
 
 - collection publish and unpublish semantics are still pending
 - automated coverage for collections and the checkout plus webhook path is still pending
 
-## Phase 4 - Extract platform pieces
+## Phase 4 - Extract Platform Pieces
 
 Status: later, after the current app is stable
 
@@ -190,11 +213,11 @@ Status: later, after the current app is stable
 - use code generation as scaffolding for new resources, not as a replacement for the existing product and order flows
 - keep the main deployable app as the proving ground until extraction is justified by real reuse
 
-## Phase 5 - Public plugin platform
+## Phase 5 - Public Plugin Platform
 
 Status: deferred until after Phase 3 and Phase 4 prove out
 
-### Requirements before we market this
+### Requirements Before We Market This
 
 - versioned plugin manifest
 - stable supported event contract
@@ -207,9 +230,11 @@ Status: deferred until after Phase 3 and Phase 4 prove out
 
 Validated in this repo on April 22, 2026:
 
-- `npx prisma generate`
-- `npx tsc --noEmit`
-- `npm run build`
+```bash
+npx prisma generate
+npx tsc --noEmit
+npm run build
+```
 
 Next automated coverage priorities:
 
@@ -218,17 +243,19 @@ Next automated coverage priorities:
 - invalid webhook signature rejection
 - stock exhaustion and race-condition handling
 - collection assignment and storefront collection visibility
+- collection auth and storefront-safe DTO exposure
 
 ## Marketing Positioning
 
 Near-term marketing should emphasize:
 
 - developer-first commerce engine
+- self-hostable app foundation
 - real admin plus real storefront
-- Stripe-ready checkout architecture
-- collections and merchandising that are powered by the same app developers extend
+- Stripe-backed checkout architecture
+- collections and merchandising powered by the same app developers extend
 - typed server-side extension seams
-- self-hostable app with Prisma and Postgres at the core
+- Prisma and Postgres at the core
 
 Near-term marketing should not emphasize:
 
@@ -237,7 +264,7 @@ Near-term marketing should not emphasize:
 - multi-tenant platform
 - theme marketplace
 
-### Phase 3 launch targets
+### Phase 3 Launch Targets
 
 - demoable collection-driven storefront browsing
 - a clearer homepage and shop merchandising story

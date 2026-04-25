@@ -1,41 +1,48 @@
 # Doopify Hardening Status
 
-> Last updated: April 22, 2026
-> Companion to `features-roadmap.md`. This file tracks the trust and correctness work that now underpins checkout, Stripe webhooks, and internal integrations.
+> Security, correctness, and operational readiness for the commerce loop.
+>
+> Documentation refresh: April 25, 2026  
+> Last repo verification recorded in active docs: April 22, 2026  
+> Companion to `STATUS.md` and `features-roadmap.md`.
+
+## Why Hardening Matters
+
+Doopify is now a real commerce app. The most important risks are no longer visual polish. They are payment correctness, inventory correctness, auth/session integrity, safe public data exposure, and operational debuggability.
 
 ## Closed In This Pass
 
-### Auth and session integrity
+### Auth And Session Integrity
 
-- `src/lib/env.ts` now validates critical environment variables up front
-- JWT validation now checks the backing `Session` record, so logout and session revocation are real
+- `src/lib/env.ts` validates critical environment variables up front
+- JWT validation checks the backing `Session` record, so logout and session revocation are real
 - login is rate-limited by IP plus email
-- shared cookie parsing now lives in `src/lib/cookies.ts` instead of ad hoc regexes
+- shared cookie parsing lives in `src/lib/cookies.ts` instead of ad hoc regexes
 
-### Route protection
+### Route Protection
 
-- `src/proxy.ts` now uses boundary-safe public-prefix matching
+- `src/proxy.ts` uses boundary-safe public-prefix matching
 - admin and private API protection is running through the active Next.js 16 proxy hook
-- the old idea of adding `src/middleware.ts` was intentionally not kept because Next 16 only allows one of `proxy.ts` or `middleware.ts`
+- the old idea of adding `src/middleware.ts` was intentionally not kept because the repo should not maintain both proxy and middleware flows
 
-### Media and public data safety
+### Media And Public Data Safety
 
 - SVG uploads are no longer accepted
 - upload MIME is verified from file bytes instead of trusting the browser-reported type
-- upload linking now verifies the target product before attaching media
-- storefront product APIs now return explicit public DTOs instead of raw Prisma payloads
+- upload linking verifies the target product before attaching media
+- storefront product APIs return explicit public DTOs instead of raw Prisma payloads
 - public storefront settings are exposed through a safe read-only endpoint
-- storefront collection APIs now split summary and detail payloads so list surfaces avoid nested product overfetching
+- storefront collection APIs split summary and detail payloads so list surfaces avoid nested product overfetching
 
-### Order and checkout correctness
+### Order And Checkout Correctness
 
 - order totals are recomputed server-side
 - checkout validates live variant pricing and inventory before creating the payment intent
 - orders are created only from verified Stripe webhook success
-- duplicate webhook deliveries are handled idempotently through the payment intent path
-- checkout failure state is persisted and surfaced on the success page polling flow
+- duplicate webhook deliveries are handled idempotently through the payment-intent path
+- checkout failure state is persisted and surfaced on the success-page polling flow
 
-### Internal extensibility without premature plugin complexity
+### Internal Extensibility Without Premature Plugin Complexity
 
 - typed internal events are in place
 - event handlers execute through a static registry instead of a runtime filesystem loader
@@ -45,13 +52,15 @@
 
 The repo passed these checks on April 22, 2026:
 
-- `npx prisma generate`
-- `npx tsc --noEmit`
-- `npm run build`
+```bash
+npx prisma generate
+npx tsc --noEmit
+npm run build
+```
 
 ## Remaining Hardening Work
 
-### High priority
+### High Priority
 
 - Add automated tests for checkout totals, webhook idempotency, invalid signatures, and inventory exhaustion
 - Keep pricing authority on the server as discounts, shipping logic, and tax handling evolve in Phase 3
@@ -59,7 +68,7 @@ The repo passed these checks on April 22, 2026:
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
 - Review and normalize production Postgres SSL settings so environments explicitly use `sslmode=verify-full`
 
-### Medium priority
+### Medium Priority
 
 - Extract the remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only while storefront collection reads stay public and read-only
@@ -72,6 +81,85 @@ The repo passed these checks on April 22, 2026:
 - Add customer-auth hardening when the customer account system exists
 - Add broader CSP and response-header hardening once external integrations and asset origins are finalized
 
+## Payment And Checkout Invariants
+
+These invariants should not be broken by future work:
+
+- the browser may start checkout
+- the server recalculates checkout totals
+- the server validates live variant pricing and inventory
+- the server creates and persists the checkout session
+- Stripe webhook success finalizes order creation
+- browser redirect success does not create the order
+- duplicate Stripe events do not create duplicate orders
+- inventory decrement happens only after verified payment success
+- failed checkout state is persisted and visible to the user
+
+## Pricing Hardening Target
+
+As discounts, shipping, and tax are added, create or preserve one pricing authority.
+
+Recommended ownership:
+
+```txt
+src/server/checkout/pricing.ts
+```
+
+The pricing service should own:
+
+- line validation
+- variant/product availability checks
+- subtotal
+- discount calculation
+- shipping calculation
+- tax calculation
+- total
+- currency
+- rounding
+- checkout snapshot shape
+
+Rules:
+
+- use integer minor units for money
+- never trust client-submitted totals
+- persist enough snapshot data to keep historical order truth accurate
+- keep browser display logic separate from server pricing authority
+
+## Inventory Hardening Target
+
+Inventory changes should be transaction-safe.
+
+The service should prove:
+
+- successful payment can decrement inventory
+- duplicate webhook delivery does not double-decrement
+- competing purchases cannot push stock negative
+- insufficient stock fails clearly
+- order/payment state remains consistent if inventory mutation fails
+
+## Webhook Hardening Target
+
+Webhook operations should become observable and replayable.
+
+Add durable provider-event tracking for:
+
+- provider
+- provider event id
+- event type
+- status
+- attempts
+- processed timestamp
+- last error
+- payload hash
+
+This enables:
+
+- duplicate detection
+- safe replay
+- failed-email debugging
+- duplicate-delivery debugging
+- support/admin visibility
+
 ## Explicit Non-Goals
 
 These ideas were intentionally rejected for this phase:
@@ -80,12 +168,15 @@ These ideas were intentionally rejected for this phase:
 - exposing Stripe under `/app/api/stripe/webhook/route.ts`
 - adding a root-level `fs` plus `require()` plugin loader
 - replacing the current admin with fully generated CRUD screens
+- treating payment redirects as order finalization
 
 ## Operational Notes
 
 - The correct public webhook endpoint is `POST /api/webhooks/stripe`
 - The browser may start checkout, but only Stripe webhook success finalizes order creation
 - Internal event handlers are allowed to fail without corrupting already-committed order or payment data
+- Media binary storage in Postgres is acceptable for local/current workflows but should move to object storage before heavier production usage
+- In-memory rate limiting must move to a shared store before multi-instance deployment
 
 ## Exit Criteria For The Next Hardening Pass
 
@@ -95,3 +186,4 @@ The next hardening milestone is complete when:
 - new collection APIs are covered by DTO and auth expectations
 - failed webhook deliveries can be replayed safely
 - operational logging is good enough to debug a missing email or duplicate delivery without inspecting the database manually
+- production database SSL behavior is explicit and documented
