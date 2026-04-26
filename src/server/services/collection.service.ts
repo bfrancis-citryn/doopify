@@ -15,6 +15,7 @@ const storefrontVisibleProductWhere: Prisma.ProductWhereInput = {
 }
 
 const storefrontVisibleCollectionWhere: Prisma.CollectionWhereInput = {
+  isPublished: true,
   products: {
     some: {
       product: storefrontVisibleProductWhere,
@@ -32,6 +33,7 @@ const collectionAdminSummarySelect = {
   handle: true,
   description: true,
   sortOrder: true,
+  isPublished: true,
   updatedAt: true,
   _count: {
     select: {
@@ -226,6 +228,7 @@ function toAdminCollectionSummary(collection: any) {
     handle: collection.handle,
     description: collection.description,
     sortOrder: collection.sortOrder,
+    isPublished: collection.isPublished,
     updatedAt: collection.updatedAt,
     productCount: collection._count?.products ?? 0,
   }
@@ -240,6 +243,7 @@ function toAdminCollection(collection: any) {
     imageUrl: collection.imageUrl,
     sortOrder: collection.sortOrder,
     isAutomated: collection.isAutomated,
+    isPublished: collection.isPublished,
     conditions: collection.conditions,
     createdAt: collection.createdAt,
     updatedAt: collection.updatedAt,
@@ -456,6 +460,7 @@ export async function createCollection(data: {
   description?: string
   imageUrl?: string
   sortOrder?: string
+  isPublished?: boolean
   productIds?: string[]
 }) {
   const handle = await ensureUniqueHandle(slugify(data.handle || data.title))
@@ -468,6 +473,7 @@ export async function createCollection(data: {
         description: data.description,
         imageUrl: data.imageUrl,
         sortOrder: normalizeSortOrder(data.sortOrder),
+        isPublished: data.isPublished ?? true,
       },
       select: {
         id: true,
@@ -497,6 +503,7 @@ export async function updateCollection(
     description: string
     imageUrl: string
     sortOrder: string
+    isPublished: boolean
     productIds: string[]
   }>
 ) {
@@ -520,6 +527,10 @@ export async function updateCollection(
 
   if (typeof data.sortOrder === 'string') {
     nextData.sortOrder = normalizeSortOrder(data.sortOrder)
+  }
+
+  if (typeof data.isPublished === 'boolean') {
+    nextData.isPublished = data.isPublished
   }
 
   const collection = await prisma.$transaction(async (tx) => {
@@ -576,9 +587,10 @@ export async function getStorefrontCollectionSummaries() {
 }
 
 export async function getStorefrontCollectionByHandle(handle: string) {
-  const collection = await prisma.collection.findUnique({
+  const collection = await prisma.collection.findFirst({
     where: {
       handle,
+      ...storefrontVisibleCollectionWhere,
     },
     include: storefrontCollectionDetailInclude,
   })

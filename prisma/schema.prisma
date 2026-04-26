@@ -255,6 +255,7 @@ model Collection {
   imageUrl    String?
   sortOrder   String              @default("MANUAL")
   isAutomated Boolean             @default(false)
+  isPublished Boolean             @default(true)
   conditions  Json?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt

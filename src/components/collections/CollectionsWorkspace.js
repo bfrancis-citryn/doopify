@@ -12,6 +12,7 @@ const EMPTY_DRAFT = {
   description: '',
   imageUrl: '',
   sortOrder: 'MANUAL',
+  isPublished: true,
   productIds: [],
 };
 
@@ -38,6 +39,7 @@ function toDraft(collection) {
     description: collection.description || '',
     imageUrl: collection.imageUrl || '',
     sortOrder: collection.sortOrder || 'MANUAL',
+    isPublished: collection.isPublished !== false,
     productIds: collection.productIds || [],
   };
 }
@@ -49,6 +51,7 @@ function toCollectionSummary(collection) {
     handle: collection.handle || '',
     description: collection.description || '',
     sortOrder: collection.sortOrder || 'MANUAL',
+    isPublished: collection.isPublished !== false,
     productCount: collection.productCount || 0,
     updatedAt: collection.updatedAt || null,
   };
@@ -295,6 +298,7 @@ export default function CollectionsWorkspace() {
       description: draft.description.trim() || undefined,
       imageUrl: draft.imageUrl.trim() || undefined,
       sortOrder: draft.sortOrder,
+      isPublished: draft.isPublished,
       productIds: draft.productIds,
     };
 
@@ -422,6 +426,7 @@ export default function CollectionsWorkspace() {
                     <p>{collection.description || 'No collection description yet.'}</p>
                     <div className={styles.collectionCardMeta}>
                       <span>/{collection.handle}</span>
+                      <span>{collection.isPublished ? 'Published' : 'Unpublished'}</span>
                       <span>{collection.sortOrder.replace('_', ' ')}</span>
                     </div>
                   </button>
@@ -510,6 +515,18 @@ export default function CollectionsWorkspace() {
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label className={styles.publishField}>
+              <input
+                checked={draft.isPublished}
+                onChange={(event) => updateDraft('isPublished', event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <strong>Published</strong>
+                <small>Show this collection on the public storefront.</small>
+              </span>
             </label>
 
             <label className={`${styles.field} ${styles.fieldWide}`}>

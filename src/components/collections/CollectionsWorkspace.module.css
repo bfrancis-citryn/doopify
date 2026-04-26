@@ -223,10 +223,43 @@
   gap: 0.45rem;
 }
 
-.field span {
+.field span,
+.publishField span {
   color: var(--slate-300);
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.publishField {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 0.8rem 0.95rem;
+}
+
+.publishField input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--primary);
+}
+
+.publishField span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.publishField strong {
+  color: var(--slate-50);
+}
+
+.publishField small {
+  color: var(--slate-400);
+  font-weight: 400;
 }
 
 .field input,

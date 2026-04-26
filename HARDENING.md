@@ -2,8 +2,8 @@
 
 > Security, correctness, and operational readiness for the commerce loop.
 >
-> Documentation refresh: April 25, 2026  
-> Last repo verification recorded in active docs: April 22, 2026  
+> Documentation refresh: April 26, 2026  
+> Last repo verification recorded in active docs: April 26, 2026  
 > Companion to `STATUS.md` and `features-roadmap.md`.
 
 ## Why Hardening Matters
@@ -33,14 +33,17 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 - storefront product APIs return explicit public DTOs instead of raw Prisma payloads
 - public storefront settings are exposed through a safe read-only endpoint
 - storefront collection APIs split summary and detail payloads so list surfaces avoid nested product overfetching
+- unpublished collections are excluded from storefront collection reads
 
 ### Order And Checkout Correctness
 
 - order totals are recomputed server-side
+- checkout pricing now flows through `src/server/checkout/pricing.ts`
 - checkout validates live variant pricing and inventory before creating the payment intent
 - orders are created only from verified Stripe webhook success
 - duplicate webhook deliveries are handled idempotently through the payment-intent path
 - checkout failure state is persisted and surfaced on the success-page polling flow
+- fast automated tests cover checkout pricing, checkout creation, duplicate payment-intent completion, and invalid webhook signature rejection
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
@@ -50,11 +53,12 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 
 ## Verified
 
-The repo passed these checks on April 22, 2026:
+The repo passed these checks on April 26, 2026:
 
 ```bash
-npx prisma generate
+npm run db:generate
 npx tsc --noEmit
+npm run test
 npm run build
 ```
 
@@ -62,9 +66,9 @@ npm run build
 
 ### High Priority
 
-- Add automated tests for checkout totals, webhook idempotency, invalid signatures, and inventory exhaustion
-- Keep pricing authority on the server as discounts, shipping logic, and tax handling evolve in Phase 3
-- Add automated checks for collection CRUD, storefront-safe collection DTO exposure, and collection mutation performance regressions
+- Expand automated tests for checkout validation failures, inventory exhaustion, and real-DB idempotency/race-condition behavior
+- Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve in Phase 3
+- Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
 - Review and normalize production Postgres SSL settings so environments explicitly use `sslmode=verify-full`
 
@@ -182,8 +186,8 @@ These ideas were intentionally rejected for this phase:
 
 The next hardening milestone is complete when:
 
-- checkout and webhook flows have automated coverage
-- new collection APIs are covered by DTO and auth expectations
+- checkout and webhook flows have broader automated coverage, including real-DB inventory behavior
+- new collection APIs are covered by DTO, publish-state, and auth expectations
 - failed webhook deliveries can be replayed safely
 - operational logging is good enough to debug a missing email or duplicate delivery without inspecting the database manually
 - production database SSL behavior is explicit and documented

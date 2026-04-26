@@ -50,6 +50,9 @@ Already available:
 - collection merchandising on homepage/shop surfaces
 - targeted collection revalidation
 - local admin collection mutation state updates
+- collection publish/unpublish semantics with storefront filtering
+- centralized checkout pricing service in `src/server/checkout/pricing.ts`
+- fast automated tests for pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
 
 ## Phase 3 Build Order
 
@@ -66,7 +69,7 @@ Finish and verify:
 - view collection detail pages
 - protect admin-only mutations
 - expose only storefront-safe DTOs publicly
-- add publish/unpublish semantics
+- verify publish/unpublish behavior across admin and storefront
 
 Acceptance:
 
@@ -77,7 +80,7 @@ Acceptance:
 
 ### 2. Harden Checkout Pricing
 
-Centralize pricing so discounts, shipping, and tax do not scatter across UI and route handlers.
+Extend the centralized pricing service so discounts, shipping, and tax do not scatter across UI and route handlers.
 
 Pricing service should own:
 
@@ -119,18 +122,15 @@ Acceptance:
 - operators can debug what happened
 - failures do not corrupt order/payment/inventory data
 
-### 4. Add Automated Coverage
+### 4. Expand Automated Coverage
 
 Prioritize tests around revenue and trust boundaries:
 
-- checkout creation success
 - checkout validation failures
-- invalid Stripe webhook signature
-- duplicate webhook event
 - inventory exhaustion
 - collection admin auth
-- storefront-safe collection DTOs
 - collection assignment behavior
+- real-DB idempotency and race-condition behavior
 
 Acceptance:
 

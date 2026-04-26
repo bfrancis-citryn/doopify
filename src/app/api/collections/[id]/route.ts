@@ -21,6 +21,7 @@ const updateSchema = z.object({
   description: z.string().optional(),
   imageUrl: z.union([z.string().url(), z.literal('')]).optional(),
   sortOrder: z.enum(COLLECTION_SORT_VALUES).optional(),
+  isPublished: z.boolean().optional(),
   productIds: z.array(z.string().min(1)).optional(),
 })
 

@@ -2,8 +2,8 @@
 
 > Canonical status snapshot for developers, maintainers, and AI agents.
 >
-> Documentation refresh: April 25, 2026  
-> Last repo verification recorded in active docs: April 22, 2026  
+> Documentation refresh: April 26, 2026  
+> Last repo verification recorded in active docs: April 26, 2026  
 > Current active phase: **Phase 3 - Merchant Readiness And Storefront Differentiation**
 
 ## Why This File Exists
@@ -35,6 +35,7 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Protected admin application
 - Public storefront routes
 - DB-backed services for core admin/catalog workflows
+- Vitest-backed fast test harness with a gated integration-test entry point
 
 ### Auth And Session Integrity
 
@@ -59,6 +60,7 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - `/collections/[handle]`
 - Public storefront product reads
 - Public storefront collection reads
+- Public storefront collection reads exclude unpublished collections
 - Public storefront settings endpoint for branding-safe store data
 - Homepage and shop merchandising surfaces that can expose collections
 
@@ -71,6 +73,7 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Admin collection workspace at `/admin/collections`
 - Collection service layer
 - Collection assignment and ordering support
+- Collection publish/unpublish semantics
 - Local-state collection mutation updates instead of full workspace reloads
 
 ### Checkout And Payments
@@ -81,6 +84,7 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - `GET /api/checkout/status`
 - Checkout validates live variant data
 - Checkout recalculates totals server-side
+- Checkout pricing is centralized in `src/server/checkout/pricing.ts`
 - Checkout validates inventory before creating payment intent
 - Checkout session persistence
 - Paid and failed status tracking
@@ -122,14 +126,15 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 - Homepage and shop merchandising updated to surface collections
 - Admin collection mutations patch local state instead of reloading the whole workspace
 - Collection revalidation is targeted to storefront pages instead of broad API refreshes
+- Collection publish/unpublish semantics are backed by Prisma and storefront filtering
+- Fast automated tests cover checkout pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
 
 ### Phase 3 Current Priorities
 
-1. Automated coverage for the revenue path
-2. Checkout pricing hardening for discounts, shipping, and tax
-3. Collection publish/unpublish semantics
-4. Storefront merchandising and branding improvements
-5. Launch proof points for the developer-first story
+1. Expand automated revenue-path coverage, especially inventory exhaustion and real-DB race/idempotency checks
+2. Build discount, shipping, and tax behavior through the centralized checkout pricing service
+3. Storefront merchandising and branding improvements
+4. Launch proof points for the developer-first story
 
 ### Phase 3 Acceptance Checks
 
@@ -145,15 +150,12 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 ### Highest Priority
 
-- Automated tests for checkout creation success and validation failures
-- Automated tests for duplicate Stripe webhook delivery idempotency
-- Automated tests for invalid webhook signature rejection
+- Automated tests for checkout validation failures
 - Automated tests for stock exhaustion and race-condition handling
-- Automated tests for collection assignment and storefront collection visibility
+- Automated tests for collection assignment and admin-only collection mutations
 - Discount application inside checkout totals
 - Configurable shipping zones and rates
 - More complete tax logic
-- Collection publish/unpublish semantics
 
 ### Medium Priority
 
@@ -179,9 +181,9 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 ### High Priority
 
-- Add automated tests for checkout totals, webhook idempotency, invalid signatures, and inventory exhaustion
-- Keep pricing authority on the server as discounts, shipping logic, and tax handling evolve
-- Add automated checks for collection CRUD, storefront-safe collection DTO exposure, and collection mutation performance regressions
+- Expand automated tests for checkout validation failures, inventory exhaustion, and real-DB idempotency/race-condition behavior
+- Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve
+- Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
 - Review and normalize production Postgres SSL settings so environments explicitly use `sslmode=verify-full`
 
@@ -219,11 +221,12 @@ Do not market or build around these yet:
 
 ## Verification History
 
-Validated in this repo on April 22, 2026:
+Validated in this repo on April 26, 2026:
 
 ```bash
-npx prisma generate
+npm run db:generate
 npx tsc --noEmit
+npm run test
 npm run build
 ```
 

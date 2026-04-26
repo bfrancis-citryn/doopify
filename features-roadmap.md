@@ -2,8 +2,8 @@
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Documentation refresh: April 25, 2026  
-> Last repo verification recorded in active docs: April 22, 2026  
+> Documentation refresh: April 26, 2026  
+> Last repo verification recorded in active docs: April 26, 2026  
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -43,6 +43,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Collection service layer and storefront-safe collection DTOs
 - Admin collection workspace at `/admin/collections`
 - Storefront collection browsing at `/collections` and `/collections/[handle]`
+- Collection publish/unpublish semantics with storefront filtering
+- Centralized checkout pricing service for subtotal, shipping, tax, discount, and total calculation
+- Vitest fast test harness covering pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
 
 ### Explicitly Deferred
 
@@ -102,6 +105,7 @@ Status: shipped foundation, still expanding
 - `GET /api/checkout/status`
 - live variant and inventory validation during checkout creation
 - server-side pricing recomputation before payment intent creation
+- centralized checkout pricing service in `src/server/checkout/pricing.ts`
 - checkout session persistence with paid and failed state tracking
 - idempotent order creation keyed off Stripe payment intent
 - inventory decrement only after verified payment success
@@ -148,6 +152,8 @@ Status: active now
 - homepage and shop merchandising updated to surface collections
 - admin collection mutations now patch local state instead of reloading the entire workspace
 - collection revalidation is targeted to storefront pages instead of broad API refreshes
+- collection publish/unpublish semantics with unpublished collections hidden from storefront reads
+- fast automated coverage for checkout pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
 
 ### Goals
 
@@ -171,7 +177,7 @@ Status: active now
 - seed data already contains starter collections, which is useful for UI development and storefront demos
 - `getStorefrontProducts()` already accepts `collectionHandle`, and collection-aware storefront filtering is now in place
 - collection list surfaces now use summary payloads while nested product data is reserved for detail reads
-- the recommended build order is collections first, then checkout pricing hardening, then storefront merchandising, then automated coverage
+- the recommended build order is collections first, then checkout pricing hardening, then storefront merchandising, with automated coverage expanded throughout
 
 ### Planned Interfaces
 
@@ -199,8 +205,7 @@ Status: active now
 
 ### Explicit Follow-Up Gaps
 
-- collection publish and unpublish semantics are still pending
-- automated coverage for collections and the checkout plus webhook path is still pending
+- automated coverage should expand to checkout validation failures, inventory exhaustion, admin-only collection mutations, and real-DB idempotency/race-condition behavior
 
 ## Phase 4 - Extract Platform Pieces
 
@@ -228,22 +233,21 @@ Status: deferred until after Phase 3 and Phase 4 prove out
 
 ## Verification And Testing
 
-Validated in this repo on April 22, 2026:
+Validated in this repo on April 26, 2026:
 
 ```bash
-npx prisma generate
+npm run db:generate
 npx tsc --noEmit
+npm run test
 npm run build
 ```
 
 Next automated coverage priorities:
 
-- checkout creation success and validation failures
-- duplicate Stripe webhook delivery idempotency
-- invalid webhook signature rejection
+- checkout validation failures
 - stock exhaustion and race-condition handling
 - collection assignment and storefront collection visibility
-- collection auth and storefront-safe DTO exposure
+- collection auth and admin-only mutation coverage
 
 ## Marketing Positioning
 

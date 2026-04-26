@@ -3,6 +3,7 @@ import { Prisma, type CheckoutSessionStatus } from '@prisma/client'
 import { createStripePaymentIntent, type StripePaymentIntent } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import { buildCheckoutPricing } from '@/server/checkout/pricing'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
 import { createOrder, getOrderByPaymentIntentId } from '@/server/services/order.service'
 import { getStoreSettings } from '@/server/services/settings.service'
@@ -38,10 +39,6 @@ type CheckoutPayload = {
   }>
   shippingAddress: CheckoutAddress
   billingAddress: CheckoutAddress
-}
-
-function roundCurrency(value: number) {
-  return Number(value.toFixed(2))
 }
 
 function normalizeEmail(email: string) {
@@ -110,23 +107,6 @@ async function resolveLineItems(items: CheckoutItemInput[]) {
   })
 }
 
-function buildPricing(items: Array<{ price: number; quantity: number }>, shippingThreshold?: number | null) {
-  const subtotal = roundCurrency(items.reduce((sum, item) => sum + item.price * item.quantity, 0))
-  const shippingAmount =
-    shippingThreshold != null && subtotal >= shippingThreshold ? 0 : subtotal > 0 ? 9.99 : 0
-  const taxAmount = 0
-  const discountAmount = 0
-  const total = roundCurrency(subtotal + shippingAmount + taxAmount - discountAmount)
-
-  return {
-    subtotal,
-    shippingAmount,
-    taxAmount,
-    discountAmount,
-    total,
-  }
-}
-
 async function resolveCheckoutCustomer(payload: CheckoutPayload) {
   let customer = await getCustomerByEmail(payload.email)
 
@@ -169,7 +149,7 @@ export async function createCheckoutPaymentIntent(input: {
   const lineItems = await resolveLineItems(input.items)
   const shippingAddress = normalizeAddress(input.shippingAddress)
   const billingAddress = normalizeAddress(input.billingAddress ?? input.shippingAddress)
-  const pricing = buildPricing(lineItems, store?.shippingThreshold)
+  const pricing = buildCheckoutPricing(lineItems, store?.shippingThreshold)
   const currency = (store?.currency || 'USD').toUpperCase()
   const customer = await getCustomerByEmail(normalizedEmail)
 
