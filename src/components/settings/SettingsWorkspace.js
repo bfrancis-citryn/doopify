@@ -100,6 +100,10 @@ export default function SettingsWorkspace() {
             {!loading && !error && activeSection === 'shipping' ? (
               <div className={styles.formGrid}>
                 <label className={styles.field}><span>Free shipping threshold</span><input className={styles.input} onChange={event => updateSettings({ freeShippingThreshold: event.target.value })} value={settings.freeShippingThreshold} /></label>
+                <label className={styles.field}><span>Domestic shipping rate</span><input className={styles.input} onChange={event => updateSettings({ domesticShippingRate: event.target.value })} value={settings.domesticShippingRate} /></label>
+                <label className={styles.field}><span>International shipping rate</span><input className={styles.input} onChange={event => updateSettings({ internationalShippingRate: event.target.value })} value={settings.internationalShippingRate} /></label>
+                <label className={styles.field}><span>Domestic tax rate (%)</span><input className={styles.input} onChange={event => updateSettings({ domesticTaxRate: event.target.value })} value={settings.domesticTaxRate} /></label>
+                <label className={styles.field}><span>International tax rate (%)</span><input className={styles.input} onChange={event => updateSettings({ internationalTaxRate: event.target.value })} value={settings.internationalTaxRate} /></label>
                 <label className={styles.field}><span>Low inventory alert</span><input className={styles.input} onChange={event => updateSettings({ lowInventoryAlert: event.target.value })} value={settings.lowInventoryAlert} /></label>
               </div>
             ) : null}

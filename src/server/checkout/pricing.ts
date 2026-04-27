@@ -45,6 +45,11 @@ type CheckoutPricingShippingRates = {
   international: number
 }
 
+type CheckoutPricingTaxRates = {
+  domestic: number
+  international: number
+}
+
 type CheckoutPricingTaxRule = {
   country: string
   province?: string
@@ -179,12 +184,20 @@ function calculateShippingAmount(input: {
 
 function resolveTaxRate(input: {
   shippingAddress?: CheckoutPricingAddress
+  storeCountry?: string | null
+  taxRates?: CheckoutPricingTaxRates
   taxRules: CheckoutPricingTaxRule[]
 }) {
   const destinationCountry = normalizeCountry(input.shippingAddress?.country)
+  const storeCountry = normalizeCountry(input.storeCountry)
   const destinationProvince = normalizeProvince(input.shippingAddress?.province)
   if (!destinationCountry) {
     return 0
+  }
+
+  if (input.taxRates) {
+    const isInternational = destinationCountry && storeCountry && destinationCountry !== storeCountry
+    return isInternational ? input.taxRates.international : input.taxRates.domestic
   }
 
   const provinceRule = input.taxRules.find(
@@ -211,6 +224,7 @@ export function buildCheckoutPricing(
     shippingAddress?: CheckoutPricingAddress
     storeCountry?: string | null
     shippingRates?: CheckoutPricingShippingRates
+    taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
     now?: Date
   } = {}
@@ -219,6 +233,7 @@ export function buildCheckoutPricing(
     items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0)
   )
   const shippingRates = options.shippingRates ?? DEFAULT_SHIPPING_RATES
+  const taxRates = options.taxRates
   const taxRules = options.taxRules ?? DEFAULT_TAX_RULES
   const shippingAmount = calculateShippingAmount({
     subtotal,
@@ -251,6 +266,8 @@ export function buildCheckoutPricing(
       : subtotal
   const taxRate = resolveTaxRate({
     shippingAddress: options.shippingAddress,
+    storeCountry: options.storeCountry,
+    taxRates,
     taxRules,
   })
   const taxAmount = roundCurrency(taxableSubtotal * taxRate)

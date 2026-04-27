@@ -120,6 +120,10 @@ model Store {
   postalCode        String?
   country           String?
   shippingThreshold Float?
+  shippingDomesticRate Float   @default(9.99)
+  shippingInternationalRate Float @default(19.99)
+  domesticTaxRate   Float   @default(0.07)
+  internationalTaxRate Float @default(0.0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

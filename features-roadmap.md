@@ -39,8 +39,10 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized pricing service
 - Baseline destination-aware shipping zone rates and tax rules in centralized pricing
+- Settings-backed domestic/international shipping and tax rates flowing through centralized pricing
 - Discount applications and usage counts created only after verified paid order creation succeeds
 - Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
+- Admin/API webhook replay tooling on top of delivery logs (`/api/webhook-deliveries` and `/api/webhook-deliveries/[id]/replay`)
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
 - Public storefront settings endpoint for branding-safe store data
@@ -161,7 +163,9 @@ Status: active now
 - collection publish/unpublish semantics with unpublished collections hidden from storefront reads
 - checkout-native code discounts with server-owned validation and persisted paid-order applications
 - baseline destination-aware shipping/tax pricing rules in the server-owned checkout pricing authority
+- settings-backed shipping/tax configuration consumed by checkout pricing
 - durable webhook delivery logging in `POST /api/webhooks/stripe` with hashed payload tracking and delivery status transitions
+- replay API + admin visibility workspace for webhook deliveries (`/admin/webhooks`)
 - fast automated coverage for checkout pricing, checkout discount codes, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
 - executed real-DB checkout/inventory integration coverage for paid checkout, duplicate payment-intent idempotency, competing duplicate completions, insufficient stock, and paid-only/idempotent discount usage
 - a real-DB checkout run exposed and fixed a concurrent customer creation race in payment-intent completion
@@ -188,7 +192,7 @@ Status: active now
 - seed data already contains starter collections, which is useful for UI development and storefront demos
 - `getStorefrontProducts()` already accepts `collectionHandle`, and collection-aware storefront filtering is now in place
 - collection list surfaces now use summary payloads while nested product data is reserved for detail reads
-- the recommended build order is now broader real-DB race coverage, configurable shipping/tax refinement, webhook replay tooling, and storefront merchandising polish
+- the recommended build order is now broader real-DB race coverage, deeper shipping/tax refinement, automated webhook retries/support diagnostics, and storefront merchandising polish
 
 ### Planned Interfaces
 

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 
+import { Prisma } from '@prisma/client'
 import type { WebhookDeliveryStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
@@ -7,6 +8,65 @@ import { prisma } from '@/lib/prisma'
 function normalizeProviderEventId(providerEventId: string | undefined, payloadHash: string) {
   const normalized = String(providerEventId || '').trim()
   return normalized || `unknown:${payloadHash.slice(0, 24)}`
+}
+
+export async function getWebhookDeliveries(params: {
+  provider?: string
+  status?: WebhookDeliveryStatus
+  eventType?: string
+  search?: string
+  page?: number
+  pageSize?: number
+}) {
+  const {
+    provider,
+    status,
+    eventType,
+    search,
+    page = 1,
+    pageSize = 20,
+  } = params
+  const trimmedSearch = search?.trim()
+
+  const where: Prisma.WebhookDeliveryWhereInput = {
+    ...(provider ? { provider } : {}),
+    ...(status ? { status } : {}),
+    ...(eventType ? { eventType } : {}),
+    ...(trimmedSearch
+      ? {
+          OR: [
+            { providerEventId: { contains: trimmedSearch, mode: 'insensitive' } },
+            { lastError: { contains: trimmedSearch, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  }
+
+  const [deliveries, total] = await Promise.all([
+    prisma.webhookDelivery.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.webhookDelivery.count({ where }),
+  ])
+
+  return {
+    deliveries,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  }
+}
+
+export async function getWebhookDeliveryById(id: string) {
+  return prisma.webhookDelivery.findUnique({
+    where: { id },
+  })
 }
 
 export function hashWebhookPayload(payload: string) {

@@ -86,6 +86,25 @@ export async function createStripePaymentIntent(input: {
   return stripeRequest<StripePaymentIntent>('/payment_intents', body)
 }
 
+export async function getStripeEvent(eventId: string) {
+  const response = await fetch(`https://api.stripe.com/v1/events/${encodeURIComponent(eventId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${getStripeSecretKey()}`,
+    },
+    cache: 'no-store',
+  })
+
+  const payload = await response.json()
+  if (!response.ok) {
+    const message =
+      payload?.error?.message || payload?.error?.code || `Stripe request failed with status ${response.status}`
+    throw new Error(message)
+  }
+
+  return payload as StripeWebhookEvent<StripePaymentIntent>
+}
+
 function secureCompare(left: string, right: string) {
   const leftBuffer = Buffer.from(left, 'utf8')
   const rightBuffer = Buffer.from(right, 'utf8')

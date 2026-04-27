@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/media', label: 'Media', icon: 'photo_library' },
   { href: '/customers', label: 'Customers', icon: 'groups' },
   { href: '/discounts', label: 'Discounts', icon: 'sell' },
+  { href: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
   { href: '/analytics', label: 'Analytics', icon: 'analytics' },
 ];
 

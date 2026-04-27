@@ -18,11 +18,20 @@ const DEFAULT_SETTINGS = {
   defaultLocation: 'Main warehouse',
   shippingOrigin: 'Main warehouse',
   freeShippingThreshold: '100',
+  domesticShippingRate: '9.99',
+  internationalShippingRate: '19.99',
+  domesticTaxRate: '7',
+  internationalTaxRate: '0',
   senderEmail: 'hello@doopify.com',
   lowInventoryAlert: '5',
 };
 
-// ── Transform API Store → UI settings shape ───────────────────────────────────
+function parseNumberField(value) {
+  if (value == null || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function transformStore(store) {
   const address = [store.address1, store.city, store.province, store.country]
     .filter(Boolean)
@@ -41,10 +50,21 @@ function transformStore(store) {
     orderPrefix: 'DPY',
     defaultLocation: store.city || DEFAULT_SETTINGS.defaultLocation,
     shippingOrigin: store.city || DEFAULT_SETTINGS.shippingOrigin,
-    freeShippingThreshold: store.shippingThreshold?.toString() || '100',
+    freeShippingThreshold: store.shippingThreshold?.toString() || DEFAULT_SETTINGS.freeShippingThreshold,
+    domesticShippingRate:
+      store.shippingDomesticRate?.toString() || DEFAULT_SETTINGS.domesticShippingRate,
+    internationalShippingRate:
+      store.shippingInternationalRate?.toString() || DEFAULT_SETTINGS.internationalShippingRate,
+    domesticTaxRate:
+      store.domesticTaxRate != null
+        ? String(Number(store.domesticTaxRate) * 100)
+        : DEFAULT_SETTINGS.domesticTaxRate,
+    internationalTaxRate:
+      store.internationalTaxRate != null
+        ? String(Number(store.internationalTaxRate) * 100)
+        : DEFAULT_SETTINGS.internationalTaxRate,
     senderEmail: store.email || DEFAULT_SETTINGS.senderEmail,
     lowInventoryAlert: '5',
-    // Raw store fields for API updates
     _storeId: store.id,
   };
 }
@@ -69,14 +89,13 @@ export function SettingsProvider({ children }) {
         setLoading(false);
       }
     }
+
     fetchSettings();
   }, []);
 
   const updateSettings = useCallback(async patch => {
-    // Optimistic update
     setSettings(current => ({ ...current, ...patch }));
 
-    // Persist to API — map UI fields back to Store fields
     try {
       await fetch('/api/settings', {
         method: 'PATCH',
@@ -90,9 +109,17 @@ export function SettingsProvider({ children }) {
           logoUrl: patch.logoUrl,
           primaryColor: patch.brandPrimary,
           secondaryColor: patch.brandAccent,
-          shippingThreshold: patch.freeShippingThreshold
-            ? Number(patch.freeShippingThreshold)
-            : undefined,
+          shippingThreshold: parseNumberField(patch.freeShippingThreshold),
+          shippingDomesticRate: parseNumberField(patch.domesticShippingRate),
+          shippingInternationalRate: parseNumberField(patch.internationalShippingRate),
+          domesticTaxRate:
+            patch.domesticTaxRate != null && patch.domesticTaxRate !== ''
+              ? Number(patch.domesticTaxRate) / 100
+              : undefined,
+          internationalTaxRate:
+            patch.internationalTaxRate != null && patch.internationalTaxRate !== ''
+              ? Number(patch.internationalTaxRate) / 100
+              : undefined,
         }),
       });
     } catch (e) {

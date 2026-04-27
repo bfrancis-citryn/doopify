@@ -28,8 +28,10 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized server pricing path
 - Baseline destination-aware shipping zone rates and tax rules through the centralized server pricing path
+- Settings-backed domestic/international shipping and tax rates flowing through the centralized server pricing path
 - Discount applications and usage counts created only after verified paid order creation succeeds
 - Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
+- Admin/API webhook replay tooling and visibility at `/admin/webhooks`
 - Admin collection management at `/admin/collections`
 - Collection publish/unpublish semantics with unpublished collections hidden from storefront reads
 - Storefront-safe collection DTOs with summary/detail query separation
@@ -47,20 +49,20 @@ The current active product phase is **Phase 3: Merchant Readiness And Storefront
 Current priorities:
 
 1. Expand broader real-DB idempotency/race-condition coverage beyond duplicate payment-intent completion
-2. Refine shipping and tax behavior from baseline defaults into configurable merchant-grade rules
-3. Add webhook replay and support visibility on top of durable delivery logs
+2. Refine shipping and tax behavior beyond current settings-backed defaults into richer merchant-grade rules
+3. Add automated webhook retries and deeper support diagnostics on top of replay + durable delivery logs
 4. Stronger storefront merchandising and branding surfaces
 5. Operational hardening: shared rate limits, audit logs, and production Postgres SSL review
 
 ### Known follow-up gaps
 
 - More complete tax logic
-- Configurable shipping zones and rates beyond current baseline defaults
+- Richer shipping zones and rates beyond current settings-backed defaults
 - Discount-code storefront UX polish and rejected-code messaging
 - Refund and return flows connected to payments and inventory
 - More edge-case coverage for admin collection mutations and broader real-DB idempotency/race-condition behavior
 - Shared rate-limiting store before multi-instance deployment
-- Webhook delivery retry/replay tooling and support-facing visibility
+- Automated webhook retries and deeper support-facing diagnostics on top of existing replay tooling
 - Audit logging around settings changes, payment events, and fulfillment operations
 - Moving media binary storage out of Postgres into object storage/CDN later
 
@@ -85,6 +87,7 @@ Do not keep stale root-level planning files that contradict `STATUS.md`, `featur
 
 - `/orders`
 - `/admin/collections`
+- `/admin/webhooks`
 - `/draft-orders`
 - `/products`
 - `/media`
@@ -117,6 +120,8 @@ Do not keep stale root-level planning files that contradict `STATUS.md`, `featur
 - `/api/storefront/products`
 - `/api/storefront/collections`
 - `/api/storefront/settings`
+- `/api/webhook-deliveries`
+- `/api/webhook-deliveries/[id]/replay`
 - `/api/checkout/create`
 - `/api/checkout/status`
 - `/api/webhooks/stripe`

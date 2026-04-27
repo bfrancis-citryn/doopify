@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
     webhookDelivery: {
       upsert: vi.fn(),
       update: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+      findUnique: vi.fn(),
     },
   },
 }))
@@ -14,6 +17,8 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import {
+  getWebhookDeliveries,
+  getWebhookDeliveryById,
   hashWebhookPayload,
   markWebhookDeliveryFailed,
   markWebhookDeliveryProcessed,
@@ -126,6 +131,65 @@ describe('webhook delivery service', () => {
         processedAt: null,
         lastError: 'Stripe webhook signature verification failed',
       },
+    })
+  })
+
+  it('returns paginated webhook deliveries with filters', async () => {
+    mocks.prisma.webhookDelivery.findMany.mockResolvedValue([
+      {
+        id: 'delivery_1',
+        provider: 'stripe',
+        providerEventId: 'evt_1',
+      },
+    ])
+    mocks.prisma.webhookDelivery.count.mockResolvedValue(1)
+
+    const result = await getWebhookDeliveries({
+      provider: 'stripe',
+      status: 'FAILED',
+      eventType: 'payment_intent.succeeded',
+      search: 'evt_1',
+      page: 2,
+      pageSize: 5,
+    })
+
+    expect(mocks.prisma.webhookDelivery.findMany).toHaveBeenCalledWith({
+      where: {
+        provider: 'stripe',
+        status: 'FAILED',
+        eventType: 'payment_intent.succeeded',
+        OR: [
+          { providerEventId: { contains: 'evt_1', mode: 'insensitive' } },
+          { lastError: { contains: 'evt_1', mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+      skip: 5,
+      take: 5,
+    })
+    expect(result.pagination).toEqual({
+      page: 2,
+      pageSize: 5,
+      total: 1,
+      totalPages: 1,
+    })
+  })
+
+  it('loads a webhook delivery by id', async () => {
+    mocks.prisma.webhookDelivery.findUnique.mockResolvedValue({
+      id: 'delivery_1',
+      provider: 'stripe',
+      providerEventId: 'evt_1',
+    })
+
+    const delivery = await getWebhookDeliveryById('delivery_1')
+
+    expect(mocks.prisma.webhookDelivery.findUnique).toHaveBeenCalledWith({
+      where: { id: 'delivery_1' },
+    })
+    expect(delivery).toMatchObject({
+      id: 'delivery_1',
+      provider: 'stripe',
     })
   })
 })

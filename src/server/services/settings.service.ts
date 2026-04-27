@@ -22,6 +22,10 @@ export async function updateStoreSettings(
     postalCode: string
     country: string
     shippingThreshold: number
+    shippingDomesticRate: number
+    shippingInternationalRate: number
+    domesticTaxRate: number
+    internationalTaxRate: number
   }>
 ) {
   return prisma.store.update({
@@ -42,5 +46,9 @@ export async function getPublicStorefrontSettings() {
     primaryColor: store.primaryColor,
     secondaryColor: store.secondaryColor,
     shippingThreshold: store.shippingThreshold,
+    shippingDomesticRate: store.shippingDomesticRate,
+    shippingInternationalRate: store.shippingInternationalRate,
+    domesticTaxRate: store.domesticTaxRate,
+    internationalTaxRate: store.internationalTaxRate,
   }
 }

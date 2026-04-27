@@ -151,6 +151,8 @@ describe('checkout service', () => {
       currency: 'USD',
       shippingThreshold: 1000,
       country: 'US',
+      domesticTaxRate: 0.07,
+      internationalTaxRate: 0.05,
     })
     mocks.prisma.productVariant.findMany.mockResolvedValue([
       {

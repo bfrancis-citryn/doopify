@@ -1,10 +1,10 @@
-import { completeCheckoutFromPaymentIntent, markCheckoutSessionFailed } from '@/server/services/checkout.service'
 import { type StripePaymentIntent, type StripeWebhookEvent, verifyStripeWebhookSignature } from '@/lib/stripe'
 import {
   markWebhookDeliveryFailed,
   markWebhookDeliveryProcessed,
   recordWebhookDeliveryAttempt,
 } from '@/server/services/webhook-delivery.service'
+import { processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
 
 export const runtime = 'nodejs'
 
@@ -54,19 +54,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    switch (event.type) {
-      case 'payment_intent.succeeded':
-        await completeCheckoutFromPaymentIntent(event.data.object)
-        break
-      case 'payment_intent.payment_failed':
-        await markCheckoutSessionFailed({
-          paymentIntentId: event.data.object.id,
-          reason: event.data.object.last_payment_error?.message ?? 'Payment failed',
-        })
-        break
-      default:
-        break
-    }
+    await processStripeWebhookEvent(event)
 
     await markWebhookDeliveryProcessed({
       provider: 'stripe',

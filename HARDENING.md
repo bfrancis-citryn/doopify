@@ -45,8 +45,10 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 - checkout failure state is persisted and surfaced on the success-page polling flow
 - checkout-native code discounts are calculated through the server pricing authority
 - checkout pricing now applies baseline destination-aware shipping zone rates and tax rules server-side
+- checkout pricing now reads settings-backed domestic/international shipping and tax rates from Store settings
 - discount applications and usage counts are persisted only after verified paid order creation succeeds
 - Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
+- webhook replay is available through admin API/UI on top of the durable delivery log
 - fast automated tests cover checkout pricing, discount-code math and invalid states, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, and invalid webhook signature rejection
 - `npm run test:integration` runs successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
 - gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
@@ -84,7 +86,7 @@ npm run build
 
 - Extract the remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only while storefront collection reads stay public and read-only
-- Add webhook retry and replay tooling plus support-facing visibility on top of the durable delivery log
+- Add automated webhook retries and deeper support diagnostics on top of replay + durable delivery logging
 - Add stronger audit logging around settings changes, payment events, and fulfillment operations
 
 ### Later

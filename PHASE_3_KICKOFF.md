@@ -54,9 +54,11 @@ Already available:
 - centralized checkout pricing service in `src/server/checkout/pricing.ts`
 - checkout-native code discounts through the centralized pricing service
 - baseline destination-aware shipping zone rates and tax rules in centralized pricing
+- settings-backed domestic/international shipping and tax rates consumed by checkout pricing
 - discount applications and usage counts created only after verified paid order creation succeeds
 - durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
-- fast automated tests for pricing, discount-code math, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront collection DTO safety
+- webhook replay API + admin workspace visibility at `/api/webhook-deliveries`, `/api/webhook-deliveries/[id]/replay`, and `/admin/webhooks`
+- fast automated tests for pricing, settings-backed shipping/tax behavior, discount-code math, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging/replay behavior, admin collection mutations, storefront collection routes, and storefront collection DTO safety
 - `DATABASE_URL_TEST`-gated real-DB integration tests for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount usage
 - the real-DB integration run exposed and fixed a concurrent checkout customer-creation race during payment-intent completion
 
@@ -86,13 +88,14 @@ Acceptance:
 - shipping/tax refinement does not move pricing client-side
 - checkout and webhook behavior remains idempotent
 
-### 2. Refine Shipping, Tax, And Discount UX
+### 2. Refine Shipping, Tax, Discount, And Replay Operations
 
 Current pricing now includes baseline destination-aware shipping and tax behavior. Next, move from baseline rules to configurable merchant-grade logic and finish checkout UX around discount rejections and stale-cart handling.
 
 - configurable shipping zones/rates
 - jurisdiction-aware tax refinement
 - discount rejection/out-of-stock/stale-cart UX around checkout failures
+- automated webhook retry controls and richer support diagnostics on top of replay + delivery logs
 
 ### 3. Improve Failure Handling
 

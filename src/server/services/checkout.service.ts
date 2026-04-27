@@ -188,6 +188,18 @@ export async function createCheckoutPaymentIntent(input: {
     discount,
     shippingAddress,
     storeCountry: store?.country,
+    shippingRates: {
+      domestic: Number(store?.shippingDomesticRate ?? 9.99),
+      international: Number(store?.shippingInternationalRate ?? 19.99),
+    },
+    ...(store?.country
+      ? {
+          taxRates: {
+            domestic: Number(store?.domesticTaxRate ?? 0.07),
+            international: Number(store?.internationalTaxRate ?? 0),
+          },
+        }
+      : {}),
   })
   const currency = (store?.currency || 'USD').toUpperCase()
   const customer = await getCustomerByEmail(normalizedEmail)

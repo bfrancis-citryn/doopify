@@ -61,6 +61,29 @@ describe('buildCheckoutPricing', () => {
     })
   })
 
+  it('uses settings-backed shipping and tax rates when provided', () => {
+    expect(
+      buildCheckoutPricing([{ price: 100, quantity: 1 }], 500, {
+        shippingAddress: { country: 'CA' },
+        storeCountry: 'US',
+        shippingRates: {
+          domestic: 12,
+          international: 25,
+        },
+        taxRates: {
+          domestic: 0.04,
+          international: 0.03,
+        },
+      })
+    ).toEqual({
+      subtotal: 100,
+      shippingAmount: 25,
+      taxAmount: 3,
+      discountAmount: 0,
+      total: 128,
+    })
+  })
+
   it('does not charge shipping for an empty pricing input', () => {
     expect(buildCheckoutPricing([], 75)).toEqual({
       subtotal: 0,

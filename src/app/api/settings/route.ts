@@ -29,6 +29,10 @@ const updateSchema = z.object({
   postalCode: z.string().optional(),
   country: z.string().optional(),
   shippingThreshold: z.number().optional(),
+  shippingDomesticRate: z.number().min(0).optional(),
+  shippingInternationalRate: z.number().min(0).optional(),
+  domesticTaxRate: z.number().min(0).max(1).optional(),
+  internationalTaxRate: z.number().min(0).max(1).optional(),
 })
 
 export async function PATCH(req: Request) {

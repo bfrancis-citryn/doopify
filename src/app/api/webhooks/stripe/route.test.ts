@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   verifyStripeWebhookSignature: vi.fn(),
-  completeCheckoutFromPaymentIntent: vi.fn(),
-  markCheckoutSessionFailed: vi.fn(),
+  processStripeWebhookEvent: vi.fn(),
   recordWebhookDeliveryAttempt: vi.fn(),
   markWebhookDeliveryProcessed: vi.fn(),
   markWebhookDeliveryFailed: vi.fn(),
@@ -13,9 +12,8 @@ vi.mock('@/lib/stripe', () => ({
   verifyStripeWebhookSignature: mocks.verifyStripeWebhookSignature,
 }))
 
-vi.mock('@/server/services/checkout.service', () => ({
-  completeCheckoutFromPaymentIntent: mocks.completeCheckoutFromPaymentIntent,
-  markCheckoutSessionFailed: mocks.markCheckoutSessionFailed,
+vi.mock('@/server/services/stripe-webhook.service', () => ({
+  processStripeWebhookEvent: mocks.processStripeWebhookEvent,
 }))
 
 vi.mock('@/server/services/webhook-delivery.service', () => ({
@@ -61,8 +59,7 @@ describe('Stripe webhook route', () => {
 
     expect(response.status).toBe(400)
     expect(await response.text()).toBe('Stripe webhook signature verification failed')
-    expect(mocks.completeCheckoutFromPaymentIntent).not.toHaveBeenCalled()
-    expect(mocks.markCheckoutSessionFailed).not.toHaveBeenCalled()
+    expect(mocks.processStripeWebhookEvent).not.toHaveBeenCalled()
     expect(mocks.recordWebhookDeliveryAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'stripe',
@@ -102,8 +99,11 @@ describe('Stripe webhook route', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.completeCheckoutFromPaymentIntent).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'pi_ok' })
+    expect(mocks.processStripeWebhookEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'evt_ok',
+        type: 'payment_intent.succeeded',
+      })
     )
     expect(mocks.markWebhookDeliveryProcessed).toHaveBeenCalledWith({
       provider: 'stripe',
@@ -113,7 +113,7 @@ describe('Stripe webhook route', () => {
   })
 
   it('records failed delivery status when webhook processing throws', async () => {
-    mocks.completeCheckoutFromPaymentIntent.mockRejectedValue(new Error('Order finalization failed'))
+    mocks.processStripeWebhookEvent.mockRejectedValue(new Error('Order finalization failed'))
 
     const response = await POST(
       new Request('http://localhost/api/webhooks/stripe', {
