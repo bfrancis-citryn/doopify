@@ -184,7 +184,11 @@ export async function createCheckoutPaymentIntent(input: {
   const shippingAddress = normalizeAddress(input.shippingAddress)
   const billingAddress = normalizeAddress(input.billingAddress ?? input.shippingAddress)
   const discount = await resolveDiscountCode(input.discountCode)
-  const pricing = buildCheckoutPricing(lineItems, store?.shippingThreshold, { discount })
+  const pricing = buildCheckoutPricing(lineItems, store?.shippingThreshold, {
+    discount,
+    shippingAddress,
+    storeCountry: store?.country,
+  })
   const currency = (store?.currency || 'USD').toUpperCase()
   const customer = await getCustomerByEmail(normalizedEmail)
 

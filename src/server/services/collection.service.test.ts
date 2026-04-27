@@ -134,4 +134,102 @@ describe('collection service', () => {
       })
     )
   })
+
+  it('returns storefront-safe collection detail DTOs without admin-only fields', async () => {
+    mocks.prisma.collection.findFirst.mockResolvedValue({
+      id: 'col_1',
+      title: 'Featured',
+      handle: 'featured',
+      description: 'Public goods',
+      imageUrl: null,
+      sortOrder: 'MANUAL',
+      isPublished: true,
+      conditions: { hidden: true },
+      products: [
+        {
+          position: 0,
+          product: {
+            id: 'prod_1',
+            handle: 'alpha',
+            title: 'Alpha',
+            description: 'Alpha desc',
+            vendor: 'Acme',
+            productType: 'Shirt',
+            status: 'ACTIVE',
+            media: [
+              {
+                id: 'media_1',
+                position: 0,
+                isFeatured: true,
+                asset: {
+                  id: 'asset_1',
+                  altText: 'Alpha',
+                  width: 1200,
+                  height: 1200,
+                },
+              },
+            ],
+            variants: [
+              {
+                id: 'var_1',
+                title: 'Default',
+                price: 25,
+                compareAtPrice: null,
+                inventory: 7,
+                weight: null,
+                weightUnit: null,
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const detail = await getStorefrontCollectionByHandle('featured')
+
+    expect(detail).toEqual({
+      id: 'col_1',
+      title: 'Featured',
+      handle: 'featured',
+      description: 'Public goods',
+      imageUrl: '/api/media/asset_1',
+      sortOrder: 'MANUAL',
+      productCount: 1,
+      products: [
+        {
+          id: 'prod_1',
+          handle: 'alpha',
+          title: 'Alpha',
+          description: 'Alpha desc',
+          vendor: 'Acme',
+          productType: 'Shirt',
+          media: [
+            {
+              id: 'media_1',
+              position: 0,
+              isFeatured: true,
+              url: '/api/media/asset_1',
+              altText: 'Alpha',
+              width: 1200,
+              height: 1200,
+            },
+          ],
+          variants: [
+            {
+              id: 'var_1',
+              title: 'Default',
+              price: 25,
+              compareAtPrice: null,
+              inventory: 7,
+              weight: null,
+              weightUnit: null,
+            },
+          ],
+        },
+      ],
+    })
+    expect(detail).not.toHaveProperty('isPublished')
+    expect(detail).not.toHaveProperty('conditions')
+    expect(detail?.products[0]).not.toHaveProperty('status')
+  })
 })

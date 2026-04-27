@@ -95,6 +95,13 @@ enum CheckoutSessionStatus {
   EXPIRED
 }
 
+enum WebhookDeliveryStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  SIGNATURE_FAILED
+}
+
 model Store {
   id                String   @id @default(cuid())
   name              String
@@ -455,6 +462,25 @@ model CheckoutSession {
   @@index([status])
   @@index([createdAt])
   @@map("checkout_sessions")
+}
+
+model WebhookDelivery {
+  id              String                @id @default(cuid())
+  provider        String
+  providerEventId String
+  eventType       String
+  status          WebhookDeliveryStatus @default(RECEIVED)
+  attempts        Int                   @default(1)
+  processedAt     DateTime?
+  lastError       String?
+  payloadHash     String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([provider, providerEventId])
+  @@index([provider, eventType])
+  @@index([status, createdAt])
+  @@map("webhook_deliveries")
 }
 
 model Fulfillment {

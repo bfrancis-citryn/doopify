@@ -146,6 +146,64 @@ describe('checkout service', () => {
     })
   })
 
+  it('uses destination shipping zone and tax rules for checkout totals', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThreshold: 1000,
+      country: 'US',
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 20,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.createStripePaymentIntent.mockResolvedValue({
+      id: 'pi_zone_tax',
+      client_secret: 'secret_zone_tax',
+      amount: 4099,
+      currency: 'usd',
+      status: 'requires_payment_method',
+    })
+    mocks.prisma.checkoutSession.create.mockResolvedValue({
+      id: 'checkout_zone_tax',
+    })
+
+    const checkout = await createCheckoutPaymentIntent({
+      email: 'ada@example.com',
+      items: [{ variantId: 'variant_1', quantity: 1 }],
+      shippingAddress: {
+        ...address,
+        country: 'CA',
+        province: 'ON',
+      },
+    })
+
+    expect(mocks.createStripePaymentIntent).toHaveBeenCalledWith({
+      amount: 4099,
+      currency: 'USD',
+      email: 'ada@example.com',
+      metadata: {
+        checkoutEmail: 'ada@example.com',
+      },
+    })
+    expect(checkout).toMatchObject({
+      checkoutSessionId: 'checkout_zone_tax',
+      subtotal: 20,
+      shippingAmount: 19.99,
+      taxAmount: 1,
+      total: 40.99,
+    })
+  })
+
   it('applies an active discount code through server-owned pricing', async () => {
     mocks.prisma.productVariant.findMany.mockResolvedValue([
       {

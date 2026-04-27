@@ -31,6 +31,36 @@ describe('buildCheckoutPricing', () => {
     })
   })
 
+  it('uses international shipping rates when the destination country differs from the store country', () => {
+    expect(
+      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
+        shippingAddress: { country: 'CA' },
+        storeCountry: 'US',
+      })
+    ).toEqual({
+      subtotal: 20,
+      shippingAmount: 19.99,
+      taxAmount: 1,
+      discountAmount: 0,
+      total: 40.99,
+    })
+  })
+
+  it('applies destination tax rules for domestic checkout addresses', () => {
+    expect(
+      buildCheckoutPricing([{ price: 100, quantity: 1 }], 500, {
+        shippingAddress: { country: 'US', province: 'CA' },
+        storeCountry: 'US',
+      })
+    ).toEqual({
+      subtotal: 100,
+      shippingAmount: 9.99,
+      taxAmount: 8.25,
+      discountAmount: 0,
+      total: 118.24,
+    })
+  })
+
   it('does not charge shipping for an empty pricing input', () => {
     expect(buildCheckoutPricing([], 75)).toEqual({
       subtotal: 0,
@@ -44,6 +74,8 @@ describe('buildCheckoutPricing', () => {
   it('applies active percentage discount codes to the checkout subtotal', () => {
     expect(
       buildCheckoutPricing([{ price: 50, quantity: 2 }], 200, {
+        shippingAddress: { country: 'US', province: 'CA' },
+        storeCountry: 'US',
         discount: {
           id: 'discount_1',
           code: 'SAVE10',
@@ -57,9 +89,9 @@ describe('buildCheckoutPricing', () => {
     ).toEqual({
       subtotal: 100,
       shippingAmount: 9.99,
-      taxAmount: 0,
+      taxAmount: 7.43,
       discountAmount: 10,
-      total: 99.99,
+      total: 107.42,
       appliedDiscount: {
         discountId: 'discount_1',
         code: 'SAVE10',
