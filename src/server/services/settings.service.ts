@@ -1,7 +1,21 @@
 import { prisma } from '@/lib/prisma'
 
 export async function getStoreSettings() {
-  return prisma.store.findFirst()
+  return prisma.store.findFirst({
+    include: {
+      shippingZones: {
+        include: {
+          rates: {
+            orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      },
+      taxRules: {
+        orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      },
+    },
+  })
 }
 
 export async function updateStoreSettings(

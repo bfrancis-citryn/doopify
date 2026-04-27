@@ -3,7 +3,12 @@ import { Prisma, type CheckoutSessionStatus } from '@prisma/client'
 import { createStripePaymentIntent, type StripePaymentIntent } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
-import { buildCheckoutPricing, type CheckoutAppliedDiscount } from '@/server/checkout/pricing'
+import {
+  buildCheckoutPricingWithDecisions,
+  type CheckoutAppliedDiscount,
+  type CheckoutPricingShippingDecision,
+  type CheckoutPricingTaxDecision,
+} from '@/server/checkout/pricing'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
 import { createOrder, getOrderByPaymentIntentId } from '@/server/services/order.service'
 import { getStoreSettings } from '@/server/services/settings.service'
@@ -40,6 +45,17 @@ type CheckoutPayload = {
   shippingAddress: CheckoutAddress
   billingAddress: CheckoutAddress
   discountApplications?: CheckoutAppliedDiscount[]
+  pricingSnapshot?: {
+    computedAt: string
+    currency: string
+    subtotal: number
+    shippingAmount: number
+    taxAmount: number
+    discountAmount: number
+    total: number
+    shippingDecision: CheckoutPricingShippingDecision
+    taxDecision: CheckoutPricingTaxDecision
+  }
 }
 
 function normalizeEmail(email: string) {
@@ -184,7 +200,7 @@ export async function createCheckoutPaymentIntent(input: {
   const shippingAddress = normalizeAddress(input.shippingAddress)
   const billingAddress = normalizeAddress(input.billingAddress ?? input.shippingAddress)
   const discount = await resolveDiscountCode(input.discountCode)
-  const pricing = buildCheckoutPricing(lineItems, store?.shippingThreshold, {
+  const pricing = buildCheckoutPricingWithDecisions(lineItems, store?.shippingThreshold, {
     discount,
     shippingAddress,
     storeCountry: store?.country,
@@ -192,6 +208,33 @@ export async function createCheckoutPaymentIntent(input: {
       domestic: Number(store?.shippingDomesticRate ?? 9.99),
       international: Number(store?.shippingInternationalRate ?? 19.99),
     },
+    shippingZones: store?.shippingZones?.map((zone) => ({
+      id: zone.id,
+      name: zone.name,
+      countryCode: zone.countryCode,
+      provinceCode: zone.provinceCode,
+      isActive: zone.isActive,
+      priority: zone.priority,
+      rates: zone.rates.map((rate) => ({
+        id: rate.id,
+        name: rate.name,
+        method: rate.method,
+        amount: rate.amount,
+        minSubtotal: rate.minSubtotal,
+        maxSubtotal: rate.maxSubtotal,
+        isActive: rate.isActive,
+        priority: rate.priority,
+      })),
+    })),
+    taxRules: store?.taxRules?.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      countryCode: rule.countryCode,
+      provinceCode: rule.provinceCode,
+      rate: rule.rate,
+      isActive: rule.isActive,
+      priority: rule.priority,
+    })),
     ...(store?.country
       ? {
           taxRates: {
@@ -222,6 +265,17 @@ export async function createCheckoutPaymentIntent(input: {
     items: lineItems,
     shippingAddress,
     billingAddress,
+    pricingSnapshot: {
+      computedAt: new Date().toISOString(),
+      currency,
+      subtotal: pricing.subtotal,
+      shippingAmount: pricing.shippingAmount,
+      taxAmount: pricing.taxAmount,
+      discountAmount: pricing.discountAmount,
+      total: pricing.total,
+      shippingDecision: pricing.shippingDecision,
+      taxDecision: pricing.taxDecision,
+    },
     ...(pricing.appliedDiscount ? { discountApplications: [pricing.appliedDiscount] } : {}),
   }
 
@@ -255,7 +309,7 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
   if (existingOrder) {
     await prisma.checkoutSession.updateMany({
       where: { paymentIntentId: intent.id },
-      data: { status: 'COMPLETED', completedAt: new Date() },
+      data: { status: 'COMPLETED', completedAt: new Date(), failureReason: null },
     })
     return existingOrder
   }
@@ -304,6 +358,11 @@ export async function markCheckoutSessionFailed(input: {
   paymentIntentId: string
   reason?: string | null
 }) {
+  const existingOrder = await getOrderByPaymentIntentId(input.paymentIntentId)
+  if (existingOrder) {
+    return null
+  }
+
   const checkoutSession = await prisma.checkoutSession.findUnique({
     where: { paymentIntentId: input.paymentIntentId },
   })
@@ -312,12 +371,25 @@ export async function markCheckoutSessionFailed(input: {
     return null
   }
 
-  const updated = await prisma.checkoutSession.update({
-    where: { id: checkoutSession.id },
+  const updateResult = await prisma.checkoutSession.updateMany({
+    where: {
+      id: checkoutSession.id,
+      status: 'PENDING',
+    },
     data: {
       status: 'FAILED',
       failureReason: input.reason ?? 'Payment failed',
     },
+  })
+
+  if (updateResult.count === 0) {
+    return prisma.checkoutSession.findUnique({
+      where: { id: checkoutSession.id },
+    })
+  }
+
+  const updated = await prisma.checkoutSession.findUniqueOrThrow({
+    where: { id: checkoutSession.id },
   })
 
   await emitInternalEvent('checkout.failed', {

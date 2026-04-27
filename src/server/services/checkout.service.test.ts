@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
       updateMany: vi.fn(),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
     },
     discount: {
@@ -55,6 +56,7 @@ vi.mock('@/server/events/dispatcher', () => ({
 import {
   completeCheckoutFromPaymentIntent,
   createCheckoutPaymentIntent,
+  markCheckoutSessionFailed,
 } from './checkout.service'
 
 const address = {
@@ -346,9 +348,116 @@ describe('checkout service', () => {
     expect(order).toBe(existingOrder)
     expect(mocks.prisma.checkoutSession.updateMany).toHaveBeenCalledWith({
       where: { paymentIntentId: 'pi_duplicate' },
-      data: { status: 'COMPLETED', completedAt: expect.any(Date) },
+      data: { status: 'COMPLETED', completedAt: expect.any(Date), failureReason: null },
     })
     expect(mocks.createOrder).not.toHaveBeenCalled()
+  })
+
+  it('marks pending checkout sessions as failed and emits an internal event', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValue(null)
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValue({
+      id: 'checkout_1',
+      email: 'ada@example.com',
+      status: 'PENDING',
+    })
+    mocks.prisma.checkoutSession.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prisma.checkoutSession.findUniqueOrThrow.mockResolvedValue({
+      id: 'checkout_1',
+      email: 'ada@example.com',
+      status: 'FAILED',
+      failureReason: 'Card declined',
+    })
+
+    const updated = await markCheckoutSessionFailed({
+      paymentIntentId: 'pi_failed',
+      reason: 'Card declined',
+    })
+
+    expect(mocks.prisma.checkoutSession.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'checkout_1',
+        status: 'PENDING',
+      },
+      data: {
+        status: 'FAILED',
+        failureReason: 'Card declined',
+      },
+    })
+    expect(mocks.emitInternalEvent).toHaveBeenCalledWith('checkout.failed', {
+      paymentIntentId: 'pi_failed',
+      email: 'ada@example.com',
+      reason: 'Card declined',
+    })
+    expect(updated).toMatchObject({
+      id: 'checkout_1',
+      status: 'FAILED',
+    })
+  })
+
+  it('does not downgrade completed checkouts when failure webhooks arrive late', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValue(null)
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValue({
+      id: 'checkout_1',
+      email: 'ada@example.com',
+      status: 'COMPLETED',
+      failureReason: null,
+    })
+    mocks.prisma.checkoutSession.updateMany.mockResolvedValue({ count: 0 })
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValueOnce({
+      id: 'checkout_1',
+      email: 'ada@example.com',
+      status: 'COMPLETED',
+      failureReason: null,
+    })
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValueOnce({
+      id: 'checkout_1',
+      email: 'ada@example.com',
+      status: 'COMPLETED',
+      failureReason: null,
+    })
+
+    const checkout = await markCheckoutSessionFailed({
+      paymentIntentId: 'pi_completed',
+      reason: 'Card declined',
+    })
+
+    expect(mocks.prisma.checkoutSession.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'checkout_1',
+        status: 'PENDING',
+      },
+      data: {
+        status: 'FAILED',
+        failureReason: 'Card declined',
+      },
+    })
+    expect(mocks.emitInternalEvent).not.toHaveBeenCalledWith(
+      'checkout.failed',
+      expect.objectContaining({
+        paymentIntentId: 'pi_completed',
+      })
+    )
+    expect(checkout).toMatchObject({
+      status: 'COMPLETED',
+      failureReason: null,
+    })
+  })
+
+  it('ignores failure webhook downgrades when a paid order already exists', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValue({
+      id: 'order_1',
+      orderNumber: 1001,
+    })
+
+    const result = await markCheckoutSessionFailed({
+      paymentIntentId: 'pi_paid',
+      reason: 'Card declined',
+    })
+
+    expect(result).toBeNull()
+    expect(mocks.prisma.checkoutSession.findUnique).not.toHaveBeenCalled()
+    expect(mocks.prisma.checkoutSession.updateMany).not.toHaveBeenCalled()
+    expect(mocks.emitInternalEvent).not.toHaveBeenCalled()
   })
 
   it('fails checkout creation when requested quantity exceeds live inventory', async () => {

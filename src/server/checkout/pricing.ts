@@ -31,6 +31,63 @@ export type CheckoutAppliedDiscount = {
   amount: number
 }
 
+export type CheckoutPricingZoneRate = {
+  id?: string
+  name?: string
+  method: 'FLAT' | 'SUBTOTAL_TIER'
+  amount: number
+  minSubtotal?: number | null
+  maxSubtotal?: number | null
+  isActive?: boolean
+  priority?: number
+}
+
+export type CheckoutPricingShippingZone = {
+  id?: string
+  name?: string
+  countryCode?: string
+  provinceCode?: string | null
+  country?: string
+  province?: string | null
+  isActive?: boolean
+  priority?: number
+  rates: CheckoutPricingZoneRate[]
+}
+
+export type CheckoutPricingTaxRule = {
+  id?: string
+  name?: string
+  countryCode?: string
+  provinceCode?: string | null
+  country?: string
+  province?: string | null
+  rate: number
+  isActive?: boolean
+  priority?: number
+}
+
+export type CheckoutPricingShippingDecision = {
+  source: 'none' | 'threshold' | 'zone' | 'fallback'
+  amount: number
+  destinationCountry?: string
+  destinationProvince?: string
+  zoneId?: string
+  zoneName?: string
+  rateId?: string
+  rateName?: string
+  rateMethod?: CheckoutPricingZoneRate['method']
+}
+
+export type CheckoutPricingTaxDecision = {
+  source: 'none' | 'rule' | 'fallback'
+  rate: number
+  amount: number
+  destinationCountry?: string
+  destinationProvince?: string
+  ruleId?: string
+  ruleName?: string
+}
+
 export type CheckoutPricingResult = {
   subtotal: number
   shippingAmount: number
@@ -38,6 +95,11 @@ export type CheckoutPricingResult = {
   discountAmount: number
   total: number
   appliedDiscount?: CheckoutAppliedDiscount
+}
+
+export type CheckoutPricingResultWithDecisions = CheckoutPricingResult & {
+  shippingDecision: CheckoutPricingShippingDecision
+  taxDecision: CheckoutPricingTaxDecision
 }
 
 type CheckoutPricingShippingRates = {
@@ -50,22 +112,16 @@ type CheckoutPricingTaxRates = {
   international: number
 }
 
-type CheckoutPricingTaxRule = {
-  country: string
-  province?: string
-  rate: number
-}
-
 const DEFAULT_SHIPPING_RATES: CheckoutPricingShippingRates = {
   domestic: 9.99,
   international: 19.99,
 }
 
 const DEFAULT_TAX_RULES: CheckoutPricingTaxRule[] = [
-  { country: 'US', province: 'CA', rate: 0.0825 },
-  { country: 'US', province: 'NY', rate: 0.08875 },
-  { country: 'US', rate: 0.07 },
-  { country: 'CA', rate: 0.05 },
+  { countryCode: 'US', provinceCode: 'CA', rate: 0.0825, priority: 10, isActive: true },
+  { countryCode: 'US', provinceCode: 'NY', rate: 0.08875, priority: 10, isActive: true },
+  { countryCode: 'US', rate: 0.07, priority: 100, isActive: true },
+  { countryCode: 'CA', rate: 0.05, priority: 100, isActive: true },
 ]
 
 export function roundCurrency(value: number) {
@@ -101,11 +157,21 @@ function isBeforeNow(value: Date | string | null | undefined, now: Date) {
   return value ? new Date(value).getTime() < now.getTime() : false
 }
 
-function validateCheckoutDiscount(
-  discount: CheckoutPricingDiscount,
-  subtotal: number,
-  now: Date
+function getCountryCode(
+  input: Pick<CheckoutPricingShippingZone, 'countryCode' | 'country'> | Pick<CheckoutPricingTaxRule, 'countryCode' | 'country'>
 ) {
+  return normalizeCountry(input.countryCode ?? input.country ?? '')
+}
+
+function getProvinceCode(
+  input:
+    | Pick<CheckoutPricingShippingZone, 'provinceCode' | 'province'>
+    | Pick<CheckoutPricingTaxRule, 'provinceCode' | 'province'>
+) {
+  return normalizeProvince(input.provinceCode ?? input.province ?? '')
+}
+
+function validateCheckoutDiscount(discount: CheckoutPricingDiscount, subtotal: number, now: Date) {
   if (discount.type !== 'CODE' || !discount.code) {
     throw new Error('Discount code not found')
   }
@@ -157,66 +223,210 @@ function calculateDiscountAmount(input: {
   return 0
 }
 
-function calculateShippingAmount(input: {
+function resolveShippingDecision(input: {
   subtotal: number
   shippingThreshold?: number | null
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
   shippingRates: CheckoutPricingShippingRates
-}) {
-  const { subtotal, shippingThreshold, shippingAddress, storeCountry, shippingRates } = input
-  if (subtotal <= 0) {
-    return 0
+  shippingZones?: CheckoutPricingShippingZone[]
+}): CheckoutPricingShippingDecision {
+  const destinationCountry = normalizeCountry(input.shippingAddress?.country)
+  const destinationProvince = normalizeProvince(input.shippingAddress?.province)
+
+  if (input.subtotal <= 0) {
+    return {
+      source: 'none',
+      amount: 0,
+      destinationCountry,
+      destinationProvince,
+    }
   }
 
-  if (shippingThreshold != null && subtotal >= shippingThreshold) {
-    return 0
+  if (input.shippingThreshold != null && input.subtotal >= input.shippingThreshold) {
+    return {
+      source: 'threshold',
+      amount: 0,
+      destinationCountry,
+      destinationProvince,
+    }
   }
 
-  const destinationCountry = normalizeCountry(shippingAddress?.country)
-  const originCountry = normalizeCountry(storeCountry)
-  if (destinationCountry && originCountry && destinationCountry !== originCountry) {
-    return roundCurrency(shippingRates.international)
+  const zoneCandidates = (input.shippingZones ?? [])
+    .filter((zone) => zone.isActive !== false)
+    .filter((zone) => getCountryCode(zone) === destinationCountry)
+    .filter((zone) => {
+      const province = getProvinceCode(zone)
+      return !province || province === destinationProvince
+    })
+    .sort((left, right) => {
+      const leftPriority = Number(left.priority ?? 100)
+      const rightPriority = Number(right.priority ?? 100)
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority
+
+      const leftSpecificity = getProvinceCode(left) ? 1 : 0
+      const rightSpecificity = getProvinceCode(right) ? 1 : 0
+      if (leftSpecificity !== rightSpecificity) return rightSpecificity - leftSpecificity
+
+      return String(left.name || '').localeCompare(String(right.name || ''))
+    })
+
+  const selectedZone = zoneCandidates[0]
+  if (selectedZone) {
+    const eligibleRates = selectedZone.rates
+      .filter((rate) => rate.isActive !== false)
+      .filter((rate) => {
+        if (rate.method === 'SUBTOTAL_TIER') {
+          const minSubtotal = Number(rate.minSubtotal ?? 0)
+          const maxSubtotal = rate.maxSubtotal == null ? Number.POSITIVE_INFINITY : Number(rate.maxSubtotal)
+          return input.subtotal >= minSubtotal && input.subtotal <= maxSubtotal
+        }
+
+        return true
+      })
+      .sort((left, right) => {
+        const leftPriority = Number(left.priority ?? 100)
+        const rightPriority = Number(right.priority ?? 100)
+        if (leftPriority !== rightPriority) return leftPriority - rightPriority
+
+        const leftTierSpecificity = left.method === 'SUBTOTAL_TIER' ? Number(left.minSubtotal ?? 0) : -1
+        const rightTierSpecificity = right.method === 'SUBTOTAL_TIER' ? Number(right.minSubtotal ?? 0) : -1
+        return rightTierSpecificity - leftTierSpecificity
+      })
+
+    const selectedRate = eligibleRates[0]
+    if (selectedRate) {
+      return {
+        source: 'zone',
+        amount: roundCurrency(selectedRate.amount),
+        destinationCountry,
+        destinationProvince,
+        zoneId: selectedZone.id,
+        zoneName: selectedZone.name,
+        rateId: selectedRate.id,
+        rateName: selectedRate.name,
+        rateMethod: selectedRate.method,
+      }
+    }
   }
 
-  return roundCurrency(shippingRates.domestic)
+  const originCountry = normalizeCountry(input.storeCountry)
+  const isInternational = destinationCountry && originCountry && destinationCountry !== originCountry
+  return {
+    source: 'fallback',
+    amount: roundCurrency(isInternational ? input.shippingRates.international : input.shippingRates.domestic),
+    destinationCountry,
+    destinationProvince,
+  }
 }
 
-function resolveTaxRate(input: {
+function resolveTaxDecision(input: {
+  taxableSubtotal: number
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
   taxRates?: CheckoutPricingTaxRates
-  taxRules: CheckoutPricingTaxRule[]
-}) {
+  taxRules?: CheckoutPricingTaxRule[]
+}): CheckoutPricingTaxDecision {
   const destinationCountry = normalizeCountry(input.shippingAddress?.country)
-  const storeCountry = normalizeCountry(input.storeCountry)
   const destinationProvince = normalizeProvince(input.shippingAddress?.province)
   if (!destinationCountry) {
-    return 0
+    return {
+      source: 'none',
+      rate: 0,
+      amount: 0,
+    }
+  }
+
+  const explicitRules = input.taxRules ?? []
+  if (explicitRules.length) {
+    const matchedRules = explicitRules
+      .filter((rule) => rule.isActive !== false)
+      .filter((rule) => getCountryCode(rule) === destinationCountry)
+      .filter((rule) => {
+        const province = getProvinceCode(rule)
+        return !province || province === destinationProvince
+      })
+      .sort((left, right) => {
+        const leftPriority = Number(left.priority ?? 100)
+        const rightPriority = Number(right.priority ?? 100)
+        if (leftPriority !== rightPriority) return leftPriority - rightPriority
+
+        const leftSpecificity = getProvinceCode(left) ? 1 : 0
+        const rightSpecificity = getProvinceCode(right) ? 1 : 0
+        if (leftSpecificity !== rightSpecificity) return rightSpecificity - leftSpecificity
+
+        return String(left.name || '').localeCompare(String(right.name || ''))
+      })
+
+    const selectedRule = matchedRules[0]
+    if (selectedRule) {
+      const rate = Number(selectedRule.rate)
+      return {
+        source: 'rule',
+        rate,
+        amount: roundCurrency(input.taxableSubtotal * rate),
+        destinationCountry,
+        destinationProvince,
+        ruleId: selectedRule.id,
+        ruleName: selectedRule.name,
+      }
+    }
   }
 
   if (input.taxRates) {
-    const isInternational = destinationCountry && storeCountry && destinationCountry !== storeCountry
-    return isInternational ? input.taxRates.international : input.taxRates.domestic
+    const originCountry = normalizeCountry(input.storeCountry)
+    const isInternational = destinationCountry && originCountry && destinationCountry !== originCountry
+    const rate = isInternational ? Number(input.taxRates.international) : Number(input.taxRates.domestic)
+    return {
+      source: 'fallback',
+      rate,
+      amount: roundCurrency(input.taxableSubtotal * rate),
+      destinationCountry,
+      destinationProvince,
+    }
   }
 
-  const provinceRule = input.taxRules.find(
-    (rule) =>
-      normalizeCountry(rule.country) === destinationCountry &&
-      normalizeProvince(rule.province) &&
-      normalizeProvince(rule.province) === destinationProvince
-  )
-  if (provinceRule) {
-    return provinceRule.rate
+  const matchedDefaultRules = DEFAULT_TAX_RULES
+    .filter((rule) => rule.isActive !== false)
+    .filter((rule) => getCountryCode(rule) === destinationCountry)
+    .filter((rule) => {
+      const province = getProvinceCode(rule)
+      return !province || province === destinationProvince
+    })
+    .sort((left, right) => {
+      const leftPriority = Number(left.priority ?? 100)
+      const rightPriority = Number(right.priority ?? 100)
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority
+
+      const leftSpecificity = getProvinceCode(left) ? 1 : 0
+      const rightSpecificity = getProvinceCode(right) ? 1 : 0
+      if (leftSpecificity !== rightSpecificity) return rightSpecificity - leftSpecificity
+
+      return String(left.name || '').localeCompare(String(right.name || ''))
+    })
+
+  const selectedDefaultRule = matchedDefaultRules[0]
+  if (selectedDefaultRule) {
+    const rate = Number(selectedDefaultRule.rate)
+    return {
+      source: 'fallback',
+      rate,
+      amount: roundCurrency(input.taxableSubtotal * rate),
+      destinationCountry,
+      destinationProvince,
+    }
   }
 
-  const countryRule = input.taxRules.find(
-    (rule) => normalizeCountry(rule.country) === destinationCountry && !normalizeProvince(rule.province)
-  )
-  return countryRule?.rate ?? 0
+  return {
+    source: 'none',
+    rate: 0,
+    amount: 0,
+    destinationCountry,
+    destinationProvince,
+  }
 }
 
-export function buildCheckoutPricing(
+export function buildCheckoutPricingWithDecisions(
   items: CheckoutPricingLine[],
   shippingThreshold?: number | null,
   options: {
@@ -224,24 +434,23 @@ export function buildCheckoutPricing(
     shippingAddress?: CheckoutPricingAddress
     storeCountry?: string | null
     shippingRates?: CheckoutPricingShippingRates
+    shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
     now?: Date
   } = {}
-): CheckoutPricingResult {
-  const subtotal = roundCurrency(
-    items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0)
-  )
+): CheckoutPricingResultWithDecisions {
+  const subtotal = roundCurrency(items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0))
   const shippingRates = options.shippingRates ?? DEFAULT_SHIPPING_RATES
-  const taxRates = options.taxRates
-  const taxRules = options.taxRules ?? DEFAULT_TAX_RULES
-  const shippingAmount = calculateShippingAmount({
+  const shippingDecision = resolveShippingDecision({
     subtotal,
     shippingThreshold,
     shippingAddress: options.shippingAddress,
     storeCountry: options.storeCountry,
     shippingRates,
+    shippingZones: options.shippingZones,
   })
+  const shippingAmount = shippingDecision.amount
   const now = options.now ?? new Date()
   const appliedDiscount = options.discount
     ? (() => {
@@ -264,13 +473,14 @@ export function buildCheckoutPricing(
     appliedDiscount && (appliedDiscount.method === 'PERCENTAGE' || appliedDiscount.method === 'FIXED_AMOUNT')
       ? Math.max(0, roundCurrency(subtotal - discountAmount))
       : subtotal
-  const taxRate = resolveTaxRate({
+  const taxDecision = resolveTaxDecision({
+    taxableSubtotal,
     shippingAddress: options.shippingAddress,
     storeCountry: options.storeCountry,
-    taxRates,
-    taxRules,
+    taxRates: options.taxRates,
+    taxRules: options.taxRules,
   })
-  const taxAmount = roundCurrency(taxableSubtotal * taxRate)
+  const taxAmount = taxDecision.amount
   const total = roundCurrency(subtotal + shippingAmount + taxAmount - discountAmount)
 
   return {
@@ -279,6 +489,33 @@ export function buildCheckoutPricing(
     taxAmount,
     discountAmount,
     total,
+    shippingDecision,
+    taxDecision,
     ...(appliedDiscount ? { appliedDiscount } : {}),
+  }
+}
+
+export function buildCheckoutPricing(
+  items: CheckoutPricingLine[],
+  shippingThreshold?: number | null,
+  options: {
+    discount?: CheckoutPricingDiscount | null
+    shippingAddress?: CheckoutPricingAddress
+    storeCountry?: string | null
+    shippingRates?: CheckoutPricingShippingRates
+    shippingZones?: CheckoutPricingShippingZone[]
+    taxRates?: CheckoutPricingTaxRates
+    taxRules?: CheckoutPricingTaxRule[]
+    now?: Date
+  } = {}
+): CheckoutPricingResult {
+  const detailed = buildCheckoutPricingWithDecisions(items, shippingThreshold, options)
+  return {
+    subtotal: detailed.subtotal,
+    shippingAmount: detailed.shippingAmount,
+    taxAmount: detailed.taxAmount,
+    discountAmount: detailed.discountAmount,
+    total: detailed.total,
+    ...(detailed.appliedDiscount ? { appliedDiscount: detailed.appliedDiscount } : {}),
   }
 }

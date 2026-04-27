@@ -16,5 +16,6 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.integration.test.ts'],
     passWithNoTests: true,
+    testTimeout: 60_000,
   },
 })

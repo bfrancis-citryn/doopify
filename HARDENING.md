@@ -2,8 +2,8 @@
 
 > Security, correctness, and operational readiness for the commerce loop.
 >
-> Documentation refresh: April 26, 2026  
-> Last repo verification recorded in active docs: April 26, 2026  
+> Documentation refresh: April 27, 2026  
+> Last repo verification recorded in active docs: April 27, 2026  
 > Companion to `STATUS.md` and `features-roadmap.md`.
 
 ## Why Hardening Matters
@@ -46,13 +46,18 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 - checkout-native code discounts are calculated through the server pricing authority
 - checkout pricing now applies baseline destination-aware shipping zone rates and tax rules server-side
 - checkout pricing now reads settings-backed domestic/international shipping and tax rates from Store settings
+- checkout pricing now resolves persisted shipping-zone/rate and jurisdiction tax-rule configuration from admin-managed settings
+- checkout payload snapshots now persist shipping/tax resolution decisions for historical accuracy after config changes
 - discount applications and usage counts are persisted only after verified paid order creation succeeds
 - Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
 - webhook replay is available through admin API/UI on top of the durable delivery log
 - fast automated tests cover checkout pricing, discount-code math and invalid states, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, and invalid webhook signature rejection
+- fast automated tests now cover representative shipping-zone/rate and jurisdiction tax-resolution matrix behavior
 - `npm run test:integration` runs successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
-- gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
+- gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, and late payment-success webhook delivery against expired sessions
 - the real-DB run exposed and fixed a concurrent checkout customer-creation race; checkout customer creation must stay idempotent under concurrent payment-intent completion
+- late or conflicting failure webhooks cannot downgrade a completed paid checkout session
+- capped discounts now enforce usage limits transaction-safely under concurrent paid-order finalization
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
@@ -62,7 +67,7 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 
 ## Verified
 
-The repo passed these checks on April 26, 2026:
+The repo passed these checks on April 27, 2026:
 
 ```bash
 npm run db:generate
@@ -76,7 +81,7 @@ npm run build
 
 ### High Priority
 
-- Expand automated tests for deeper checkout validation failures and broader real-DB race-condition behavior beyond duplicate payment-intent completion
+- Expand automated tests for deeper checkout validation failures and broader real-DB race-condition behavior beyond the current inventory/webhook/discount race coverage
 - Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve in Phase 3
 - Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
@@ -107,8 +112,12 @@ These invariants should not be broken by future work:
 - browser redirect success does not create the order
 - duplicate Stripe events do not create duplicate orders
 - checkout customer creation is idempotent when duplicate payment-intent completions race
+- conflicting Stripe success/failure deliveries for one payment intent must not downgrade paid checkout state
 - inventory decrement happens only after verified payment success
 - discount applications and usage increments happen only after verified paid order creation
+- capped discount usage is enforced safely under concurrent paid-order finalization
+- late payment-success webhook delivery can finalize an expired checkout session exactly once
+- order/payment/inventory commits remain durable even when order confirmation email delivery fails
 - failed checkout state is persisted and visible to the user
 
 ## Pricing Hardening Target
@@ -133,12 +142,15 @@ The pricing service should own:
 - currency
 - rounding
 - checkout snapshot shape
+- zone/rate resolution precedence
+- jurisdiction override precedence
 
 Rules:
 
 - use integer minor units for money
 - never trust client-submitted totals
 - persist enough snapshot data to keep historical order truth accurate
+- persist shipping/tax resolution decisions with checkout snapshots
 - keep browser display logic separate from server pricing authority
 
 ## Inventory Hardening Target
@@ -150,6 +162,7 @@ The service should prove:
 - successful payment can decrement inventory
 - duplicate webhook delivery does not double-decrement
 - competing purchases cannot push stock negative
+- concurrent checkout creation near stock-out still keeps paid-order inventory deterministic
 - insufficient stock fails clearly
 - order/payment state remains consistent if inventory mutation fails
 
@@ -174,6 +187,8 @@ This enables:
 - safe replay
 - failed-email debugging
 - duplicate-delivery debugging
+- deterministic success/failure conflict handling for the same payment intent
+- deterministic late-success handling for expired checkout sessions
 - support/admin visibility
 
 ## Explicit Non-Goals
@@ -198,7 +213,7 @@ These ideas were intentionally rejected for this phase:
 
 The next hardening milestone is complete when:
 
-- checkout and webhook flows have broader automated coverage beyond the current real-DB inventory, discount, and duplicate payment-intent coverage
+- checkout and webhook flows have broader automated coverage beyond the current real-DB inventory, discount, success/failure conflict, and expired-session late-webhook coverage
 - new collection APIs are covered by DTO, publish-state, and auth expectations
 - failed webhook deliveries can be replayed safely
 - operational logging is good enough to debug a missing email or duplicate delivery without inspecting the database manually

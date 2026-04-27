@@ -2,8 +2,8 @@
 
 > Canonical status snapshot for developers, maintainers, and AI agents.
 >
-> Documentation refresh: April 26, 2026  
-> Last repo verification recorded in active docs: April 26, 2026  
+> Documentation refresh: April 27, 2026  
+> Last repo verification recorded in active docs: April 27, 2026  
 > Current active phase: **Phase 3 - Merchant Readiness And Storefront Differentiation**
 
 ## Why This File Exists
@@ -70,6 +70,7 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Product editor persistence and product-to-storefront sync
 - Standalone media library with upload, alt text editing, deletion, and linked-product visibility
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, and collections
+- Admin settings shipping workspace now supports CRUD for shipping zones, zone rates, and jurisdiction-aware tax rules
 - Admin collection workspace at `/admin/collections`
 - Collection service layer
 - Collection assignment and ordering support
@@ -88,6 +89,15 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Checkout accepts server-validated code discounts through the centralized pricing path
 - Checkout applies baseline destination-aware shipping zones/rates and tax rules through the centralized pricing path
 - Checkout pricing now reads merchant-configurable shipping and tax rates from store settings
+- Checkout pricing now resolves persisted shipping-zone/rate and tax-rule configuration from admin APIs
+- Checkout payload snapshots now persist shipping/tax resolution decisions for historical order-checkout truth
+- Admin pricing-configuration APIs now include:
+  - `GET/POST /api/settings/shipping-zones`
+  - `PATCH/DELETE /api/settings/shipping-zones/[zoneId]`
+  - `POST /api/settings/shipping-zones/[zoneId]/rates`
+  - `PATCH/DELETE /api/settings/shipping-zones/[zoneId]/rates/[rateId]`
+  - `GET/POST /api/settings/tax-rules`
+  - `PATCH/DELETE /api/settings/tax-rules/[ruleId]`
 - Checkout validates inventory before creating payment intent
 - Checkout session persistence
 - Paid and failed status tracking
@@ -134,15 +144,17 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 - Collection revalidation is targeted to storefront pages instead of broad API refreshes
 - Collection publish/unpublish semantics are backed by Prisma and storefront filtering
 - Fast automated tests cover checkout pricing, shipping/tax zone behavior, checkout-native discount math, checkout creation, checkout discount-code input handling, checkout payload validation failure handling, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
+- Fast automated tests now include representative shipping-zone/rate and jurisdiction tax-resolution matrix coverage
 - Fast tests now also cover webhook replay APIs and settings-backed shipping/tax pricing behavior
 - `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
-- Gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
+- Gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, and late payment-success webhook delivery against expired sessions
 - The real-DB run exposed and fixed a concurrent checkout customer-creation race; customer creation during payment-intent completion must stay idempotent
+- Failure webhooks no longer downgrade already-paid checkout sessions, and capped discount usage is now concurrency-safe at paid-order finalization
 
 ### Phase 3 Current Priorities
 
-1. Expand broader real-DB race/idempotency checks beyond duplicate payment-intent completion
-2. Refine shipping and tax behavior beyond current settings-backed defaults into richer zone/jurisdiction rules
+1. Maintain the new real-DB race/idempotency regression suite as checkout and webhook flows evolve
+2. Expand merchant ergonomics and validation around shipping-zone/rate and tax-rule configuration
 3. Add automated webhook retry controls and support diagnostics on top of replay + delivery logs
 4. Storefront merchandising and branding improvements
 5. Launch proof points for the developer-first story
@@ -162,10 +174,10 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 ### Highest Priority
 
 - Expanded automated tests for checkout validation failures beyond payload-schema checks
-- Broader real-DB race-condition coverage beyond duplicate payment-intent completion
+- Keep expanding real-DB race-condition coverage as new checkout/webhook behaviors land
 - Deeper collection coverage for assignment edge cases and mutation performance behavior
-- Richer shipping zones and rates beyond current settings-backed domestic/international defaults
-- More complete jurisdiction-aware tax logic beyond domestic/international settings rates
+- Richer shipping strategies beyond flat/tier zone rates
+- More complete jurisdiction-aware tax logic beyond current country/province overrides
 - Discount-code UX on storefront checkout surfaces, including stale-cart and rejected-code messaging
 
 ### Medium Priority
@@ -192,7 +204,7 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 ### High Priority
 
-- Expand automated tests for deeper checkout validation failures plus real-DB race-condition behavior beyond the current duplicate payment-intent coverage
+- Expand automated tests for deeper checkout validation failures plus real-DB race-condition behavior beyond the current inventory/webhook/discount race coverage
 - Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve
 - Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
@@ -232,7 +244,7 @@ Do not market or build around these yet:
 
 ## Verification History
 
-Validated in this repo on April 26, 2026:
+Validated in this repo on April 27, 2026:
 
 ```bash
 npm run db:generate

@@ -41,6 +41,49 @@ function buildOrderTotals(input: {
   }
 }
 
+async function incrementDiscountUsageWithCap(input: {
+  tx: Prisma.TransactionClient
+  discountId: string
+}) {
+  const discount = await input.tx.discount.findUnique({
+    where: { id: input.discountId },
+    select: {
+      id: true,
+      usageCount: true,
+      usageLimit: true,
+    },
+  })
+
+  if (!discount) {
+    throw new Error(`Discount ${input.discountId} could not be found`)
+  }
+
+  if (discount.usageLimit == null) {
+    await input.tx.discount.update({
+      where: { id: input.discountId },
+      data: { usageCount: { increment: 1 } },
+    })
+    return
+  }
+
+  if (discount.usageCount >= discount.usageLimit) {
+    throw new Error(`Discount usage limit reached for ${input.discountId}`)
+  }
+
+  const updated = await input.tx.discount.updateMany({
+    where: {
+      id: input.discountId,
+      usageCount: discount.usageCount,
+      usageLimit: discount.usageLimit,
+    },
+    data: { usageCount: { increment: 1 } },
+  })
+
+  if (updated.count === 0) {
+    throw new Error(`Discount usage limit reached for ${input.discountId}`)
+  }
+}
+
 export async function getOrders(params: {
   status?: OrderStatus
   paymentStatus?: PaymentStatus
@@ -343,9 +386,9 @@ export async function createOrder(data: {
 
       if (paymentStatus === 'PAID') {
         for (const discount of paidDiscountApplications) {
-          await tx.discount.update({
-            where: { id: discount.discountId },
-            data: { usageCount: { increment: 1 } },
+          await incrementDiscountUsageWithCap({
+            tx,
+            discountId: discount.discountId,
           })
         }
       }

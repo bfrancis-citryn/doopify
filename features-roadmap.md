@@ -2,8 +2,8 @@
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Documentation refresh: April 26, 2026  
-> Last repo verification recorded in active docs: April 26, 2026  
+> Documentation refresh: April 27, 2026  
+> Last repo verification recorded in active docs: April 27, 2026  
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -40,6 +40,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Checkout-native code discounts through the centralized pricing service
 - Baseline destination-aware shipping zone rates and tax rules in centralized pricing
 - Settings-backed domestic/international shipping and tax rates flowing through centralized pricing
+- Configurable shipping zones and zone rates through private settings APIs
+- Configurable jurisdiction-aware tax overrides through private settings APIs
+- Checkout pricing snapshots that persist shipping/tax resolution decisions into checkout payloads
 - Discount applications and usage counts created only after verified paid order creation succeeds
 - Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
 - Admin/API webhook replay tooling on top of delivery logs (`/api/webhook-deliveries` and `/api/webhook-deliveries/[id]/replay`)
@@ -53,7 +56,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Centralized checkout pricing service for subtotal, shipping, tax, discount, and total calculation
 - Vitest fast test harness covering pricing, checkout-native discount math, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
 - `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
-- `DATABASE_URL_TEST`-gated integration specs for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
+- `DATABASE_URL_TEST`-gated integration specs for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, and late payment-success webhook delivery against expired sessions
 
 ### Explicitly Deferred
 
@@ -164,11 +167,15 @@ Status: active now
 - checkout-native code discounts with server-owned validation and persisted paid-order applications
 - baseline destination-aware shipping/tax pricing rules in the server-owned checkout pricing authority
 - settings-backed shipping/tax configuration consumed by checkout pricing
+- persisted shipping-zone/rate and jurisdiction tax-rule configuration consumed by checkout pricing
+- checkout payload pricing snapshots that persist shipping/tax resolution decisions
+- private admin CRUD APIs for shipping zones, zone rates, and tax rules
+- settings shipping workspace editor for shipping zones/rates and jurisdiction tax overrides
 - durable webhook delivery logging in `POST /api/webhooks/stripe` with hashed payload tracking and delivery status transitions
 - replay API + admin visibility workspace for webhook deliveries (`/admin/webhooks`)
-- fast automated coverage for checkout pricing, checkout discount codes, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
-- executed real-DB checkout/inventory integration coverage for paid checkout, duplicate payment-intent idempotency, competing duplicate completions, insufficient stock, and paid-only/idempotent discount usage
-- a real-DB checkout run exposed and fixed a concurrent customer creation race in payment-intent completion
+- fast automated coverage for checkout pricing, zone/rate/jurisdiction matrix behavior, checkout discount codes, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
+- executed real-DB checkout/inventory integration coverage for paid checkout, duplicate payment-intent idempotency, competing duplicate completions, insufficient stock, paid-only/idempotent discount usage, and broader webhook/race scenarios
+- real-DB checkout runs exposed and fixed concurrent customer creation, failure-webhook downgrade, and discount-cap finalization race conditions
 
 ### Goals
 
@@ -192,7 +199,7 @@ Status: active now
 - seed data already contains starter collections, which is useful for UI development and storefront demos
 - `getStorefrontProducts()` already accepts `collectionHandle`, and collection-aware storefront filtering is now in place
 - collection list surfaces now use summary payloads while nested product data is reserved for detail reads
-- the recommended build order is now broader real-DB race coverage, deeper shipping/tax refinement, automated webhook retries/support diagnostics, and storefront merchandising polish
+- the recommended build order is now webhook retries/support diagnostics, storefront merchandising polish, and deeper checkout-failure UX contracts
 
 ### Planned Interfaces
 
@@ -248,7 +255,7 @@ Status: deferred until after Phase 3 and Phase 4 prove out
 
 ## Verification And Testing
 
-Validated in this repo on April 26, 2026:
+Validated in this repo on April 27, 2026:
 
 ```bash
 npm run db:generate
@@ -262,7 +269,7 @@ Next automated coverage priorities:
 
 - collection assignment and storefront collection visibility
 - collection auth and admin-only mutation edge-case coverage
-- broader real-DB race-condition handling beyond duplicate payment-intent completion
+- broader webhook retry/support diagnostics coverage
 - deeper checkout validation failures around stale carts and inactive/deleted variants
 
 ## Marketing Positioning

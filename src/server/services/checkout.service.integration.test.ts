@@ -1,13 +1,47 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { prisma } from '@/lib/prisma'
 
-import { completeCheckoutFromPaymentIntent } from './checkout.service'
+const mocks = vi.hoisted(() => ({
+  createStripePaymentIntent: vi.fn(),
+}))
+
+vi.mock('@/lib/stripe', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/stripe')>('@/lib/stripe')
+  return {
+    ...actual,
+    createStripePaymentIntent: mocks.createStripePaymentIntent,
+  }
+})
+
+import {
+  completeCheckoutFromPaymentIntent,
+  createCheckoutPaymentIntent,
+} from './checkout.service'
+import { processStripeWebhookEvent } from './stripe-webhook.service'
+import { integrationRegistry } from '@/server/integrations/registry'
 
 const runIntegration =
   process.env.DATABASE_URL_TEST && process.env.DATABASE_URL === process.env.DATABASE_URL_TEST
     ? describe
     : describe.skip
+const originalResendApiKey = process.env.RESEND_API_KEY
+
+function createBarrier(parties: number) {
+  let waiting = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  return async () => {
+    waiting += 1
+    if (waiting === parties) {
+      release()
+    }
+    await gate
+  }
+}
 
 const address = {
   firstName: 'Ada',
@@ -19,6 +53,10 @@ const address = {
 }
 
 async function cleanTestData() {
+  await prisma.webhookDelivery.deleteMany()
+  await prisma.shippingRate.deleteMany()
+  await prisma.shippingZone.deleteMany()
+  await prisma.taxRule.deleteMany()
   await prisma.discountApplication.deleteMany()
   await prisma.discount.deleteMany()
   await prisma.refund.deleteMany()
@@ -42,6 +80,105 @@ async function cleanTestData() {
   await prisma.productVariant.deleteMany()
   await prisma.product.deleteMany()
   await prisma.store.deleteMany()
+}
+
+async function seedVariant(input: {
+  paymentIntentId: string
+  inventory: number
+  price?: number
+}) {
+  await prisma.store.create({
+    data: {
+      name: 'Integration Store',
+      email: 'orders@example.com',
+      currency: 'USD',
+      shippingThreshold: 75,
+    },
+  })
+
+  const product = await prisma.product.create({
+    data: {
+      title: 'Integration Shirt',
+      handle: `integration-variant-${input.paymentIntentId}`,
+      status: 'ACTIVE',
+      variants: {
+        create: {
+          title: 'Default',
+          sku: `SKU-${input.paymentIntentId}`,
+          price: input.price ?? 25,
+          inventory: input.inventory,
+        },
+      },
+    },
+    include: {
+      variants: true,
+    },
+  })
+
+  return {
+    product,
+    variant: product.variants[0],
+  }
+}
+
+async function createCheckoutSession(input: {
+  paymentIntentId: string
+  email: string
+  productId: string
+  variantId: string
+  title: string
+  variantTitle: string
+  sku: string
+  price: number
+  quantity: number
+  discountApplication?: {
+    discountId: string
+    code?: string | null
+    title: string
+    method: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING' | 'BUY_X_GET_Y'
+    amount: number
+  }
+  status?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'EXPIRED'
+}) {
+  const subtotal = input.price * input.quantity
+  const shippingAmount = subtotal >= 75 ? 0 : 9.99
+  const discountAmount = input.discountApplication?.amount ?? 0
+  const total = Number((subtotal + shippingAmount - discountAmount).toFixed(2))
+
+  return prisma.checkoutSession.create({
+    data: {
+      paymentIntentId: input.paymentIntentId,
+      email: input.email,
+      currency: 'USD',
+      status: input.status ?? 'PENDING',
+      subtotal,
+      shippingAmount,
+      taxAmount: 0,
+      discountAmount,
+      total,
+      payload: {
+        email: input.email,
+        shippingAddress: address,
+        billingAddress: address,
+        items: [
+          {
+            productId: input.productId,
+            variantId: input.variantId,
+            title: input.title,
+            variantTitle: input.variantTitle,
+            sku: input.sku,
+            price: input.price,
+            quantity: input.quantity,
+          },
+        ],
+        ...(input.discountApplication
+          ? {
+              discountApplications: [input.discountApplication],
+            }
+          : {}),
+      },
+    },
+  })
 }
 
 async function seedCheckout({
@@ -154,11 +291,29 @@ async function seedCheckout({
 
 runIntegration('checkout service integration', () => {
   beforeEach(async () => {
+    process.env.RESEND_API_KEY = ''
     await cleanTestData()
+    let paymentIntentOrdinal = 0
+    mocks.createStripePaymentIntent.mockReset()
+    mocks.createStripePaymentIntent.mockImplementation(async (input: { amount: number; currency: string }) => {
+      paymentIntentOrdinal += 1
+      return {
+        id: `pi_mock_${paymentIntentOrdinal}`,
+        client_secret: `secret_mock_${paymentIntentOrdinal}`,
+        amount: input.amount,
+        currency: input.currency.toLowerCase(),
+        status: 'requires_payment_method',
+      }
+    })
   }, 60_000)
 
   afterAll(async () => {
     await cleanTestData()
+    if (originalResendApiKey == null) {
+      delete process.env.RESEND_API_KEY
+    } else {
+      process.env.RESEND_API_KEY = originalResendApiKey
+    }
     await prisma.$disconnect()
   }, 60_000)
 
@@ -342,5 +497,354 @@ runIntegration('checkout service integration', () => {
     expect(await prisma.order.count()).toBe(1)
     expect(await prisma.discountApplication.count()).toBe(1)
     expect(updatedDiscount.usageCount).toBe(1)
+  })
+
+  it('keeps stock and paid-order state deterministic when concurrent checkout creates race near stock-out', async () => {
+    const { variant, product } = await seedVariant({
+      paymentIntentId: 'pi_checkout_create_race_seed',
+      inventory: 1,
+    })
+    const waitAtStripeIntentCreation = createBarrier(2)
+    let paymentIntentOrdinal = 0
+
+    mocks.createStripePaymentIntent.mockImplementation(async (input: { amount: number; currency: string }) => {
+      await waitAtStripeIntentCreation()
+      paymentIntentOrdinal += 1
+      return {
+        id: `pi_checkout_create_race_${paymentIntentOrdinal}`,
+        client_secret: `secret_checkout_create_race_${paymentIntentOrdinal}`,
+        amount: input.amount,
+        currency: input.currency.toLowerCase(),
+        status: 'requires_payment_method',
+      }
+    })
+
+    const [firstCheckout, secondCheckout] = await Promise.all([
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: variant.id, quantity: 1 }],
+        shippingAddress: address,
+      }),
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: variant.id, quantity: 1 }],
+        shippingAddress: address,
+      }),
+    ])
+
+    expect(firstCheckout.paymentIntentId).not.toBe(secondCheckout.paymentIntentId)
+    expect(await prisma.checkoutSession.count()).toBe(2)
+    expect(await prisma.order.count()).toBe(0)
+
+    const completionResults = await Promise.allSettled([
+      completeCheckoutFromPaymentIntent({
+        id: firstCheckout.paymentIntentId,
+        amount: Math.round(firstCheckout.total * 100),
+        currency: 'usd',
+        status: 'succeeded',
+      }),
+      completeCheckoutFromPaymentIntent({
+        id: secondCheckout.paymentIntentId,
+        amount: Math.round(secondCheckout.total * 100),
+        currency: 'usd',
+        status: 'succeeded',
+      }),
+    ])
+
+    const successfulResults = completionResults.filter((result) => result.status === 'fulfilled')
+    const rejectedResults = completionResults.filter((result) => result.status === 'rejected')
+
+    expect(successfulResults).toHaveLength(1)
+    expect(rejectedResults).toHaveLength(1)
+    expect(String(rejectedResults[0].reason)).toContain(`Insufficient inventory for variant ${variant.id}`)
+
+    const updatedVariant = await prisma.productVariant.findUniqueOrThrow({
+      where: { id: variant.id },
+    })
+    const orderCount = await prisma.order.count()
+    const paymentCount = await prisma.payment.count()
+    const completedSessions = await prisma.checkoutSession.count({
+      where: { status: 'COMPLETED' },
+    })
+    const pendingSessions = await prisma.checkoutSession.count({
+      where: { status: 'PENDING' },
+    })
+    const createdOrderItems = await prisma.orderItem.findMany({
+      include: { product: true },
+    })
+
+    expect(orderCount).toBe(1)
+    expect(paymentCount).toBe(1)
+    expect(updatedVariant.inventory).toBe(0)
+    expect(completedSessions).toBe(1)
+    expect(pendingSessions).toBe(1)
+    expect(createdOrderItems).toHaveLength(1)
+    expect(createdOrderItems[0].productId).toBe(product.id)
+  })
+
+  it('does not downgrade completed checkout state during conflicting success/failure webhook delivery', async () => {
+    await seedCheckout({
+      paymentIntentId: 'pi_integration_conflicting_webhooks',
+      inventory: 5,
+      quantity: 1,
+    })
+
+    await Promise.all([
+      processStripeWebhookEvent({
+        id: 'evt_conflict_success',
+        type: 'payment_intent.succeeded',
+        data: {
+          object: {
+            id: 'pi_integration_conflicting_webhooks',
+            amount: 3499,
+            currency: 'usd',
+            status: 'succeeded',
+          },
+        },
+      }),
+      processStripeWebhookEvent({
+        id: 'evt_conflict_failed',
+        type: 'payment_intent.payment_failed',
+        data: {
+          object: {
+            id: 'pi_integration_conflicting_webhooks',
+            amount: 3499,
+            currency: 'usd',
+            status: 'requires_payment_method',
+            last_payment_error: {
+              message: 'Card declined',
+            },
+          },
+        },
+      }),
+    ])
+
+    await processStripeWebhookEvent({
+      id: 'evt_conflict_failed_late',
+      type: 'payment_intent.payment_failed',
+      data: {
+        object: {
+          id: 'pi_integration_conflicting_webhooks',
+          amount: 3499,
+          currency: 'usd',
+          status: 'requires_payment_method',
+          last_payment_error: {
+            message: 'Card declined',
+          },
+        },
+      },
+    })
+
+    const checkoutSession = await prisma.checkoutSession.findUniqueOrThrow({
+      where: { paymentIntentId: 'pi_integration_conflicting_webhooks' },
+    })
+    const orderCount = await prisma.order.count()
+    const paymentCount = await prisma.payment.count({
+      where: { stripePaymentIntentId: 'pi_integration_conflicting_webhooks' },
+    })
+
+    expect(orderCount).toBe(1)
+    expect(paymentCount).toBe(1)
+    expect(checkoutSession.status).toBe('COMPLETED')
+    expect(checkoutSession.failureReason).toBeNull()
+  })
+
+  it('keeps paid order finalization committed when confirmation email delivery fails', async () => {
+    await seedCheckout({
+      paymentIntentId: 'pi_integration_email_failure',
+      inventory: 5,
+      quantity: 1,
+    })
+
+    const orderPaidHandler = integrationRegistry.find((handler) => handler.event === 'order.paid')
+    if (!orderPaidHandler) {
+      throw new Error('order.paid handler is required for this integration test')
+    }
+
+    const originalOrderPaidHandle = orderPaidHandler.handle
+    orderPaidHandler.handle = async () => {
+      throw new Error('Email delivery failed')
+    }
+
+    try {
+      const order = await completeCheckoutFromPaymentIntent({
+        id: 'pi_integration_email_failure',
+        amount: 3499,
+        currency: 'usd',
+        status: 'succeeded',
+      })
+
+      const checkoutSession = await prisma.checkoutSession.findUniqueOrThrow({
+        where: { paymentIntentId: 'pi_integration_email_failure' },
+      })
+      const payment = await prisma.payment.findUniqueOrThrow({
+        where: { stripePaymentIntentId: 'pi_integration_email_failure' },
+      })
+
+      expect(order.paymentStatus).toBe('PAID')
+      expect(payment.status).toBe('PAID')
+      expect(checkoutSession.status).toBe('COMPLETED')
+      expect(await prisma.order.count()).toBe(1)
+      expect(await prisma.orderEvent.count({ where: { orderId: order.id } })).toBeGreaterThan(0)
+    } finally {
+      orderPaidHandler.handle = originalOrderPaidHandle
+    }
+  })
+
+  it('enforces discount usage cap under concurrent paid-order finalization', async () => {
+    const { product, variant } = await seedVariant({
+      paymentIntentId: 'pi_discount_cap_seed',
+      inventory: 4,
+    })
+    const discount = await prisma.discount.create({
+      data: {
+        code: 'CAP1',
+        title: 'Cap One',
+        type: 'CODE',
+        method: 'PERCENTAGE',
+        value: 20,
+        usageLimit: 1,
+        status: 'ACTIVE',
+      },
+    })
+
+    await createCheckoutSession({
+      paymentIntentId: 'pi_discount_cap_1',
+      email: 'ada@example.com',
+      productId: product.id,
+      variantId: variant.id,
+      title: product.title,
+      variantTitle: variant.title,
+      sku: variant.sku ?? 'SKU-1',
+      price: variant.price,
+      quantity: 1,
+      discountApplication: {
+        discountId: discount.id,
+        code: discount.code,
+        title: discount.title,
+        method: discount.method,
+        amount: 5,
+      },
+    })
+    await createCheckoutSession({
+      paymentIntentId: 'pi_discount_cap_2',
+      email: 'ada@example.com',
+      productId: product.id,
+      variantId: variant.id,
+      title: product.title,
+      variantTitle: variant.title,
+      sku: variant.sku ?? 'SKU-1',
+      price: variant.price,
+      quantity: 1,
+      discountApplication: {
+        discountId: discount.id,
+        code: discount.code,
+        title: discount.title,
+        method: discount.method,
+        amount: 5,
+      },
+    })
+
+    const completionResults = await Promise.allSettled([
+      completeCheckoutFromPaymentIntent({
+        id: 'pi_discount_cap_1',
+        amount: 2999,
+        currency: 'usd',
+        status: 'succeeded',
+      }),
+      completeCheckoutFromPaymentIntent({
+        id: 'pi_discount_cap_2',
+        amount: 2999,
+        currency: 'usd',
+        status: 'succeeded',
+      }),
+    ])
+
+    const successfulResults = completionResults.filter((result) => result.status === 'fulfilled')
+    const rejectedResults = completionResults.filter((result) => result.status === 'rejected')
+
+    expect(successfulResults).toHaveLength(1)
+    expect(rejectedResults).toHaveLength(1)
+    expect(String((rejectedResults[0] as PromiseRejectedResult).reason)).toContain(
+      `Discount usage limit reached for ${discount.id}`
+    )
+
+    const updatedVariant = await prisma.productVariant.findUniqueOrThrow({
+      where: { id: variant.id },
+    })
+    const updatedDiscount = await prisma.discount.findUniqueOrThrow({
+      where: { id: discount.id },
+    })
+
+    expect(updatedVariant.inventory).toBe(3)
+    expect(await prisma.order.count()).toBe(1)
+    expect(await prisma.payment.count()).toBe(1)
+    expect(await prisma.discountApplication.count()).toBe(1)
+    expect(updatedDiscount.usageCount).toBe(1)
+    expect(
+      await prisma.checkoutSession.count({
+        where: { status: 'COMPLETED' },
+      })
+    ).toBe(1)
+    expect(
+      await prisma.checkoutSession.count({
+        where: { status: 'PENDING' },
+      })
+    ).toBe(1)
+  })
+
+  it('allows late payment success webhooks to finalize an expired checkout session once', async () => {
+    await seedCheckout({
+      paymentIntentId: 'pi_integration_late_success',
+      inventory: 5,
+      quantity: 1,
+    })
+
+    await prisma.checkoutSession.update({
+      where: { paymentIntentId: 'pi_integration_late_success' },
+      data: {
+        status: 'EXPIRED',
+        failureReason: 'Checkout session expired',
+      },
+    })
+
+    await processStripeWebhookEvent({
+      id: 'evt_late_success',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_integration_late_success',
+          amount: 3499,
+          currency: 'usd',
+          status: 'succeeded',
+        },
+      },
+    })
+
+    await processStripeWebhookEvent({
+      id: 'evt_late_success_duplicate',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_integration_late_success',
+          amount: 3499,
+          currency: 'usd',
+          status: 'succeeded',
+        },
+      },
+    })
+
+    const checkoutSession = await prisma.checkoutSession.findUniqueOrThrow({
+      where: { paymentIntentId: 'pi_integration_late_success' },
+    })
+    const paymentCount = await prisma.payment.count({
+      where: { stripePaymentIntentId: 'pi_integration_late_success' },
+    })
+
+    expect(await prisma.order.count()).toBe(1)
+    expect(paymentCount).toBe(1)
+    expect(checkoutSession.status).toBe('COMPLETED')
+    expect(checkoutSession.failureReason).toBeNull()
+    expect(checkoutSession.completedAt).toBeInstanceOf(Date)
   })
 })
