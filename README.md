@@ -27,7 +27,9 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Idempotent paid-order creation keyed from verified Stripe payment success
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized server pricing path
+- Baseline destination-aware shipping zone rates and tax rules through the centralized server pricing path
 - Discount applications and usage counts created only after verified paid order creation succeeds
+- Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
 - Admin collection management at `/admin/collections`
 - Collection publish/unpublish semantics with unpublished collections hidden from storefront reads
 - Storefront-safe collection DTOs with summary/detail query separation
@@ -44,21 +46,21 @@ The current active product phase is **Phase 3: Merchant Readiness And Storefront
 
 Current priorities:
 
-1. Extend checkout pricing from code discounts into configurable shipping and basic tax rules
-2. Add admin collection mutation, assignment, ordering, and publish/unpublish coverage
-3. Expand broader real-DB idempotency/race-condition coverage beyond duplicate payment-intent completion
+1. Expand broader real-DB idempotency/race-condition coverage beyond duplicate payment-intent completion
+2. Refine shipping and tax behavior from baseline defaults into configurable merchant-grade rules
+3. Add webhook replay and support visibility on top of durable delivery logs
 4. Stronger storefront merchandising and branding surfaces
-5. Operational hardening: shared rate limits, webhook replay, audit logs, and production Postgres SSL review
+5. Operational hardening: shared rate limits, audit logs, and production Postgres SSL review
 
 ### Known follow-up gaps
 
 - More complete tax logic
-- Configurable shipping zones and rates
+- Configurable shipping zones and rates beyond current baseline defaults
 - Discount-code storefront UX polish and rejected-code messaging
 - Refund and return flows connected to payments and inventory
-- More coverage for admin-only collection mutations and broader real-DB idempotency/race-condition behavior
+- More edge-case coverage for admin collection mutations and broader real-DB idempotency/race-condition behavior
 - Shared rate-limiting store before multi-instance deployment
-- Webhook delivery logs, retries, and replay tooling
+- Webhook delivery retry/replay tooling and support-facing visibility
 - Audit logging around settings changes, payment events, and fulfillment operations
 - Moving media binary storage out of Postgres into object storage/CDN later
 

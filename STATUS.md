@@ -86,12 +86,14 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Checkout recalculates totals server-side
 - Checkout pricing is centralized in `src/server/checkout/pricing.ts`
 - Checkout accepts server-validated code discounts through the centralized pricing path
+- Checkout applies baseline destination-aware shipping zones/rates and tax rules through the centralized pricing path
 - Checkout validates inventory before creating payment intent
 - Checkout session persistence
 - Paid and failed status tracking
 - Orders, payments, inventory decrements, and order events are created only after verified Stripe payment success
 - Duplicate webhook deliveries are handled idempotently through the payment-intent path, including recovery when a race surfaces as a non-unique transaction error
 - Discount applications and discount usage counts are created only after verified paid order creation succeeds
+- Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
 - Checkout failure state is surfaced on the success-page polling flow
 
 ### Internal Extensibility
@@ -129,16 +131,16 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 - Admin collection mutations patch local state instead of reloading the whole workspace
 - Collection revalidation is targeted to storefront pages instead of broad API refreshes
 - Collection publish/unpublish semantics are backed by Prisma and storefront filtering
-- Fast automated tests cover checkout pricing, checkout-native discount math, checkout creation, checkout discount-code input handling, checkout payload validation failure handling, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
+- Fast automated tests cover checkout pricing, shipping/tax zone behavior, checkout-native discount math, checkout creation, checkout discount-code input handling, checkout payload validation failure handling, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
 - `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
 - Gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
 - The real-DB run exposed and fixed a concurrent checkout customer-creation race; customer creation during payment-intent completion must stay idempotent
 
 ### Phase 3 Current Priorities
 
-1. Extend checkout pricing beyond code discounts into configurable shipping zones/rates and basic tax rules
-2. Add automated coverage for admin-only collection mutations, product assignment, ordering, and publish/unpublish visibility
-3. Expand broader real-DB race/idempotency checks beyond duplicate payment-intent completion
+1. Expand broader real-DB race/idempotency checks beyond duplicate payment-intent completion
+2. Refine shipping and tax rules from baseline defaults into configurable merchant-grade behavior
+3. Add webhook replay/admin visibility tooling on top of the new durable delivery log
 4. Storefront merchandising and branding improvements
 5. Launch proof points for the developer-first story
 
@@ -158,9 +160,9 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 - Expanded automated tests for checkout validation failures beyond payload-schema checks
 - Broader real-DB race-condition coverage beyond duplicate payment-intent completion
-- Automated tests for collection assignment and admin-only collection mutations
-- Configurable shipping zones and rates
-- More complete tax logic
+- Deeper collection coverage for assignment edge cases and mutation performance behavior
+- Configurable shipping zones and rates beyond baseline defaults
+- More complete jurisdiction-aware tax logic
 - Discount-code UX on storefront checkout surfaces, including stale-cart and rejected-code messaging
 
 ### Medium Priority
@@ -198,7 +200,7 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 - Extract remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only
 - Keep storefront collection reads public and read-only
-- Add outbound webhook delivery logs, retries, and replay tooling
+- Add webhook replay tooling and support-facing visibility on top of the durable delivery log
 - Add stronger audit logging around settings changes, payment events, and fulfillment operations
 
 ### Later

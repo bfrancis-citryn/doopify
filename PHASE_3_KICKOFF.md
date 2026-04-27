@@ -53,16 +53,18 @@ Already available:
 - collection publish/unpublish semantics with storefront filtering
 - centralized checkout pricing service in `src/server/checkout/pricing.ts`
 - checkout-native code discounts through the centralized pricing service
+- baseline destination-aware shipping zone rates and tax rules in centralized pricing
 - discount applications and usage counts created only after verified paid order creation succeeds
-- fast automated tests for pricing, discount-code math, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
+- durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
+- fast automated tests for pricing, discount-code math, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront collection DTO safety
 - `DATABASE_URL_TEST`-gated real-DB integration tests for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount usage
 - the real-DB integration run exposed and fixed a concurrent checkout customer-creation race during payment-intent completion
 
 ## Phase 3 Build Order
 
-### 1. Harden Checkout Pricing
+### 1. Expand Revenue-Path Race Coverage
 
-The initial revenue-path coverage is now in place and has been executed against a disposable Postgres test target. Continue checkout pricing from code discounts into the remaining money rules.
+The initial revenue-path coverage is in place. Extend real-DB race/idempotency assertions beyond duplicate payment-intent completion so concurrent payment-success paths remain deterministic.
 
 Pricing service should own:
 
@@ -81,30 +83,16 @@ Acceptance:
 
 - browser never owns totals
 - discount logic stays server-side and idempotent after verified payment success
-- shipping/tax additions do not move pricing client-side
+- shipping/tax refinement does not move pricing client-side
 - checkout and webhook behavior remains idempotent
 
-### 2. Cover Admin Collections
+### 2. Refine Shipping, Tax, And Discount UX
 
-Finish and verify:
+Current pricing now includes baseline destination-aware shipping and tax behavior. Next, move from baseline rules to configurable merchant-grade logic and finish checkout UX around discount rejections and stale-cart handling.
 
-- create collection
-- edit collection
-- delete collection
-- assign products
-- order products inside a collection
-- view collections on storefront
-- view collection detail pages
-- protect admin-only mutations
-- expose only storefront-safe DTOs publicly
-- verify publish/unpublish behavior across admin and storefront
-
-Acceptance:
-
-- merchants can manage collections without manual DB changes
-- public users can browse collections without seeing private fields
-- list pages avoid nested product overfetching
-- collection mutations do not reload the entire admin workspace unnecessarily
+- configurable shipping zones/rates
+- jurisdiction-aware tax refinement
+- discount rejection/out-of-stock/stale-cart UX around checkout failures
 
 ### 3. Improve Failure Handling
 
