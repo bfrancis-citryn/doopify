@@ -2,7 +2,7 @@
 
 > Active execution brief.
 >
-> Documentation refresh: April 25, 2026  
+> Documentation refresh: April 26, 2026
 > Current phase: **Phase 3**
 
 ## Phase Intent
@@ -52,11 +52,39 @@ Already available:
 - local admin collection mutation state updates
 - collection publish/unpublish semantics with storefront filtering
 - centralized checkout pricing service in `src/server/checkout/pricing.ts`
-- fast automated tests for pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
+- checkout-native code discounts through the centralized pricing service
+- discount applications and usage counts created only after verified paid order creation succeeds
+- fast automated tests for pricing, discount-code math, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
+- `DATABASE_URL_TEST`-gated real-DB integration tests for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount usage
+- the real-DB integration run exposed and fixed a concurrent checkout customer-creation race during payment-intent completion
 
 ## Phase 3 Build Order
 
-### 1. Stabilize Collections
+### 1. Harden Checkout Pricing
+
+The initial revenue-path coverage is now in place and has been executed against a disposable Postgres test target. Continue checkout pricing from code discounts into the remaining money rules.
+
+Pricing service should own:
+
+- live item validation
+- product/variant availability
+- subtotal
+- discounts
+- shipping
+- tax
+- total
+- currency
+- rounding
+- persisted checkout snapshot
+
+Acceptance:
+
+- browser never owns totals
+- discount logic stays server-side and idempotent after verified payment success
+- shipping/tax additions do not move pricing client-side
+- checkout and webhook behavior remains idempotent
+
+### 2. Cover Admin Collections
 
 Finish and verify:
 
@@ -77,30 +105,6 @@ Acceptance:
 - public users can browse collections without seeing private fields
 - list pages avoid nested product overfetching
 - collection mutations do not reload the entire admin workspace unnecessarily
-
-### 2. Harden Checkout Pricing
-
-Extend the centralized pricing service so discounts, shipping, and tax do not scatter across UI and route handlers.
-
-Pricing service should own:
-
-- live item validation
-- product/variant availability
-- subtotal
-- discounts
-- shipping
-- tax
-- total
-- currency
-- rounding
-- persisted checkout snapshot
-
-Acceptance:
-
-- browser never owns totals
-- discount logic changes do not require rewriting checkout route internals
-- shipping/tax additions do not move pricing client-side
-- checkout and webhook behavior remains idempotent
 
 ### 3. Improve Failure Handling
 

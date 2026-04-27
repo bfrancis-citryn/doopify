@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    discount: {
+      findUnique: vi.fn(),
+    },
   },
   createStripePaymentIntent: vi.fn(),
   getStoreSettings: vi.fn(),
@@ -143,6 +146,129 @@ describe('checkout service', () => {
     })
   })
 
+  it('applies an active discount code through server-owned pricing', async () => {
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.prisma.discount.findUnique.mockResolvedValue({
+      id: 'discount_1',
+      code: 'LAUNCH10',
+      title: 'Launch 10',
+      type: 'CODE',
+      method: 'PERCENTAGE',
+      value: 10,
+      minimumOrder: null,
+      usageLimit: null,
+      usageCount: 0,
+      status: 'ACTIVE',
+      startsAt: null,
+      endsAt: null,
+    })
+    mocks.createStripePaymentIntent.mockResolvedValue({
+      id: 'pi_discount',
+      client_secret: 'secret_discount',
+      amount: 5499,
+      currency: 'usd',
+      status: 'requires_payment_method',
+    })
+    mocks.prisma.checkoutSession.create.mockResolvedValue({
+      id: 'checkout_discount',
+    })
+
+    const checkout = await createCheckoutPaymentIntent({
+      email: 'ada@example.com',
+      items: [{ variantId: 'variant_1', quantity: 2 }],
+      shippingAddress: address,
+      discountCode: ' launch10 ',
+    })
+
+    expect(mocks.prisma.discount.findUnique).toHaveBeenCalledWith({
+      where: { code: 'LAUNCH10' },
+    })
+    expect(mocks.createStripePaymentIntent).toHaveBeenCalledWith({
+      amount: 5499,
+      currency: 'USD',
+      email: 'ada@example.com',
+      metadata: {
+        checkoutEmail: 'ada@example.com',
+      },
+    })
+    expect(mocks.prisma.checkoutSession.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        paymentIntentId: 'pi_discount',
+        subtotal: 50,
+        shippingAmount: 9.99,
+        taxAmount: 0,
+        discountAmount: 5,
+        total: 54.99,
+        payload: expect.objectContaining({
+          discountApplications: [
+            {
+              discountId: 'discount_1',
+              code: 'LAUNCH10',
+              title: 'Launch 10',
+              method: 'PERCENTAGE',
+              amount: 5,
+            },
+          ],
+        }),
+      }),
+    })
+    expect(checkout).toMatchObject({
+      checkoutSessionId: 'checkout_discount',
+      subtotal: 50,
+      shippingAmount: 9.99,
+      discountAmount: 5,
+      total: 54.99,
+      appliedDiscount: {
+        discountId: 'discount_1',
+        code: 'LAUNCH10',
+        amount: 5,
+      },
+    })
+  })
+
+  it('rejects missing discount codes before creating a Stripe payment intent', async () => {
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.prisma.discount.findUnique.mockResolvedValue(null)
+
+    await expect(
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: 'variant_1', quantity: 2 }],
+        shippingAddress: address,
+        discountCode: 'missing',
+      })
+    ).rejects.toThrow('Discount code not found')
+
+    expect(mocks.createStripePaymentIntent).not.toHaveBeenCalled()
+    expect(mocks.prisma.checkoutSession.create).not.toHaveBeenCalled()
+  })
+
   it('returns the existing paid order for duplicate payment-intent completion', async () => {
     const existingOrder = {
       id: 'order_1',
@@ -163,5 +289,33 @@ describe('checkout service', () => {
       data: { status: 'COMPLETED', completedAt: expect.any(Date) },
     })
     expect(mocks.createOrder).not.toHaveBeenCalled()
+  })
+
+  it('fails checkout creation when requested quantity exceeds live inventory', async () => {
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 1,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+
+    await expect(
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: 'variant_1', quantity: 2 }],
+        shippingAddress: address,
+      })
+    ).rejects.toThrow('Only 1 units left for Test Shirt')
+
+    expect(mocks.createStripePaymentIntent).not.toHaveBeenCalled()
+    expect(mocks.prisma.checkoutSession.create).not.toHaveBeenCalled()
   })
 })

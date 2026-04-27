@@ -85,11 +85,13 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Checkout validates live variant data
 - Checkout recalculates totals server-side
 - Checkout pricing is centralized in `src/server/checkout/pricing.ts`
+- Checkout accepts server-validated code discounts through the centralized pricing path
 - Checkout validates inventory before creating payment intent
 - Checkout session persistence
 - Paid and failed status tracking
 - Orders, payments, inventory decrements, and order events are created only after verified Stripe payment success
-- Duplicate webhook deliveries are handled idempotently through the payment-intent path
+- Duplicate webhook deliveries are handled idempotently through the payment-intent path, including recovery when a race surfaces as a non-unique transaction error
+- Discount applications and discount usage counts are created only after verified paid order creation succeeds
 - Checkout failure state is surfaced on the success-page polling flow
 
 ### Internal Extensibility
@@ -127,14 +129,18 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 - Admin collection mutations patch local state instead of reloading the whole workspace
 - Collection revalidation is targeted to storefront pages instead of broad API refreshes
 - Collection publish/unpublish semantics are backed by Prisma and storefront filtering
-- Fast automated tests cover checkout pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
+- Fast automated tests cover checkout pricing, checkout-native discount math, checkout creation, checkout discount-code input handling, checkout payload validation failure handling, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
+- `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
+- Gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
+- The real-DB run exposed and fixed a concurrent checkout customer-creation race; customer creation during payment-intent completion must stay idempotent
 
 ### Phase 3 Current Priorities
 
-1. Expand automated revenue-path coverage, especially inventory exhaustion and real-DB race/idempotency checks
-2. Build discount, shipping, and tax behavior through the centralized checkout pricing service
-3. Storefront merchandising and branding improvements
-4. Launch proof points for the developer-first story
+1. Extend checkout pricing beyond code discounts into configurable shipping zones/rates and basic tax rules
+2. Add automated coverage for admin-only collection mutations, product assignment, ordering, and publish/unpublish visibility
+3. Expand broader real-DB race/idempotency checks beyond duplicate payment-intent completion
+4. Storefront merchandising and branding improvements
+5. Launch proof points for the developer-first story
 
 ### Phase 3 Acceptance Checks
 
@@ -150,12 +156,12 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 ### Highest Priority
 
-- Automated tests for checkout validation failures
-- Automated tests for stock exhaustion and race-condition handling
+- Expanded automated tests for checkout validation failures beyond payload-schema checks
+- Broader real-DB race-condition coverage beyond duplicate payment-intent completion
 - Automated tests for collection assignment and admin-only collection mutations
-- Discount application inside checkout totals
 - Configurable shipping zones and rates
 - More complete tax logic
+- Discount-code UX on storefront checkout surfaces, including stale-cart and rejected-code messaging
 
 ### Medium Priority
 
@@ -181,7 +187,7 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 ### High Priority
 
-- Expand automated tests for checkout validation failures, inventory exhaustion, and real-DB idempotency/race-condition behavior
+- Expand automated tests for deeper checkout validation failures plus real-DB race-condition behavior beyond the current duplicate payment-intent coverage
 - Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve
 - Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
@@ -227,6 +233,7 @@ Validated in this repo on April 26, 2026:
 npm run db:generate
 npx tsc --noEmit
 npm run test
+npm run test:integration # with DATABASE_URL_TEST configured to a disposable Postgres database/schema
 npm run build
 ```
 

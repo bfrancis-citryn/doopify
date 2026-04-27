@@ -1,6 +1,7 @@
 import { Prisma, type FulfillmentStatus, type OrderStatus, type PaymentStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import type { CheckoutAppliedDiscount } from '@/server/checkout/pricing'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 
 function roundCurrency(value: number) {
@@ -38,10 +39,6 @@ function buildOrderTotals(input: {
     discountAmount,
     total,
   }
-}
-
-function isUniqueConstraintError(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
 }
 
 export async function getOrders(params: {
@@ -184,6 +181,7 @@ export async function createOrder(data: {
   shippingAmount?: number
   discountAmount?: number
   currency?: string
+  discountApplications?: CheckoutAppliedDiscount[]
   stripePaymentIntentId?: string
   stripeChargeId?: string
   paymentStatus?: PaymentStatus
@@ -211,6 +209,8 @@ export async function createOrder(data: {
   const paymentStatus = data.paymentStatus ?? 'PAID'
   const fulfillmentStatus = data.fulfillmentStatus ?? 'UNFULFILLED'
   const orderStatus = data.status ?? 'OPEN'
+  const discountApplications = data.discountApplications ?? []
+  const paidDiscountApplications = paymentStatus === 'PAID' ? discountApplications : []
 
   try {
     const order = await prisma.$transaction(async (tx) => {
@@ -288,6 +288,14 @@ export async function createOrder(data: {
                 },
               }
             : undefined,
+          discountApplications: paidDiscountApplications.length
+            ? {
+                create: paidDiscountApplications.map((discount) => ({
+                  discountId: discount.discountId,
+                  amount: roundCurrency(discount.amount),
+                })),
+              }
+            : undefined,
           events: {
             create: [
               {
@@ -333,6 +341,15 @@ export async function createOrder(data: {
         })
       }
 
+      if (paymentStatus === 'PAID') {
+        for (const discount of paidDiscountApplications) {
+          await tx.discount.update({
+            where: { id: discount.discountId },
+            data: { usageCount: { increment: 1 } },
+          })
+        }
+      }
+
       return createdOrder
     })
 
@@ -375,7 +392,7 @@ export async function createOrder(data: {
 
     return order
   } catch (error) {
-    if (data.stripePaymentIntentId && isUniqueConstraintError(error)) {
+    if (data.stripePaymentIntentId) {
       const existingOrder = await getOrderByPaymentIntentId(data.stripePaymentIntentId)
       if (existingOrder) {
         return existingOrder

@@ -41,9 +41,14 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 - checkout pricing now flows through `src/server/checkout/pricing.ts`
 - checkout validates live variant pricing and inventory before creating the payment intent
 - orders are created only from verified Stripe webhook success
-- duplicate webhook deliveries are handled idempotently through the payment-intent path
+- duplicate webhook deliveries are handled idempotently through the payment-intent path, including recovery when a race surfaces as a non-unique transaction error
 - checkout failure state is persisted and surfaced on the success-page polling flow
-- fast automated tests cover checkout pricing, checkout creation, duplicate payment-intent completion, and invalid webhook signature rejection
+- checkout-native code discounts are calculated through the server pricing authority
+- discount applications and usage counts are persisted only after verified paid order creation succeeds
+- fast automated tests cover checkout pricing, discount-code math and invalid states, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, and invalid webhook signature rejection
+- `npm run test:integration` runs successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
+- gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
+- the real-DB run exposed and fixed a concurrent checkout customer-creation race; checkout customer creation must stay idempotent under concurrent payment-intent completion
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
@@ -59,6 +64,7 @@ The repo passed these checks on April 26, 2026:
 npm run db:generate
 npx tsc --noEmit
 npm run test
+npm run test:integration # with DATABASE_URL_TEST configured to a disposable Postgres database/schema
 npm run build
 ```
 
@@ -66,7 +72,7 @@ npm run build
 
 ### High Priority
 
-- Expand automated tests for checkout validation failures, inventory exhaustion, and real-DB idempotency/race-condition behavior
+- Expand automated tests for deeper checkout validation failures and broader real-DB race-condition behavior beyond duplicate payment-intent completion
 - Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve in Phase 3
 - Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
 - Move rate limiting from in-memory process state to a shared store before multi-instance deployment
@@ -96,7 +102,9 @@ These invariants should not be broken by future work:
 - Stripe webhook success finalizes order creation
 - browser redirect success does not create the order
 - duplicate Stripe events do not create duplicate orders
+- checkout customer creation is idempotent when duplicate payment-intent completions race
 - inventory decrement happens only after verified payment success
+- discount applications and usage increments happen only after verified paid order creation
 - failed checkout state is persisted and visible to the user
 
 ## Pricing Hardening Target
@@ -186,7 +194,7 @@ These ideas were intentionally rejected for this phase:
 
 The next hardening milestone is complete when:
 
-- checkout and webhook flows have broader automated coverage, including real-DB inventory behavior
+- checkout and webhook flows have broader automated coverage beyond the current real-DB inventory, discount, and duplicate payment-intent coverage
 - new collection APIs are covered by DTO, publish-state, and auth expectations
 - failed webhook deliveries can be replayed safely
 - operational logging is good enough to debug a missing email or duplicate delivery without inspecting the database manually

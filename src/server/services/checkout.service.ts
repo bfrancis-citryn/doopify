@@ -3,7 +3,7 @@ import { Prisma, type CheckoutSessionStatus } from '@prisma/client'
 import { createStripePaymentIntent, type StripePaymentIntent } from '@/lib/stripe'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
-import { buildCheckoutPricing } from '@/server/checkout/pricing'
+import { buildCheckoutPricing, type CheckoutAppliedDiscount } from '@/server/checkout/pricing'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
 import { createOrder, getOrderByPaymentIntentId } from '@/server/services/order.service'
 import { getStoreSettings } from '@/server/services/settings.service'
@@ -39,6 +39,7 @@ type CheckoutPayload = {
   }>
   shippingAddress: CheckoutAddress
   billingAddress: CheckoutAddress
+  discountApplications?: CheckoutAppliedDiscount[]
 }
 
 function normalizeEmail(email: string) {
@@ -63,6 +64,10 @@ function normalizeAddress(input: CheckoutAddress): CheckoutAddress {
 function getLatestChargeId(intent: StripePaymentIntent) {
   if (!intent.latest_charge) return undefined
   return typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge.id
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
 }
 
 async function resolveLineItems(items: CheckoutItemInput[]) {
@@ -107,16 +112,44 @@ async function resolveLineItems(items: CheckoutItemInput[]) {
   })
 }
 
+async function resolveDiscountCode(discountCode?: string) {
+  const code = discountCode?.trim().toUpperCase()
+  if (!code) {
+    return null
+  }
+
+  const discount = await prisma.discount.findUnique({
+    where: { code },
+  })
+
+  if (!discount) {
+    throw new Error('Discount code not found')
+  }
+
+  return discount
+}
+
 async function resolveCheckoutCustomer(payload: CheckoutPayload) {
   let customer = await getCustomerByEmail(payload.email)
 
   if (!customer) {
-    customer = await createCustomer({
-      email: payload.email,
-      firstName: payload.shippingAddress.firstName,
-      lastName: payload.shippingAddress.lastName,
-      phone: payload.shippingAddress.phone,
-    })
+    try {
+      customer = await createCustomer({
+        email: payload.email,
+        firstName: payload.shippingAddress.firstName,
+        lastName: payload.shippingAddress.lastName,
+        phone: payload.shippingAddress.phone,
+      })
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) {
+        throw error
+      }
+
+      customer = await getCustomerByEmail(payload.email)
+      if (!customer) {
+        throw error
+      }
+    }
   }
 
   if (customer && customer.addresses.length === 0) {
@@ -143,13 +176,15 @@ export async function createCheckoutPaymentIntent(input: {
   items: CheckoutItemInput[]
   shippingAddress: CheckoutAddress
   billingAddress?: CheckoutAddress
+  discountCode?: string
 }) {
   const store = await getStoreSettings()
   const normalizedEmail = normalizeEmail(input.email)
   const lineItems = await resolveLineItems(input.items)
   const shippingAddress = normalizeAddress(input.shippingAddress)
   const billingAddress = normalizeAddress(input.billingAddress ?? input.shippingAddress)
-  const pricing = buildCheckoutPricing(lineItems, store?.shippingThreshold)
+  const discount = await resolveDiscountCode(input.discountCode)
+  const pricing = buildCheckoutPricing(lineItems, store?.shippingThreshold, { discount })
   const currency = (store?.currency || 'USD').toUpperCase()
   const customer = await getCustomerByEmail(normalizedEmail)
 
@@ -171,6 +206,7 @@ export async function createCheckoutPaymentIntent(input: {
     items: lineItems,
     shippingAddress,
     billingAddress,
+    ...(pricing.appliedDiscount ? { discountApplications: [pricing.appliedDiscount] } : {}),
   }
 
   const checkoutSession = await prisma.checkoutSession.create({
@@ -225,6 +261,7 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
     items: payload.items,
     shippingAddress: payload.shippingAddress,
     billingAddress: payload.billingAddress,
+    discountApplications: payload.discountApplications,
     taxAmount: checkoutSession.taxAmount,
     shippingAmount: checkoutSession.shippingAmount,
     discountAmount: checkoutSession.discountAmount,

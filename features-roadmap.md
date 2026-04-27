@@ -37,6 +37,8 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Idempotent order creation from verified Stripe payment success
 - Checkout session persistence plus paid and failed status tracking
 - Inventory decrement only after verified payment success
+- Checkout-native code discounts through the centralized pricing service
+- Discount applications and usage counts created only after verified paid order creation succeeds
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
 - Public storefront settings endpoint for branding-safe store data
@@ -45,7 +47,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Storefront collection browsing at `/collections` and `/collections/[handle]`
 - Collection publish/unpublish semantics with storefront filtering
 - Centralized checkout pricing service for subtotal, shipping, tax, discount, and total calculation
-- Vitest fast test harness covering pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
+- Vitest fast test harness covering pricing, checkout-native discount math, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
+- `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
+- `DATABASE_URL_TEST`-gated integration specs for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, and paid-only/idempotent discount application usage
 
 ### Explicitly Deferred
 
@@ -113,9 +117,9 @@ Status: shipped foundation, still expanding
 
 ### Remaining Follow-Up
 
-- discount application inside checkout totals
 - more complete tax logic
 - configurable shipping zones and rates
+- discount-code checkout UX polish and failure messaging
 - refund and return flows connected to payments and inventory
 
 ## Phase 2 - Add Internal Extension Seams
@@ -153,7 +157,10 @@ Status: active now
 - admin collection mutations now patch local state instead of reloading the entire workspace
 - collection revalidation is targeted to storefront pages instead of broad API refreshes
 - collection publish/unpublish semantics with unpublished collections hidden from storefront reads
-- fast automated coverage for checkout pricing, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
+- checkout-native code discounts with server-owned validation and persisted paid-order applications
+- fast automated coverage for checkout pricing, checkout discount codes, checkout creation, duplicate payment-intent completion, invalid webhook signatures, and storefront-safe collection DTOs
+- executed real-DB checkout/inventory integration coverage for paid checkout, duplicate payment-intent idempotency, competing duplicate completions, insufficient stock, and paid-only/idempotent discount usage
+- a real-DB checkout run exposed and fixed a concurrent customer creation race in payment-intent completion
 
 ### Goals
 
@@ -177,7 +184,7 @@ Status: active now
 - seed data already contains starter collections, which is useful for UI development and storefront demos
 - `getStorefrontProducts()` already accepts `collectionHandle`, and collection-aware storefront filtering is now in place
 - collection list surfaces now use summary payloads while nested product data is reserved for detail reads
-- the recommended build order is collections first, then checkout pricing hardening, then storefront merchandising, with automated coverage expanded throughout
+- the recommended build order is now checkout pricing hardening after the revenue-path test pass, then admin collection mutation coverage, webhook observability, and storefront merchandising
 
 ### Planned Interfaces
 
@@ -205,7 +212,7 @@ Status: active now
 
 ### Explicit Follow-Up Gaps
 
-- automated coverage should expand to checkout validation failures, inventory exhaustion, admin-only collection mutations, and real-DB idempotency/race-condition behavior
+- automated coverage should expand to deeper checkout validation failures, admin-only collection mutations, and broader real-DB idempotency/race-condition behavior
 
 ## Phase 4 - Extract Platform Pieces
 
@@ -239,15 +246,16 @@ Validated in this repo on April 26, 2026:
 npm run db:generate
 npx tsc --noEmit
 npm run test
+npm run test:integration # with DATABASE_URL_TEST configured to a disposable Postgres database/schema
 npm run build
 ```
 
 Next automated coverage priorities:
 
-- checkout validation failures
-- stock exhaustion and race-condition handling
 - collection assignment and storefront collection visibility
 - collection auth and admin-only mutation coverage
+- broader real-DB race-condition handling beyond duplicate payment-intent completion
+- deeper checkout validation failures around stale carts and inactive/deleted variants
 
 ## Marketing Positioning
 

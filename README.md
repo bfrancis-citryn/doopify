@@ -26,6 +26,8 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Checkout session persistence with paid and failed status tracking
 - Idempotent paid-order creation keyed from verified Stripe payment success
 - Inventory decrement only after verified payment success
+- Checkout-native code discounts through the centralized server pricing path
+- Discount applications and usage counts created only after verified paid order creation succeeds
 - Admin collection management at `/admin/collections`
 - Collection publish/unpublish semantics with unpublished collections hidden from storefront reads
 - Storefront-safe collection DTOs with summary/detail query separation
@@ -34,7 +36,7 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Typed internal event dispatcher
 - Static server-side integration registry
 - First-party event consumers for logging and order confirmation email delivery
-- Vitest fast test harness plus a `DATABASE_URL_TEST`-gated integration test entry point
+- Vitest fast test harness plus `DATABASE_URL_TEST`-gated integration specs for checkout inventory, payment-idempotency, and discount-usage behavior
 
 ### Active phase
 
@@ -42,19 +44,19 @@ The current active product phase is **Phase 3: Merchant Readiness And Storefront
 
 Current priorities:
 
-1. Expand automated coverage for checkout validation failures, inventory exhaustion, and real-DB idempotency/race-condition behavior
-2. Build discount, shipping, and tax handling through the centralized checkout pricing service
-3. Stronger storefront merchandising and branding surfaces
-4. Operational hardening: shared rate limits, webhook replay, audit logs, and production Postgres SSL review
-5. Launch proof points for the developer-first, self-hostable commerce story
+1. Extend checkout pricing from code discounts into configurable shipping and basic tax rules
+2. Add admin collection mutation, assignment, ordering, and publish/unpublish coverage
+3. Expand broader real-DB idempotency/race-condition coverage beyond duplicate payment-intent completion
+4. Stronger storefront merchandising and branding surfaces
+5. Operational hardening: shared rate limits, webhook replay, audit logs, and production Postgres SSL review
 
 ### Known follow-up gaps
 
-- Discount application inside checkout totals
 - More complete tax logic
 - Configurable shipping zones and rates
+- Discount-code storefront UX polish and rejected-code messaging
 - Refund and return flows connected to payments and inventory
-- Automated coverage for checkout validation failures, inventory exhaustion, admin-only collection mutations, and real-DB idempotency/race-condition behavior
+- More coverage for admin-only collection mutations and broader real-DB idempotency/race-condition behavior
 - Shared rate-limiting store before multi-instance deployment
 - Webhook delivery logs, retries, and replay tooling
 - Audit logging around settings changes, payment events, and fulfillment operations
@@ -166,11 +168,13 @@ Run fast automated tests:
 npm run test
 ```
 
-Run integration tests when a dedicated test database is configured:
+Run integration tests when a disposable test database or schema is configured:
 
 ```bash
 DATABASE_URL_TEST="postgresql://..." npm run test:integration
 ```
+
+`DATABASE_URL_TEST` must point at disposable Postgres storage, never the normal development database. The integration-test wrapper runs Vitest through `npm exec` for more reliable Windows execution.
 
 Recommended merge gate once tests are present:
 
@@ -178,6 +182,7 @@ Recommended merge gate once tests are present:
 npm run db:generate
 npx tsc --noEmit
 npm run test
+npm run test:integration # when DATABASE_URL_TEST is configured
 npm run build
 ```
 

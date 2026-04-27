@@ -2,7 +2,7 @@
 
 > Development rules for a developer-first, self-hostable commerce engine.
 >
-> Documentation refresh: April 25, 2026
+> Documentation refresh: April 26, 2026
 
 ## Start Here
 
@@ -149,7 +149,7 @@ Rules:
 - Storefront collection reads must stay public and read-only.
 - List views should use summary payloads.
 - Detail views may load nested product data.
-- Collection publish/unpublish semantics are still pending and should be added intentionally.
+- Collection publish/unpublish semantics are shipped and storefront reads must continue to exclude unpublished collections.
 - Revalidate targeted storefront paths instead of broadly refreshing everything.
 
 ## Testing Priorities
@@ -161,10 +161,12 @@ Add automated coverage in this order:
 3. invalid webhook signature rejection
 4. duplicate webhook delivery idempotency
 5. inventory exhaustion and race conditions
-6. collection assignment behavior
-7. storefront collection visibility and DTO safety
-8. admin-only collection mutations
-9. discount/shipping/tax pricing behavior as those features land
+6. discount/shipping/tax pricing behavior as those features land
+7. collection assignment behavior
+8. storefront collection visibility and DTO safety
+9. admin-only collection mutations
+
+Revenue-path, checkout, webhook, inventory, and discount-usage changes should include real-DB coverage when transaction behavior matters. Integration tests must use `DATABASE_URL_TEST` pointed at a disposable Postgres database or schema, never the normal development database.
 
 ## Recommended Verification
 
@@ -174,6 +176,7 @@ Run before merging meaningful work:
 npm run db:generate
 npx tsc --noEmit
 npm run test
+npm run test:integration # for checkout, webhook, inventory, discount, or revenue-path changes
 npm run build
 ```
 

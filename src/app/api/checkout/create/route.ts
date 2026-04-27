@@ -26,6 +26,7 @@ const schema = z.object({
   items: z.array(itemSchema).min(1),
   shippingAddress: addressSchema,
   billingAddress: addressSchema.optional(),
+  discountCode: z.string().trim().min(1).max(64).optional(),
 })
 
 export async function POST(req: Request) {

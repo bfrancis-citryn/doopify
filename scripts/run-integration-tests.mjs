@@ -5,17 +5,30 @@ if (!process.env.DATABASE_URL_TEST) {
   process.exit(0)
 }
 
-const result = spawnSync(
-  process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['vitest', 'run', '--config', 'vitest.integration.config.ts'],
-  {
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      DATABASE_URL: process.env.DATABASE_URL_TEST,
-      NODE_ENV: 'test',
-    },
-  }
-)
+const runEnv = {
+  ...process.env,
+  DATABASE_URL: process.env.DATABASE_URL_TEST,
+  NODE_ENV: 'test',
+}
+
+const npmExecPath = process.env.npm_execpath
+
+const result = npmExecPath
+  ? spawnSync(
+      process.execPath,
+      [npmExecPath, 'exec', '--', 'vitest', 'run', '--config', 'vitest.integration.config.ts'],
+      {
+        stdio: 'inherit',
+        env: runEnv,
+      }
+    )
+  : spawnSync(
+      process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      ['vitest', 'run', '--config', 'vitest.integration.config.ts'],
+      {
+        stdio: 'inherit',
+        env: runEnv,
+      }
+    )
 
 process.exit(result.status ?? 1)
