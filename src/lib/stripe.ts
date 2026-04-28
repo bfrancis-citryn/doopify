@@ -39,13 +39,23 @@ export function getStripePublishableKey() {
   return env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 }
 
-async function stripeRequest<T>(path: string, body: URLSearchParams) {
+async function stripeRequest<T>(
+  path: string,
+  body: URLSearchParams,
+  options: { idempotencyKey?: string } = {}
+) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${getStripeSecretKey()}`,
+    'Content-Type': 'application/x-www-form-urlencoded',
+  }
+
+  if (options.idempotencyKey) {
+    headers['Idempotency-Key'] = options.idempotencyKey
+  }
+
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${getStripeSecretKey()}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers,
     body,
     cache: 'no-store',
   })
@@ -101,6 +111,7 @@ export async function createStripeRefund(input: {
   paymentIntentId?: string | null
   amount?: number
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
+  idempotencyKey?: string
 }) {
   const body = new URLSearchParams()
 
@@ -120,7 +131,9 @@ export async function createStripeRefund(input: {
     body.set('reason', input.reason)
   }
 
-  return stripeRequest<StripeRefund>('/refunds', body)
+  return stripeRequest<StripeRefund>('/refunds', body, {
+    idempotencyKey: input.idempotencyKey,
+  })
 }
 
 export async function getStripeEvent(eventId: string) {
