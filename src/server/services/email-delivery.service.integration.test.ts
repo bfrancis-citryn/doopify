@@ -134,6 +134,10 @@ runIntegration('email delivery integration', () => {
 
     const beforeOrderCount = await prisma.order.count()
     const beforePaymentCount = await prisma.payment.count()
+    const beforeRefundCount = await prisma.refund.count()
+    const beforeReturnCount = await prisma.return.count()
+    const beforeInboundWebhookCount = await prisma.webhookDelivery.count()
+    const beforeOutboundWebhookCount = await prisma.outboundWebhookDelivery.count()
 
     const resendResult = await resendEmailDelivery(originalDelivery.id)
     expect(resendResult.success).toBe(true)
@@ -153,9 +157,13 @@ runIntegration('email delivery integration', () => {
 
     expect(await prisma.order.count()).toBe(beforeOrderCount)
     expect(await prisma.payment.count()).toBe(beforePaymentCount)
+    expect(await prisma.refund.count()).toBe(beforeRefundCount)
+    expect(await prisma.return.count()).toBe(beforeReturnCount)
+    expect(await prisma.webhookDelivery.count()).toBe(beforeInboundWebhookCount)
+    expect(await prisma.outboundWebhookDelivery.count()).toBe(beforeOutboundWebhookCount)
   })
 
-  it('updates delivery status from provider webhook events without recreating delivery rows', async () => {
+  it('updates only the targeted delivery status from provider webhook events', async () => {
     const delivery = await prisma.emailDelivery.create({
       data: {
         event: 'order.paid',
@@ -165,6 +173,30 @@ runIntegration('email delivery integration', () => {
         status: 'SENT',
         provider: 'resend',
         providerMessageId: 'msg_provider',
+        attempts: 1,
+      },
+    })
+    const siblingDelivery = await prisma.emailDelivery.create({
+      data: {
+        event: 'order.paid',
+        template: 'order_confirmation',
+        recipientEmail: 'other@example.com',
+        subject: 'Order confirmation',
+        status: 'SENT',
+        provider: 'resend',
+        providerMessageId: 'msg_provider',
+        attempts: 1,
+      },
+    })
+    const complainedTarget = await prisma.emailDelivery.create({
+      data: {
+        event: 'order.paid',
+        template: 'order_confirmation',
+        recipientEmail: 'customer@example.com',
+        subject: 'Order confirmation',
+        status: 'SENT',
+        provider: 'resend',
+        providerMessageId: 'msg_provider_complaint',
         attempts: 1,
       },
     })
@@ -185,25 +217,34 @@ runIntegration('email delivery integration', () => {
     const afterBounce = await prisma.emailDelivery.findUniqueOrThrow({
       where: { id: delivery.id },
     })
+    const siblingAfterBounce = await prisma.emailDelivery.findUniqueOrThrow({
+      where: { id: siblingDelivery.id },
+    })
     expect(afterBounce.status).toBe('BOUNCED')
     expect(afterBounce.lastError).toBe('Recipient mailbox unavailable')
     expect(afterBounce.bouncedAt).toBeInstanceOf(Date)
+    expect(siblingAfterBounce.status).toBe('SENT')
+    expect(siblingAfterBounce.bouncedAt).toBeNull()
 
     const complained = await applyEmailProviderWebhookEvent({
       type: 'email.complained',
       created_at: '2026-04-28T18:05:00.000Z',
       data: {
-        email_id: 'msg_provider',
+        email_id: 'msg_provider_complaint',
         to: ['customer@example.com'],
       },
     })
     expect(complained).toEqual({ handled: true })
 
-    const afterComplaint = await prisma.emailDelivery.findUniqueOrThrow({
+    const complainedAfter = await prisma.emailDelivery.findUniqueOrThrow({
+      where: { id: complainedTarget.id },
+    })
+    const originalAfterComplaint = await prisma.emailDelivery.findUniqueOrThrow({
       where: { id: delivery.id },
     })
-    expect(afterComplaint.status).toBe('COMPLAINED')
-    expect(afterComplaint.complainedAt).toBeInstanceOf(Date)
-    expect(await prisma.emailDelivery.count()).toBe(1)
+    expect(complainedAfter.status).toBe('COMPLAINED')
+    expect(complainedAfter.complainedAt).toBeInstanceOf(Date)
+    expect(originalAfterComplaint.status).toBe('BOUNCED')
+    expect(await prisma.emailDelivery.count()).toBe(3)
   })
 })

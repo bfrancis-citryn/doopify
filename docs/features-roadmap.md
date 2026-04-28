@@ -226,27 +226,27 @@ Target work:
 3. Update order confirmation email consumer to record delivery status — shipped.
 4. Add safe list/detail/resend APIs — shipped.
 5. Add admin email delivery visibility — shipped in `/admin/webhooks`.
-6. Add tests for success, failure, bounce/complaint state, and safe resend — in progress (service/API fast coverage, provider-webhook route coverage, and `DATABASE_URL_TEST`-gated integration specs shipped; broader integration execution/coverage pending).
+6. Add tests for success, failure, bounce/complaint state, and safe resend — shipped (service/API fast coverage, provider-webhook route coverage, and executed `DATABASE_URL_TEST` real-DB integration coverage for resend side effects and provider-state transitions).
 
 ### Phase 4 Acceptance Checks
 
 - an admin can issue a partial or full refund and the order, payment, and inventory are consistent afterward — foundation shipped
 - a return moves through its state machine and triggers a refund correctly — foundation shipped
 - outbound webhook deliveries are signed, retried with backoff, claimed before send, and visible in the admin — foundation shipped
-- integration secrets never appear unencrypted at rest — foundation shipped for integration/webhook secrets; continue coverage
-- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — in progress (API/resend/admin visibility/provider webhook states shipped; broader real-DB coverage pending)
+- integration secrets never appear unencrypted at rest — foundation shipped with real-DB update-flow preservation coverage
+- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — foundation shipped with real-DB resend/provider-transition coverage
 
 ## Phase 5 - Setup Wizard, CLI, And Launch Operations
 
-Status: planned after Phase 4 email observability foundation is stable
+Status: active foundation with `doopify doctor`, setup status API, and Setup tab shipped; interactive setup still pending
 
 See `SETUP_AND_CLI_PLAN.md`.
 
 ### Goals
 
-- add `doopify doctor` for read-only local setup diagnostics
-- add setup status service and `/api/setup/status`
-- add Settings -> Setup checklist tab
+- add `doopify doctor` for read-only local setup diagnostics — shipped
+- add setup status service and `/api/setup/status` — shipped
+- add Settings -> Setup checklist tab — shipped foundation
 - add interactive `doopify setup`
 - later automate Vercel, Neon, Stripe webhook, and email provider setup where safe
 - keep sensitive provider tokens out of long-lived app storage unless scoped lifecycle is designed
@@ -285,9 +285,10 @@ Status: deferred until after platform extraction proves out
 
 ## Verification And Testing
 
-Validated locally by the maintainer on April 28, 2026 after Phase 4 refund/return and outbound webhook slices:
+Validated locally by the maintainer on April 28, 2026 after the Phase 4 transactional email observability and real-DB confidence pass:
 
 ```bash
+npm run test:integration
 npm run test
 npm run build
 ```

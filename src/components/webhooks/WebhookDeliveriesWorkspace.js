@@ -8,6 +8,7 @@ import styles from './WebhookDeliveriesWorkspace.module.css';
 const INBOUND_STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
 const OUTBOUND_STATUS_OPTIONS = ['ALL', 'PENDING', 'SUCCESS', 'FAILED', 'RETRYING', 'EXHAUSTED'];
 const EMAIL_STATUS_OPTIONS = ['ALL', 'PENDING', 'SENT', 'FAILED', 'BOUNCED', 'COMPLAINED', 'RETRYING', 'RESEND_REQUESTED'];
+const EMAIL_RESEND_ELIGIBLE_STATUSES = ['FAILED', 'BOUNCED', 'COMPLAINED'];
 
 function formatTimestamp(value, fallback = 'Not scheduled') {
   if (!value) return fallback;
@@ -22,6 +23,20 @@ function getReplayDisabledReason(delivery) {
   if (!delivery?.hasVerifiedPayload) return 'Replay needs a verified stored payload.';
   if (delivery.providerEventId?.startsWith('unknown:')) return 'Replay needs a provider event id.';
   if (delivery.status === 'SIGNATURE_FAILED') return 'Signature failures are not replayable.';
+  return '';
+}
+
+function getEmailResendDisabledReason(delivery) {
+  if (!delivery) return 'Email delivery is unavailable.';
+  if (!EMAIL_RESEND_ELIGIBLE_STATUSES.includes(delivery.status)) {
+    return 'Only failed, bounced, or complained deliveries can be resent.';
+  }
+  if (delivery.template !== 'order_confirmation') {
+    return 'Only order confirmation deliveries support safe resend.';
+  }
+  if (!delivery.orderId) {
+    return 'Safe resend requires a linked order.';
+  }
   return '';
 }
 
@@ -572,6 +587,11 @@ export default function WebhookDeliveriesWorkspace() {
                         <td>{formatTimestamp(delivery.sentAt, 'Not sent')}</td>
                         <td>{delivery.lastError || 'None'}</td>
                         <td className={styles.actionCell}>
+                          {(() => {
+                            const resendDisabledReason = getEmailResendDisabledReason(delivery);
+
+                            return (
+                              <>
                           <button
                             type="button"
                             disabled={emailInspectingId === delivery.id}
@@ -581,11 +601,15 @@ export default function WebhookDeliveriesWorkspace() {
                           </button>
                           <button
                             type="button"
-                            disabled={resendingEmailId === delivery.id}
+                            disabled={resendingEmailId === delivery.id || Boolean(resendDisabledReason)}
+                            title={resendDisabledReason || 'Safely resend this transactional email'}
                             onClick={() => handleResendEmail(delivery)}
                           >
                             {resendingEmailId === delivery.id ? 'Resending...' : 'Resend'}
                           </button>
+                              </>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}

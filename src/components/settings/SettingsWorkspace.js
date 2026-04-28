@@ -14,7 +14,52 @@ const SETTINGS_SECTIONS = [
   { id: 'payments', label: 'Payments' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'users', label: 'Users & permissions' },
+  { id: 'setup', label: 'Setup' },
   { id: 'integrations', label: 'Integrations & Webhooks' },
+];
+
+const SETUP_STATUS_PRIORITY = {
+  PASS: 0,
+  WARN: 1,
+  FAIL: 2,
+};
+
+const SETUP_CARD_DEFINITIONS = [
+  { id: 'database', label: 'Database connected', checkIds: ['database-url', 'database-reachable', 'prisma-client-generated'] },
+  { id: 'admin', label: 'Admin account created', checkIds: ['owner-user-exists'] },
+  { id: 'store', label: 'Store profile complete', checkIds: ['store-exists', 'store-settings'] },
+  { id: 'stripe-core', label: 'Stripe configured', checkIds: ['stripe-keys'] },
+  { id: 'stripe-webhook', label: 'Stripe webhook configured', checkIds: ['stripe-webhook-secret'] },
+  { id: 'email-provider', label: 'Email provider configured', checkIds: ['resend-api-or-preview'] },
+  { id: 'email-webhook', label: 'Email webhook configured', checkIds: ['resend-webhook-secret-enabled'] },
+  { id: 'webhook-retry', label: 'Webhook retry secret configured', checkIds: ['webhook-retry-secret'] },
+  { id: 'public-url', label: 'Public app URL configured', checkIds: ['next-public-store-url'] },
+  { id: 'deployment', label: 'Deployment ready', checkIds: ['vercel-deployment'] },
+];
+
+const SETUP_COMMANDS = [
+  {
+    id: 'doctor',
+    label: 'Run doctor',
+    command: 'npm run doopify:doctor',
+  },
+  {
+    id: 'db-generate',
+    label: 'Generate Prisma client',
+    command: 'npm run db:generate',
+  },
+  {
+    id: 'bootstrap',
+    label: 'Bootstrap store/admin',
+    command: 'npm run db:seed:bootstrap',
+  },
+];
+
+const PROVIDER_HINTS = [
+  'Stripe: set STRIPE_SECRET_KEY, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY, and STRIPE_WEBHOOK_SECRET.',
+  'Resend: set RESEND_API_KEY for live sends. Leave unset for preview mode.',
+  'Email webhooks: set RESEND_WEBHOOK_SECRET before enabling provider webhook delivery.',
+  'Deployment: set NEXT_PUBLIC_STORE_URL and configure VERCEL_URL/VERCEL_ENV for hosted environments.',
 ];
 
 const EMPTY_ZONE_FORM = {
@@ -97,6 +142,34 @@ async function parseApiJson(response) {
   return payload.data;
 }
 
+function getHigherStatus(left, right) {
+  if (!left) return right || 'PASS';
+  if (!right) return left;
+  return SETUP_STATUS_PRIORITY[right] > SETUP_STATUS_PRIORITY[left] ? right : left;
+}
+
+function normalizeCheckStatus(check) {
+  if (!check) return 'WARN';
+  if (check.status === 'FAIL' && !check.required) return 'WARN';
+  return check.status || 'WARN';
+}
+
+function extractEnvVariableHints(checks) {
+  const envNames = new Set();
+  const envPattern = /\b[A-Z][A-Z0-9_]{2,}\b/g;
+
+  for (const check of checks || []) {
+    const scanTarget = `${check.summary || ''} ${check.fix || ''}`;
+    const matches = scanTarget.match(envPattern) || [];
+    for (const match of matches) {
+      if (match.startsWith('API') || match === 'HTTP' || match === 'HTTPS') continue;
+      envNames.add(match);
+    }
+  }
+
+  return Array.from(envNames).slice(0, 12);
+}
+
 export default function SettingsWorkspace() {
   const [activeSection, setActiveSection] = useState('general');
   const { settings, updateSettings, loading, error } = useSettings();
@@ -108,6 +181,10 @@ export default function SettingsWorkspace() {
   const [newZone, setNewZone] = useState(EMPTY_ZONE_FORM);
   const [newTaxRule, setNewTaxRule] = useState(EMPTY_TAX_FORM);
   const [newRateByZoneId, setNewRateByZoneId] = useState({});
+  const [setupStatus, setSetupStatus] = useState(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupError, setSetupError] = useState('');
+  const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
 
   const activeTitle = useMemo(
     () => SETTINGS_SECTIONS.find((section) => section.id === activeSection)?.label || 'Settings',
@@ -151,6 +228,78 @@ export default function SettingsWorkspace() {
     };
   }, [activeSection, shippingConfigLoaded, shippingConfigLoading]);
 
+  useEffect(() => {
+    if (activeSection !== 'setup' || setupLoading || setupStatus) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSetupStatus() {
+      setSetupLoading(true);
+      setSetupError('');
+
+      try {
+        const diagnostics = await fetch('/api/setup/status').then(parseApiJson);
+        if (!cancelled) {
+          setSetupStatus(diagnostics);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setSetupError(loadError instanceof Error ? loadError.message : 'Failed to load setup diagnostics');
+        }
+      } finally {
+        if (!cancelled) {
+          setSetupLoading(false);
+        }
+      }
+    }
+
+    loadSetupStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, setupStatus, setupLoading]);
+
+  const setupChecks = useMemo(() => {
+    if (!setupStatus) return [];
+    return [...(setupStatus.requiredChecks || []), ...(setupStatus.recommendedChecks || [])];
+  }, [setupStatus]);
+
+  const setupCheckById = useMemo(() => {
+    const byId = {};
+    for (const check of setupChecks) {
+      byId[check.id] = check;
+    }
+    return byId;
+  }, [setupChecks]);
+
+  const setupCards = useMemo(() => {
+    return SETUP_CARD_DEFINITIONS.map((card) => {
+      const checks = card.checkIds.map((id) => setupCheckById[id]).filter(Boolean);
+      let status = 'WARN';
+      let fix = '';
+      let summary = 'Pending check data.';
+
+      if (checks.length > 0) {
+        status = checks.reduce((current, check) => getHigherStatus(current, normalizeCheckStatus(check)), 'PASS');
+        const primaryIssue = checks.find((check) => normalizeCheckStatus(check) !== 'PASS');
+        summary = primaryIssue?.summary || checks[0].summary || 'Configured.';
+        fix = primaryIssue?.fix || '';
+      }
+
+      return {
+        ...card,
+        status,
+        summary,
+        fix,
+      };
+    });
+  }, [setupCheckById]);
+
+  const setupMissingEnvVars = useMemo(() => extractEnvVariableHints(setupChecks), [setupChecks]);
+
   async function refreshShippingConfig() {
     setShippingConfigLoaded(false);
     setShippingConfigLoading(false);
@@ -162,6 +311,44 @@ export default function SettingsWorkspace() {
     setShippingZones((zonesData || []).map(toZoneForm));
     setTaxRules((taxRulesData || []).map(toTaxForm));
     setShippingConfigLoaded(true);
+  }
+
+  async function refreshSetupStatus() {
+    try {
+      setSetupLoading(true);
+      setSetupError('');
+      const diagnostics = await fetch('/api/setup/status').then(parseApiJson);
+      setSetupStatus(diagnostics);
+    } catch (refreshError) {
+      setSetupError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh setup diagnostics');
+    } finally {
+      setSetupLoading(false);
+    }
+  }
+
+  async function handleCopyCommand(commandId, command) {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(command);
+      } else {
+        const temp = document.createElement('textarea');
+        temp.value = command;
+        temp.setAttribute('readonly', '');
+        temp.style.position = 'absolute';
+        temp.style.left = '-9999px';
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+      }
+
+      setSetupCopiedCommandId(commandId);
+      setTimeout(() => {
+        setSetupCopiedCommandId((current) => (current === commandId ? '' : current));
+      }, 1400);
+    } catch {
+      setSetupCopiedCommandId('');
+    }
   }
 
   async function handleCreateZone() {
@@ -445,15 +632,21 @@ export default function SettingsWorkspace() {
         </div>
 
         <div className={styles.detailPanel}>
-          <div aria-busy={loading || shippingConfigLoading} className={styles.detailCard}>
+          <div aria-busy={loading || shippingConfigLoading || setupLoading} className={styles.detailCard}>
             <div className={styles.detailHeader}>
               <div>
                 <p className={styles.eyebrow}>Settings</p>
                 <h2 className={styles.title}>{activeTitle}</h2>
               </div>
-              <button className={styles.saveButton} disabled={loading || Boolean(error)} type="button">
-                Save
-              </button>
+              {activeSection === 'setup' ? (
+                <button className={styles.saveButton} disabled={setupLoading} onClick={() => refreshSetupStatus()} type="button">
+                  {setupLoading ? 'Refreshing...' : 'Refresh diagnostics'}
+                </button>
+              ) : (
+                <button className={styles.saveButton} disabled={loading || Boolean(error)} type="button">
+                  Save
+                </button>
+              )}
             </div>
 
             {loading ? (
@@ -903,6 +1096,123 @@ export default function SettingsWorkspace() {
 
             {!loading && !error && activeSection === 'users' ? (
               <div className={styles.infoBlock}>Staff accounts, roles, permissions, and approval rules should live here.</div>
+            ) : null}
+
+            {!loading && !error && activeSection === 'setup' ? (
+              <div className={styles.setupPanel}>
+                <section className={styles.setupSummaryCard}>
+                  <div>
+                    <p className={styles.eyebrow}>Setup health</p>
+                    <h3 className={styles.setupHeadline}>{setupStatus?.overallStatus?.replaceAll('_', ' ') || 'Loading diagnostics'}</h3>
+                    <p className={styles.statusText}>Completion: {setupStatus?.completionPercent ?? 0}%</p>
+                  </div>
+                  <div className={styles.setupMeterTrack} role="img" aria-label={`Setup completion ${setupStatus?.completionPercent ?? 0}%`}>
+                    <div className={styles.setupMeterFill} style={{ width: `${setupStatus?.completionPercent ?? 0}%` }} />
+                  </div>
+                </section>
+
+                {setupLoading ? (
+                  <div className={styles.statusBlock}>
+                    <div className={styles.loadingLine} />
+                    <div className={styles.loadingLine} />
+                    <div className={`${styles.loadingLine} ${styles.loadingLineShort}`} />
+                    <p className={styles.statusText}>Loading setup diagnostics...</p>
+                  </div>
+                ) : null}
+
+                {setupError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Setup diagnostics error</p>
+                    <p className={styles.statusText}>{setupError}</p>
+                  </div>
+                ) : null}
+
+                {!setupLoading && !setupError ? (
+                  <>
+                    <section className={styles.setupGrid}>
+                      {setupCards.map((card) => (
+                        <article className={styles.setupCard} key={card.id}>
+                          <div className={styles.setupCardHeader}>
+                            <h4>{card.label}</h4>
+                            <span
+                              className={
+                                card.status === 'PASS'
+                                  ? styles.setupBadgePass
+                                  : card.status === 'FAIL'
+                                    ? styles.setupBadgeFail
+                                    : styles.setupBadgeWarn
+                              }
+                            >
+                              {card.status}
+                            </span>
+                          </div>
+                          <p className={styles.statusText}>{card.summary}</p>
+                          {card.fix ? <p className={styles.setupFixText}>Fix: {card.fix}</p> : null}
+                        </article>
+                      ))}
+                    </section>
+
+                    <section className={styles.setupColumns}>
+                      <article className={styles.setupColumnCard}>
+                        <h4>Missing env warnings</h4>
+                        {setupMissingEnvVars.length ? (
+                          <div className={styles.warningTagList}>
+                            {setupMissingEnvVars.map((envName) => (
+                              <span className={styles.warningTag} key={envName}>
+                                {envName}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className={styles.statusText}>No env variable gaps detected in current diagnostics.</p>
+                        )}
+                      </article>
+
+                      <article className={styles.setupColumnCard}>
+                        <h4>Copy/paste CLI commands</h4>
+                        <div className={styles.commandList}>
+                          {SETUP_COMMANDS.map((entry) => (
+                            <div className={styles.commandRow} key={entry.id}>
+                              <code className={styles.commandCode}>{entry.command}</code>
+                              <button
+                                className={styles.secondaryButton}
+                                onClick={() => handleCopyCommand(entry.id, entry.command)}
+                                type="button"
+                              >
+                                {setupCopiedCommandId === entry.id ? 'Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    </section>
+
+                    <section className={styles.setupColumns}>
+                      <article className={styles.setupColumnCard}>
+                        <h4>Safe next actions</h4>
+                        {setupStatus?.safeNextActions?.length ? (
+                          <ul className={styles.setupList}>
+                            {setupStatus.safeNextActions.map((action) => (
+                              <li key={action}>{action}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className={styles.statusText}>No required fixes right now.</p>
+                        )}
+                      </article>
+
+                      <article className={styles.setupColumnCard}>
+                        <h4>Provider connection hints</h4>
+                        <ul className={styles.setupList}>
+                          {PROVIDER_HINTS.map((hint) => (
+                            <li key={hint}>{hint}</li>
+                          ))}
+                        </ul>
+                      </article>
+                    </section>
+                  </>
+                ) : null}
+              </div>
             ) : null}
 
             {!loading && !error && activeSection === 'integrations' ? (

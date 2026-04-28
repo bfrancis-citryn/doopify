@@ -109,9 +109,10 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 
 ## Verified
 
-Validated locally by the maintainer on April 28, 2026 after Phase 4 refund/return and outbound webhook slices:
+Validated locally by the maintainer on April 28, 2026 after the Phase 4 transactional email observability and real-DB confidence pass:
 
 ```bash
+npm run test:integration
 npm run test
 npm run build
 ```
@@ -132,8 +133,8 @@ npm run build
 ### High Priority
 
 - Run the full local verification gate after the latest correctness patches
-- Add transactional email observability without coupling email success to order/payment/inventory/refund/return durability
-- Verify integration secret encryption and outbound webhook retry/idempotency with broader real-DB coverage
+- Keep transactional email observability decoupled from order/payment/inventory/refund/return durability as provider/event coverage expands
+- Expand real-DB lifecycle coverage for new consumers and race/idempotency paths as Phase 4 evolves
 - Keep the centralized pricing authority on the server as lifecycle flows evolve
 - Continue proving payment, inventory, refund, return, webhook, email, and setup behavior through real-DB tests where transaction behavior matters
 
@@ -142,7 +143,7 @@ npm run build
 - Extract the remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only while storefront collection reads stay public and read-only
 - Expand audit logging around integration changes, refund/return transitions, email resends, and webhook retries
-- Add setup status service and `doopify doctor` checks that redact secrets and avoid mutating user files by default
+- Keep Settings -> Setup guidance aligned with the shipped setup status service/API and `doopify doctor` as setup automation expands
 
 ### Later
 
@@ -336,8 +337,8 @@ These ideas are intentionally rejected for this phase:
 
 The next hardening milestone is complete when:
 
-- transactional email delivery records, status transitions, bounce/complaint handling, and safe resend tooling are implemented
-- email failure and resend behavior are covered by fast tests and at least one real-DB lifecycle test
-- outbound webhook retry/idempotency has broader real-DB coverage
+- transactional email delivery records, status transitions, bounce/complaint handling, and safe resend tooling remain stable as coverage expands
+- email failure/resend, outbound retry/idempotency, and integration secret-preservation behavior remain green in real-DB runs
+- analytics fan-out behavior is covered with side-effect safety checks once that consumer ships
 - setup diagnostics are implemented in a way that redacts secrets and reuses checks between CLI and admin Setup tab
 - operational logging is good enough to debug a missing email, duplicate delivery, stuck retry, exhausted outbound webhook, or broken setup without inspecting the database manually

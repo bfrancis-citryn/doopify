@@ -146,6 +146,99 @@ describe('POST /api/webhooks/email-provider', () => {
     })
   })
 
+  it('returns 202 for unsupported email-provider event types', async () => {
+    mocks.applyEmailProviderWebhookEvent.mockResolvedValue({
+      handled: false,
+      reason: 'UNSUPPORTED_EVENT',
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/webhooks/email-provider', {
+        method: 'POST',
+        headers: {
+          'svix-id': 'msg_123',
+          'svix-timestamp': '1714341000',
+          'svix-signature': 'v1,valid',
+        },
+        body: JSON.stringify({
+          type: 'email.delivered',
+          data: { email_id: 'email_123' },
+        }),
+      })
+    )
+
+    expect(response.status).toBe(202)
+    expect(await response.text()).toBe('Unsupported email provider event ignored')
+    expect(mocks.markWebhookDeliveryProcessed).toHaveBeenCalledWith({
+      provider: 'resend',
+      providerEventId: 'msg_123',
+    })
+  })
+
+  it('returns 422 when signed webhook payload is missing provider email id', async () => {
+    mocks.applyEmailProviderWebhookEvent.mockResolvedValue({
+      handled: false,
+      reason: 'MISSING_EMAIL_ID',
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/webhooks/email-provider', {
+        method: 'POST',
+        headers: {
+          'svix-id': 'msg_123',
+          'svix-timestamp': '1714341000',
+          'svix-signature': 'v1,valid',
+        },
+        body: JSON.stringify({
+          type: 'email.bounced',
+          data: {},
+        }),
+      })
+    )
+
+    expect(response.status).toBe(422)
+    expect(await response.text()).toBe('Email provider webhook payload missing provider email id')
+    expect(mocks.markWebhookDeliveryFailed).toHaveBeenCalledWith({
+      provider: 'resend',
+      providerEventId: 'msg_123',
+      error: 'Email provider webhook payload missing provider email id',
+      retryable: false,
+    })
+  })
+
+  it('returns 202 when signed webhook payload does not match a local email delivery', async () => {
+    mocks.applyEmailProviderWebhookEvent.mockResolvedValue({
+      handled: false,
+      reason: 'DELIVERY_NOT_FOUND',
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/webhooks/email-provider', {
+        method: 'POST',
+        headers: {
+          'svix-id': 'msg_123',
+          'svix-timestamp': '1714341000',
+          'svix-signature': 'v1,valid',
+        },
+        body: JSON.stringify({
+          type: 'email.complained',
+          data: {
+            email_id: 'missing_provider_id',
+          },
+        }),
+      })
+    )
+
+    expect(response.status).toBe(202)
+    expect(await response.text()).toBe('No matching email delivery record for provider message id')
+    expect(mocks.markWebhookDeliveryFailed).toHaveBeenCalledWith({
+      provider: 'resend',
+      providerEventId: 'msg_123',
+      error: 'Email delivery record was not found for this provider message id',
+      retryable: false,
+    })
+  })
+
   it('marks failed processing for unexpected errors', async () => {
     mocks.applyEmailProviderWebhookEvent.mockRejectedValue(new Error('Database unavailable'))
 

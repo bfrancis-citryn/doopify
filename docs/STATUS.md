@@ -130,19 +130,19 @@ Shipped foundation:
 - admin email delivery visibility in `/admin/webhooks` with status filters, detail inspection, resend controls, and pagination
 - provider webhook route at `POST /api/webhooks/email-provider` with Svix signature verification and bounced/complained status transitions
 - `DATABASE_URL_TEST`-gated integration specs added for safe resend audit-trail behavior and provider bounce/complaint state transitions
+- `DATABASE_URL_TEST` real-DB execution now verifies resend side-effect safety, provider bounce/complaint transitions, outbound webhook retry/idempotency behavior, and integration-secret preservation update flows
 - fast tests for delivery creation, sent/failed transitions, tracked send success/failure, paginated delivery listing, email delivery API/resend behavior, and provider webhook route behavior
 
-Still pending:
+Ongoing expansion:
 
-- broader real-DB execution/coverage for email failure/resend behavior in release verification environments
+- broaden real-DB lifecycle coverage as new event consumers (for example analytics fan-out) are added
 
 ### Remaining Phase 4 Priorities
 
-1. Transactional email observability broader real-DB execution/coverage for resend and provider-state transitions
-2. Analytics event fan-out through the existing dispatcher
-3. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
-4. Broader real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
-5. Continued audit-log expansion where admin lifecycle operations need durable traces
+1. Analytics event fan-out through the existing dispatcher
+2. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
+3. Continued audit-log expansion where admin lifecycle operations need durable traces
+4. Broader real-DB lifecycle/race coverage as Phase 4 behavior expands
 
 ## Phase 4 Acceptance Checks
 
@@ -151,9 +151,9 @@ Status by acceptance check:
 - Admin can issue a partial/full refund and order, payment, and inventory are consistent afterward — **foundation shipped; continue real-DB coverage**
 - A return moves through its state machine and triggers a refund correctly — **foundation shipped; continue UX and integration coverage**
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
-- Integration secrets never appear unencrypted at rest — **foundation shipped for integration/webhook secrets; continue verification tests**
-- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation shipped; continue real-DB coverage**
-- Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **planned after email observability foundation**
+- Integration secrets never appear unencrypted at rest — **foundation shipped with real-DB update-flow preservation coverage**
+- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation shipped with real-DB resend/provider-transition coverage**
+- Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **doctor + setup status API + Setup tab shipped foundation**
 - Build and typecheck stay green throughout — **must be re-run after every change**
 
 ## Transactional Email Observability Plan
@@ -177,7 +177,7 @@ First foundation shipped:
 
 Remaining target:
 
-- tests proving email failure/resend never duplicate order, payment, inventory, refund, return, webhook, or analytics side effects
+- continue expanding lifecycle side-effect proofs as new event consumers (for example analytics fan-out) are added
 
 ## Setup Wizard And CLI Plan
 
@@ -189,9 +189,9 @@ SETUP_AND_CLI_PLAN.md
 
 Planned sequence:
 
-- `doopify doctor` read-only local diagnostics
-- setup status service and `/api/setup/status`
-- Settings -> Setup checklist tab
+- `doopify doctor` read-only local diagnostics — **shipped**
+- setup status service and `/api/setup/status` — **shipped**
+- Settings -> Setup checklist tab — **shipped foundation**
 - interactive `doopify setup`
 - later Vercel, Neon, Stripe, and email-provider automation
 
@@ -199,7 +199,6 @@ Planned sequence:
 
 ### Highest Priority
 
-- Transactional email observability APIs/admin/resend/bounce handling
 - Analytics event fan-out
 - Setup Wizard and CLI foundation
 - Broader real-DB race/idempotency coverage as Phase 4 behaviors expand
@@ -223,8 +222,8 @@ Planned sequence:
 
 ### High Priority
 
-- Finish transactional email observability without coupling email success to order/payment/inventory durability
-- Verify integration secret encryption and outbound webhook retry/idempotency with broader coverage
+- Keep transactional email observability decoupled from order/payment/inventory durability as provider/event coverage expands
+- Expand real-DB lifecycle coverage to include new event consumers and race paths
 - Keep the centralized pricing authority server-owned as lifecycle flows evolve
 - Continue proving payment, inventory, refund, return, webhook, and email behavior through real-DB tests where transaction behavior matters
 
@@ -262,9 +261,10 @@ Do not market or build around these yet:
 
 ## Verification History
 
-Validated locally by the maintainer on April 28, 2026 after Phase 4 refund/return and outbound webhook slices:
+Validated locally by the maintainer on April 28, 2026 after the Phase 4 transactional email observability and real-DB confidence pass:
 
 ```bash
+npm run test:integration
 npm run test
 npm run build
 ```

@@ -81,7 +81,38 @@ export async function POST(req: Request) {
   })
 
   try {
-    await applyEmailProviderWebhookEvent(parsedEvent)
+    const result = await applyEmailProviderWebhookEvent(parsedEvent)
+
+    if (!result.handled) {
+      if (result.reason === 'UNSUPPORTED_EVENT') {
+        await markWebhookDeliveryProcessed({
+          provider: 'resend',
+          providerEventId: delivery.providerEventId,
+        })
+        return new Response('Unsupported email provider event ignored', { status: 202 })
+      }
+
+      if (result.reason === 'MISSING_EMAIL_ID') {
+        await markWebhookDeliveryFailed({
+          provider: 'resend',
+          providerEventId: delivery.providerEventId,
+          error: 'Email provider webhook payload missing provider email id',
+          retryable: false,
+        })
+        return new Response('Email provider webhook payload missing provider email id', { status: 422 })
+      }
+
+      if (result.reason === 'DELIVERY_NOT_FOUND') {
+        await markWebhookDeliveryFailed({
+          provider: 'resend',
+          providerEventId: delivery.providerEventId,
+          error: 'Email delivery record was not found for this provider message id',
+          retryable: false,
+        })
+        return new Response('No matching email delivery record for provider message id', { status: 202 })
+      }
+    }
+
     await markWebhookDeliveryProcessed({
       provider: 'resend',
       providerEventId: delivery.providerEventId,

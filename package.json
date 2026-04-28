@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:integration": "node scripts/run-integration-tests.mjs",
+    "doopify:doctor": "node scripts/doopify-cli.mjs doctor",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

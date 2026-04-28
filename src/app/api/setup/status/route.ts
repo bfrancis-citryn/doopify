@@ -1,0 +1,253 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '@prisma/client'
+
+import { ok, err } from '@/lib/api'
+import {
+  buildSetupDoctorReport,
+  deriveSafeNextActions,
+  type SetupCheck,
+  type SetupCheckCategory,
+  type SetupDoctorFacts,
+} from '@/server/services/setup.service'
+
+export const runtime = 'nodejs'
+
+type SetupCategorySummary = {
+  id: SetupCheckCategory
+  label: string
+  status: 'PASS' | 'WARN' | 'FAIL'
+  requiredFailures: number
+  warningCount: number
+  checkCount: number
+}
+
+const CATEGORY_LABELS: Record<SetupCheckCategory, string> = {
+  runtime: 'Runtime',
+  database: 'Database',
+  admin_owner: 'Admin owner',
+  store_settings: 'Store settings',
+  stripe: 'Stripe',
+  resend_email: 'Resend/email',
+  webhook_retry: 'Webhook retry secret',
+  public_url: 'Public URL',
+  deployment: 'Vercel/deployment',
+}
+
+function parseNodeMajor(version: string) {
+  const match = /^v(\d+)/.exec(version)
+  return match ? Number(match[1]) : null
+}
+
+function normalizeDatabaseUrl(connectionString: string) {
+  try {
+    const url = new URL(connectionString)
+    const sslmode = url.searchParams.get('sslmode')
+
+    if (sslmode && ['prefer', 'require', 'verify-ca'].includes(sslmode)) {
+      url.searchParams.set('sslmode', 'verify-full')
+      return url.toString()
+    }
+  } catch {
+    return connectionString
+  }
+
+  return connectionString
+}
+
+function sanitizeErrorMessage(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error)
+  return raw
+    .replace(/:\/\/([^:\s]+):([^@\s]+)@/g, '://$1:***@')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function gatherDatabaseFacts(databaseUrl: string | undefined) {
+  if (!databaseUrl) {
+    return {
+      databaseReachable: false,
+      databaseError: 'DATABASE_URL is missing.',
+      storeCount: null as number | null,
+      ownerCount: null as number | null,
+      storeConfigured: null as boolean | null,
+      storeContactConfigured: null as boolean | null,
+    }
+  }
+
+  let prisma: PrismaClient | null = null
+  try {
+    prisma = new PrismaClient({
+      adapter: new PrismaPg({
+        connectionString: normalizeDatabaseUrl(databaseUrl),
+      }),
+    })
+
+    await prisma.$queryRawUnsafe('SELECT 1')
+
+    const [storeCount, ownerCount, firstStore] = await Promise.all([
+      prisma.store.count(),
+      prisma.user.count({ where: { role: 'OWNER', isActive: true } }),
+      prisma.store.findFirst({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ])
+
+    return {
+      databaseReachable: true,
+      storeCount,
+      ownerCount,
+      storeConfigured: Boolean(firstStore?.name?.trim()),
+      storeContactConfigured: Boolean(firstStore?.email?.trim()),
+    }
+  } catch (error) {
+    return {
+      databaseReachable: false,
+      databaseError: sanitizeErrorMessage(error),
+      storeCount: null,
+      ownerCount: null,
+      storeConfigured: null,
+      storeContactConfigured: null,
+    }
+  } finally {
+    if (prisma) {
+      await prisma.$disconnect().catch(() => {})
+    }
+  }
+}
+
+function computeCompletionPercent(checks: SetupCheck[]) {
+  if (checks.length === 0) return 0
+
+  const score = checks.reduce((acc, check) => {
+    if (check.status === 'PASS') return acc + 1
+    if (check.status === 'WARN') return acc + 0.5
+    return acc
+  }, 0)
+
+  return Math.round((score / checks.length) * 100)
+}
+
+function buildCategorySummaries(checks: SetupCheck[]): SetupCategorySummary[] {
+  const grouped = new Map<SetupCheckCategory, SetupCheck[]>()
+
+  for (const check of checks) {
+    const bucket = grouped.get(check.category) ?? []
+    bucket.push(check)
+    grouped.set(check.category, bucket)
+  }
+
+  return Object.keys(CATEGORY_LABELS).map((categoryKey) => {
+    const category = categoryKey as SetupCheckCategory
+    const categoryChecks = grouped.get(category) ?? []
+    const requiredFailures = categoryChecks.filter((check) => check.required && check.status === 'FAIL').length
+    const warningCount = categoryChecks.filter((check) => check.status === 'WARN' || (!check.required && check.status === 'FAIL')).length
+
+    const status: 'PASS' | 'WARN' | 'FAIL' =
+      requiredFailures > 0
+        ? 'FAIL'
+        : warningCount > 0
+          ? 'WARN'
+          : 'PASS'
+
+    return {
+      id: category,
+      label: CATEGORY_LABELS[category],
+      status,
+      requiredFailures,
+      warningCount,
+      checkCount: categoryChecks.length,
+    }
+  })
+}
+
+export async function GET() {
+  try {
+    const cwd = process.cwd()
+    const databaseUrl = process.env.DATABASE_URL
+    const databaseFacts = await gatherDatabaseFacts(databaseUrl)
+
+    const facts: SetupDoctorFacts = {
+      nodeVersion: process.version,
+      nodeMajorVersion: parseNodeMajor(process.version),
+      minimumNodeMajor: 20,
+      npmAvailable: true,
+      npmVersion: undefined,
+      dependenciesInstalled: true,
+      missingDependencies: [],
+      hasEnvFile: fs.existsSync(path.join(cwd, '.env')),
+      hasEnvLocalFile: fs.existsSync(path.join(cwd, '.env.local')),
+      databaseUrlPresent: Boolean(databaseUrl),
+      databaseReachable: databaseFacts.databaseReachable,
+      databaseError: databaseFacts.databaseError,
+      prismaClientGenerated:
+        fs.existsSync(path.join(cwd, 'node_modules/.prisma/client/index.js')) &&
+        fs.existsSync(path.join(cwd, 'node_modules/@prisma/client/index.js')),
+      storeCount: databaseFacts.storeCount,
+      ownerCount: databaseFacts.ownerCount,
+      storeConfigured: databaseFacts.storeConfigured,
+      storeContactConfigured: databaseFacts.storeContactConfigured,
+      jwtSecret: process.env.JWT_SECRET,
+      stripeSecretKeyPresent: Boolean(process.env.STRIPE_SECRET_KEY),
+      stripePublishableKeyPresent: Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY),
+      stripeWebhookSecretPresent: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+      webhookRetrySecret: process.env.WEBHOOK_RETRY_SECRET,
+      resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
+      resendWebhookSecretPresent: Boolean(process.env.RESEND_WEBHOOK_SECRET),
+      emailProviderWebhooksEnabled: Boolean(process.env.RESEND_API_KEY || process.env.RESEND_WEBHOOK_SECRET),
+      nextPublicStoreUrl: process.env.NEXT_PUBLIC_STORE_URL,
+      vercelEnvironmentDetected: Boolean(process.env.VERCEL || process.env.VERCEL_ENV),
+      vercelUrlPresent: Boolean(process.env.VERCEL_URL),
+    }
+
+    const report = buildSetupDoctorReport(facts, { profile: 'app' })
+    const requiredChecks = report.checks.filter((check) => check.required)
+    const recommendedChecks = report.checks.filter((check) => !check.required)
+
+    const warnings = report.checks
+      .filter((check) => check.status === 'WARN' || (!check.required && check.status === 'FAIL'))
+      .map((check) => ({
+        id: check.id,
+        category: check.category,
+        title: check.title,
+        summary: check.summary,
+      }))
+
+    const categories = buildCategorySummaries(report.checks)
+    const completionPercent = computeCompletionPercent(report.checks)
+    const safeNextActions = deriveSafeNextActions(report.checks)
+
+    const overallStatus = report.requiredFailCount > 0
+      ? 'ACTION_REQUIRED'
+      : warnings.length > 0
+        ? 'READY_WITH_WARNINGS'
+        : 'HEALTHY'
+
+    return ok({
+      overallStatus,
+      completionPercent,
+      checkedAt: new Date().toISOString(),
+      categories,
+      requiredChecks,
+      recommendedChecks,
+      warnings,
+      safeNextActions,
+      summary: {
+        passCount: report.passCount,
+        warnCount: report.warnCount,
+        failCount: report.failCount,
+        requiredFailCount: report.requiredFailCount,
+      },
+    })
+  } catch (error) {
+    console.error('[GET /api/setup/status]', error)
+    return err('Failed to collect setup diagnostics', 500)
+  }
+}

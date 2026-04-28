@@ -16,7 +16,7 @@ const npmExecPath = process.env.npm_execpath
 const result = npmExecPath
   ? spawnSync(
       process.execPath,
-      [npmExecPath, 'exec', '--', 'vitest', 'run', '--config', 'vitest.integration.config.ts'],
+      [npmExecPath, 'exec', '--', 'vitest', 'run', '--config', 'vitest.integration.config.ts', '--no-file-parallelism'],
       {
         stdio: 'inherit',
         env: runEnv,
@@ -24,7 +24,7 @@ const result = npmExecPath
     )
   : spawnSync(
       process.platform === 'win32' ? 'npx.cmd' : 'npx',
-      ['vitest', 'run', '--config', 'vitest.integration.config.ts'],
+      ['vitest', 'run', '--config', 'vitest.integration.config.ts', '--no-file-parallelism'],
       {
         stdio: 'inherit',
         env: runEnv,

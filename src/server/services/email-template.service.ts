@@ -23,6 +23,15 @@ export type OrderConfirmationInput = {
   } | null
 }
 
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -40,6 +49,7 @@ function formatAddress(address: OrderConfirmationInput['shippingAddress']) {
     address.country,
   ]
     .filter(Boolean)
+    .map((segment) => escapeHtml(segment))
     .join('<br />')
 }
 
@@ -48,8 +58,8 @@ function buildOrderConfirmationHtml(input: OrderConfirmationInput, storeName: st
     .map((item) => {
       const itemTitle = item.variantTitle ? `${item.title} - ${item.variantTitle}` : item.title
       return `<tr>
-        <td style="padding:8px 0;color:#111827;">${itemTitle}</td>
-        <td style="padding:8px 0;color:#6b7280;text-align:center;">${item.quantity}</td>
+        <td style="padding:8px 0;color:#111827;">${escapeHtml(itemTitle)}</td>
+        <td style="padding:8px 0;color:#6b7280;text-align:center;">${escapeHtml(item.quantity)}</td>
         <td style="padding:8px 0;color:#111827;text-align:right;">${formatMoney(item.price * item.quantity, input.currency)}</td>
       </tr>`
     })
@@ -57,9 +67,9 @@ function buildOrderConfirmationHtml(input: OrderConfirmationInput, storeName: st
 
   return `
     <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:32px;color:#111827;">
-      <p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;margin-bottom:16px;">${storeName}</p>
+      <p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;margin-bottom:16px;">${escapeHtml(storeName)}</p>
       <h1 style="font-size:28px;line-height:1.2;margin:0 0 12px;">Order confirmation</h1>
-      <p style="font-size:16px;color:#4b5563;margin:0 0 24px;">Thanks for your purchase. Your order <strong>#${input.orderNumber}</strong> is confirmed.</p>
+      <p style="font-size:16px;color:#4b5563;margin:0 0 24px;">Thanks for your purchase. Your order <strong>#${escapeHtml(input.orderNumber)}</strong> is confirmed.</p>
       <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
         <thead>
           <tr>

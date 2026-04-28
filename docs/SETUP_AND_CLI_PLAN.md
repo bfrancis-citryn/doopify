@@ -3,7 +3,7 @@
 > Deployment setup plan for Doopify.
 >
 > Created: April 28, 2026
-> Status: planned after current Phase 4 correctness and email-observability work
+> Status: active foundation; Phase A (`doopify doctor`) shipped on April 28, 2026
 
 ## Goal
 
@@ -54,7 +54,7 @@ The app should not ask for broad provider tokens unless the storage, encryption,
 
 ## Phase A - `doopify doctor`
 
-Status: planned first CLI slice
+Status: shipped first CLI slice
 
 Purpose: create a read-only diagnostic command that can run safely before setup.
 
@@ -76,14 +76,14 @@ Checks:
 
 Acceptance:
 
-- `doopify doctor` prints pass/warn/fail results.
-- It never writes files unless explicitly passed a repair flag later.
-- It exits non-zero when required checks fail.
-- The same status model can be reused by the in-app Setup tab.
+- `doopify doctor` prints pass/warn/fail results. — shipped
+- It never writes files unless explicitly passed a repair flag later. — shipped
+- It exits non-zero when required checks fail. — shipped
+- The same status model can be reused by the in-app Setup tab. — shipped foundation (`src/server/services/setup.service.ts`)
 
 ## Phase B - Setup Status API And Admin Setup Tab
 
-Status: planned after `doctor`
+Status: shipped foundation (`/api/setup/status` + Settings -> Setup checklist tab)
 
 Add:
 
