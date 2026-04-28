@@ -7,19 +7,31 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
       count: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    order: {
+      findUnique: vi.fn(),
     },
   },
   sendTransactionalEmail: vi.fn(),
+  getOrderById: vi.fn(),
+  buildOrderConfirmationEmailMessage: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
 vi.mock('@/server/email/provider', () => ({ sendTransactionalEmail: mocks.sendTransactionalEmail }))
+vi.mock('@/server/services/order.service', () => ({ getOrderById: mocks.getOrderById }))
+vi.mock('@/server/services/email-template.service', () => ({
+  buildOrderConfirmationEmailMessage: mocks.buildOrderConfirmationEmailMessage,
+}))
 
 import {
   createEmailDelivery,
+  getEmailDeliveryById,
   getEmailDeliveries,
   markEmailDeliveryFailed,
   markEmailDeliverySent,
+  resendEmailDelivery,
   sendTrackedEmail,
 } from './email-delivery.service'
 
@@ -31,6 +43,14 @@ describe('email delivery service', () => {
     mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-1', status: 'SENT' })
     mocks.prisma.emailDelivery.count.mockResolvedValue(1)
     mocks.prisma.emailDelivery.findMany.mockResolvedValue([{ id: 'email-1', status: 'SENT' }])
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue(null)
+    mocks.prisma.order.findUnique.mockResolvedValue(null)
+    mocks.getOrderById.mockResolvedValue(null)
+    mocks.buildOrderConfirmationEmailMessage.mockResolvedValue({
+      from: 'orders@example.com',
+      subject: 'Store order #1001 confirmation',
+      html: '<p>Order confirmation</p>',
+    })
   })
 
   it('creates a pending delivery record', async () => {
@@ -137,5 +157,142 @@ describe('email delivery service', () => {
       take: 10,
     }))
     expect(result.pagination).toEqual({ page: 2, pageSize: 10, total: 1, totalPages: 1 })
+  })
+
+  it('returns delivery diagnostics with resend policy', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-1',
+      event: 'order.paid',
+      template: 'order_confirmation',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order confirmation',
+      status: 'FAILED',
+      provider: 'resend',
+      providerMessageId: null,
+      attempts: 1,
+      lastError: 'Bounce',
+      nextRetryAt: null,
+      sentAt: null,
+      bouncedAt: null,
+      complainedAt: null,
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+      createdAt: new Date('2026-04-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-28T00:00:00.000Z'),
+    })
+    mocks.prisma.order.findUnique.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      status: 'OPEN',
+      paymentStatus: 'PAID',
+      fulfillmentStatus: 'UNFULFILLED',
+      total: 120,
+      currency: 'USD',
+      createdAt: new Date('2026-04-28T00:00:00.000Z'),
+    })
+
+    const result = await getEmailDeliveryById('email-1')
+
+    expect(result?.resendPolicy.canResend).toBe(true)
+    expect(result?.resendPolicy.blockers).toEqual([])
+    expect(result?.related.order).toEqual(expect.objectContaining({ id: 'order-1', orderNumber: 1001 }))
+  })
+
+  it('rejects resend when status is not eligible', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-1',
+      event: 'order.paid',
+      template: 'order_confirmation',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order confirmation',
+      status: 'SENT',
+      provider: 'resend',
+      providerMessageId: 'provider-1',
+      attempts: 1,
+      lastError: null,
+      nextRetryAt: null,
+      sentAt: new Date('2026-04-28T00:00:00.000Z'),
+      bouncedAt: null,
+      complainedAt: null,
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+      createdAt: new Date('2026-04-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-28T00:00:00.000Z'),
+    })
+
+    const result = await resendEmailDelivery('email-1')
+
+    expect(result).toEqual(expect.objectContaining({
+      success: false,
+      reason: 'NOT_RESENDABLE',
+    }))
+    expect(mocks.prisma.emailDelivery.create).not.toHaveBeenCalled()
+  })
+
+  it('resends an eligible order confirmation as a new tracked delivery', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-1',
+      event: 'order.paid',
+      template: 'order_confirmation',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order confirmation',
+      status: 'FAILED',
+      provider: 'resend',
+      providerMessageId: null,
+      attempts: 1,
+      lastError: 'Provider unavailable',
+      nextRetryAt: null,
+      sentAt: null,
+      bouncedAt: null,
+      complainedAt: null,
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+      createdAt: new Date('2026-04-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-28T00:00:00.000Z'),
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      total: 120,
+      items: [{ title: 'Tee', variantTitle: 'Blue', quantity: 2, price: 60 }],
+      addresses: [{
+        type: 'SHIPPING',
+        firstName: 'Alex',
+        lastName: 'Rivera',
+        address1: '123 Main St',
+        city: 'Los Angeles',
+        province: 'CA',
+        postalCode: '90001',
+        country: 'US',
+      }],
+    })
+    mocks.sendTransactionalEmail.mockResolvedValue({ provider: 'resend', providerMessageId: 'resend-2' })
+    mocks.prisma.emailDelivery.create.mockResolvedValue({ id: 'email-2', status: 'PENDING' })
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-2', status: 'SENT' })
+
+    const result = await resendEmailDelivery('email-1')
+
+    expect(result).toEqual({
+      success: true,
+      delivery: { id: 'email-2', status: 'SENT' },
+    })
+    expect(mocks.buildOrderConfirmationEmailMessage).toHaveBeenCalled()
+    expect(mocks.prisma.emailDelivery.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        event: 'order.paid',
+        template: 'order_confirmation',
+        recipientEmail: 'customer@example.com',
+        provider: 'resend',
+        status: 'PENDING',
+      }),
+    })
   })
 })

@@ -90,6 +90,13 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - settings integration UI supports webhook URL, selected events, active/inactive status, signing secret, explicit signing-secret clear, and encrypted custom headers
 - fast tests cover outbound queueing, signing, delivery success, retry/exhaustion, due processing, manual retry, claim behavior, listing, and retry route behavior
 
+### Transactional Email Observability (Current Slice)
+
+- private email delivery list/detail/resend APIs now exist at `GET /api/email-deliveries`, `GET /api/email-deliveries/[id]`, and `POST /api/email-deliveries/[id]/resend`
+- safe resend eligibility is limited to failed, bounced, and complained deliveries
+- resend reuses order-confirmation template rendering and creates a new tracked delivery attempt instead of mutating order/payment/inventory/refund/return/webhook state
+- fast tests now cover email delivery API routes and resend eligibility behavior
+
 ### Internal Extensibility Without Premature Plugin Complexity
 
 - typed internal events are in place
@@ -123,7 +130,7 @@ npm run build
 
 - Run the full local verification gate after the latest correctness patches
 - Add transactional email observability without coupling email success to order/payment/inventory/refund/return durability
-- Add safe email resend tooling that never re-emits commerce side effects
+- Add admin email delivery visibility for list/detail/resend observability
 - Add bounce/complaint handling for the chosen email provider
 - Verify integration secret encryption and outbound webhook retry/idempotency with broader real-DB coverage
 - Keep the centralized pricing authority on the server as lifecycle flows evolve

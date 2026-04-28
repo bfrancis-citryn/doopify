@@ -44,6 +44,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Durable inbound Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, retry metadata, local-payload replay, diagnostics, cron-compatible retry tooling, and admin visibility
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
+- Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
 - Public storefront settings endpoint for branding-safe store data
 - Collection service layer and storefront-safe collection DTOs
 - Admin collection workspace at `/admin/collections`
@@ -220,12 +221,12 @@ See `TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`.
 
 Target work:
 
-1. Add durable email delivery persistence.
-2. Add an email delivery service and provider adapter seam.
-3. Update order confirmation email consumer to record delivery status.
-4. Add safe list/detail/resend APIs.
-5. Add admin email delivery visibility.
-6. Add tests for success, failure, bounce/complaint state, and safe resend.
+1. Add durable email delivery persistence — shipped.
+2. Add an email delivery service and provider adapter seam — shipped.
+3. Update order confirmation email consumer to record delivery status — shipped.
+4. Add safe list/detail/resend APIs — shipped.
+5. Add admin email delivery visibility — pending.
+6. Add tests for success, failure, bounce/complaint state, and safe resend — in progress (service/API fast coverage shipped; broader integration coverage pending).
 
 ### Phase 4 Acceptance Checks
 
@@ -233,7 +234,7 @@ Target work:
 - a return moves through its state machine and triggers a refund correctly — foundation shipped
 - outbound webhook deliveries are signed, retried with backoff, claimed before send, and visible in the admin — foundation shipped
 - integration secrets never appear unencrypted at rest — foundation shipped for integration/webhook secrets; continue coverage
-- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — next slice
+- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — in progress (API/resend foundation shipped; admin visibility and provider webhook states pending)
 
 ## Phase 5 - Setup Wizard, CLI, And Launch Operations
 

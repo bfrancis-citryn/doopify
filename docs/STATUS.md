@@ -41,7 +41,7 @@ The repo currently includes:
 - centralized checkout pricing in `src/server/checkout/pricing.ts`
 - checkout-native discount-code validation and paid-order discount usage persistence
 - settings-backed shipping/tax rates plus persisted shipping zones/rates and jurisdiction-aware tax rules
-- DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, and outbound webhook deliveries
+- DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - typed internal event dispatcher and static integration registry
 - first-party logging and order-confirmation email consumers
@@ -125,19 +125,19 @@ Shipped foundation:
 - email delivery service in `src/server/services/email-delivery.service.ts`
 - tracked send flow with `PENDING -> SENT` and `PENDING -> FAILED` persistence
 - order-confirmation email delivery now creates delivery records and stores provider metadata when available
-- fast tests for delivery creation, sent/failed transitions, tracked send success/failure, and paginated delivery listing
+- private email delivery APIs: `GET /api/email-deliveries`, `GET /api/email-deliveries/[id]`, `POST /api/email-deliveries/[id]/resend`
+- safe resend policy for `FAILED`/`BOUNCED`/`COMPLAINED` order-confirmation deliveries that creates a new tracked send without re-emitting commerce side effects
+- fast tests for delivery creation, sent/failed transitions, tracked send success/failure, paginated delivery listing, and email delivery API/resend behavior
 
 Still pending:
 
-- private email delivery list/detail/resend APIs
 - admin email delivery visibility
 - provider bounce/complaint webhook handling
-- safe resend flow that does not duplicate commerce side effects
 - real-DB integration coverage for email failure/resend behavior
 
 ### Remaining Phase 4 Priorities
 
-1. Transactional email observability APIs/admin/resend/bounce handling
+1. Transactional email observability admin visibility and provider bounce/complaint handling
 2. Analytics event fan-out through the existing dispatcher
 3. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
 4. Broader real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
@@ -151,7 +151,7 @@ Status by acceptance check:
 - A return moves through its state machine and triggers a refund correctly — **foundation shipped; continue UX and integration coverage**
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
 - Integration secrets never appear unencrypted at rest — **foundation shipped for integration/webhook secrets; continue verification tests**
-- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation in progress; API/admin/resend/bounce handling pending**
+- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation in progress; admin visibility and provider webhook handling pending**
 - Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **planned after email observability foundation**
 - Build and typecheck stay green throughout — **must be re-run after every change**
 
@@ -169,11 +169,12 @@ First foundation shipped:
 - email delivery service/provider adapter seam
 - order confirmation delivery status tracking
 - failed/sent delivery transitions
+- private email delivery list/detail/resend APIs
+- resend safety policy for failed/bounced/complained order-confirmation deliveries
 
 Remaining target:
 
-- private email delivery list/detail/resend APIs
-- admin visibility and safe resend controls
+- admin visibility and resend controls in UI
 - failed/bounced/complained states wired to provider webhooks
 - tests proving email failure/resend never duplicate order, payment, inventory, refund, return, webhook, or analytics side effects
 
