@@ -9,14 +9,30 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   type: z.string().min(1).optional(),
   webhookUrl: z.string().url().optional().or(z.literal('')),
-  webhookSecret: z.string().optional().or(z.literal('')),
+  webhookSecret: z.string().optional(),
+  clearWebhookSecret: z.boolean().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   events: z.array(z.string()).optional(),
   secrets: z.array(z.object({
     key: z.string(),
-    value: z.string().optional() // if value is blank, maybe delete it or leave alone
+    value: z.string().optional()
   })).optional()
 })
+
+function uniqueStrings(values: string[] | undefined) {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
+}
+
+function sanitizeSecretKeys(secrets: Array<{ key: string; value?: string }> | undefined) {
+  const seen = new Set<string>()
+  return (secrets ?? [])
+    .map((secret) => ({ key: secret.key.trim(), value: secret.value?.trim() ?? '' }))
+    .filter((secret) => {
+      if (!secret.key || seen.has(secret.key)) return false
+      seen.add(secret.key)
+      return true
+    })
+}
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -42,45 +58,45 @@ export async function PUT(req: Request, { params }: Params) {
     const { id } = await params
     const json = await req.json()
     const parsed = updateSchema.parse(json)
-    
-    // We update in a transaction if we are mapping nested items
+
     const updated = await prisma.$transaction(async (tx) => {
-      // update standard fields
       const data: any = {}
       if (parsed.name) data.name = parsed.name
       if (parsed.type) data.type = parsed.type
       if (parsed.status) data.status = parsed.status
       if (parsed.webhookUrl !== undefined) data.webhookUrl = parsed.webhookUrl || null
-      if (parsed.webhookSecret !== undefined) {
-        data.webhookSecret = parsed.webhookSecret ? encrypt(parsed.webhookSecret) : null
+      if (parsed.clearWebhookSecret) {
+        data.webhookSecret = null
+      } else if (parsed.webhookSecret && parsed.webhookSecret.trim()) {
+        data.webhookSecret = encrypt(parsed.webhookSecret.trim())
       }
 
-      const integration = await tx.integration.update({
+      await tx.integration.update({
         where: { id },
         data
       })
 
-      // Update events: delete old, create new
       if (parsed.events !== undefined) {
+        const events = uniqueStrings(parsed.events)
         await tx.integrationEvent.deleteMany({ where: { integrationId: id } })
-        if (parsed.events.length > 0) {
+        if (events.length > 0) {
           await tx.integrationEvent.createMany({
-            data: parsed.events.map(event => ({ integrationId: id, event }))
+            data: events.map(event => ({ integrationId: id, event }))
           })
         }
       }
 
-      // Update secrets:
       if (parsed.secrets !== undefined) {
-        // delete secrets not in the new list?
-        const newKeys = parsed.secrets.map(s => s.key)
+        const secrets = sanitizeSecretKeys(parsed.secrets)
+        const newKeys = secrets.map(s => s.key)
         await tx.integrationSecret.deleteMany({
-          where: { integrationId: id, key: { notIn: newKeys } }
+          where: newKeys.length
+            ? { integrationId: id, key: { notIn: newKeys } }
+            : { integrationId: id }
         })
 
-        // upsert existing or new ones
-        for (const secret of parsed.secrets) {
-          if (secret.value && secret.value.trim() !== '') {
+        for (const secret of secrets) {
+          if (secret.value) {
             await tx.integrationSecret.upsert({
               where: { integrationId_key: { integrationId: id, key: secret.key } },
               create: { integrationId: id, key: secret.key, value: encrypt(secret.value) },
