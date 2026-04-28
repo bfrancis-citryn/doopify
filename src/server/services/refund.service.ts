@@ -8,6 +8,10 @@ function roundCurrency(value: number) {
   return Number(value.toFixed(2))
 }
 
+function toMinorUnits(value: number) {
+  return Math.round(roundCurrency(value) * 100)
+}
+
 function derivePaymentStatus(
   originalAmount: number,
   refundedAmount: number
@@ -24,6 +28,7 @@ export type IssueRefundInput = {
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
   note?: string
   restockItems?: boolean
+  returnId?: string
   items?: Array<{
     orderItemId: string
     variantId?: string
@@ -32,18 +37,125 @@ export type IssueRefundInput = {
   }>
 }
 
+type ValidatedRefundItem = {
+  orderItemId: string
+  variantId?: string
+  quantity: number
+  amount: number
+}
+
+function validateRefundItems(input: {
+  order: {
+    items?: Array<{
+      id: string
+      variantId: string | null
+      quantity: number
+      total: number
+      price: number
+    }>
+    refunds?: Array<{
+      status: string
+      items: Array<{ orderItemId: string; quantity: number }>
+    }>
+  }
+  amount: number
+  items: IssueRefundInput['items']
+}) {
+  const requestedItems = input.items ?? []
+  if (!requestedItems.length) return []
+
+  const orderItems = new Map((input.order.items ?? []).map(item => [item.id, item]))
+  const alreadyRefundedByItem = new Map<string, number>()
+
+  for (const refund of input.order.refunds ?? []) {
+    if (refund.status !== 'ISSUED' && refund.status !== 'PENDING') continue
+    for (const item of refund.items ?? []) {
+      alreadyRefundedByItem.set(
+        item.orderItemId,
+        (alreadyRefundedByItem.get(item.orderItemId) ?? 0) + item.quantity
+      )
+    }
+  }
+
+  let itemAmountTotal = 0
+  const validated: ValidatedRefundItem[] = []
+
+  for (const item of requestedItems) {
+    const orderItem = orderItems.get(item.orderItemId)
+    if (!orderItem) {
+      throw new Error('Refund item does not belong to this order')
+    }
+
+    const quantity = Number(item.quantity)
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new Error('Refund item quantity must be a positive integer')
+    }
+
+    const alreadyRefunded = alreadyRefundedByItem.get(item.orderItemId) ?? 0
+    if (quantity > orderItem.quantity - alreadyRefunded) {
+      throw new Error('Refund item quantity exceeds refundable quantity')
+    }
+
+    if (item.variantId && orderItem.variantId && item.variantId !== orderItem.variantId) {
+      throw new Error('Refund item variant does not match the order item')
+    }
+
+    if (roundCurrency(item.amount) <= 0) {
+      throw new Error('Refund item amount must be positive')
+    }
+
+    const maxItemAmount = roundCurrency((orderItem.total || orderItem.price * orderItem.quantity) * (quantity / orderItem.quantity))
+    if (roundCurrency(item.amount) > maxItemAmount) {
+      throw new Error('Refund item amount exceeds refundable item amount')
+    }
+
+    itemAmountTotal += roundCurrency(item.amount)
+    validated.push({
+      orderItemId: item.orderItemId,
+      variantId: orderItem.variantId ?? item.variantId,
+      quantity,
+      amount: roundCurrency(item.amount),
+    })
+  }
+
+  if (roundCurrency(itemAmountTotal) > roundCurrency(input.amount)) {
+    throw new Error('Refund item amounts exceed the refund amount')
+  }
+
+  return validated
+}
+
 export async function issueRefund(input: IssueRefundInput) {
-  const { orderId, paymentId, amount, reason, note, restockItems = false, items = [] } = input
+  const { orderId, paymentId, amount, reason, note, restockItems = false, returnId, items = [] } = input
+
+  if (roundCurrency(amount) <= 0) {
+    throw new Error('Refund amount must be positive')
+  }
 
   const [order, payment] = await Promise.all([
     prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, orderNumber: true, currency: true, paymentStatus: true },
+      select: {
+        id: true,
+        orderNumber: true,
+        currency: true,
+        paymentStatus: true,
+        items: {
+          select: { id: true, variantId: true, quantity: true, price: true, total: true },
+        },
+        refunds: {
+          select: {
+            status: true,
+            items: { select: { orderItemId: true, quantity: true } },
+          },
+        },
+      },
     }),
     prisma.payment.findUnique({
       where: { id: paymentId },
       select: {
         id: true,
+        orderId: true,
         amount: true,
         stripePaymentIntentId: true,
         stripeChargeId: true,
@@ -54,10 +166,13 @@ export async function issueRefund(input: IssueRefundInput) {
 
   if (!order) throw new Error('Order not found')
   if (!payment) throw new Error('Payment not found')
+  if (payment.orderId !== order.id) throw new Error('Payment does not belong to this order')
+  if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'PARTIALLY_REFUNDED') {
+    throw new Error('Only paid orders can be refunded')
+  }
 
-  // Calculate total already refunded on this payment
   const alreadyRefunded = payment.refunds
-    .filter(r => r.status === 'ISSUED')
+    .filter(r => r.status === 'ISSUED' || r.status === 'PENDING')
     .reduce((sum, r) => sum + r.amount, 0)
 
   const refundable = roundCurrency(payment.amount - alreadyRefunded)
@@ -65,13 +180,52 @@ export async function issueRefund(input: IssueRefundInput) {
     throw new Error(`Refund amount ${amount} exceeds refundable amount ${refundable}`)
   }
 
-  // Issue refund in Stripe — amount is stored in cents in Stripe
-  const stripeRefund = await createStripeRefund({
-    chargeId: payment.stripeChargeId,
-    paymentIntentId: payment.stripePaymentIntentId,
-    amount: Math.round(amount * 100),
-    reason,
+  const validatedItems = validateRefundItems({ order, amount, items })
+
+  const pendingRefund = await prisma.refund.create({
+    data: {
+      orderId,
+      paymentId,
+      status: 'PENDING',
+      amount: roundCurrency(amount),
+      reason,
+      note,
+      restockItems,
+      items: validatedItems.length > 0
+        ? {
+            create: validatedItems.map(item => ({
+              orderItemId: item.orderItemId,
+              variantId: item.variantId,
+              quantity: item.quantity,
+              amount: item.amount,
+            })),
+          }
+        : undefined,
+    },
+    include: { items: true },
   })
+
+  let stripeRefund: Awaited<ReturnType<typeof createStripeRefund>>
+  try {
+    stripeRefund = await createStripeRefund({
+      chargeId: payment.stripeChargeId,
+      paymentIntentId: payment.stripePaymentIntentId,
+      amount: toMinorUnits(amount),
+      reason,
+      idempotencyKey: `refund:${pendingRefund.id}`,
+    })
+  } catch (error) {
+    await prisma.refund.update({
+      where: { id: pendingRefund.id },
+      data: {
+        status: 'FAILED',
+        note: note
+          ? `${note}\nStripe refund failed before issuing: ${error instanceof Error ? error.message : 'Unknown Stripe error'}`
+          : `Stripe refund failed before issuing: ${error instanceof Error ? error.message : 'Unknown Stripe error'}`,
+      },
+    })
+    throw new Error('Stripe refund failed before issuing')
+  }
 
   const newPaymentStatus = derivePaymentStatus(
     payment.amount,
@@ -79,33 +233,24 @@ export async function issueRefund(input: IssueRefundInput) {
   )
 
   const refund = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const created = await tx.refund.create({
+    const issued = await tx.refund.update({
+      where: { id: pendingRefund.id },
       data: {
-        orderId,
-        paymentId,
         stripeRefundId: stripeRefund.id,
         status: 'ISSUED',
-        amount: roundCurrency(amount),
-        reason,
-        note,
-        restockItems,
-        items: items.length > 0
-          ? {
-              create: items.map(item => ({
-                orderItemId: item.orderItemId,
-                variantId: item.variantId,
-                quantity: item.quantity,
-                amount: roundCurrency(item.amount),
-              })),
-            }
-          : undefined,
       },
       include: { items: true },
     })
 
-    // Restock inventory for each line item
-    if (restockItems && items.length > 0) {
-      for (const item of items) {
+    if (returnId) {
+      await tx.return.update({
+        where: { id: returnId },
+        data: { refundId: issued.id },
+      })
+    }
+
+    if (restockItems && validatedItems.length > 0) {
+      for (const item of validatedItems) {
         if (item.variantId) {
           await tx.productVariant.update({
             where: { id: item.variantId },
@@ -115,7 +260,6 @@ export async function issueRefund(input: IssueRefundInput) {
       }
     }
 
-    // Update payment and order payment status
     await tx.payment.update({
       where: { id: paymentId },
       data: { status: newPaymentStatus },
@@ -126,7 +270,6 @@ export async function issueRefund(input: IssueRefundInput) {
       data: { paymentStatus: newPaymentStatus },
     })
 
-    // Log order event
     await tx.orderEvent.create({
       data: {
         orderId,
@@ -137,7 +280,7 @@ export async function issueRefund(input: IssueRefundInput) {
       },
     })
 
-    return created
+    return issued
   })
 
   await emitInternalEvent('order.refunded', {
