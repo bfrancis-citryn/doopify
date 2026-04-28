@@ -10,7 +10,7 @@
 
 Doopify is now a real commerce app. The most important risks are payment correctness, inventory correctness, auth/session integrity, safe public data exposure, and operational debuggability.
 
-Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outbound webhook delivery, integration secrets, and transactional email recovery must be safe, observable, and retryable without duplicating commerce side effects.
+Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outbound webhook delivery, integration secrets, transactional email recovery, and setup automation must be safe, observable, and retryable without duplicating commerce side effects or leaking secrets.
 
 ## Closed In This Pass
 
@@ -66,6 +66,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - returns validate order-owned items
 - returns follow an explicit state machine
 - received returns can close with a linked refund
+- close-with-refund validates refund quantities and variants against actual return items
 - admin order detail now exposes refund, return creation, return workflow, and close-with-refund controls
 - fast and gated integration coverage exists for representative refund/return lifecycle behavior
 
@@ -77,13 +78,17 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - outbound deliveries use timestamped HMAC signatures in `sha256=<hex>` format
 - delivery requests include `X-Doopify-Delivery`, `X-Doopify-Event`, `X-Doopify-Timestamp`, and `X-Doopify-Signature`
 - custom outbound headers can be stored as encrypted `IntegrationSecret` rows using `HEADER_`-prefixed keys
+- integration edits preserve existing signing secrets unless explicitly cleared
+- integration event subscriptions are deduplicated and constrained unique by integration/event
+- outbound delivery processing now claims a delivery before sending to reduce duplicate sends from overlapping retry workers
+- manual outbound retry returns clean not-retryable behavior for missing or successful deliveries
 - responses record status code, truncated response body, attempts, last error, retry timestamps, and processed timestamps
 - failed deliveries retry with backoff and then move to an exhausted/dead-letter state
 - due outbound deliveries are processed through the existing cron-compatible retry runner
 - manual retry is available through `POST /api/outbound-webhook-deliveries/[id]/retry`
 - `/admin/webhooks` shows inbound and outbound delivery visibility with outbound retry controls
-- settings integration UI supports webhook URL, selected events, active/inactive status, signing secret, and encrypted custom headers
-- fast tests cover outbound queueing, signing, delivery success, retry/exhaustion, due processing, manual retry, listing, and retry route behavior
+- settings integration UI supports webhook URL, selected events, active/inactive status, signing secret, explicit signing-secret clear, and encrypted custom headers
+- fast tests cover outbound queueing, signing, delivery success, retry/exhaustion, due processing, manual retry, claim behavior, listing, and retry route behavior
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
@@ -116,18 +121,20 @@ npm run build
 
 ### High Priority
 
+- Run the full local verification gate after the latest correctness patches
 - Add transactional email observability without coupling email success to order/payment/inventory/refund/return durability
 - Add safe email resend tooling that never re-emits commerce side effects
 - Add bounce/complaint handling for the chosen email provider
 - Verify integration secret encryption and outbound webhook retry/idempotency with broader real-DB coverage
 - Keep the centralized pricing authority on the server as lifecycle flows evolve
-- Continue proving payment, inventory, refund, return, webhook, and email behavior through real-DB tests where transaction behavior matters
+- Continue proving payment, inventory, refund, return, webhook, email, and setup behavior through real-DB tests where transaction behavior matters
 
 ### Medium Priority
 
 - Extract the remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only while storefront collection reads stay public and read-only
 - Expand audit logging around integration changes, refund/return transitions, email resends, and webhook retries
+- Add setup status service and `doopify doctor` checks that redact secrets and avoid mutating user files by default
 
 ### Later
 
@@ -164,14 +171,18 @@ These invariants should not be broken by future work:
 - refund items must belong to the order and stay within refundable quantity bounds
 - returns must move only through allowed state transitions
 - closing a return with a refund must link the return to the refund record
+- close-with-refund item quantities must not exceed the quantities actually received in the return
 
 ## Outbound Webhook Invariants
 
 - outbound webhook subscriptions must be explicit by integration and event
+- integration/event subscriptions must be unique
 - delivery records must be durable before delivery is attempted
 - signing secrets and custom header secrets must be encrypted at rest
+- editing an integration must not clear signing secrets unless explicitly requested
 - outbound payload signing must include a timestamp to reduce replay risk
 - non-2xx responses should be recorded and retried according to policy
+- due delivery processing must claim a delivery before sending to reduce duplicate sends from overlapping workers
 - exhausted deliveries must remain visible to the admin as a dead-letter state
 - manual retries must not erase the history needed to debug earlier failures
 - typed internal events remain the source of outbound delivery creation
@@ -189,6 +200,19 @@ The first email hardening milestone is complete when:
 - failed/bounced deliveries can be resent from admin without duplicate commerce side effects
 - admin list/detail APIs expose safe metadata only
 - tests prove email failure and resend behavior do not duplicate orders, payments, inventory changes, refunds, returns, webhooks, or analytics events
+
+## Setup And CLI Hardening Target
+
+See `SETUP_AND_CLI_PLAN.md` for the planned implementation sequence.
+
+The first setup hardening milestone is complete when:
+
+- `doopify doctor` can run read-only setup diagnostics locally
+- setup status is available through a safe server service and `/api/setup/status`
+- Settings -> Setup shows setup health and next actions without running shell commands from the browser
+- `doopify setup` can later write env files, run Prisma setup, and bootstrap owner/store from a local trusted environment
+- secrets are redacted from logs and never exposed through setup-status APIs
+- broad Vercel, Neon, Stripe, or email-provider account tokens are not stored long term inside the app unless a scoped token lifecycle exists
 
 ## Pricing Hardening Target
 
@@ -288,6 +312,7 @@ These ideas are intentionally rejected for this phase:
 - replacing the current admin with fully generated CRUD screens
 - treating payment redirects as order finalization
 - marketing a public plugin marketplace before the typed integration model matures
+- running local shell commands from the browser Setup tab
 
 ## Operational Notes
 
@@ -296,6 +321,7 @@ These ideas are intentionally rejected for this phase:
 - The browser may start checkout, but only Stripe webhook success finalizes order creation
 - Internal event handlers are allowed to fail without corrupting already-committed order or payment data
 - Outbound merchant webhook failures should become delivery records, not uncaught lifecycle errors
+- Setup automation should start with read-only diagnostics and status checks before mutating user environments
 - Media binary storage in Postgres is acceptable for local/current workflows but should move to object storage before heavier production usage
 
 ## Exit Criteria For The Next Hardening Pass
@@ -305,4 +331,5 @@ The next hardening milestone is complete when:
 - transactional email delivery records, status transitions, bounce/complaint handling, and safe resend tooling are implemented
 - email failure and resend behavior are covered by fast tests and at least one real-DB lifecycle test
 - outbound webhook retry/idempotency has broader real-DB coverage
-- operational logging is good enough to debug a missing email, duplicate delivery, stuck retry, or exhausted outbound webhook without inspecting the database manually
+- setup diagnostics are implemented in a way that redacts secrets and reuses checks between CLI and admin Setup tab
+- operational logging is good enough to debug a missing email, duplicate delivery, stuck retry, exhausted outbound webhook, or broken setup without inspecting the database manually
