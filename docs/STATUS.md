@@ -31,7 +31,7 @@ Doopify is a real DB-backed commerce app, not a prototype.
 
 The repo currently includes:
 
-- Prisma/Postgres commerce schema for products, variants, media, customers, orders, discounts, settings, sessions, payments, fulfillments, refunds, returns, integrations, inbound webhook deliveries, and outbound webhook deliveries
+- Prisma/Postgres commerce schema for products, variants, media, customers, orders, discounts, settings, sessions, payments, fulfillments, refunds, returns, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - Next.js App Router admin, storefront, and API surface
 - protected admin auth with session-backed JWT validation
 - private route protection through `src/proxy.ts`
@@ -49,6 +49,7 @@ The repo currently includes:
 - Phase 4 return service with state-machine transitions, order-owned item validation, received-return close-with-refund support, and admin order action panels
 - Phase 4 outbound merchant webhook foundation with subscriptions, timestamped HMAC signatures, retry/backoff, manual retry API, dead-letter/exhausted visibility, integration settings UI, and admin delivery visibility
 - Phase 4 correctness hardening for outbound webhook delivery claiming, manual retry eligibility, integration secret preservation, event-subscription deduplication, and return refund quantity validation
+- Phase 4 transactional email observability foundation with `EmailDelivery` persistence, provider adapter seam, order-confirmation delivery tracking, and fast service tests
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs
 
 ## Phase 3 Status
@@ -115,9 +116,28 @@ Shipped:
 - `/admin/webhooks` inbound/outbound direction switch, outbound delivery table, status filter, response/attempt visibility, and manual retry button
 - fast tests for outbound service queueing, signing, delivery success, retry/exhaustion, due processing, manual retry, listing route, and retry route
 
+#### Transactional Email Observability
+
+Shipped foundation:
+
+- `EmailDeliveryStatus` enum and `EmailDelivery` Prisma model
+- provider adapter seam in `src/server/email/provider.ts`
+- email delivery service in `src/server/services/email-delivery.service.ts`
+- tracked send flow with `PENDING -> SENT` and `PENDING -> FAILED` persistence
+- order-confirmation email delivery now creates delivery records and stores provider metadata when available
+- fast tests for delivery creation, sent/failed transitions, tracked send success/failure, and paginated delivery listing
+
+Still pending:
+
+- private email delivery list/detail/resend APIs
+- admin email delivery visibility
+- provider bounce/complaint webhook handling
+- safe resend flow that does not duplicate commerce side effects
+- real-DB integration coverage for email failure/resend behavior
+
 ### Remaining Phase 4 Priorities
 
-1. Transactional email observability: delivery status, bounce/complaint handling, and safe resend tooling
+1. Transactional email observability APIs/admin/resend/bounce handling
 2. Analytics event fan-out through the existing dispatcher
 3. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
 4. Broader real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
@@ -131,26 +151,30 @@ Status by acceptance check:
 - A return moves through its state machine and triggers a refund correctly — **foundation shipped; continue UX and integration coverage**
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
 - Integration secrets never appear unencrypted at rest — **foundation shipped for integration/webhook secrets; continue verification tests**
-- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **next planned slice**
+- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation in progress; API/admin/resend/bounce handling pending**
 - Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **planned after email observability foundation**
 - Build and typecheck stay green throughout — **must be re-run after every change**
 
 ## Transactional Email Observability Plan
 
-The next Phase 4 implementation slice is documented in:
+The current Phase 4 implementation slice is documented in:
 
 ```txt
 TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md
 ```
 
-First implementation target:
+First foundation shipped:
 
 - durable `EmailDelivery` records
 - email delivery service/provider adapter seam
 - order confirmation delivery status tracking
-- failed/bounced/complained states
+- failed/sent delivery transitions
+
+Remaining target:
+
 - private email delivery list/detail/resend APIs
 - admin visibility and safe resend controls
+- failed/bounced/complained states wired to provider webhooks
 - tests proving email failure/resend never duplicate order, payment, inventory, refund, return, webhook, or analytics side effects
 
 ## Setup Wizard And CLI Plan
@@ -173,7 +197,7 @@ Planned sequence:
 
 ### Highest Priority
 
-- Transactional email observability and resend tooling
+- Transactional email observability APIs/admin/resend/bounce handling
 - Analytics event fan-out
 - Setup Wizard and CLI foundation
 - Broader real-DB race/idempotency coverage as Phase 4 behaviors expand
@@ -197,7 +221,7 @@ Planned sequence:
 
 ### High Priority
 
-- Add transactional email observability without coupling email success to order/payment/inventory durability
+- Finish transactional email observability without coupling email success to order/payment/inventory durability
 - Verify integration secret encryption and outbound webhook retry/idempotency with broader coverage
 - Keep the centralized pricing authority server-owned as lifecycle flows evolve
 - Continue proving payment, inventory, refund, return, webhook, and email behavior through real-DB tests where transaction behavior matters
