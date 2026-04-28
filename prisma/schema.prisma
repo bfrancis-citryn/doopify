@@ -115,6 +115,16 @@ enum RefundStatus {
   FAILED
 }
 
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  BOUNCED
+  COMPLAINED
+  RETRYING
+  RESEND_REQUESTED
+}
+
 model Store {
   id                String   @id @default(cuid())
   name              String
@@ -696,6 +706,35 @@ model DiscountApplication {
 
   @@unique([orderId, discountId])
   @@map("discount_applications")
+}
+
+model EmailDelivery {
+  id                String              @id @default(cuid())
+  event             String
+  template          String
+  recipientEmail    String
+  subject           String
+  status            EmailDeliveryStatus @default(PENDING)
+  provider          String              @default("resend")
+  providerMessageId String?
+  attempts          Int                 @default(0)
+  lastError         String?
+  nextRetryAt       DateTime?
+  sentAt            DateTime?
+  bouncedAt         DateTime?
+  complainedAt      DateTime?
+  orderId           String?
+  customerId        String?
+  refundId          String?
+  returnId          String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([recipientEmail])
+  @@index([orderId])
+  @@index([providerMessageId])
+  @@map("email_deliveries")
 }
 
 model Integration {
