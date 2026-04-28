@@ -7,6 +7,7 @@ import type { OutboundWebhookDelivery } from '@prisma/client'
 
 const MAX_ATTEMPTS = 5
 const MAX_RESPONSE_BODY_LENGTH = 1000
+const RETRYABLE_STATUSES = ['PENDING', 'RETRYING', 'FAILED', 'EXHAUSTED'] as const
 
 function calculateNextRetry(attempt: number, now = new Date()): Date {
   const baseDelayMs = 1000 * 60
@@ -31,6 +32,10 @@ function safeResponseBody(body: string) {
 
 function normalizeError(error: unknown) {
   return error instanceof Error ? error.message : 'Outbound webhook delivery failed'
+}
+
+function uniqueEvents(events: string[] | undefined) {
+  return [...new Set((events ?? []).map((event) => event.trim()).filter(Boolean))]
 }
 
 export async function queueOutboundWebhooks<K extends DoopifyEventName>(
@@ -70,6 +75,28 @@ export async function queueOutboundWebhooks<K extends DoopifyEventName>(
   return { queued: activeIntegrations.length }
 }
 
+async function claimOutboundDelivery(delivery: Pick<OutboundWebhookDelivery, 'id' | 'status' | 'nextRetryAt'>, now: Date) {
+  if (delivery.status === 'PENDING') {
+    return prisma.outboundWebhookDelivery.updateMany({
+      where: { id: delivery.id, status: 'PENDING' },
+      data: { status: 'RETRYING', lastRetriedAt: now },
+    })
+  }
+
+  if (delivery.status === 'RETRYING') {
+    return prisma.outboundWebhookDelivery.updateMany({
+      where: {
+        id: delivery.id,
+        status: 'RETRYING',
+        OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }],
+      },
+      data: { lastRetriedAt: now },
+    })
+  }
+
+  return { count: 0 }
+}
+
 export async function processOutboundWebhook(deliveryId: string) {
   const delivery = await prisma.outboundWebhookDelivery.findUnique({
     where: { id: deliveryId },
@@ -79,6 +106,10 @@ export async function processOutboundWebhook(deliveryId: string) {
   if (!delivery || !delivery.integration || (delivery.status !== 'PENDING' && delivery.status !== 'RETRYING')) {
     return null
   }
+
+  const attemptedAt = new Date()
+  const claimed = await claimOutboundDelivery(delivery, attemptedAt)
+  if (claimed.count === 0) return null
 
   const integration = delivery.integration
   if (!integration.webhookUrl || integration.status !== 'ACTIVE') {
@@ -90,11 +121,11 @@ export async function processOutboundWebhook(deliveryId: string) {
           ? 'Integration is inactive'
           : 'Missing webhook URL on integration',
         processedAt: new Date(),
+        nextRetryAt: null,
       },
     })
   }
 
-  const attemptedAt = new Date()
   const newAttempts = delivery.attempts + 1
   let status: OutboundWebhookDelivery['status'] = 'SUCCESS'
   let lastError: string | null = null
@@ -186,6 +217,15 @@ export async function processDueOutboundDeliveries(limit = 50) {
 }
 
 export async function retryOutboundWebhookDelivery(deliveryId: string) {
+  const existing = await prisma.outboundWebhookDelivery.findUnique({
+    where: { id: deliveryId },
+    select: { id: true, status: true },
+  })
+
+  if (!existing || !RETRYABLE_STATUSES.includes(existing.status as typeof RETRYABLE_STATUSES[number])) {
+    return null
+  }
+
   const delivery = await prisma.outboundWebhookDelivery.update({
     where: { id: deliveryId },
     data: {
@@ -198,3 +238,5 @@ export async function retryOutboundWebhookDelivery(deliveryId: string) {
 
   return processOutboundWebhook(delivery.id)
 }
+
+export { uniqueEvents }
