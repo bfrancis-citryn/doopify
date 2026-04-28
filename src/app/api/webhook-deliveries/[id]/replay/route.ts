@@ -1,12 +1,11 @@
 import { err, ok } from '@/lib/api'
-import { getStripeEvent } from '@/lib/stripe'
 import {
   getWebhookDeliveryById,
   markWebhookDeliveryFailed,
   markWebhookDeliveryProcessed,
   recordWebhookDeliveryAttempt,
 } from '@/server/services/webhook-delivery.service'
-import { processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
+import { parseStripeWebhookEventPayload, processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
 
 interface Params {
   params: Promise<{ id: string }>
@@ -28,24 +27,28 @@ export async function POST(_req: Request, { params }: Params) {
     return err('Replay requires a provider event id', 400)
   }
 
-  let replayEvent
-  try {
-    replayEvent = await getStripeEvent(delivery.providerEventId)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch Stripe event'
+  if (!delivery.rawPayload) {
+    return err('Replay requires a verified stored payload', 400)
+  }
+
+  const replayEvent = parseStripeWebhookEventPayload(delivery.rawPayload)
+  if (!replayEvent) {
     await markWebhookDeliveryFailed({
       provider: delivery.provider,
       providerEventId: delivery.providerEventId,
-      error: message,
+      error: 'Stored webhook payload is invalid',
+      retryable: false,
     })
-    return err('Failed to fetch webhook event from Stripe', 500)
+    return err('Stored webhook payload is invalid', 400)
   }
 
   const replayAttempt = await recordWebhookDeliveryAttempt({
     provider: delivery.provider,
     providerEventId: replayEvent.id,
     eventType: replayEvent.type,
-    payload: JSON.stringify(replayEvent),
+    payload: delivery.rawPayload,
+    rawPayload: delivery.rawPayload,
+    isRetry: true,
   })
 
   try {
@@ -68,6 +71,7 @@ export async function POST(_req: Request, { params }: Params) {
       provider: replayAttempt.provider,
       providerEventId: replayAttempt.providerEventId,
       error: message,
+      retryable: true,
     })
     return err('Webhook replay failed', 500)
   }

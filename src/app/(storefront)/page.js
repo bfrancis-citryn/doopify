@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Component as EtheralShadow } from '@/components/ui/etheral-shadow';
 import { getStorefrontProducts } from '@/server/services/product.service';
 import { getStorefrontCollectionSummaries } from '@/server/services/collection.service';
+import FeaturedCollectionsGrid from '@/components/storefront/FeaturedCollectionsGrid';
 
 export const metadata = {
   title: 'Doopify - Commerce, Refined',
@@ -20,6 +21,12 @@ export default async function LandingPage() {
   try {
     const result = await getStorefrontCollectionSummaries();
     featuredCollections = (result || []).slice(0, 3);
+  } catch {}
+
+  let store = null;
+  try {
+    const { getPublicStorefrontSettings } = await import('@/server/services/settings.service');
+    store = await getPublicStorefrontSettings();
   } catch {}
 
   return (
@@ -460,7 +467,7 @@ export default async function LandingPage() {
 
       <div className="landing">
         <nav className="nav">
-          <Link className="nav-logo" href="/">Doopify</Link>
+          <Link className="nav-logo" href="/">{store?.name || 'Doopify'}</Link>
           <ul className="nav-links">
             <li><Link href="/shop">Shop</Link></li>
             <li><Link href="/collections">Collections</Link></li>
@@ -511,46 +518,13 @@ export default async function LandingPage() {
 
         <section className="featured">
           {featuredCollections.length ? (
-            <>
-              <div className="section-header">
-                <div>
-                  <p className="section-label">Phase 3 in motion</p>
-                  <h2 className="section-title">Featured Collections</h2>
-                </div>
-                <Link className="section-link" href="/collections">Browse all</Link>
-              </div>
-
-              <div className="product-grid" style={{ marginBottom: 80 }}>
-                {featuredCollections.map(collection => {
-                  const image = collection.imageUrl;
-
-                  return (
-                    <Link className="product-card" href={`/collections/${collection.handle}`} key={collection.id}>
-                      <div className="card-img">
-                        <div className="card-img-inner">
-                          {image ? (
-                            <img alt={collection.title} src={image} />
-                          ) : (
-                            <div className="card-placeholder">
-                              <span className="placeholder-icon">[]</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="card-body">
-                        <p className="card-vendor">{collection.productCount} products</p>
-                        <h3 className="card-title">{collection.title}</h3>
-                        <div className="card-meta">
-                          <p className="card-price">Curated storefront edit</p>
-                          <span className="card-chip">Explore</span>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </>
+            <div style={{ marginBottom: 80 }}>
+              <FeaturedCollectionsGrid
+                collections={featuredCollections}
+                label="Shop by Collection"
+                sublabel="Merchandising"
+              />
+            </div>
           ) : null}
 
           <div className="section-header">
@@ -597,8 +571,8 @@ export default async function LandingPage() {
         </section>
 
         <footer className="footer">
-          <span className="footer-brand">Doopify</span>
-          <span className="footer-copy">(c) 2026 Doopify. All rights reserved.</span>
+          <span className="footer-brand">{store?.name || 'Doopify'}</span>
+          <span className="footer-copy">&copy; 2026 {store?.name || 'Doopify'}. All rights reserved.</span>
         </footer>
       </div>
     </>

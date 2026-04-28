@@ -9,6 +9,7 @@ const PUBLIC_PREFIXES = [
   '/api/checkout',
   '/api/storefront',
   '/api/webhooks',
+  '/api/webhook-retries',
   '/_next',
   '/favicon',
   '/images',

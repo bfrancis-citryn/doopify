@@ -3,7 +3,14 @@ import type { WebhookDeliveryStatus } from '@prisma/client'
 import { err, ok } from '@/lib/api'
 import { getWebhookDeliveries } from '@/server/services/webhook-delivery.service'
 
-const WEBHOOK_STATUSES: WebhookDeliveryStatus[] = ['RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED']
+const WEBHOOK_STATUSES: WebhookDeliveryStatus[] = [
+  'RECEIVED',
+  'PROCESSED',
+  'FAILED',
+  'SIGNATURE_FAILED',
+  'RETRY_PENDING',
+  'RETRY_EXHAUSTED',
+]
 
 function parseStatus(value: string | null): WebhookDeliveryStatus | undefined {
   if (!value) return undefined

@@ -1,29 +1,18 @@
-import { type StripePaymentIntent, type StripeWebhookEvent, verifyStripeWebhookSignature } from '@/lib/stripe'
+import { verifyStripeWebhookSignature } from '@/lib/stripe'
 import {
   markWebhookDeliveryFailed,
   markWebhookDeliveryProcessed,
   recordWebhookDeliveryAttempt,
+  storeVerifiedWebhookPayload,
 } from '@/server/services/webhook-delivery.service'
-import { processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
+import { parseStripeWebhookEventPayload, processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
 
 export const runtime = 'nodejs'
-
-function safeParseWebhookEvent(payload: string): StripeWebhookEvent<StripePaymentIntent> | null {
-  try {
-    const event = JSON.parse(payload)
-    if (!event || typeof event !== 'object') return null
-    if (typeof event.id !== 'string' || typeof event.type !== 'string') return null
-    if (!event.data || typeof event.data !== 'object' || !('object' in event.data)) return null
-    return event as StripeWebhookEvent<StripePaymentIntent>
-  } catch {
-    return null
-  }
-}
 
 export async function POST(req: Request) {
   const payload = await req.text()
   const signature = req.headers.get('stripe-signature')
-  const event = safeParseWebhookEvent(payload)
+  const event = parseStripeWebhookEventPayload(payload)
   const delivery = await recordWebhookDeliveryAttempt({
     provider: 'stripe',
     providerEventId: event?.id,
@@ -49,9 +38,16 @@ export async function POST(req: Request) {
       provider: 'stripe',
       providerEventId: delivery.providerEventId,
       error: 'Invalid Stripe webhook payload',
+      retryable: false,
     })
     return new Response('Invalid Stripe webhook payload', { status: 400 })
   }
+
+  await storeVerifiedWebhookPayload({
+    provider: 'stripe',
+    providerEventId: delivery.providerEventId,
+    rawPayload: payload,
+  })
 
   try {
     await processStripeWebhookEvent(event)
@@ -67,6 +63,7 @@ export async function POST(req: Request) {
       provider: 'stripe',
       providerEventId: delivery.providerEventId,
       error: error instanceof Error ? error.message : 'Webhook processing failed',
+      retryable: true,
     })
     return new Response('Webhook processing failed', { status: 500 })
   }

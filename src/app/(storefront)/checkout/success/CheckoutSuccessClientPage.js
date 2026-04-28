@@ -99,8 +99,13 @@ export default function CheckoutSuccessClientPage() {
             </>
           ) : status === 'failed' ? (
             <>
-              <h1 className="title">Payment didn&apos;t complete.</h1>
-              <p className="body">{error || 'Stripe marked this payment as failed. You can head back to checkout and try again.'}</p>
+              <h1 className="title" style={{ color: '#fca5a5' }}>Payment didn&apos;t go through.</h1>
+              <p className="body">
+                {error || 'Stripe marked this payment as failed.'}
+              </p>
+              <p className="body" style={{ marginTop: -12, fontSize: 13, color: 'rgba(255,255,255,0.44)' }}>
+                Your cart has not been charged. You can return to checkout and try again — your items are still available.
+              </p>
             </>
           ) : (
             <>
@@ -109,13 +114,23 @@ export default function CheckoutSuccessClientPage() {
                 Payment was submitted, and we&apos;re waiting for the Stripe webhook to finish writing the order record.
                 This usually takes a moment.
               </p>
-              <div className="pill">Waiting for webhook confirmation</div>
+              <div className="pill">Waiting for webhook confirmation&hellip;</div>
+              <p style={{ marginTop: 14, fontSize: 12, color: 'rgba(255,255,255,0.36)', letterSpacing: '0.04em' }}>This page polls automatically. Do not refresh.</p>
             </>
           )}
 
           <div className="actions">
-            <Link className="primary" href="/shop">Back to shop</Link>
-            <Link className="secondary" href="/checkout">Return to checkout</Link>
+            {status === 'failed' ? (
+              <>
+                <Link className="primary" href="/checkout">Try again</Link>
+                <Link className="secondary" href="/shop">Back to shop</Link>
+              </>
+            ) : (
+              <>
+                <Link className="primary" href="/shop">Back to shop</Link>
+                <Link className="secondary" href="/checkout">Return to checkout</Link>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -18,7 +18,15 @@ import {
   completeCheckoutFromPaymentIntent,
   createCheckoutPaymentIntent,
 } from './checkout.service'
-import { processStripeWebhookEvent } from './stripe-webhook.service'
+import { parseStripeWebhookEventPayload, processStripeWebhookEvent } from './stripe-webhook.service'
+import {
+  claimWebhookDeliveryForRetry,
+  getDueWebhookDeliveriesForRetry,
+  markWebhookDeliveryFailed,
+  markWebhookDeliveryProcessed,
+  recordWebhookDeliveryAttempt,
+  storeVerifiedWebhookPayload,
+} from './webhook-delivery.service'
 import { integrationRegistry } from '@/server/integrations/registry'
 
 const runIntegration =
@@ -846,5 +854,84 @@ runIntegration('checkout service integration', () => {
     expect(checkoutSession.status).toBe('COMPLETED')
     expect(checkoutSession.failureReason).toBeNull()
     expect(checkoutSession.completedAt).toBeInstanceOf(Date)
+  })
+
+  it('retries a failed webhook from the stored payload without duplicating commerce side effects', async () => {
+    const { variant, discount } = await seedCheckout({
+      paymentIntentId: 'pi_integration_retry_payload',
+      inventory: 5,
+      quantity: 2,
+      discountCode: 'RETRY10',
+    })
+    const rawPayload = JSON.stringify({
+      id: 'evt_retry_payload',
+      type: 'payment_intent.succeeded',
+      data: {
+        object: {
+          id: 'pi_integration_retry_payload',
+          amount: 5499,
+          currency: 'usd',
+          status: 'succeeded',
+        },
+      },
+    })
+
+    const delivery = await recordWebhookDeliveryAttempt({
+      provider: 'stripe',
+      providerEventId: 'evt_retry_payload',
+      eventType: 'payment_intent.succeeded',
+      payload: rawPayload,
+    })
+    await storeVerifiedWebhookPayload({
+      provider: 'stripe',
+      providerEventId: delivery.providerEventId,
+      rawPayload,
+    })
+    await markWebhookDeliveryFailed({
+      provider: 'stripe',
+      providerEventId: delivery.providerEventId,
+      error: 'Transient database timeout',
+      retryable: true,
+    })
+    await prisma.webhookDelivery.update({
+      where: { id: delivery.id },
+      data: { nextRetryAt: new Date(0) },
+    })
+
+    const dueDeliveries = await getDueWebhookDeliveriesForRetry(1, new Date())
+    expect(dueDeliveries).toHaveLength(1)
+
+    const claimedDelivery = await claimWebhookDeliveryForRetry(dueDeliveries[0].id)
+    expect(claimedDelivery?.rawPayload).toBe(rawPayload)
+
+    const event = parseStripeWebhookEventPayload(claimedDelivery!.rawPayload!)
+    if (!event) {
+      throw new Error('Stored retry payload should parse')
+    }
+
+    await processStripeWebhookEvent(event)
+    await markWebhookDeliveryProcessed({
+      provider: claimedDelivery!.provider,
+      providerEventId: claimedDelivery!.providerEventId,
+    })
+    await processStripeWebhookEvent(event)
+
+    const updatedVariant = await prisma.productVariant.findUniqueOrThrow({
+      where: { id: variant.id },
+    })
+    const updatedDiscount = await prisma.discount.findUniqueOrThrow({
+      where: { id: discount!.id },
+    })
+    const finalDelivery = await prisma.webhookDelivery.findUniqueOrThrow({
+      where: { id: delivery.id },
+    })
+
+    expect(await prisma.order.count()).toBe(1)
+    expect(await prisma.payment.count({ where: { stripePaymentIntentId: 'pi_integration_retry_payload' } })).toBe(1)
+    expect(await prisma.discountApplication.count()).toBe(1)
+    expect(updatedDiscount.usageCount).toBe(1)
+    expect(updatedVariant.inventory).toBe(3)
+    expect(finalDelivery.status).toBe('PROCESSED')
+    expect(finalDelivery.rawPayload).toBe(rawPayload)
   })
 })

@@ -1,3 +1,10 @@
+> **⚠ STALE ARCHIVE — DO NOT USE**
+>
+> This is the old lowercase `launch-rollout.md` from `docs/`. The canonical file is `LAUNCH_ROLLOUT.md` at the repo root.
+> This version predates multiple shipped Phase 3 features and has an outdated readiness checklist.
+
+---
+
 # Launch Rollout
 
 This document keeps the product story, launch messaging, and rollout sequencing aligned with what the repo actually does.

@@ -91,6 +91,9 @@ export default function CheckoutClientPage({ publishableKey, store }) {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [error, setError] = useState('');
   const [paymentReady, setPaymentReady] = useState(false);
+  const [discountCode, setDiscountCode] = useState('');
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [discountError, setDiscountError] = useState('');
 
   const stripeRef = useRef(null);
   const elementsRef = useRef(null);
@@ -163,6 +166,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
   async function handleCreateIntent(event) {
     event.preventDefault();
     setError('');
+    setDiscountError('');
 
     if (!publishableKey) {
       setError('Stripe is not configured yet. Add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to continue.');
@@ -205,6 +209,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
           })),
           shippingAddress: buildAddressPayload(shippingAddress),
           billingAddress: billingSameAsShipping ? buildAddressPayload(shippingAddress) : buildAddressPayload(billingAddress),
+          ...(showDiscount && discountCode.trim() ? { discountCode: discountCode.trim() } : {}),
         }),
       });
 
@@ -216,7 +221,12 @@ export default function CheckoutClientPage({ publishableKey, store }) {
       setCheckout(payload.data);
       await initializePaymentElement(payload.data.clientSecret);
     } catch (checkoutError) {
-      setError(checkoutError instanceof Error ? checkoutError.message : 'Failed to start checkout');
+      const message = checkoutError instanceof Error ? checkoutError.message : 'Failed to start checkout';
+      if (message.toLowerCase().includes('discount')) {
+        setDiscountError(message);
+      } else {
+        setError(message);
+      }
     } finally {
       setCreatingIntent(false);
     }
@@ -441,6 +451,50 @@ export default function CheckoutClientPage({ publishableKey, store }) {
                   </div>
                 )}
 
+                <div className="section">
+                  {showDiscount ? (
+                    <>
+                      <div className="section-title">Promo code</div>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <input
+                          className="field"
+                          onChange={e => {
+                            if (checkout) resetPaymentStep();
+                            setDiscountCode(e.target.value.toUpperCase());
+                            setDiscountError('');
+                          }}
+                          placeholder="ENTER CODE"
+                          style={{ flex: 1, padding: '13px 16px', borderRadius: 16, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#f3efe7', fontFamily: 'inherit', fontSize: 13, letterSpacing: '0.08em' }}
+                          type="text"
+                          value={discountCode}
+                        />
+                        <button
+                          className="secondary-btn"
+                          onClick={() => { setShowDiscount(false); setDiscountCode(''); setDiscountError(''); if (checkout) resetPaymentStep(); }}
+                          style={{ padding: '0 16px', minHeight: 44, flexShrink: 0 }}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {discountError ? (
+                        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 12, background: 'rgba(127,29,29,0.2)', border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5', fontSize: 13 }}>
+                          {discountError}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <button
+                      className="secondary-btn"
+                      onClick={() => setShowDiscount(true)}
+                      style={{ fontSize: 12, minHeight: 38, padding: '0 14px' }}
+                      type="button"
+                    >
+                      + Add promo code
+                    </button>
+                  )}
+                </div>
+
                 {checkout && (
                   <div className="payment-shell">
                     <div className="section-title" style={{ marginBottom: 12 }}>Payment</div>
@@ -475,7 +529,16 @@ export default function CheckoutClientPage({ publishableKey, store }) {
               </>
             )}
 
-            {error ? <div className="error">{error}</div> : null}
+            {error ? (
+              <div className="error" role="alert">
+                <strong style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>
+                  {error.toLowerCase().includes('units left') ? 'Stock issue' :
+                   error.toLowerCase().includes('variant') ? 'Item unavailable' :
+                   'Could not start checkout'}
+                </strong>
+                {error}
+              </div>
+            ) : null}
           </form>
 
           <aside className="checkout-card summary">
@@ -517,6 +580,12 @@ export default function CheckoutClientPage({ publishableKey, store }) {
               <span>Tax</span>
               <span>{checkout ? formatMoney(checkout.taxAmount, currency) : 'Calculated at payment step'}</span>
             </div>
+            {checkout && checkout.discountAmount > 0 ? (
+              <div className="summary-row" style={{ color: '#86efac' }}>
+                <span>Discount{checkout.discountApplications?.[0]?.code ? ` (${checkout.discountApplications[0].code})` : ''}</span>
+                <span>-{formatMoney(checkout.discountAmount, currency)}</span>
+              </div>
+            ) : null}
             <div className="summary-row total">
               <span>Total</span>
               <span>{formatMoney(checkout?.total ?? cartSubtotal, currency)}</span>

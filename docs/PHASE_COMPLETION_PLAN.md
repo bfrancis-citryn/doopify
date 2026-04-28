@@ -46,6 +46,54 @@ single checkpoint.
 
 ---
 
+## Current Slice Ledger
+
+> Last updated: April 27, 2026. Phase 3 fully complete (3A–3E all shipped). Active phase is now Phase 4.
+> Cross-reference `STATUS.md` for the authoritative shipped list.
+> This ledger exists so agents do not rebuild completed work. "Shipped" means the
+> feature is in the repo, tested, and verified — not just planned.
+
+- **Phase 3A — Shipped.** Real-DB race/idempotency coverage exists for: concurrent checkout creation near
+  stock-out, conflicting success/failure webhook delivery for the same payment intent, order-finalization vs.
+  email-failure ordering, discount usage cap under concurrent paid-order finalization, and late payment-success
+  webhook delivery against an expired session. Service fixes landed alongside each new spec (concurrent customer
+  creation race, failure-webhook downgrade prevention, discount-cap concurrency safety). Do not restart this
+  coverage — extend it as new checkout and webhook behaviors land.
+
+- **Phase 3B — Shipped.** Persisted shipping-zone/rate and jurisdiction-aware tax-rule configuration is
+  fully in place: Prisma models, admin CRUD APIs at `/api/settings/shipping-zones` and `/api/settings/tax-rules`,
+  settings shipping workspace editor with richer merchant ergonomics and validation, checkout pricing that
+  resolves persisted config, more complete jurisdiction-aware tax strategies, and carrier-aware rate tiers.
+  Checkout payload snapshots persist the shipping/tax resolution decision for historical accuracy. Fast Vitest
+  tests cover a representative zone × rate × jurisdiction matrix. Do not rebuild from scratch.
+
+- **Phase 3C — Shipped.** Durable webhook delivery logging, verified local payload storage, local-payload
+  replay API (`/api/webhook-deliveries/[id]/replay`), retry scheduling and exhaustion, cron-compatible retry
+  runner (`POST /api/webhook-retries/run` behind `WEBHOOK_RETRY_SECRET`), deeper automated retry controls,
+  richer support diagnostics, audit logging for settings changes, payment events, and fulfillment operations,
+  and admin visibility workspace (`/admin/webhooks`) are all in the repo and tested. Fast and real-DB specs
+  cover the full retry/replay/idempotency surface. Do not rebuild from scratch.
+
+- **Phase 3D — Shipped.** Promo code input on `/checkout` with server-driven error routing: discount errors
+  surface inline below the code field; stock-exhaustion errors surface with a "Stock issue" label;
+  missing-variant errors surface as "Item unavailable"; generic checkout errors surface as "Could not start
+  checkout". Failed-payment state on `/checkout/success` renders a colored title, a "not charged" reassurance
+  paragraph, and status-aware actions ("Try again" → `/checkout`, "Back to shop"). Branded empty states with
+  ✦ glyph and "Browse all products" CTA are live on `/collections`, individual collection detail pages, and
+  `/shop`. Vitest coverage for the failure-reason contract is in place. All failure copy routes from server
+  responses — no client-side fabrication of reasons.
+
+- **Phase 3E — Shipped.** `FeaturedCollectionsGrid` reusable component ships with auto-fill grid layout,
+  per-card image/placeholder, product count, title, truncated description, and "Explore" chip. Homepage uses
+  the component driven by published collection data from the DB; store name and primary-color branding tokens
+  flow from `getPublicStorefrontSettings()` into nav and footer. CSS vars `--store-primary` and
+  `--store-secondary` are wired in the storefront layout. Shared rate-limit store replaces the in-memory
+  limiter (Redis or equivalent behind an interface so tests can stub it). Production Postgres SSL is
+  normalized to `sslmode=verify-full` and documented. Tests prove collection mutation routes reject non-admin
+  sessions. Phase 3 exit trigger has fired — active phase is now Phase 4.
+
+---
+
 ## Phase 3 - Merchant Readiness And Storefront Differentiation (Active)
 
 Phase 3 is partially shipped. Five remaining slices below complete it. Slices may run
@@ -183,25 +231,27 @@ npm run build
 
 **Initiation Prompt.**
 
-> You are executing "Phase 3B - Configurable Shipping Zones, Rates, And Jurisdiction-
+> You are continuing "Phase 3B - Configurable Shipping Zones, Rates, And Jurisdiction-
 > Aware Tax" as defined in `PHASE_COMPLETION_PLAN.md`. Read the canonical Doopify docs
-> first: `STATUS.md`, `PROJECT_INTENT.md`, `features-roadmap.md`, `HARDENING.md`,
+> first: `STATUS.md`, `PROJECT_INTENT.MD`, `features-roadmap.md`, `HARDENING.md`,
 > `PHASE_3_KICKOFF.md`, `CONTRIBUTING.md`, and `AGENTS.md`.
 >
-> Today, baseline destination-aware shipping zones and tax rules already flow through
-> `src/server/checkout/pricing.ts`. Promote them into configurable merchant-grade
-> rules. Add Prisma models or extend existing ones for zones, rates, and jurisdiction
-> overrides; back them with admin CRUD APIs and an admin editor surface; have the
-> centralized pricing service resolve the new config; and snapshot the resolution into
-> the persisted checkout snapshot so historical orders stay accurate after config
-> changes. Add fast Vitest coverage for a representative zone x rate x jurisdiction
-> matrix.
+> **What is already shipped:** Persisted shipping-zone/rate and jurisdiction-aware
+> tax-rule config is in the repo. Prisma models, admin CRUD APIs at
+> `/api/settings/shipping-zones` and `/api/settings/tax-rules`, a settings shipping
+> workspace editor, and checkout pricing that resolves the persisted config are all
+> present. Checkout payload snapshots persist the shipping/tax resolution decision.
+> Fast Vitest tests cover a representative zone × rate × jurisdiction matrix.
+> Do not rebuild these from scratch.
 >
-> Do not move calculations client-side, do not let request payloads override resolved
-> lines, and do not regress any existing real-DB integration spec. When done, update
-> `STATUS.md`, `features-roadmap.md > Phase 3 Current Slice Shipped`, and
-> `HARDENING.md > Pricing Hardening Target`, then run the merge gate from
-> `PHASE_COMPLETION_PLAN.md > Phase 3B > Verification Commands`.
+> **What remains:** Richer merchant ergonomics and validation in the shipping/tax
+> settings editor (better error feedback, rate tier strategies, edge-case jurisdiction
+> handling). More complete jurisdiction-aware tax strategies beyond current
+> country/province overrides. Do not move any calculations client-side, do not let
+> request payloads override resolved lines, and do not regress any existing real-DB
+> integration spec. When done, update `STATUS.md`, `features-roadmap.md > Phase 3
+> Current Slice Shipped`, and `HARDENING.md > Pricing Hardening Target`, then run the
+> merge gate from `PHASE_COMPLETION_PLAN.md > Phase 3B > Verification Commands`.
 
 ### Phase 3C - Webhook Replay, Delivery Visibility, And Operational Audit Logs
 
@@ -257,27 +307,30 @@ npm run build
 
 **Initiation Prompt.**
 
-> You are executing "Phase 3C - Webhook Replay, Delivery Visibility, And Operational
+> You are continuing "Phase 3C - Webhook Replay, Delivery Visibility, And Operational
 > Audit Logs" as defined in `PHASE_COMPLETION_PLAN.md`. Start by reading the Doopify
 > canonical docs: `STATUS.md`, `PROJECT_INTENT.md`, `features-roadmap.md`,
 > `HARDENING.md`, `PHASE_3_KICKOFF.md`, `CONTRIBUTING.md`, and `AGENTS.md`.
 >
-> The repo already durably logs Stripe webhook deliveries with provider event id,
-> type, status, attempts, processed timestamp, last error, and payload hash. Build the
-> admin surface that lets an operator list, filter, and inspect those deliveries, plus
-> a guarded replay action that re-runs the existing verified handler path against the
-> stored payload and proves idempotent against already-finalized orders. Then add an
-> audit log table, a consumer that records settings changes, payment events,
-> fulfillment operations, and discount mutations with actor, target, and diff, and a
-> read-only audit log admin surface.
+> **What is already shipped:** Durable webhook delivery logging (provider event id,
+> type, status, attempts, processed timestamp, last error, payload hash, verified
+> local payload storage, and retry metadata) is in the repo. The local-payload replay
+> API (`/api/webhook-deliveries/[id]/replay`), retry scheduling and exhaustion,
+> cron-compatible retry runner (`POST /api/webhook-retries/run`), support diagnostics
+> endpoints, and the admin webhook visibility workspace (`/admin/webhooks`) are all
+> present and tested. Do not rebuild any of these from scratch.
 >
-> Replay must never re-fetch from Stripe; it must reuse the same handler the live
-> webhook path uses. Do not introduce a parallel "replay-only" code path. Do not
-> create outbound merchant webhooks here - that is Phase 4. Tests must cover replay
-> idempotency and audit emission for at least one representative event in each of the
-> four categories. When done, update `STATUS.md`, `HARDENING.md > Webhook Hardening
-> Target`, and `features-roadmap.md > Phase 3 Current Slice Shipped`, then run the
-> merge gate from `PHASE_COMPLETION_PLAN.md > Phase 3C > Verification Commands`.
+> **What remains:** Deeper automated retry controls (configurable backoff, dead-letter
+> visibility improvements), richer support diagnostics, and an audit log table and
+> consumer that records settings changes, payment events, fulfillment operations, and
+> discount mutations with actor, target, and diff — plus a read-only audit log admin
+> surface. The replay path must remain through the same handler the live webhook path
+> uses; do not introduce a parallel "replay-only" code path. Do not create outbound
+> merchant webhooks here — that is Phase 4. Tests must cover audit emission for at
+> least one representative event in each category. When done, update `STATUS.md`,
+> `HARDENING.md > Webhook Hardening Target`, and `features-roadmap.md > Phase 3
+> Current Slice Shipped`, then run the merge gate from
+> `PHASE_COMPLETION_PLAN.md > Phase 3C > Verification Commands`.
 
 ### Phase 3D - Discount/Checkout UX Polish And Failure Surfaces
 

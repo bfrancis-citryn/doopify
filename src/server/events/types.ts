@@ -50,6 +50,24 @@ export type DoopifyEvents = {
     email?: string | null
     reason?: string | null
   }
+  'order.refunded': {
+    orderId: string
+    orderNumber: number
+    refundId: string
+    amount: number
+    currency: string
+  }
+  'order.return_requested': {
+    orderId: string
+    orderNumber: number
+    returnId: string
+  }
+  'order.return_updated': {
+    orderId: string
+    orderNumber: number
+    returnId: string
+    status: string
+  }
 }
 
 export type DoopifyEventName = keyof DoopifyEvents

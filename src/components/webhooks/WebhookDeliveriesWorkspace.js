@@ -5,10 +5,10 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../AppShell';
 import styles from './WebhookDeliveriesWorkspace.module.css';
 
-const STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED'];
+const STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
 
-function formatTimestamp(value) {
-  if (!value) return 'Not processed';
+function formatTimestamp(value, fallback = 'Not scheduled') {
+  if (!value) return fallback;
   return new Date(value).toLocaleString();
 }
 
@@ -16,11 +16,20 @@ function formatEventType(value) {
   return String(value || '').replaceAll('_', ' ').replaceAll('.', ' / ');
 }
 
+function getReplayDisabledReason(delivery) {
+  if (!delivery?.hasVerifiedPayload) return 'Replay needs a verified stored payload.';
+  if (delivery.providerEventId?.startsWith('unknown:')) return 'Replay needs a provider event id.';
+  if (delivery.status === 'SIGNATURE_FAILED') return 'Signature failures are not replayable.';
+  return '';
+}
+
 export default function WebhookDeliveriesWorkspace() {
   const [deliveries, setDeliveries] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [replayingId, setReplayingId] = useState(null);
+  const [inspectingId, setInspectingId] = useState(null);
+  const [diagnostics, setDiagnostics] = useState(null);
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
@@ -64,6 +73,11 @@ export default function WebhookDeliveriesWorkspace() {
     loadDeliveries(1);
   }, [search, status]);
 
+  const retryCount = useMemo(
+    () => deliveries.filter((delivery) => ['RETRY_PENDING', 'RETRY_EXHAUSTED'].includes(delivery.status)).length,
+    [deliveries]
+  );
+
   const processedCount = useMemo(
     () => deliveries.filter((delivery) => delivery.status === 'PROCESSED').length,
     [deliveries]
@@ -71,6 +85,12 @@ export default function WebhookDeliveriesWorkspace() {
 
   async function handleReplay(delivery) {
     if (!delivery?.id) {
+      return;
+    }
+
+    const disabledReason = getReplayDisabledReason(delivery);
+    if (disabledReason) {
+      setNotice(disabledReason);
       return;
     }
 
@@ -90,11 +110,42 @@ export default function WebhookDeliveriesWorkspace() {
 
       setNotice(`Replay completed for ${delivery.providerEventId}.`);
       await loadDeliveries(pagination.page);
+      await loadDiagnostics(delivery.id, false);
     } catch (error) {
       console.error('[WebhookDeliveriesWorkspace] replay failed', error);
       setNotice('Webhook replay failed.');
     } finally {
       setReplayingId(null);
+    }
+  }
+
+  async function loadDiagnostics(deliveryId, showLoading = true) {
+    if (!deliveryId) return;
+
+    if (showLoading) {
+      setInspectingId(deliveryId);
+      setDiagnostics(null);
+    }
+
+    try {
+      const response = await fetch(`/api/webhook-deliveries/${deliveryId}`, {
+        cache: 'no-store',
+      });
+      const json = await response.json();
+      if (!json.success) {
+        setNotice(json.error || 'Webhook diagnostics could not be loaded.');
+        return;
+      }
+
+      setDiagnostics(json.data);
+      setNotice('');
+    } catch (error) {
+      console.error('[WebhookDeliveriesWorkspace] diagnostics failed', error);
+      setNotice('Webhook diagnostics could not be loaded.');
+    } finally {
+      if (showLoading) {
+        setInspectingId(null);
+      }
     }
   }
 
@@ -118,6 +169,7 @@ export default function WebhookDeliveriesWorkspace() {
             <div className={styles.stats}>
               <span>{pagination.total} total</span>
               <span>{processedCount} processed</span>
+              <span>{retryCount} retry watch</span>
             </div>
           </div>
 
@@ -150,39 +202,97 @@ export default function WebhookDeliveriesWorkspace() {
                     <th>Type</th>
                     <th>Status</th>
                     <th>Attempts</th>
-                    <th>Processed</th>
+                    <th>Next retry</th>
+                    <th>Payload</th>
                     <th>Error</th>
-                    <th>Payload hash</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {deliveries.map((delivery) => (
-                    <tr key={delivery.id}>
-                      <td>{delivery.providerEventId}</td>
-                      <td>{formatEventType(delivery.eventType)}</td>
-                      <td>{delivery.status}</td>
-                      <td>{delivery.attempts}</td>
-                      <td>{formatTimestamp(delivery.processedAt)}</td>
-                      <td>{delivery.lastError || 'None'}</td>
-                      <td className={styles.hashCell}>{delivery.payloadHash}</td>
-                      <td className={styles.actionCell}>
-                        <button
-                          type="button"
-                          disabled={replayingId === delivery.id || delivery.providerEventId.startsWith('unknown:')}
-                          onClick={() => handleReplay(delivery)}
-                        >
-                          {replayingId === delivery.id ? 'Replaying...' : 'Replay'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {deliveries.map((delivery) => {
+                    const disabledReason = getReplayDisabledReason(delivery);
+
+                    return (
+                      <tr key={delivery.id}>
+                        <td>
+                          <strong>{delivery.providerEventId}</strong>
+                          <span className={styles.subtle}>{delivery.payloadHash}</span>
+                        </td>
+                        <td>{formatEventType(delivery.eventType)}</td>
+                        <td>{delivery.status}</td>
+                        <td>
+                          {delivery.attempts}
+                          <span className={styles.subtle}>Last retry: {formatTimestamp(delivery.lastRetriedAt, 'Never')}</span>
+                        </td>
+                        <td>{formatTimestamp(delivery.nextRetryAt)}</td>
+                        <td>{delivery.hasVerifiedPayload ? 'Verified local payload' : 'Hash only'}</td>
+                        <td>{delivery.lastError || 'None'}</td>
+                        <td className={styles.actionCell}>
+                          <button
+                            type="button"
+                            disabled={replayingId === delivery.id || Boolean(disabledReason)}
+                            title={disabledReason || 'Replay stored payload'}
+                            onClick={() => handleReplay(delivery)}
+                          >
+                            {replayingId === delivery.id ? 'Replaying...' : 'Replay'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={inspectingId === delivery.id}
+                            onClick={() => loadDiagnostics(delivery.id)}
+                          >
+                            {inspectingId === delivery.id ? 'Inspecting...' : 'Inspect'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           ) : (
             <div className={styles.empty}>No webhook deliveries match this filter.</div>
           )}
+
+          {diagnostics ? (
+            <aside className={styles.diagnostics}>
+              <div>
+                <p className={styles.eyebrow}>Support diagnostics</p>
+                <h2>{diagnostics.delivery.providerEventId}</h2>
+              </div>
+              <div className={styles.diagnosticGrid}>
+                <div>
+                  <span>Status</span>
+                  <strong>{diagnostics.delivery.status}</strong>
+                </div>
+                <div>
+                  <span>Verified payload</span>
+                  <strong>{diagnostics.delivery.hasVerifiedPayload ? `${diagnostics.delivery.rawPayloadBytes} bytes` : 'No'}</strong>
+                </div>
+                <div>
+                  <span>Can retry</span>
+                  <strong>{diagnostics.retryPolicy.canRetry ? 'Yes' : 'No'}</strong>
+                </div>
+                <div>
+                  <span>Payment intent</span>
+                  <strong>{diagnostics.related.paymentIntentId || 'Unknown'}</strong>
+                </div>
+                <div>
+                  <span>Checkout</span>
+                  <strong>{diagnostics.related.checkoutSession?.status || 'Missing'}</strong>
+                </div>
+                <div>
+                  <span>Order</span>
+                  <strong>{diagnostics.related.order?.orderNumber ? `#${diagnostics.related.order.orderNumber}` : 'Missing'}</strong>
+                </div>
+              </div>
+              {diagnostics.retryPolicy.retryBlockers.length ? (
+                <p className={styles.notice}>Retry blockers: {diagnostics.retryPolicy.retryBlockers.join(' ')}</p>
+              ) : (
+                <p className={styles.notice}>This delivery is eligible for automated retry when due.</p>
+              )}
+            </aside>
+          ) : null}
 
           <div className={styles.pagination}>
             <button

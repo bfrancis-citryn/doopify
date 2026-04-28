@@ -86,6 +86,43 @@ export async function createStripePaymentIntent(input: {
   return stripeRequest<StripePaymentIntent>('/payment_intents', body)
 }
 
+export type StripeRefund = {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  charge?: string | null
+  payment_intent?: string | null
+  reason?: string | null
+}
+
+export async function createStripeRefund(input: {
+  chargeId?: string | null
+  paymentIntentId?: string | null
+  amount?: number
+  reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
+}) {
+  const body = new URLSearchParams()
+
+  if (input.chargeId) {
+    body.set('charge', input.chargeId)
+  } else if (input.paymentIntentId) {
+    body.set('payment_intent', input.paymentIntentId)
+  } else {
+    throw new Error('createStripeRefund requires chargeId or paymentIntentId')
+  }
+
+  if (input.amount != null) {
+    body.set('amount', String(Math.round(input.amount)))
+  }
+
+  if (input.reason) {
+    body.set('reason', input.reason)
+  }
+
+  return stripeRequest<StripeRefund>('/refunds', body)
+}
+
 export async function getStripeEvent(eventId: string) {
   const response = await fetch(`https://api.stripe.com/v1/events/${encodeURIComponent(eventId)}`, {
     method: 'GET',

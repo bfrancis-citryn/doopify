@@ -2,9 +2,9 @@
 
 > Canonical status snapshot for developers, maintainers, and AI agents.
 >
-> Documentation refresh: April 27, 2026  
-> Last repo verification recorded in active docs: April 27, 2026  
-> Current active phase: **Phase 3 - Merchant Readiness And Storefront Differentiation**
+> Documentation refresh: April 27, 2026
+> Last repo verification recorded in active docs: April 27, 2026
+> Current active phase: **Phase 4 - Merchant Lifecycle And Outbound Integrations**
 
 ## Why This File Exists
 
@@ -104,8 +104,9 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - Orders, payments, inventory decrements, and order events are created only after verified Stripe payment success
 - Duplicate webhook deliveries are handled idempotently through the payment-intent path, including recovery when a race surfaces as a non-unique transaction error
 - Discount applications and discount usage counts are created only after verified paid order creation succeeds
-- Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
-- Admin webhook operations include replay APIs and an admin visibility workspace at `/admin/webhooks`
+- Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
+- Admin webhook operations include local-payload replay APIs, support diagnostics, retry visibility, and an admin visibility workspace at `/admin/webhooks`
+- Cron-compatible webhook retry execution is available at `POST /api/webhook-retries/run` behind `WEBHOOK_RETRY_SECRET`
 - Checkout failure state is surfaced on the success-page polling flow
 
 ### Internal Extensibility
@@ -116,13 +117,11 @@ Doopify is a developer-first, self-hostable commerce engine with:
 - First-party consumers for logging and order confirmation email delivery
 - Event emission from product, order, fulfillment, and failed-checkout flows
 
-## Active Phase 3 Scope
+## Phase 3 — Complete
 
-### Current Phase 3 Status
+All slices 3A–3E are fully shipped. Phase 3 exit trigger has fired. Active phase is now Phase 4.
 
-Phase 3 is active now. The current slice is partially shipped and should be expanded, not restarted.
-
-### Phase 3 Current Slice Shipped
+### Phase 3 Shipped
 
 - Collection service layer and storefront-safe collection DTOs
 - Summary and detail collection query split for admin and storefront reads
@@ -146,49 +145,59 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 - Fast automated tests cover checkout pricing, shipping/tax zone behavior, checkout-native discount math, checkout creation, checkout discount-code input handling, checkout payload validation failure handling, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
 - Fast automated tests now include representative shipping-zone/rate and jurisdiction tax-resolution matrix coverage
 - Fast tests now also cover webhook replay APIs and settings-backed shipping/tax pricing behavior
+- Fast tests now also cover verified webhook payload storage, local-payload replay, retry scheduling/exhaustion, retry runner authorization, due retry processing, and support diagnostics
 - `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
 - Gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, and late payment-success webhook delivery against expired sessions
 - The real-DB run exposed and fixed a concurrent checkout customer-creation race; customer creation during payment-intent completion must stay idempotent
 - Failure webhooks no longer downgrade already-paid checkout sessions, and capped discount usage is now concurrency-safe at paid-order finalization
+- Webhook retry coverage proves a failed stored-payload delivery can finalize a paid order exactly once without duplicating payments, inventory decrements, or discount usage
+- Checkout page includes an optional promo-code input that sends `discountCode` to `POST /api/checkout/create`; discount errors (code not found, usage exceeded) surface inline on the discount field rather than in the general error area
+- Checkout error banner distinguishes inventory stock issues and unavailable items from general errors using the server's error message text
+- Checkout success page failed state is more actionable: prominent "Try again" link, clear "your items are still available" messaging, and auto-polling notice
+- `/collections` empty state replaced with an intentional branded empty state and a fallback link to the shop
+- Collection detail empty state replaced with an intentional empty state and a fallback link to the shop
+- `FeaturedCollectionsGrid` reusable storefront component created at `src/components/storefront/FeaturedCollectionsGrid.js`
+- Homepage featured collections section uses `FeaturedCollectionsGrid` and shows store name from settings in nav and footer
 
-### Phase 3 Current Priorities
+## Active Phase 4 Scope
 
-1. Maintain the new real-DB race/idempotency regression suite as checkout and webhook flows evolve
-2. Expand merchant ergonomics and validation around shipping-zone/rate and tax-rule configuration
-3. Add automated webhook retry controls and support diagnostics on top of replay + delivery logs
-4. Storefront merchandising and branding improvements
-5. Launch proof points for the developer-first story
+### Current Phase 4 Status
 
-### Phase 3 Acceptance Checks
+Phase 4 is active now. Phase 3 is fully complete (all slices 3A–3E shipped and verified).
 
-- A merchant can create, edit, delete, and assign products to collections
-- Storefront collection routes expose only storefront-safe data
-- Collection list surfaces avoid nested product overfetching
-- Checkout totals remain server-owned after discount and shipping work
-- Failed or exhausted inventory states fail safely and clearly during checkout creation
-- Build and typecheck stay green after collections and pricing changes
-- The launch narrative is backed by working product proof, not roadmap-only claims
+### Phase 4 Current Priorities
+
+1. Refund flow connected to Stripe, payment records, order state, and inventory restocking — with admin UX
+2. Return flow with a clear state machine connected to refunds — with admin UX
+3. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility — built on the existing typed event dispatcher and static integration registry
+4. Per-integration settings and secrets management, encrypted at rest, surfaced in the admin
+5. Transactional email observability: delivery status, bounce/complaint handling, resend tooling
+6. Analytics event fan-out through the existing dispatcher
+
+### Phase 4 Acceptance Checks
+
+- An admin can issue a partial or full refund and order, payment, and inventory are consistent afterward
+- A return moves through its state machine and triggers a refund correctly
+- Outbound webhook deliveries are signed, retried with backoff, and visible in the admin
+- Integration secrets never appear unencrypted at rest
+- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects
+- Build and typecheck stay green throughout
 
 ## Remaining Product Work
 
-### Highest Priority
+### Highest Priority (Phase 4)
 
-- Expanded automated tests for checkout validation failures beyond payload-schema checks
-- Keep expanding real-DB race-condition coverage as new checkout/webhook behaviors land
-- Deeper collection coverage for assignment edge cases and mutation performance behavior
-- Richer shipping strategies beyond flat/tier zone rates
-- More complete jurisdiction-aware tax logic beyond current country/province overrides
-- Discount-code UX on storefront checkout surfaces, including stale-cart and rejected-code messaging
+- Refund and return flows connected to payments and inventory
+- Outbound merchant webhooks with subscriptions, signing, retry/backoff, and dead-letter visibility
+- Per-integration settings and secrets management
+- Transactional email observability and resend tooling
+- Analytics event fan-out
 
 ### Medium Priority
 
-- Refund and return flows connected to payments and inventory
-- Outbound merchant webhooks
-- Audit log consumers
-- Analytics event fan-out
-- Integration-specific settings and secrets management
-- Transactional email template and delivery observability
-- Stronger failed-payment, empty-state, and out-of-stock UI
+- Audit log consumers (settings changes, payment events, fulfillment operations)
+- Stronger admin-only collection mutation test coverage
+- Keep expanding real-DB race-condition coverage as new behaviors land
 
 ### Later
 
@@ -206,16 +215,14 @@ Phase 3 is active now. The current slice is partially shipped and should be expa
 
 - Expand automated tests for deeper checkout validation failures plus real-DB race-condition behavior beyond the current inventory/webhook/discount race coverage
 - Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve
-- Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
-- Move rate limiting from in-memory process state to a shared store before multi-instance deployment
-- Review and normalize production Postgres SSL settings so environments explicitly use `sslmode=verify-full`
+- Add audit logging for settings changes, payment events, and fulfillment operations (Phase 4 scope)
+- Ensure Phase 4 refund/return flows maintain payment and inventory invariants
 
 ### Medium Priority
 
 - Extract remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only
 - Keep storefront collection reads public and read-only
-- Add automated webhook retries and deeper support diagnostics on top of replay + durable delivery logs
 - Add stronger audit logging around settings changes, payment events, and fulfillment operations
 
 ### Later
@@ -244,15 +251,16 @@ Do not market or build around these yet:
 
 ## Verification History
 
-Validated in this repo on April 27, 2026:
+Validated in this repo on April 27, 2026 (Phase 3 complete, Phase 4 kickoff):
 
 ```bash
 npm run db:generate
 npx tsc --noEmit
 npm run test
-npm run test:integration # with DATABASE_URL_TEST configured to a disposable Postgres database/schema
 npm run build
 ```
+
+`npm run test:integration` should be run with a disposable Postgres database/schema before making release claims about real-DB behavior.
 
 When returning to the repo, run the current verification commands again before making release claims.
 

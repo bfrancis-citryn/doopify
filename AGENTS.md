@@ -3,7 +3,7 @@
 > This file replaces the old `CLAUDE.md` workflow.  
 > It exists to guide AI coding agents and future maintainers without creating a second conflicting roadmap.
 
-Documentation refresh: April 25, 2026
+Documentation refresh: April 28, 2026
 
 ## Required Reading Order
 
@@ -35,21 +35,33 @@ Implemented:
 - `GET /api/checkout/status`
 - idempotent order creation from verified Stripe payment success
 - inventory decrement after verified payment success
+- centralized checkout pricing service in `src/server/checkout/pricing.ts`
+- checkout-native code discounts validated and applied through the server pricing authority
+- settings-backed shipping/tax rates and persisted shipping-zone/rate and jurisdiction tax-rule config consumed by checkout pricing
+- admin CRUD APIs for shipping zones, zone rates, and tax rules (`/api/settings/shipping-zones`, `/api/settings/tax-rules`)
+- collection service layer, storefront-safe collection DTOs, collection publish/unpublish semantics
+- admin collection workspace at `/admin/collections` and storefront collection routes
+- durable Stripe webhook delivery logging with verified local payload storage and retry metadata
+- local-payload replay API, retry scheduling and exhaustion, cron-compatible retry runner (`POST /api/webhook-retries/run`)
+- admin webhook visibility workspace at `/admin/webhooks` with support diagnostics
 - typed internal event dispatcher
 - static integration registry
 - first-party logging and order confirmation email consumers
+- fast Vitest test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs covering checkout inventory, payment idempotency, discount usage, concurrent races, and webhook retry idempotency
 
 Current active phase:
 
-- **Phase 3 - Merchant Readiness And Storefront Differentiation**
+- **Phase 4 - Merchant Lifecycle And Outbound Integrations**
+
+Phase 3 is fully complete (all slices 3A–3E shipped and verified).
 
 Current priorities:
 
-1. automated revenue-path coverage
-2. checkout pricing hardening for discounts, shipping, and tax
-3. collection publish/unpublish semantics
-4. storefront merchandising and branding improvements
-5. operational hardening
+1. Refund flow connected to Stripe, payment records, order state, and inventory restocking
+2. Return flow with a state machine connected to refunds
+3. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility — built on the existing typed event dispatcher
+4. Per-integration settings and secrets management, encrypted at rest
+5. Transactional email observability and analytics event fan-out
 
 ## What Not To Rebuild
 
@@ -138,14 +150,24 @@ Be especially careful with:
 
 ## Current Best Next Tasks
 
-The strongest next tasks are:
+The following are shipped and must not be rebuilt from scratch:
 
-1. Add automated tests for checkout, webhook idempotency, invalid webhook signatures, inventory exhaustion, and collections
-2. Centralize/strengthen checkout pricing for discounts, shipping, and tax
-3. Add collection publish/unpublish semantics
-4. Add webhook delivery logging and replay support
-5. Move rate limiting to a shared store before multi-instance deployment
-6. Add audit logging for settings, payment events, and fulfillment
+- automated tests for checkout, webhook idempotency, invalid webhook signatures, inventory exhaustion, and collections — **shipped**
+- centralized checkout pricing for discounts, shipping, and tax — **shipped** (`src/server/checkout/pricing.ts`)
+- collection publish/unpublish semantics — **shipped**
+- webhook delivery logging, local-payload replay, and admin visibility — **shipped** (`/admin/webhooks`)
+- configurable shipping zones/rates and jurisdiction-aware tax rules — **shipped**
+- shared rate-limit store, Postgres SSL normalization, audit logging — **shipped** (Phase 3 complete)
+- storefront merchandising: `FeaturedCollectionsGrid`, branding tokens from settings — **shipped**
+
+The strongest remaining tasks are:
+
+1. Build the refund flow against Stripe, payment records, order state, and inventory restocking with admin UX
+2. Build the return flow as a state machine connected to refunds with admin UX
+3. Build outbound merchant webhooks (subscriptions, signing, retry with backoff, dead-letter visibility) on top of the existing typed event dispatcher and static integration registry
+4. Build per-integration settings and secrets management, encrypted at rest, with admin surface
+5. Add transactional email observability (delivery status, bounce/complaint handling, resend tooling)
+6. Add analytics event fan-out through the existing dispatcher
 
 ## Definition Of Done For Agent Work
 

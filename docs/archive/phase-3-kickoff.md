@@ -1,3 +1,11 @@
+> **⚠ STALE ARCHIVE — DO NOT USE**
+>
+> This is the old lowercase `phase-3-kickoff.md` from `docs/`. The canonical file is `PHASE_3_KICKOFF.md` at the repo root.
+> This version predates checkout-native discounts, persisted shipping/tax config, webhook replay and retry tooling,
+> the admin webhooks workspace, and the full real-DB integration spec suite.
+
+---
+
 # Phase 3 Kickoff
 
 This is the working execution brief for **Phase 3: Merchant Readiness And Storefront Differentiation**.

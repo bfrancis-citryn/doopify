@@ -2,8 +2,8 @@
 
 > Security, correctness, and operational readiness for the commerce loop.
 >
-> Documentation refresh: April 27, 2026  
-> Last repo verification recorded in active docs: April 27, 2026  
+> Documentation refresh: April 27, 2026
+> Last repo verification recorded in active docs: April 27, 2026
 > Companion to `STATUS.md` and `features-roadmap.md`.
 
 ## Why Hardening Matters
@@ -49,12 +49,13 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 - checkout pricing now resolves persisted shipping-zone/rate and jurisdiction tax-rule configuration from admin-managed settings
 - checkout payload snapshots now persist shipping/tax resolution decisions for historical accuracy after config changes
 - discount applications and usage counts are persisted only after verified paid order creation succeeds
-- Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
-- webhook replay is available through admin API/UI on top of the durable delivery log
+- Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
+- webhook replay now uses the verified local payload instead of refetching from Stripe, and retry/support diagnostics are available through admin API/UI on top of the durable delivery log
 - fast automated tests cover checkout pricing, discount-code math and invalid states, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, and invalid webhook signature rejection
+- fast automated tests cover verified webhook payload capture, non-retryable signature/malformed-payload handling, retry scheduling/exhaustion, cron retry authorization, local-payload replay, and support diagnostics
 - fast automated tests now cover representative shipping-zone/rate and jurisdiction tax-resolution matrix behavior
 - `npm run test:integration` runs successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
-- gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, and late payment-success webhook delivery against expired sessions
+- gated real-DB integration specs cover paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, late payment-success webhook delivery against expired sessions, and stored-payload webhook retry idempotency
 - the real-DB run exposed and fixed a concurrent checkout customer-creation race; checkout customer creation must stay idempotent under concurrent payment-intent completion
 - late or conflicting failure webhooks cannot downgrade a completed paid checkout session
 - capped discounts now enforce usage limits transaction-safely under concurrent paid-order finalization
@@ -67,32 +68,36 @@ Doopify is now a real commerce app. The most important risks are no longer visua
 
 ## Verified
 
-The repo passed these checks on April 27, 2026:
+The repo passed these checks on April 27, 2026 (Phase 3 complete, Phase 4 kickoff):
 
 ```bash
 npm run db:generate
 npx tsc --noEmit
 npm run test
-npm run test:integration # with DATABASE_URL_TEST configured to a disposable Postgres database/schema
 npm run build
 ```
+
+`npm run test:integration` should be run with a disposable Postgres database/schema before making release claims about real-DB behavior.
+
+### Closed In Phase 3E
+
+- Shared rate-limit store replaced the in-memory limiter; the interface allows test stubbing and is suitable for multi-instance deployment
+- Production Postgres SSL normalized to `sslmode=verify-full` and documented in `README.md`
+- Tests prove collection mutation routes reject non-admin sessions
+- Audit logging for settings changes, payment events, and fulfillment operations shipped in Phase 3C
 
 ## Remaining Hardening Work
 
 ### High Priority
 
-- Expand automated tests for deeper checkout validation failures and broader real-DB race-condition behavior beyond the current inventory/webhook/discount race coverage
-- Keep the centralized pricing authority on the server as discounts, shipping logic, and tax handling evolve in Phase 3
-- Add automated checks for collection CRUD, admin-only collection mutations, and collection mutation performance regressions
-- Move rate limiting from in-memory process state to a shared store before multi-instance deployment
-- Review and normalize production Postgres SSL settings so environments explicitly use `sslmode=verify-full`
+- Expand automated tests for deeper checkout validation failures and broader real-DB race-condition coverage as Phase 4 refund/return/outbound-webhook behaviors land
+- Keep the centralized pricing authority on the server as Phase 4 refund and return flows touch payment records
+- Ensure Phase 4 outbound webhook delivery signing and retry logic maintains invariants from the existing inbound webhook hardening target
 
 ### Medium Priority
 
 - Extract the remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only while storefront collection reads stay public and read-only
-- Add automated webhook retries and deeper support diagnostics on top of replay + durable delivery logging
-- Add stronger audit logging around settings changes, payment events, and fulfillment operations
 
 ### Later
 
@@ -170,7 +175,7 @@ The service should prove:
 
 Webhook operations should become observable and replayable.
 
-Add durable provider-event tracking for:
+Durable provider-event tracking now includes:
 
 - provider
 - provider event id
@@ -180,16 +185,28 @@ Add durable provider-event tracking for:
 - processed timestamp
 - last error
 - payload hash
+- verified local payload storage
+- next retry timestamp
+- last retry timestamp
 
 This enables:
 
 - duplicate detection
 - safe replay
+- safe automated retry without refetching provider events
 - failed-email debugging
 - duplicate-delivery debugging
 - deterministic success/failure conflict handling for the same payment intent
 - deterministic late-success handling for expired checkout sessions
 - support/admin visibility
+
+Retry rules:
+
+- only verified, well-formed Stripe payloads are stored for retry/replay
+- signature failures and malformed payloads are not retryable
+- retry attempts use 1 minute, 5 minute, then 30 minute backoff
+- deliveries are marked retry-exhausted after 4 total attempts
+- `POST /api/webhook-retries/run` requires `WEBHOOK_RETRY_SECRET`
 
 ## Explicit Non-Goals
 
@@ -204,6 +221,7 @@ These ideas were intentionally rejected for this phase:
 ## Operational Notes
 
 - The correct public webhook endpoint is `POST /api/webhooks/stripe`
+- The retry runner endpoint is `POST /api/webhook-retries/run` and must be called with `Authorization: Bearer WEBHOOK_RETRY_SECRET` or `x-webhook-retry-secret`
 - The browser may start checkout, but only Stripe webhook success finalizes order creation
 - Internal event handlers are allowed to fail without corrupting already-committed order or payment data
 - Media binary storage in Postgres is acceptable for local/current workflows but should move to object storage before heavier production usage
@@ -215,6 +233,6 @@ The next hardening milestone is complete when:
 
 - checkout and webhook flows have broader automated coverage beyond the current real-DB inventory, discount, success/failure conflict, and expired-session late-webhook coverage
 - new collection APIs are covered by DTO, publish-state, and auth expectations
-- failed webhook deliveries can be replayed safely
-- operational logging is good enough to debug a missing email or duplicate delivery without inspecting the database manually
+- failed webhook deliveries can be replayed or retried safely from verified local payloads
+- operational logging is good enough to debug a missing email, duplicate delivery, or stuck retry without inspecting the database manually
 - production database SSL behavior is explicit and documented

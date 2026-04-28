@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   recordWebhookDeliveryAttempt: vi.fn(),
   markWebhookDeliveryProcessed: vi.fn(),
   markWebhookDeliveryFailed: vi.fn(),
-  getStripeEvent: vi.fn(),
   processStripeWebhookEvent: vi.fn(),
 }))
 
@@ -16,11 +15,14 @@ vi.mock('@/server/services/webhook-delivery.service', () => ({
   markWebhookDeliveryFailed: mocks.markWebhookDeliveryFailed,
 }))
 
-vi.mock('@/lib/stripe', () => ({
-  getStripeEvent: mocks.getStripeEvent,
-}))
-
 vi.mock('@/server/services/stripe-webhook.service', () => ({
+  parseStripeWebhookEventPayload: (payload: string) => {
+    try {
+      return JSON.parse(payload)
+    } catch {
+      return null
+    }
+  },
   processStripeWebhookEvent: mocks.processStripeWebhookEvent,
 }))
 
@@ -35,18 +37,18 @@ describe('POST /api/webhook-deliveries/[id]/replay', () => {
       providerEventId: 'evt_1',
       eventType: 'payment_intent.succeeded',
       status: 'FAILED',
-    })
-    mocks.getStripeEvent.mockResolvedValue({
-      id: 'evt_1',
-      type: 'payment_intent.succeeded',
-      data: {
-        object: {
-          id: 'pi_1',
-          amount: 5999,
-          currency: 'usd',
-          status: 'succeeded',
+      rawPayload: JSON.stringify({
+        id: 'evt_1',
+        type: 'payment_intent.succeeded',
+        data: {
+          object: {
+            id: 'pi_1',
+            amount: 5999,
+            currency: 'usd',
+            status: 'succeeded',
+          },
         },
-      },
+      }),
     })
     mocks.recordWebhookDeliveryAttempt.mockResolvedValue({
       id: 'delivery_1',
@@ -97,7 +99,6 @@ describe('POST /api/webhook-deliveries/[id]/replay', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(mocks.getStripeEvent).toHaveBeenCalledWith('evt_1')
     expect(mocks.processStripeWebhookEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'evt_1',
@@ -108,6 +109,36 @@ describe('POST /api/webhook-deliveries/[id]/replay', () => {
       provider: 'stripe',
       providerEventId: 'evt_1',
     })
+    expect(mocks.recordWebhookDeliveryAttempt).toHaveBeenCalledWith({
+      provider: 'stripe',
+      providerEventId: 'evt_1',
+      eventType: 'payment_intent.succeeded',
+      payload: expect.stringContaining('"evt_1"'),
+      rawPayload: expect.stringContaining('"evt_1"'),
+      isRetry: true,
+    })
+  })
+
+  it('rejects replay when no verified stored payload exists', async () => {
+    mocks.getWebhookDeliveryById.mockResolvedValue({
+      id: 'delivery_1',
+      provider: 'stripe',
+      providerEventId: 'evt_1',
+      eventType: 'payment_intent.succeeded',
+      status: 'FAILED',
+      rawPayload: null,
+    })
+
+    const response = await POST(new Request('http://localhost/api/webhook-deliveries/delivery_1/replay'), {
+      params: Promise.resolve({ id: 'delivery_1' }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Replay requires a verified stored payload',
+    })
+    expect(mocks.processStripeWebhookEvent).not.toHaveBeenCalled()
   })
 
   it('marks replay failures and returns 500 when processing fails', async () => {
@@ -126,6 +157,7 @@ describe('POST /api/webhook-deliveries/[id]/replay', () => {
       provider: 'stripe',
       providerEventId: 'evt_1',
       error: 'Replay processing failed',
+      retryable: true,
     })
   })
 })

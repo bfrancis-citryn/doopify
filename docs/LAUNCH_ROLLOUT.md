@@ -2,7 +2,7 @@
 
 > Positioning and rollout guide for the developer-first, self-hostable commerce story.
 >
-> Documentation refresh: April 25, 2026
+> Documentation refresh: April 28, 2026
 
 ## Core Positioning
 
@@ -139,17 +139,21 @@ No hidden hosted control plane is required for the core app.
 
 ## Launch Readiness Checklist
 
-Before making larger public claims:
+Before making larger public claims. Honest state as of April 28, 2026:
 
-- [ ] Collections are demoable end-to-end
-- [ ] Checkout test path is reliable
-- [ ] Webhook order creation is demonstrable
-- [ ] Inventory decrement is visible
-- [ ] Confirmation email flow is demonstrable or clearly labeled as first-party event consumer
-- [ ] Checkout/webhook/inventory path has automated coverage
-- [ ] README accurately matches current behavior
-- [ ] `STATUS.md`, `features-roadmap.md`, and `HARDENING.md` are up to date
-- [ ] Known gaps are called out honestly
+- [x] Collections are demoable end-to-end
+- [x] Checkout test path is reliable
+- [x] Webhook order creation is demonstrable
+- [x] Inventory decrement is visible
+- [x] Confirmation email flow is demonstrable or clearly labeled as first-party event consumer
+- [x] Checkout/webhook/inventory path has automated coverage (fast Vitest suite plus `DATABASE_URL_TEST`-gated real-DB integration specs)
+- [x] `README.md` accurately matches current behavior (updated April 28, 2026)
+- [x] `STATUS.md`, `features-roadmap.md`, and `HARDENING.md` are up to date
+- [x] Known gaps are called out honestly in `README.md > Known follow-up gaps`
+- [ ] Shared rate-limit store in place before multi-instance deployment
+- [ ] Audit logging for settings changes, payment events, and fulfillment operations
+- [ ] Production Postgres SSL normalized to `sslmode=verify-full`
+- [x] Storefront discount-code UX polish and clear rejected-code messaging (promo code input with server-driven inline error routing shipped April 27, 2026)
 
 ## Suggested README Badge/Tagline Copy
 

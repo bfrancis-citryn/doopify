@@ -2,8 +2,8 @@
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Documentation refresh: April 27, 2026  
-> Last repo verification recorded in active docs: April 27, 2026  
+> Documentation refresh: April 27, 2026
+> Last repo verification recorded in active docs: April 27, 2026
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -44,8 +44,8 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Configurable jurisdiction-aware tax overrides through private settings APIs
 - Checkout pricing snapshots that persist shipping/tax resolution decisions into checkout payloads
 - Discount applications and usage counts created only after verified paid order creation succeeds
-- Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
-- Admin/API webhook replay tooling on top of delivery logs (`/api/webhook-deliveries` and `/api/webhook-deliveries/[id]/replay`)
+- Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, and retry metadata
+- Admin/API webhook replay, retry diagnostics, and cron-compatible retry tooling on top of delivery logs (`/api/webhook-deliveries`, `/api/webhook-deliveries/[id]`, `/api/webhook-deliveries/[id]/replay`, and `/api/webhook-retries/run`)
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
 - Public storefront settings endpoint for branding-safe store data
@@ -54,9 +54,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Storefront collection browsing at `/collections` and `/collections/[handle]`
 - Collection publish/unpublish semantics with storefront filtering
 - Centralized checkout pricing service for subtotal, shipping, tax, discount, and total calculation
-- Vitest fast test harness covering pricing, checkout-native discount math, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, and storefront collection DTO safety
+- Vitest fast test harness covering pricing, checkout-native discount math, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signatures, webhook retry/diagnostics behavior, and storefront collection DTO safety
 - `npm run test:integration` executes successfully when `DATABASE_URL_TEST` points at a disposable Postgres database or schema
-- `DATABASE_URL_TEST`-gated integration specs for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, and late payment-success webhook delivery against expired sessions
+- `DATABASE_URL_TEST`-gated integration specs for paid checkout inventory decrement, duplicate payment-intent idempotency, competing duplicate completions, insufficient-stock consistency, paid-only/idempotent discount application usage, concurrent checkout creation near stock-out, conflicting success/failure webhook delivery for one payment intent, paid-order finalization while email delivery fails, concurrent discount usage-cap enforcement, late payment-success webhook delivery against expired sessions, and stored-payload webhook retry idempotency
 
 ### Explicitly Deferred
 
@@ -150,7 +150,7 @@ Status: shipped initial implementation
 
 ## Phase 3 - Merchant Readiness And Storefront Differentiation
 
-Status: active now
+Status: shipped — all slices 3A–3E complete as of April 27, 2026
 
 ### Current Slice Shipped
 
@@ -172,9 +172,10 @@ Status: active now
 - private admin CRUD APIs for shipping zones, zone rates, and tax rules
 - settings shipping workspace editor for shipping zones/rates and jurisdiction tax overrides
 - durable webhook delivery logging in `POST /api/webhooks/stripe` with hashed payload tracking and delivery status transitions
-- replay API + admin visibility workspace for webhook deliveries (`/admin/webhooks`)
-- fast automated coverage for checkout pricing, zone/rate/jurisdiction matrix behavior, checkout discount codes, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
-- executed real-DB checkout/inventory integration coverage for paid checkout, duplicate payment-intent idempotency, competing duplicate completions, insufficient stock, paid-only/idempotent discount usage, and broader webhook/race scenarios
+- verified local webhook payload storage for replay/retry after successful signature and payload validation
+- local-payload replay API, retry scheduling/exhaustion, support diagnostics, cron-compatible retry runner, and admin visibility workspace for webhook deliveries (`/admin/webhooks`)
+- fast automated coverage for checkout pricing, zone/rate/jurisdiction matrix behavior, checkout discount codes, checkout creation, duplicate payment-intent completion, invalid webhook signatures, webhook delivery logging/replay/retry/diagnostics behavior, admin collection mutations, storefront collection routes, and storefront-safe collection DTOs
+- executed real-DB checkout/inventory integration coverage for paid checkout, duplicate payment-intent idempotency, competing duplicate completions, insufficient stock, paid-only/idempotent discount usage, stored-payload webhook retry idempotency, and broader webhook/race scenarios
 - real-DB checkout runs exposed and fixed concurrent customer creation, failure-webhook downgrade, and discount-cap finalization race conditions
 
 ### Goals
@@ -199,7 +200,7 @@ Status: active now
 - seed data already contains starter collections, which is useful for UI development and storefront demos
 - `getStorefrontProducts()` already accepts `collectionHandle`, and collection-aware storefront filtering is now in place
 - collection list surfaces now use summary payloads while nested product data is reserved for detail reads
-- the recommended build order is now webhook retries/support diagnostics, storefront merchandising polish, and deeper checkout-failure UX contracts
+- the recommended build order is now storefront merchandising polish, deeper checkout-failure UX contracts, audit logging, and shared rate-limit hardening
 
 ### Planned Interfaces
 
@@ -229,20 +230,41 @@ Status: active now
 
 - automated coverage should expand to deeper checkout validation failures, admin-only collection mutations, and broader real-DB idempotency/race-condition behavior
 
-## Phase 4 - Extract Platform Pieces
+## Phase 4 - Merchant Lifecycle And Outbound Integrations
 
-Status: later, after the current app is stable
+Status: active now
 
 ### Goals
 
-- extract shared domain and service logic into packages
-- introduce an SDK and lightweight CLI or template tooling
-- use code generation as scaffolding for new resources, not as a replacement for the existing product and order flows
-- keep the main deployable app as the proving ground until extraction is justified by real reuse
+- refund flow connected to Stripe, payment records, order state, and inventory restocking
+- return flow with a state machine connected to refunds
+- outbound merchant webhooks: subscriptions, signing, retry with backoff, dead-letter visibility — built on the typed event dispatcher and static integration registry
+- per-integration settings and secrets management, encrypted at rest
+- transactional email observability: delivery status, bounce/complaint handling, resend tooling
+- analytics event fan-out through the existing dispatcher
 
-## Phase 5 - Public Plugin Platform
+### Acceptance Checks
 
-Status: deferred until after Phase 3 and Phase 4 prove out
+- an admin can issue a partial or full refund and the order, payment, and inventory are consistent afterward
+- a return moves through its state machine and triggers a refund correctly
+- outbound webhook deliveries are signed, retried with backoff, and visible in the admin
+- integration secrets never appear unencrypted at rest
+- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects
+
+## Phase 5 - Platform Extraction
+
+Status: deferred until after Phase 4 is stable
+
+### Goals
+
+- extract shared domain and service logic into versioned internal packages
+- introduce a thin SDK that lets external consumers call commerce services
+- add a scaffolder CLI or template tool for new resources (route + service + Prisma fragment + DTO + test)
+- keep the main app as the proving ground until extraction is justified by real reuse
+
+## Phase 6 - Public Plugin Platform
+
+Status: deferred until after Phase 5 proves out
 
 ### Requirements Before We Market This
 
@@ -255,22 +277,23 @@ Status: deferred until after Phase 3 and Phase 4 prove out
 
 ## Verification And Testing
 
-Validated in this repo on April 27, 2026:
+Validated in this repo on April 27, 2026 (Phase 3 complete, Phase 4 kickoff):
 
 ```bash
 npm run db:generate
 npx tsc --noEmit
 npm run test
-npm run test:integration # with DATABASE_URL_TEST configured to a disposable Postgres database/schema
 npm run build
 ```
 
+`npm run test:integration` should be run with a disposable Postgres database/schema before making release claims about real-DB behavior.
+
 Next automated coverage priorities:
 
-- collection assignment and storefront collection visibility
-- collection auth and admin-only mutation edge-case coverage
-- broader webhook retry/support diagnostics coverage
-- deeper checkout validation failures around stale carts and inactive/deleted variants
+- refund and return correctness against payments and inventory
+- outbound webhook retry/idempotency
+- integration secret encryption at rest
+- email delivery status transitions
 
 ## Marketing Positioning
 

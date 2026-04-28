@@ -19,9 +19,184 @@ function formatTimelineDate(value) {
   });
 }
 
+// ── Refund Panel ──────────────────────────────────────────────────────────────
+function RefundPanel({ order, onClose, onSuccess }) {
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('requested_by_customer');
+  const [note, setNote] = useState('');
+  const [restockItems, setRestockItems] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const payment = order.payments?.[0];
+  const maxRefundable = payment ? payment.amount - (order.refunds || []).filter(r => r.status === 'ISSUED').reduce((s, r) => s + r.amount, 0) : 0;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) { setError('Enter a valid amount'); return; }
+    if (!payment) { setError('No payment found on this order'); return; }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const orderNum = order.orderNumber.replace('#', '');
+      const res = await fetch(`/api/orders/${orderNum}/refunds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: payment.id, amount: parsedAmount, reason, note: note || undefined, restockItems }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Refund failed');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className={styles.shopifyPanelClean} style={{ border: '2px solid #e3e3e3', marginBottom: '16px' }}>
+      <div className={styles.shopifyPanelHeaderClean}>
+        <strong>Issue refund</strong>
+        <button className={styles.textActionButton} onClick={onClose} type="button">✕</button>
+      </div>
+      <form onSubmit={handleSubmit} style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {error && <p style={{ color: '#c0392b', fontSize: '13px', margin: 0 }}>{error}</p>}
+        <label style={{ fontSize: '13px' }}>
+          Refund amount (max {formatOrderMoney(maxRefundable)})
+          <input
+            className={styles.detailInput}
+            min="0.01"
+            max={maxRefundable}
+            placeholder="0.00"
+            step="0.01"
+            style={{ marginTop: '4px', width: '100%' }}
+            type="number"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+          />
+        </label>
+        <label style={{ fontSize: '13px' }}>
+          Reason
+          <select className={styles.detailSelect} style={{ marginTop: '4px', width: '100%' }} value={reason} onChange={e => setReason(e.target.value)}>
+            <option value="requested_by_customer">Requested by customer</option>
+            <option value="duplicate">Duplicate</option>
+            <option value="fraudulent">Fraudulent</option>
+          </select>
+        </label>
+        <label style={{ fontSize: '13px' }}>
+          Note (optional)
+          <input className={styles.detailInput} placeholder="Internal note" style={{ marginTop: '4px', width: '100%' }} type="text" value={note} onChange={e => setNote(e.target.value)} />
+        </label>
+        <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <input checked={restockItems} type="checkbox" onChange={e => setRestockItems(e.target.checked)} />
+          Restock items
+        </label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className={styles.primaryAction} disabled={submitting} type="submit">{submitting ? 'Refunding…' : 'Issue refund'}</button>
+          <button className={styles.secondaryAction} onClick={onClose} type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ── Return Panel ──────────────────────────────────────────────────────────────
+function ReturnPanel({ order, onClose, onSuccess }) {
+  const [selectedItems, setSelectedItems] = useState(
+    (order.lineItems || []).map(item => ({ ...item, selected: false, returnQty: item.quantity, returnReason: '' }))
+  );
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  function toggleItem(id) {
+    setSelectedItems(current => current.map(i => i.id === id ? { ...i, selected: !i.selected } : i));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const items = selectedItems.filter(i => i.selected).map(i => ({
+      orderItemId: i.id,
+      quantity: parseInt(i.returnQty, 10) || 1,
+      reason: i.returnReason || undefined,
+    }));
+    if (!items.length) { setError('Select at least one item'); return; }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const orderNum = order.orderNumber.replace('#', '');
+      const res = await fetch(`/api/orders/${orderNum}/returns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, note: note || undefined }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed to create return');
+      onSuccess();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className={styles.shopifyPanelClean} style={{ border: '2px solid #e3e3e3', marginBottom: '16px' }}>
+      <div className={styles.shopifyPanelHeaderClean}>
+        <strong>Create return</strong>
+        <button className={styles.textActionButton} onClick={onClose} type="button">✕</button>
+      </div>
+      <form onSubmit={handleSubmit} style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {error && <p style={{ color: '#c0392b', fontSize: '13px', margin: 0 }}>{error}</p>}
+        <p style={{ fontSize: '13px', margin: 0, color: '#555' }}>Select items to return:</p>
+        {selectedItems.map(item => (
+          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+            <input checked={item.selected} type="checkbox" onChange={() => toggleItem(item.id)} />
+            <span style={{ flex: 1 }}>{item.title}{item.variant ? ` — ${item.variant}` : ''}</span>
+            {item.selected && (
+              <>
+                <input
+                  className={styles.detailInput}
+                  max={item.quantity}
+                  min="1"
+                  style={{ width: '48px' }}
+                  type="number"
+                  value={item.returnQty}
+                  onChange={e => setSelectedItems(c => c.map(i => i.id === item.id ? { ...i, returnQty: e.target.value } : i))}
+                />
+                <input
+                  className={styles.detailInput}
+                  placeholder="Reason"
+                  style={{ flex: 1 }}
+                  type="text"
+                  value={item.returnReason}
+                  onChange={e => setSelectedItems(c => c.map(i => i.id === item.id ? { ...i, returnReason: e.target.value } : i))}
+                />
+              </>
+            )}
+          </div>
+        ))}
+        <label style={{ fontSize: '13px' }}>
+          Note (optional)
+          <input className={styles.detailInput} placeholder="Internal note" style={{ marginTop: '4px', width: '100%' }} type="text" value={note} onChange={e => setNote(e.target.value)} />
+        </label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className={styles.primaryAction} disabled={submitting} type="submit">{submitting ? 'Creating…' : 'Create return'}</button>
+          <button className={styles.secondaryAction} onClick={onClose} type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function OrderDetailView({ order, onUpdateOrder }) {
   const { settings } = useSettings();
   const [tagInput, setTagInput] = useState('');
+  const [activePanel, setActivePanel] = useState(null); // 'refund' | 'return' | null
   const [shippingLabelDraft, setShippingLabelDraft] = useState({
     packageType: 'Small box',
     carrierService: 'UPS Ground',

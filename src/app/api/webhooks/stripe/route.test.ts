@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   verifyStripeWebhookSignature: vi.fn(),
   processStripeWebhookEvent: vi.fn(),
   recordWebhookDeliveryAttempt: vi.fn(),
+  storeVerifiedWebhookPayload: vi.fn(),
   markWebhookDeliveryProcessed: vi.fn(),
   markWebhookDeliveryFailed: vi.fn(),
 }))
@@ -13,11 +14,23 @@ vi.mock('@/lib/stripe', () => ({
 }))
 
 vi.mock('@/server/services/stripe-webhook.service', () => ({
+  parseStripeWebhookEventPayload: (payload: string) => {
+    try {
+      const event = JSON.parse(payload)
+      if (!event || typeof event !== 'object') return null
+      if (typeof event.id !== 'string' || typeof event.type !== 'string') return null
+      if (!event.data || typeof event.data !== 'object' || !('object' in event.data)) return null
+      return event
+    } catch {
+      return null
+    }
+  },
   processStripeWebhookEvent: mocks.processStripeWebhookEvent,
 }))
 
 vi.mock('@/server/services/webhook-delivery.service', () => ({
   recordWebhookDeliveryAttempt: mocks.recordWebhookDeliveryAttempt,
+  storeVerifiedWebhookPayload: mocks.storeVerifiedWebhookPayload,
   markWebhookDeliveryProcessed: mocks.markWebhookDeliveryProcessed,
   markWebhookDeliveryFailed: mocks.markWebhookDeliveryFailed,
 }))
@@ -73,7 +86,30 @@ describe('Stripe webhook route', () => {
       status: 'SIGNATURE_FAILED',
       error: 'Stripe webhook signature verification failed',
     })
+    expect(mocks.storeVerifiedWebhookPayload).not.toHaveBeenCalled()
     expect(mocks.markWebhookDeliveryProcessed).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed payloads without storing a verified payload or scheduling retry', async () => {
+    const response = await POST(
+      new Request('http://localhost/api/webhooks/stripe', {
+        method: 'POST',
+        headers: {
+          'stripe-signature': 'good-signature',
+        },
+        body: '{"not":"stripe"}',
+      })
+    )
+
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe('Invalid Stripe webhook payload')
+    expect(mocks.storeVerifiedWebhookPayload).not.toHaveBeenCalled()
+    expect(mocks.markWebhookDeliveryFailed).toHaveBeenCalledWith({
+      provider: 'stripe',
+      providerEventId: 'evt_test',
+      error: 'Invalid Stripe webhook payload',
+      retryable: false,
+    })
   })
 
   it('records processed payment_intent.succeeded events', async () => {
@@ -105,6 +141,11 @@ describe('Stripe webhook route', () => {
         type: 'payment_intent.succeeded',
       })
     )
+    expect(mocks.storeVerifiedWebhookPayload).toHaveBeenCalledWith({
+      provider: 'stripe',
+      providerEventId: 'evt_test',
+      rawPayload: expect.stringContaining('"evt_ok"'),
+    })
     expect(mocks.markWebhookDeliveryProcessed).toHaveBeenCalledWith({
       provider: 'stripe',
       providerEventId: 'evt_test',
@@ -142,6 +183,7 @@ describe('Stripe webhook route', () => {
       provider: 'stripe',
       providerEventId: 'evt_test',
       error: 'Order finalization failed',
+      retryable: true,
     })
     expect(mocks.markWebhookDeliveryProcessed).not.toHaveBeenCalled()
   })

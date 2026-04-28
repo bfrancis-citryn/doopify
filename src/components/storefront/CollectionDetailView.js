@@ -427,8 +427,15 @@ export default function CollectionDetailView({ collection, peerCollections = [] 
             })}
           </div>
         ) : (
-          <div className="empty">
-            Nothing is assigned to this collection yet. Add products from the admin collection workspace to bring it to life.
+          <div className="empty" style={{ padding: '80px 48px', textAlign: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-headline), sans-serif', fontSize: 52, fontWeight: 700, letterSpacing: '-0.05em', color: 'rgba(255,255,255,0.08)', marginBottom: 20 }}>✦</p>
+            <p style={{ fontSize: 16, color: '#a79a8d', marginBottom: 8 }}>This collection is empty.</p>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.36)', marginBottom: 28, lineHeight: 1.7 }}>
+              Products haven&apos;t been assigned here yet.<br />Use the admin collection workspace to add products.
+            </p>
+            <a href="/shop" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 20px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)', color: '#f2ede4', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>
+              Browse all products
+            </a>
           </div>
         )}
       </div>

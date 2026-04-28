@@ -6,8 +6,8 @@
 
 ## Current Status
 
-Documentation refresh: April 26, 2026  
-Last repo verification recorded in active docs: April 26, 2026
+Documentation refresh: April 27, 2026
+Last repo verification recorded in active docs: April 27, 2026
 
 Doopify is no longer a prototype or only a UI shell. It has a working admin, storefront, checkout entry point, Stripe webhook path, Prisma/Postgres-backed commerce data, and typed internal event seams.
 
@@ -30,8 +30,8 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Baseline destination-aware shipping zone rates and tax rules through the centralized server pricing path
 - Settings-backed domestic/international shipping and tax rates flowing through the centralized server pricing path
 - Discount applications and usage counts created only after verified paid order creation succeeds
-- Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, and payload hash
-- Admin/API webhook replay tooling and visibility at `/admin/webhooks`
+- Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
+- Admin/API webhook local-payload replay, retry tooling, support diagnostics, and visibility at `/admin/webhooks`
 - Admin collection management at `/admin/collections`
 - Collection publish/unpublish semantics with unpublished collections hidden from storefront reads
 - Storefront-safe collection DTOs with summary/detail query separation
@@ -44,26 +44,24 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 
 ### Active phase
 
-The current active product phase is **Phase 3: Merchant Readiness And Storefront Differentiation**.
+The current active product phase is **Phase 4: Merchant Lifecycle And Outbound Integrations**.
+
+Phase 3 is fully complete — all slices 3A–3E shipped and verified.
 
 Current priorities:
 
-1. Expand broader real-DB idempotency/race-condition coverage beyond duplicate payment-intent completion
-2. Refine shipping and tax behavior beyond current settings-backed defaults into richer merchant-grade rules
-3. Add automated webhook retries and deeper support diagnostics on top of replay + durable delivery logs
-4. Stronger storefront merchandising and branding surfaces
-5. Operational hardening: shared rate limits, audit logs, and production Postgres SSL review
+1. Refund flow connected to Stripe, payment records, order state, and inventory restocking
+2. Return flow with a state machine connected to refunds
+3. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility
+4. Per-integration settings and secrets management, encrypted at rest
+5. Transactional email observability and analytics event fan-out
 
 ### Known follow-up gaps
 
-- More complete tax logic
-- Richer shipping zones and rates beyond current settings-backed defaults
-- Discount-code storefront UX polish and rejected-code messaging
-- Refund and return flows connected to payments and inventory
-- More edge-case coverage for admin collection mutations and broader real-DB idempotency/race-condition behavior
-- Shared rate-limiting store before multi-instance deployment
-- Automated webhook retries and deeper support-facing diagnostics on top of existing replay tooling
-- Audit logging around settings changes, payment events, and fulfillment operations
+- Refund and return flows connected to payments and inventory (active Phase 4 work)
+- Outbound merchant webhooks with subscriptions, signing, and retry (active Phase 4 work)
+- Per-integration secrets management and transactional email observability (active Phase 4 work)
+- Analytics event fan-out (active Phase 4 work)
 - Moving media binary storage out of Postgres into object storage/CDN later
 
 ## Active Documentation Map
@@ -77,7 +75,8 @@ Start here when returning to the repo:
 5. [`CONTRIBUTING.md`](./CONTRIBUTING.md) - development rules and definition of done
 6. [`AGENTS.md`](./AGENTS.md) - instructions for AI coding agents and future maintainers
 7. [`PHASE_3_KICKOFF.md`](./PHASE_3_KICKOFF.md) - active Phase 3 execution brief
-8. [`LAUNCH_ROLLOUT.md`](./LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
+8. [`PHASE_COMPLETION_PLAN.md`](./PHASE_COMPLETION_PLAN.md) - sequenced phase completion plan with current slice ledger
+9. [`LAUNCH_ROLLOUT.md`](./LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
 
 Do not keep stale root-level planning files that contradict `STATUS.md`, `features-roadmap.md`, or `HARDENING.md`.
 
@@ -121,7 +120,9 @@ Do not keep stale root-level planning files that contradict `STATUS.md`, `featur
 - `/api/storefront/collections`
 - `/api/storefront/settings`
 - `/api/webhook-deliveries`
+- `/api/webhook-deliveries/[id]`
 - `/api/webhook-deliveries/[id]/replay`
+- `/api/webhook-retries/run`
 - `/api/checkout/create`
 - `/api/checkout/status`
 - `/api/webhooks/stripe`
@@ -199,6 +200,7 @@ This repo expects PostgreSQL through Prisma.
 
 - Put `DATABASE_URL` and `DIRECT_URL` in `.env`
 - Put app/runtime secrets in `.env.local`
+- Set `WEBHOOK_RETRY_SECRET` for cron-compatible calls to `POST /api/webhook-retries/run`
 - Production Postgres SSL should be reviewed and normalized so environments explicitly use `sslmode=verify-full`
 
 ## Notes On Media

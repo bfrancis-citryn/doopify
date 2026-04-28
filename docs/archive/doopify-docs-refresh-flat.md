@@ -1,3 +1,13 @@
+> **⚠ STALE ARCHIVE — DO NOT USE FOR CURRENT STATUS**
+>
+> This flat-pack was generated on April 25, 2026 and is substantially out of date.
+> It predates: persisted shipping-zone/rate and tax-rule config, webhook retry/replay tooling,
+> the admin webhooks workspace, comprehensive real-DB integration specs, and other shipped Phase 3 work.
+> Use the canonical root-level docs (`STATUS.md`, `features-roadmap.md`, `HARDENING.md`, `AGENTS.md`,
+> `PHASE_3_KICKOFF.md`, `PHASE_COMPLETION_PLAN.md`, `LAUNCH_ROLLOUT.md`, `README.md`) instead.
+
+---
+
 # Doopify Documentation Refresh - Flat Active Pack
 
 This consolidated file mirrors the flat Markdown handoff pack. It intentionally excludes `docs/` and `archive/` folders so every active file can live at the repo root.

@@ -2,7 +2,7 @@
 
 > Doopify is a developer-first, self-hostable commerce engine with a real admin, real storefront, Prisma/Postgres as the source of truth, Stripe-backed checkout architecture, and typed server-side extension seams.
 
-Documentation refresh: April 25, 2026
+Documentation refresh: April 28, 2026
 
 ## The One-Sentence Intent
 

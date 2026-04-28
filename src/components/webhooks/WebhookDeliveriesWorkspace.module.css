@@ -74,6 +74,11 @@
   padding: 0.55rem 0.9rem;
 }
 
+.actionCell button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .tableWrap {
   flex: 1;
   min-height: 0;
@@ -85,7 +90,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 980px;
+  min-width: 1180px;
 }
 
 .table th,
@@ -108,15 +113,33 @@
   font-size: 0.86rem;
 }
 
-.hashCell {
+.hashCell,
+.subtle {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color: var(--slate-300);
+}
+
+.hashCell {
   max-width: 240px;
   word-break: break-all;
 }
 
+.subtle {
+  display: block;
+  max-width: 220px;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .actionCell {
   white-space: nowrap;
+}
+
+.actionCell button + button {
+  margin-left: 0.5rem;
 }
 
 .notice,
@@ -134,11 +157,57 @@
   font-size: 0.85rem;
 }
 
+.diagnostics {
+  display: grid;
+  gap: 1rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 32rem),
+    rgba(255, 255, 255, 0.035);
+  padding: 1rem;
+}
+
+.diagnostics h2 {
+  margin: 0;
+  color: var(--slate-50);
+  font-size: 1rem;
+}
+
+.diagnosticGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.diagnosticGrid div {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.18);
+  padding: 0.8rem;
+}
+
+.diagnosticGrid span {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--slate-400);
+  font-size: 0.72rem;
+}
+
+.diagnosticGrid strong {
+  color: var(--slate-50);
+  font-size: 0.9rem;
+}
+
 @media (max-width: 900px) {
   .header,
   .controls,
   .pagination {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .diagnosticGrid {
+    grid-template-columns: 1fr;
   }
 }
