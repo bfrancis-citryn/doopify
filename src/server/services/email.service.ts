@@ -1,7 +1,8 @@
-import { env } from '@/lib/env'
 import { getStoreSettings } from '@/server/services/settings.service'
+import { sendTrackedEmail } from '@/server/services/email-delivery.service'
 
 type OrderConfirmationInput = {
+  orderId?: string
   orderNumber: number
   email: string
   currency: string
@@ -90,31 +91,13 @@ export async function sendOrderConfirmationEmail(input: OrderConfirmationInput) 
   const subject = `${storeName} order #${input.orderNumber} confirmation`
   const html = buildOrderConfirmationHtml(input, storeName)
 
-  if (!env.RESEND_API_KEY) {
-    console.info('[email.preview] Order confirmation', {
-      to: input.email,
-      subject,
-      orderNumber: input.orderNumber,
-    })
-    return
-  }
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [input.email],
-      subject,
-      html,
-    }),
+  return sendTrackedEmail({
+    event: 'order.paid',
+    template: 'order_confirmation',
+    recipientEmail: input.email,
+    subject,
+    from,
+    html,
+    orderId: input.orderId,
   })
-
-  if (!response.ok) {
-    const payload = await response.text()
-    throw new Error(`Resend request failed: ${payload}`)
-  }
 }
