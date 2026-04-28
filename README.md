@@ -6,17 +6,17 @@
 
 ## Current Status
 
-Documentation refresh: April 27, 2026
-Last repo verification recorded in active docs: April 27, 2026
+Documentation refresh: April 28, 2026
+Last repo verification recorded in active docs: April 28, 2026
 
-Doopify is no longer a prototype or only a UI shell. It has a working admin, storefront, checkout entry point, Stripe webhook path, Prisma/Postgres-backed commerce data, and typed internal event seams.
+Doopify is no longer a prototype or only a UI shell. It has a working admin, storefront, checkout entry point, Stripe webhook path, Prisma/Postgres-backed commerce data, refunds/returns, inbound and outbound webhook observability, and typed internal event seams.
 
 ### Working now
 
 - Protected admin auth with session-backed JWT validation
 - Safe cookie parsing and required environment validation
 - Login rate limiting by IP plus email
-- DB-backed products, variants, media, customers, discounts, settings, analytics, orders, payments, fulfillments, refunds, returns, and sessions
+- DB-backed products, variants, media, customers, discounts, settings, analytics, orders, payments, fulfillments, refunds, returns, integrations, and sessions
 - Storefront catalog routes at `/`, `/shop`, and `/shop/[handle]`
 - Collection browsing at `/collections` and `/collections/[handle]`
 - Cart-to-checkout flow at `/checkout`
@@ -27,58 +27,57 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Idempotent paid-order creation keyed from verified Stripe payment success
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized server pricing path
-- Baseline destination-aware shipping zone rates and tax rules through the centralized server pricing path
-- Settings-backed domestic/international shipping and tax rates flowing through the centralized server pricing path
-- Discount applications and usage counts created only after verified paid order creation succeeds
-- Durable Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
-- Admin/API webhook local-payload replay, retry tooling, support diagnostics, and visibility at `/admin/webhooks`
+- Configurable shipping zones/rates and jurisdiction-aware tax rules through the centralized server pricing path
+- Discount applications and usage counts created only after verified paid-order creation succeeds
+- Durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry tooling, support diagnostics, and visibility at `/admin/webhooks`
 - Admin collection management at `/admin/collections`
 - Collection publish/unpublish semantics with unpublished collections hidden from storefront reads
 - Storefront-safe collection DTOs with summary/detail query separation
 - Centralized checkout pricing service for server-owned subtotal, shipping, tax, discount, and total calculation
+- Refund and return foundations with Stripe refund idempotency, item validation, return state machine, admin workflow controls, and return-to-refund linkage
+- Outbound merchant webhook subscriptions, timestamped HMAC signing, retry/backoff, exhausted/dead-letter visibility, manual retry, settings UI, and admin visibility
 - Public storefront settings endpoint for branding-safe store data
 - Typed internal event dispatcher
 - Static server-side integration registry
 - First-party event consumers for logging and order confirmation email delivery
-- Vitest fast test harness plus `DATABASE_URL_TEST`-gated integration specs for checkout inventory, payment-idempotency, and discount-usage behavior
+- Vitest fast test harness plus `DATABASE_URL_TEST`-gated integration specs for checkout inventory, payment idempotency, discount usage, webhook retry, and refund/return behavior
 
 ### Active phase
 
 The current active product phase is **Phase 4: Merchant Lifecycle And Outbound Integrations**.
 
-Phase 3 is fully complete — all slices 3A–3E shipped and verified.
+Phase 3 is fully complete. Phase 4 refund/return and outbound webhook foundations are shipped. The next planned slice is transactional email observability.
 
 Current priorities:
 
-1. Refund flow connected to Stripe, payment records, order state, and inventory restocking
-2. Return flow with a state machine connected to refunds
-3. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility
-4. Per-integration settings and secrets management, encrypted at rest
-5. Transactional email observability and analytics event fan-out
+1. Transactional email observability and safe resend tooling
+2. Bounce/complaint handling for the selected email provider
+3. Analytics event fan-out through the existing dispatcher
+4. Broader real-DB coverage for outbound webhook and email retry/idempotency behavior
+5. Continued audit-log expansion for lifecycle operations
 
 ### Known follow-up gaps
 
-- Refund and return flows connected to payments and inventory (active Phase 4 work)
-- Outbound merchant webhooks with subscriptions, signing, and retry (active Phase 4 work)
-- Per-integration secrets management and transactional email observability (active Phase 4 work)
-- Analytics event fan-out (active Phase 4 work)
+- Transactional email observability and resend tooling
+- Analytics event fan-out
+- Broader real-DB coverage for outbound webhook retry/idempotency
+- Integration secret encryption verification tests
 - Moving media binary storage out of Postgres into object storage/CDN later
 
 ## Active Documentation Map
 
 Start here when returning to the repo:
 
-1. [`STATUS.md`](./STATUS.md) - current shipped, active, pending, and deferred status
-2. [`PROJECT_INTENT.md`](./PROJECT_INTENT.md) - product intent, architecture principles, and non-goals
-3. [`features-roadmap.md`](./features-roadmap.md) - product phases and build sequencing
-4. [`HARDENING.md`](./HARDENING.md) - security, correctness, and operational readiness
-5. [`CONTRIBUTING.md`](./CONTRIBUTING.md) - development rules and definition of done
+1. [`docs/STATUS.md`](./docs/STATUS.md) - current shipped, active, pending, and deferred status
+2. [`docs/PROJECT_INTENT.md`](./docs/PROJECT_INTENT.md) - product intent, architecture principles, and non-goals
+3. [`docs/features-roadmap.md`](./docs/features-roadmap.md) - product phases and build sequencing
+4. [`docs/HARDENING.md`](./docs/HARDENING.md) - security, correctness, and operational readiness
+5. [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) - development rules and definition of done
 6. [`AGENTS.md`](./AGENTS.md) - instructions for AI coding agents and future maintainers
-7. [`PHASE_3_KICKOFF.md`](./PHASE_3_KICKOFF.md) - active Phase 3 execution brief
-8. [`PHASE_COMPLETION_PLAN.md`](./PHASE_COMPLETION_PLAN.md) - sequenced phase completion plan with current slice ledger
-9. [`LAUNCH_ROLLOUT.md`](./LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
+7. [`docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`](./docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md) - next Phase 4 email observability implementation plan
+8. [`docs/LAUNCH_ROLLOUT.md`](./docs/LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
 
-Do not keep stale root-level planning files that contradict `STATUS.md`, `features-roadmap.md`, or `HARDENING.md`.
+Historical planning files live in `docs/archive/`. Do not use archived docs as current repo status.
 
 ## Key Routes
 
@@ -123,6 +122,8 @@ Do not keep stale root-level planning files that contradict `STATUS.md`, `featur
 - `/api/webhook-deliveries/[id]`
 - `/api/webhook-deliveries/[id]/replay`
 - `/api/webhook-retries/run`
+- `/api/outbound-webhook-deliveries`
+- `/api/outbound-webhook-deliveries/[id]/retry`
 - `/api/checkout/create`
 - `/api/checkout/status`
 - `/api/webhooks/stripe`
@@ -182,9 +183,9 @@ Run integration tests when a disposable test database or schema is configured:
 DATABASE_URL_TEST="postgresql://..." npm run test:integration
 ```
 
-`DATABASE_URL_TEST` must point at disposable Postgres storage, never the normal development database. The integration-test wrapper runs Vitest through `npm exec` for more reliable Windows execution.
+`DATABASE_URL_TEST` must point at disposable Postgres storage, never the normal development database.
 
-Recommended merge gate once tests are present:
+Recommended merge gate:
 
 ```bash
 npm run db:generate
@@ -211,6 +212,6 @@ That is acceptable for local development and current admin workflows. Moving to 
 
 ## Do Not Reintroduce
 
-Do not re-add `CLAUDE.md` as a separate roadmap. It was removed because it created status drift.
+Do not re-add `CLAUDE.md`, active Phase 3 kickoff docs, or duplicate phase-completion ledgers as separate roadmaps. They created status drift.
 
-Use `AGENTS.md` for AI-agent instructions and `STATUS.md` plus `features-roadmap.md` for repo truth.
+Use `AGENTS.md`, `docs/STATUS.md`, `docs/features-roadmap.md`, and `docs/HARDENING.md` for repo truth.
