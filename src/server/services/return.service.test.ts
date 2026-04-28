@@ -143,6 +143,21 @@ describe('closeReturnWithRefund', () => {
     expect(mocks.issueRefund).toHaveBeenCalledWith(expect.objectContaining({ orderId: ORDER_ID, returnId: RETURN_ID, restockItems: true }))
     expect(result.refund.id).toBe('refund-1')
   })
+
+  it('rejects refund quantities greater than the returned quantity', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue({ ...baseReturn, status: 'RECEIVED' })
+
+    await expect(
+      closeReturnWithRefund({
+        returnId: RETURN_ID,
+        paymentId: 'payment-1',
+        amount: 100,
+        items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 2, amount: 100 }],
+      })
+    ).rejects.toThrow('Refund item quantity exceeds returned quantity')
+
+    expect(mocks.issueRefund).not.toHaveBeenCalled()
+  })
 })
 
 describe('getOrderReturns', () => {
