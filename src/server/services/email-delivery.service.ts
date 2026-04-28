@@ -99,12 +99,37 @@ export type ResendEmailDeliveryResult =
       blockers?: string[]
     }
 
+export type EmailProviderWebhookEvent = {
+  type: string
+  created_at?: string
+  data?: {
+    email_id?: string
+    to?: string[]
+    bounce?: {
+      message?: string
+      type?: string
+      subType?: string
+    }
+  }
+}
+
+export type ApplyEmailProviderWebhookEventResult = {
+  handled: boolean
+  reason?: 'UNSUPPORTED_EVENT' | 'MISSING_EMAIL_ID' | 'DELIVERY_NOT_FOUND'
+}
+
 function normalizeError(error: unknown) {
   return error instanceof Error ? error.message : 'Email delivery failed'
 }
 
 function emailDeliveryClient() {
   return (prisma as any).emailDelivery
+}
+
+function parseTimestamp(value: string | undefined) {
+  if (!value) return new Date()
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
 }
 
 function hasResendEligibleStatus(status: EmailDeliveryStatus): status is EmailDeliveryResendEligibleStatus {
@@ -178,6 +203,72 @@ export async function markEmailDeliveryFailed(input: {
       nextRetryAt: input.retryable ? new Date(Date.now() + 1000 * 60 * 5) : null,
     },
   })
+}
+
+export function parseEmailProviderWebhookPayload(payload: string): EmailProviderWebhookEvent | null {
+  try {
+    const parsed = JSON.parse(payload)
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof (parsed as { type?: unknown }).type !== 'string') return null
+    return parsed as EmailProviderWebhookEvent
+  } catch {
+    return null
+  }
+}
+
+export async function applyEmailProviderWebhookEvent(
+  event: EmailProviderWebhookEvent
+): Promise<ApplyEmailProviderWebhookEventResult> {
+  const providerMessageId = String(event.data?.email_id || '').trim()
+  if (!providerMessageId) {
+    return { handled: false, reason: 'MISSING_EMAIL_ID' }
+  }
+
+  const toRecipient = Array.isArray(event.data?.to) ? event.data?.to[0] : undefined
+  const baseWhere: Prisma.EmailDeliveryWhereInput = {
+    provider: 'resend',
+    providerMessageId,
+  }
+  const where: Prisma.EmailDeliveryWhereInput = toRecipient
+    ? {
+        ...baseWhere,
+        recipientEmail: toRecipient,
+      }
+    : baseWhere
+
+  if (event.type === 'email.bounced') {
+    const updated = await emailDeliveryClient().updateMany({
+      where,
+      data: {
+        status: 'BOUNCED',
+        bouncedAt: parseTimestamp(event.created_at),
+        lastError: event.data?.bounce?.message ?? 'Email bounced',
+        nextRetryAt: null,
+      },
+    })
+
+    return updated.count > 0
+      ? { handled: true }
+      : { handled: false, reason: 'DELIVERY_NOT_FOUND' }
+  }
+
+  if (event.type === 'email.complained') {
+    const updated = await emailDeliveryClient().updateMany({
+      where,
+      data: {
+        status: 'COMPLAINED',
+        complainedAt: parseTimestamp(event.created_at),
+        lastError: 'Recipient reported this email as spam',
+        nextRetryAt: null,
+      },
+    })
+
+    return updated.count > 0
+      ? { handled: true }
+      : { handled: false, reason: 'DELIVERY_NOT_FOUND' }
+  }
+
+  return { handled: false, reason: 'UNSUPPORTED_EVENT' }
 }
 
 export async function sendTrackedEmail(input: SendTrackedEmailInput) {

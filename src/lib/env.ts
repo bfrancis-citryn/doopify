@@ -8,6 +8,7 @@ const envSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_WEBHOOK_SECRET: z.string().min(1).optional(),
   NEXT_PUBLIC_STORE_URL: z.string().url().optional(),
   WEBHOOK_RETRY_SECRET: z.string().min(16).optional(),
 })

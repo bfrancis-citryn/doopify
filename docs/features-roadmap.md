@@ -226,7 +226,7 @@ Target work:
 3. Update order confirmation email consumer to record delivery status — shipped.
 4. Add safe list/detail/resend APIs — shipped.
 5. Add admin email delivery visibility — shipped in `/admin/webhooks`.
-6. Add tests for success, failure, bounce/complaint state, and safe resend — in progress (service/API fast coverage shipped; broader integration coverage pending).
+6. Add tests for success, failure, bounce/complaint state, and safe resend — in progress (service/API fast coverage, provider-webhook route coverage, and `DATABASE_URL_TEST`-gated integration specs shipped; broader integration execution/coverage pending).
 
 ### Phase 4 Acceptance Checks
 
@@ -234,7 +234,7 @@ Target work:
 - a return moves through its state machine and triggers a refund correctly — foundation shipped
 - outbound webhook deliveries are signed, retried with backoff, claimed before send, and visible in the admin — foundation shipped
 - integration secrets never appear unencrypted at rest — foundation shipped for integration/webhook secrets; continue coverage
-- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — in progress (API/resend/admin visibility shipped; provider webhook states pending)
+- a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — in progress (API/resend/admin visibility/provider webhook states shipped; broader real-DB coverage pending)
 
 ## Phase 5 - Setup Wizard, CLI, And Launch Operations
 

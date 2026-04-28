@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     emailDelivery: {
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -26,11 +27,13 @@ vi.mock('@/server/services/email-template.service', () => ({
 }))
 
 import {
+  applyEmailProviderWebhookEvent,
   createEmailDelivery,
   getEmailDeliveryById,
   getEmailDeliveries,
   markEmailDeliveryFailed,
   markEmailDeliverySent,
+  parseEmailProviderWebhookPayload,
   resendEmailDelivery,
   sendTrackedEmail,
 } from './email-delivery.service'
@@ -41,6 +44,7 @@ describe('email delivery service', () => {
     vi.useRealTimers()
     mocks.prisma.emailDelivery.create.mockResolvedValue({ id: 'email-1', status: 'PENDING' })
     mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-1', status: 'SENT' })
+    mocks.prisma.emailDelivery.updateMany.mockResolvedValue({ count: 1 })
     mocks.prisma.emailDelivery.count.mockResolvedValue(1)
     mocks.prisma.emailDelivery.findMany.mockResolvedValue([{ id: 'email-1', status: 'SENT' }])
     mocks.prisma.emailDelivery.findUnique.mockResolvedValue(null)
@@ -294,5 +298,77 @@ describe('email delivery service', () => {
         status: 'PENDING',
       }),
     })
+  })
+
+  it('parses provider webhook payloads safely', () => {
+    expect(parseEmailProviderWebhookPayload('{"type":"email.bounced","data":{"email_id":"msg_1"}}')).toEqual({
+      type: 'email.bounced',
+      data: { email_id: 'msg_1' },
+    })
+    expect(parseEmailProviderWebhookPayload('{"noType":true}')).toBeNull()
+    expect(parseEmailProviderWebhookPayload('not json')).toBeNull()
+  })
+
+  it('marks a delivery bounced from provider webhook event', async () => {
+    const result = await applyEmailProviderWebhookEvent({
+      type: 'email.bounced',
+      created_at: '2026-04-28T18:00:00.000Z',
+      data: {
+        email_id: 'provider-1',
+        to: ['customer@example.com'],
+        bounce: { message: 'Mailbox unavailable' },
+      },
+    })
+
+    expect(result).toEqual({ handled: true })
+    expect(mocks.prisma.emailDelivery.updateMany).toHaveBeenCalledWith({
+      where: {
+        provider: 'resend',
+        providerMessageId: 'provider-1',
+        recipientEmail: 'customer@example.com',
+      },
+      data: expect.objectContaining({
+        status: 'BOUNCED',
+        lastError: 'Mailbox unavailable',
+        nextRetryAt: null,
+        bouncedAt: expect.any(Date),
+      }),
+    })
+  })
+
+  it('marks a delivery complained from provider webhook event', async () => {
+    const result = await applyEmailProviderWebhookEvent({
+      type: 'email.complained',
+      created_at: '2026-04-28T18:05:00.000Z',
+      data: {
+        email_id: 'provider-2',
+      },
+    })
+
+    expect(result).toEqual({ handled: true })
+    expect(mocks.prisma.emailDelivery.updateMany).toHaveBeenCalledWith({
+      where: {
+        provider: 'resend',
+        providerMessageId: 'provider-2',
+      },
+      data: expect.objectContaining({
+        status: 'COMPLAINED',
+        lastError: 'Recipient reported this email as spam',
+        nextRetryAt: null,
+        complainedAt: expect.any(Date),
+      }),
+    })
+  })
+
+  it('ignores unsupported provider webhook events', async () => {
+    const result = await applyEmailProviderWebhookEvent({
+      type: 'email.delivered',
+      data: {
+        email_id: 'provider-3',
+      },
+    })
+
+    expect(result).toEqual({ handled: false, reason: 'UNSUPPORTED_EVENT' })
+    expect(mocks.prisma.emailDelivery.updateMany).not.toHaveBeenCalled()
   })
 })

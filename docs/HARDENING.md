@@ -96,7 +96,9 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - safe resend eligibility is limited to failed, bounced, and complained deliveries
 - resend reuses order-confirmation template rendering and creates a new tracked delivery attempt instead of mutating order/payment/inventory/refund/return/webhook state
 - `/admin/webhooks` now includes an email delivery observability surface with filters, detail inspection, and resend controls
-- fast tests now cover email delivery API routes and resend eligibility behavior
+- provider webhook ingestion now exists at `POST /api/webhooks/email-provider` with Svix signature verification and bounced/complained status transitions
+- fast tests now cover email delivery API routes, resend eligibility behavior, and provider webhook signature/path handling
+- `DATABASE_URL_TEST`-gated integration specs now cover safe resend audit-trail behavior and provider bounce/complaint state transitions
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
@@ -131,7 +133,6 @@ npm run build
 
 - Run the full local verification gate after the latest correctness patches
 - Add transactional email observability without coupling email success to order/payment/inventory/refund/return durability
-- Add bounce/complaint handling for the chosen email provider
 - Verify integration secret encryption and outbound webhook retry/idempotency with broader real-DB coverage
 - Keep the centralized pricing authority on the server as lifecycle flows evolve
 - Continue proving payment, inventory, refund, return, webhook, email, and setup behavior through real-DB tests where transaction behavior matters

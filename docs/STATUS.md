@@ -128,16 +128,17 @@ Shipped foundation:
 - private email delivery APIs: `GET /api/email-deliveries`, `GET /api/email-deliveries/[id]`, `POST /api/email-deliveries/[id]/resend`
 - safe resend policy for `FAILED`/`BOUNCED`/`COMPLAINED` order-confirmation deliveries that creates a new tracked send without re-emitting commerce side effects
 - admin email delivery visibility in `/admin/webhooks` with status filters, detail inspection, resend controls, and pagination
-- fast tests for delivery creation, sent/failed transitions, tracked send success/failure, paginated delivery listing, and email delivery API/resend behavior
+- provider webhook route at `POST /api/webhooks/email-provider` with Svix signature verification and bounced/complained status transitions
+- `DATABASE_URL_TEST`-gated integration specs added for safe resend audit-trail behavior and provider bounce/complaint state transitions
+- fast tests for delivery creation, sent/failed transitions, tracked send success/failure, paginated delivery listing, email delivery API/resend behavior, and provider webhook route behavior
 
 Still pending:
 
-- provider bounce/complaint webhook handling
-- real-DB integration coverage for email failure/resend behavior
+- broader real-DB execution/coverage for email failure/resend behavior in release verification environments
 
 ### Remaining Phase 4 Priorities
 
-1. Transactional email observability provider bounce/complaint handling
+1. Transactional email observability broader real-DB execution/coverage for resend and provider-state transitions
 2. Analytics event fan-out through the existing dispatcher
 3. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
 4. Broader real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
@@ -151,7 +152,7 @@ Status by acceptance check:
 - A return moves through its state machine and triggers a refund correctly — **foundation shipped; continue UX and integration coverage**
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
 - Integration secrets never appear unencrypted at rest — **foundation shipped for integration/webhook secrets; continue verification tests**
-- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation in progress; provider webhook handling pending**
+- A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation shipped; continue real-DB coverage**
 - Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **planned after email observability foundation**
 - Build and typecheck stay green throughout — **must be re-run after every change**
 
@@ -172,10 +173,10 @@ First foundation shipped:
 - private email delivery list/detail/resend APIs
 - resend safety policy for failed/bounced/complained order-confirmation deliveries
 - admin email delivery visibility in `/admin/webhooks`
+- provider webhook handling for bounced/complained status transitions with signature verification
 
 Remaining target:
 
-- failed/bounced/complained states wired to provider webhooks
 - tests proving email failure/resend never duplicate order, payment, inventory, refund, return, webhook, or analytics side effects
 
 ## Setup Wizard And CLI Plan
