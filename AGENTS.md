@@ -14,8 +14,11 @@ Before writing code, read:
 3. `docs/features-roadmap.md`
 4. `docs/HARDENING.md`
 5. `docs/CONTRIBUTING.md`
+6. `docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md` when working on the current email observability slice
 
 If these files conflict, treat `docs/STATUS.md` as the current state, `docs/features-roadmap.md` as the build sequence, and `docs/HARDENING.md` as the security/correctness backlog.
+
+Do not use files in `docs/archive/` as current status.
 
 ## Current Repo Truth
 
@@ -26,7 +29,7 @@ Implemented:
 - Prisma/Postgres-backed commerce schema
 - protected admin auth with session-backed JWT validation
 - private route protection through `src/proxy.ts`
-- DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, and collections
+- DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, integrations, inbound webhook deliveries, and outbound webhook deliveries
 - storefront product routes at `/`, `/shop`, and `/shop/[handle]`
 - storefront collection routes at `/collections` and `/collections/[handle]`
 - checkout flow at `/checkout`
@@ -43,27 +46,28 @@ Implemented:
 - admin collection workspace at `/admin/collections` and storefront collection routes
 - durable Stripe webhook delivery logging with verified local payload storage and retry metadata
 - local-payload replay API, retry scheduling and exhaustion, cron-compatible retry runner (`POST /api/webhook-retries/run`)
-- admin webhook visibility workspace at `/admin/webhooks` with support diagnostics
+- admin webhook visibility workspace at `/admin/webhooks` with inbound/outbound delivery visibility and retry controls
 - Phase 4 refund service with pending refund persistence, Stripe idempotency keys, payment/order status updates, validated item-level restocking, and return linkage
 - Phase 4 return service with state-machine transitions, order-owned item validation, received-return close-with-refund support, and admin order action panels
+- Phase 4 outbound merchant webhooks with subscriptions, timestamped HMAC signing, retry/backoff, exhausted/dead-letter visibility, manual retry API, integration settings UI, and admin delivery visibility
+- encrypted integration webhook secrets and custom `HEADER_` secrets
 - typed internal event dispatcher
 - static integration registry
 - first-party logging and order confirmation email consumers
-- fast Vitest test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs covering checkout inventory, payment idempotency, discount usage, concurrent races, and webhook retry idempotency
+- fast Vitest test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs covering checkout inventory, payment idempotency, discount usage, concurrent races, webhook retry idempotency, and refund/return lifecycle behavior
 
 Current active phase:
 
 - **Phase 4 - Merchant Lifecycle And Outbound Integrations**
 
-Phase 3 is fully complete (all slices 3A-3E shipped and verified). Phase 4 refund/return foundations are now partially shipped; outbound merchant webhooks, per-integration secrets, transactional email observability, and analytics fan-out remain active priorities.
+Phase 3 is fully complete. Phase 4 refund/return and outbound merchant webhook foundations are shipped. Transactional email observability is the next active slice.
 
 Current priorities:
 
-1. Extend refund/return real-DB coverage and refine admin UX around closing received returns with refunds
-2. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility — built on the existing typed event dispatcher
-3. Per-integration settings and secrets management, encrypted at rest
-4. Transactional email observability
-5. Analytics event fan-out
+1. Transactional email observability: delivery status, bounce/complaint handling, and safe resend tooling
+2. Analytics event fan-out through the existing dispatcher
+3. Broader real-DB coverage for outbound webhook retry/idempotency and email behavior
+4. Additional audit-log coverage around integration changes, webhook retries, email resends, refunds, and returns
 
 ## What Not To Rebuild
 
@@ -79,6 +83,9 @@ Do not rebuild these foundations unless source inspection proves they are broken
 - checkout status route
 - collection service/API/storefront foundation
 - refund/return service foundation
+- inbound webhook delivery/replay/retry foundation
+- outbound merchant webhook delivery foundation
+- integration settings/secrets foundation
 - typed event dispatcher
 - static integration registry
 
@@ -86,9 +93,9 @@ Do not rebuild these foundations unless source inspection proves they are broken
 
 ### No Placeholder Commerce Logic
 
-Do not write fake payment, fake order, fake inventory, or fake pricing logic unless explicitly asked for a mock.
+Do not write fake payment, fake order, fake inventory, fake email, or fake pricing logic unless explicitly asked for a mock.
 
-If a feature touches money, inventory, auth, or public/private data boundaries, implement it against the real service architecture.
+If a feature touches money, inventory, auth, email delivery, integrations, or public/private data boundaries, implement it against the real service architecture.
 
 ### Use Existing Patterns
 
@@ -134,9 +141,9 @@ The client does not own:
 
 Verified Stripe webhook success finalizes orders.
 
-### Keep Extension Seams Typed
+### Keep Extension Seams Typed And Observable
 
-Use typed events and the static registry for internal integrations.
+Use typed events, persisted delivery records, and the static registry for integrations.
 
 Do not add runtime plugin loading or marketplace mechanics yet.
 
@@ -158,22 +165,22 @@ The following are shipped and must not be rebuilt from scratch:
 - automated tests for checkout, webhook idempotency, invalid webhook signatures, inventory exhaustion, and collections — **shipped**
 - centralized checkout pricing for discounts, shipping, and tax — **shipped** (`src/server/checkout/pricing.ts`)
 - collection publish/unpublish semantics — **shipped**
-- webhook delivery logging, local-payload replay, and admin visibility — **shipped** (`/admin/webhooks`)
+- inbound webhook delivery logging, local-payload replay, retry, and admin visibility — **shipped** (`/admin/webhooks`)
 - configurable shipping zones/rates and jurisdiction-aware tax rules — **shipped**
 - shared rate-limit store, Postgres SSL normalization, audit logging — **shipped** (Phase 3 complete)
 - storefront merchandising: `FeaturedCollectionsGrid`, branding tokens from settings — **shipped**
 - refund service with pending persistence, Stripe idempotency, item validation, status updates, and restocking — **shipped foundation**
 - return service with validated state machine and close-with-refund path — **shipped foundation**
-- admin order refund/return action panels — **shipped foundation**
+- admin order refund/return action panels and return workflow controls — **shipped foundation**
+- outbound merchant webhook subscriptions, signing, retry/backoff, dead-letter visibility, manual retry, settings UI, and admin visibility — **shipped foundation**
 
 The strongest remaining tasks are:
 
-1. Add real-DB integration coverage for refunds, restocking bounds, and return-to-refund linkage
-2. Add a richer admin workflow for received returns to close with a refund directly from the order page
-3. Build outbound merchant webhooks (subscriptions, signing, retry with backoff, dead-letter visibility) on top of the existing typed event dispatcher and static integration registry
-4. Build per-integration settings and secrets management, encrypted at rest, with admin surface
-5. Add transactional email observability (delivery status, bounce/complaint handling, resend tooling)
-6. Add analytics event fan-out through the existing dispatcher
+1. Implement transactional email observability per `docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
+2. Add safe email resend APIs and admin visibility
+3. Add provider bounce/complaint webhook handling when provider choice is finalized
+4. Add analytics event fan-out through the dispatcher
+5. Expand real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
 
 ## Definition Of Done For Agent Work
 
@@ -208,4 +215,4 @@ When a shipped/pending/deferred status changes, update:
 - `docs/HARDENING.md` if security/correctness/ops changed
 - `README.md` if onboarding or public repo orientation changed
 
-Do not recreate `CLAUDE.md`.
+Do not recreate `CLAUDE.md`, active Phase 3 kickoff docs, or a duplicate phase-completion roadmap.
