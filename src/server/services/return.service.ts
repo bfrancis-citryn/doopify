@@ -192,10 +192,23 @@ export async function closeReturnWithRefund(input: {
     throw new Error('Return already has a refund')
   }
 
-  const returnItemIds = new Set(returnRecord.items.map(item => item.orderItemId))
+  const returnedByOrderItem = new Map(
+    returnRecord.items.map(item => [item.orderItemId, item])
+  )
+
   for (const item of input.items) {
-    if (!returnItemIds.has(item.orderItemId)) {
+    const returnItem = returnedByOrderItem.get(item.orderItemId)
+    if (!returnItem) {
       throw new Error('Refund item does not belong to this return')
+    }
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+      throw new Error('Refund item quantity must be a positive integer')
+    }
+    if (item.quantity > returnItem.quantity) {
+      throw new Error('Refund item quantity exceeds returned quantity')
+    }
+    if (item.variantId && returnItem.variantId && item.variantId !== returnItem.variantId) {
+      throw new Error('Refund item variant does not match the return item')
     }
   }
 
