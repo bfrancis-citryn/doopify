@@ -1,8 +1,8 @@
 import WebhookDeliveriesWorkspace from '@/components/webhooks/WebhookDeliveriesWorkspace';
 
 export const metadata = {
-  title: 'Doopify | Webhooks',
-  description: 'Webhook delivery observability and replay controls.',
+  title: 'Doopify | Delivery Observability',
+  description: 'Inbound webhooks, outbound webhooks, and transactional email delivery observability.',
 };
 
 export default function AdminWebhooksPage() {

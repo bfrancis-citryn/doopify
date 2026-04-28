@@ -95,6 +95,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - private email delivery list/detail/resend APIs now exist at `GET /api/email-deliveries`, `GET /api/email-deliveries/[id]`, and `POST /api/email-deliveries/[id]/resend`
 - safe resend eligibility is limited to failed, bounced, and complained deliveries
 - resend reuses order-confirmation template rendering and creates a new tracked delivery attempt instead of mutating order/payment/inventory/refund/return/webhook state
+- `/admin/webhooks` now includes an email delivery observability surface with filters, detail inspection, and resend controls
 - fast tests now cover email delivery API routes and resend eligibility behavior
 
 ### Internal Extensibility Without Premature Plugin Complexity
@@ -130,7 +131,6 @@ npm run build
 
 - Run the full local verification gate after the latest correctness patches
 - Add transactional email observability without coupling email success to order/payment/inventory/refund/return durability
-- Add admin email delivery visibility for list/detail/resend observability
 - Add bounce/complaint handling for the chosen email provider
 - Verify integration secret encryption and outbound webhook retry/idempotency with broader real-DB coverage
 - Keep the centralized pricing authority on the server as lifecycle flows evolve
