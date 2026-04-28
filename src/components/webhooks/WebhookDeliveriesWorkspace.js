@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../AppShell';
 import styles from './WebhookDeliveriesWorkspace.module.css';
 
-const STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
+const INBOUND_STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
+const OUTBOUND_STATUS_OPTIONS = ['ALL', 'PENDING', 'SUCCESS', 'FAILED', 'RETRYING', 'EXHAUSTED'];
 
 function formatTimestamp(value, fallback = 'Not scheduled') {
   if (!value) return fallback;
@@ -24,15 +25,21 @@ function getReplayDisabledReason(delivery) {
 }
 
 export default function WebhookDeliveriesWorkspace() {
+  const [mode, setMode] = useState('inbound');
   const [deliveries, setDeliveries] = useState([]);
+  const [outboundDeliveries, setOutboundDeliveries] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1 });
+  const [outboundPagination, setOutboundPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
+  const [outboundLoading, setOutboundLoading] = useState(false);
   const [replayingId, setReplayingId] = useState(null);
+  const [retryingOutboundId, setRetryingOutboundId] = useState(null);
   const [inspectingId, setInspectingId] = useState(null);
   const [diagnostics, setDiagnostics] = useState(null);
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [outboundStatus, setOutboundStatus] = useState('ALL');
 
   async function loadDeliveries(nextPage = 1) {
     setLoading(true);
@@ -69,9 +76,49 @@ export default function WebhookDeliveriesWorkspace() {
     }
   }
 
+  async function loadOutboundDeliveries(nextPage = 1) {
+    setOutboundLoading(true);
+
+    try {
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        pageSize: String(outboundPagination.pageSize || 20),
+      });
+      if (outboundStatus !== 'ALL') {
+        params.set('status', outboundStatus);
+      }
+
+      const response = await fetch(`/api/outbound-webhook-deliveries?${params.toString()}`);
+      const json = await response.json();
+      if (!json.success) {
+        setNotice(json.error || 'Outbound webhook deliveries could not be loaded.');
+        setOutboundDeliveries([]);
+        return;
+      }
+
+      setOutboundDeliveries(json.data.deliveries || []);
+      setOutboundPagination(json.data.pagination || { page: 1, pageSize: 20, total: 0, totalPages: 1 });
+      setNotice('');
+    } catch (error) {
+      console.error('[WebhookDeliveriesWorkspace] outbound load failed', error);
+      setNotice('Outbound webhook deliveries could not be loaded.');
+      setOutboundDeliveries([]);
+    } finally {
+      setOutboundLoading(false);
+    }
+  }
+
   useEffect(() => {
-    loadDeliveries(1);
-  }, [search, status]);
+    if (mode === 'inbound') {
+      loadDeliveries(1);
+    }
+  }, [search, status, mode]);
+
+  useEffect(() => {
+    if (mode === 'outbound') {
+      loadOutboundDeliveries(1);
+    }
+  }, [outboundStatus, mode]);
 
   const retryCount = useMemo(
     () => deliveries.filter((delivery) => ['RETRY_PENDING', 'RETRY_EXHAUSTED'].includes(delivery.status)).length,
@@ -81,6 +128,16 @@ export default function WebhookDeliveriesWorkspace() {
   const processedCount = useMemo(
     () => deliveries.filter((delivery) => delivery.status === 'PROCESSED').length,
     [deliveries]
+  );
+
+  const outboundRetryCount = useMemo(
+    () => outboundDeliveries.filter((delivery) => ['RETRYING', 'EXHAUSTED'].includes(delivery.status)).length,
+    [outboundDeliveries]
+  );
+
+  const outboundSuccessCount = useMemo(
+    () => outboundDeliveries.filter((delivery) => delivery.status === 'SUCCESS').length,
+    [outboundDeliveries]
   );
 
   async function handleReplay(delivery) {
@@ -119,6 +176,31 @@ export default function WebhookDeliveriesWorkspace() {
     }
   }
 
+  async function handleRetryOutbound(delivery) {
+    if (!delivery?.id) return;
+    setRetryingOutboundId(delivery.id);
+    setNotice('');
+
+    try {
+      const response = await fetch(`/api/outbound-webhook-deliveries/${delivery.id}/retry`, {
+        method: 'POST',
+      });
+      const json = await response.json();
+      if (!json.success) {
+        setNotice(json.error || 'Outbound webhook retry failed.');
+        return;
+      }
+
+      setNotice(`Outbound delivery ${delivery.id.slice(0, 8)} retried.`);
+      await loadOutboundDeliveries(outboundPagination.page);
+    } catch (error) {
+      console.error('[WebhookDeliveriesWorkspace] outbound retry failed', error);
+      setNotice('Outbound webhook retry failed.');
+    } finally {
+      setRetryingOutboundId(null);
+    }
+  }
+
   async function loadDiagnostics(deliveryId, showLoading = true) {
     if (!deliveryId) return;
 
@@ -151,9 +233,9 @@ export default function WebhookDeliveriesWorkspace() {
 
   return (
     <AppShell
-      onCreateOrder={() => loadDeliveries(1)}
+      onCreateOrder={() => (mode === 'inbound' ? loadDeliveries(1) : loadOutboundDeliveries(1))}
       onNotificationsClick={() => setNotice('Webhook delivery feed is live.')}
-      onQuickActionClick={() => setNotice('Use filters to narrow provider events before replay.')}
+      onQuickActionClick={() => setNotice('Use filters to narrow webhook deliveries before replay or retry.')}
       onSearchChange={(event) => setSearch(event.target.value)}
       primaryActionLabel="Refresh deliveries"
       searchPlaceholder="Search event id or error..."
@@ -167,31 +249,115 @@ export default function WebhookDeliveriesWorkspace() {
               <h1 className={styles.title}>Webhook Deliveries</h1>
             </div>
             <div className={styles.stats}>
-              <span>{pagination.total} total</span>
-              <span>{processedCount} processed</span>
-              <span>{retryCount} retry watch</span>
+              {mode === 'inbound' ? (
+                <>
+                  <span>{pagination.total} inbound</span>
+                  <span>{processedCount} processed</span>
+                  <span>{retryCount} retry watch</span>
+                </>
+              ) : (
+                <>
+                  <span>{outboundPagination.total} outbound</span>
+                  <span>{outboundSuccessCount} successful</span>
+                  <span>{outboundRetryCount} retry/dead-letter</span>
+                </>
+              )}
             </div>
           </div>
 
           <div className={styles.controls}>
             <label className={styles.control}>
-              <span>Status</span>
-              <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option === 'ALL' ? 'All statuses' : option}
-                  </option>
-                ))}
+              <span>Direction</span>
+              <select value={mode} onChange={(event) => setMode(event.target.value)}>
+                <option value="inbound">Inbound provider webhooks</option>
+                <option value="outbound">Outbound merchant webhooks</option>
               </select>
             </label>
-            <button className={styles.refreshButton} type="button" onClick={() => loadDeliveries(pagination.page)}>
+            {mode === 'inbound' ? (
+              <label className={styles.control}>
+                <span>Status</span>
+                <select value={status} onChange={(event) => setStatus(event.target.value)}>
+                  {INBOUND_STATUS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'ALL' ? 'All statuses' : option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className={styles.control}>
+                <span>Status</span>
+                <select value={outboundStatus} onChange={(event) => setOutboundStatus(event.target.value)}>
+                  {OUTBOUND_STATUS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option === 'ALL' ? 'All statuses' : option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button className={styles.refreshButton} type="button" onClick={() => (mode === 'inbound' ? loadDeliveries(pagination.page) : loadOutboundDeliveries(outboundPagination.page))}>
               Refresh
             </button>
           </div>
 
           {notice ? <p className={styles.notice}>{notice}</p> : null}
 
-          {loading ? (
+          {mode === 'outbound' ? (
+            outboundLoading ? (
+              <div className={styles.loading}>Loading outbound webhook deliveries...</div>
+            ) : outboundDeliveries.length ? (
+              <div className={styles.tableWrap}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Integration</th>
+                      <th>Event</th>
+                      <th>Status</th>
+                      <th>Attempts</th>
+                      <th>Response</th>
+                      <th>Next retry</th>
+                      <th>Error</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outboundDeliveries.map((delivery) => (
+                      <tr key={delivery.id}>
+                        <td>
+                          <strong>{delivery.integration?.name || 'Integration'}</strong>
+                          <span className={styles.subtle}>{delivery.integration?.webhookUrl || 'No URL'}</span>
+                        </td>
+                        <td>{formatEventType(delivery.event)}</td>
+                        <td>{delivery.status}</td>
+                        <td>
+                          {delivery.attempts}
+                          <span className={styles.subtle}>Last retry: {formatTimestamp(delivery.lastRetriedAt, 'Never')}</span>
+                        </td>
+                        <td>
+                          {delivery.statusCode || '—'}
+                          <span className={styles.subtle}>{delivery.responseBody || 'No response body'}</span>
+                        </td>
+                        <td>{formatTimestamp(delivery.nextRetryAt)}</td>
+                        <td>{delivery.lastError || 'None'}</td>
+                        <td className={styles.actionCell}>
+                          <button
+                            type="button"
+                            disabled={retryingOutboundId === delivery.id}
+                            onClick={() => handleRetryOutbound(delivery)}
+                          >
+                            {retryingOutboundId === delivery.id ? 'Retrying...' : 'Retry now'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className={styles.empty}>No outbound webhook deliveries match this filter.</div>
+            )
+          ) : loading ? (
             <div className={styles.loading}>Loading webhook deliveries...</div>
           ) : deliveries.length ? (
             <div className={styles.tableWrap}>
@@ -254,7 +420,7 @@ export default function WebhookDeliveriesWorkspace() {
             <div className={styles.empty}>No webhook deliveries match this filter.</div>
           )}
 
-          {diagnostics ? (
+          {mode === 'inbound' && diagnostics ? (
             <aside className={styles.diagnostics}>
               <div>
                 <p className={styles.eyebrow}>Support diagnostics</p>
@@ -295,23 +461,47 @@ export default function WebhookDeliveriesWorkspace() {
           ) : null}
 
           <div className={styles.pagination}>
-            <button
-              type="button"
-              disabled={loading || pagination.page <= 1}
-              onClick={() => loadDeliveries(pagination.page - 1)}
-            >
-              Previous
-            </button>
-            <span>
-              Page {pagination.page} of {pagination.totalPages || 1}
-            </span>
-            <button
-              type="button"
-              disabled={loading || pagination.page >= (pagination.totalPages || 1)}
-              onClick={() => loadDeliveries(pagination.page + 1)}
-            >
-              Next
-            </button>
+            {mode === 'inbound' ? (
+              <>
+                <button
+                  type="button"
+                  disabled={loading || pagination.page <= 1}
+                  onClick={() => loadDeliveries(pagination.page - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {pagination.page} of {pagination.totalPages || 1}
+                </span>
+                <button
+                  type="button"
+                  disabled={loading || pagination.page >= (pagination.totalPages || 1)}
+                  onClick={() => loadDeliveries(pagination.page + 1)}
+                >
+                  Next
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={outboundLoading || outboundPagination.page <= 1}
+                  onClick={() => loadOutboundDeliveries(outboundPagination.page - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {outboundPagination.page} of {outboundPagination.totalPages || 1}
+                </span>
+                <button
+                  type="button"
+                  disabled={outboundLoading || outboundPagination.page >= (outboundPagination.totalPages || 1)}
+                  onClick={() => loadOutboundDeliveries(outboundPagination.page + 1)}
+                >
+                  Next
+                </button>
+              </>
+            )}
           </div>
         </section>
       </div>
