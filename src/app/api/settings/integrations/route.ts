@@ -18,13 +18,26 @@ const createSchema = z.object({
   })).optional()
 })
 
+function uniqueStrings(values: string[] | undefined) {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
+}
+
+function sanitizeSecrets(secrets: Array<{ key: string; value?: string }> | undefined) {
+  const seen = new Set<string>()
+  return (secrets ?? [])
+    .map((secret) => ({ key: secret.key.trim(), value: secret.value?.trim() ?? '' }))
+    .filter((secret) => {
+      if (!secret.key || !secret.value || seen.has(secret.key)) return false
+      seen.add(secret.key)
+      return true
+    })
+}
+
 export async function GET() {
   try {
     const integrations = await prisma.integration.findMany({
       include: {
         events: true,
-        // we deliberately do not send down the secrets unencrypted list,
-        // or we just send the keys so the UI knows they exist
         secrets: {
           select: { id: true, key: true }
         }
@@ -42,6 +55,8 @@ export async function POST(req: Request) {
   try {
     const json = await req.json()
     const parsed = createSchema.parse(json)
+    const events = uniqueStrings(parsed.events)
+    const secrets = sanitizeSecrets(parsed.secrets)
 
     const integration = await prisma.integration.create({
       data: {
@@ -50,11 +65,11 @@ export async function POST(req: Request) {
         webhookUrl: parsed.webhookUrl || null,
         webhookSecret: parsed.webhookSecret ? encrypt(parsed.webhookSecret) : null,
         status: parsed.status,
-        events: parsed.events?.length ? {
-          create: parsed.events.map(event => ({ event }))
+        events: events.length ? {
+          create: events.map(event => ({ event }))
         } : undefined,
-        secrets: parsed.secrets?.length ? {
-          create: parsed.secrets.filter(s => !!s.value).map(s => ({
+        secrets: secrets.length ? {
+          create: secrets.map(s => ({
             key: s.key,
             value: encrypt(s.value)
           }))
