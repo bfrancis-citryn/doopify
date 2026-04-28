@@ -18,9 +18,10 @@ Active planning docs:
 - `CONTRIBUTING.md` for implementation rules and definition of done
 - `AGENTS.md` for AI-agent instructions
 - `TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md` for the next Phase 4 email observability slice
+- `SETUP_AND_CLI_PLAN.md` for the planned setup wizard and deployment CLI sequence
 - `LAUNCH_ROLLOUT.md` for launch positioning and marketing rollout guidance
 
-Historical planning docs are intentionally omitted from this active handoff pack. Do not use old `CLAUDE.md` or legacy `skill.md` content as current repo status.
+Historical planning docs are intentionally omitted from this active handoff pack. Do not use old `CLAUDE.md`, stale Phase 3 kickoff docs, or legacy phase-completion ledgers as current repo status.
 
 ## Snapshot
 
@@ -49,7 +50,8 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Storefront collection browsing and collection publish/unpublish semantics
 - Refund service with pending persistence, Stripe idempotency, item validation, payment/order status updates, restocking, and return linkage
 - Return service with validated state machine, admin workflow controls, and close-with-refund path
-- Outbound merchant webhook subscriptions, timestamped HMAC signing, retry/backoff, exhausted/dead-letter visibility, manual retry API, settings UI, and admin delivery visibility
+- Outbound merchant webhook subscriptions, timestamped HMAC signing, retry/backoff, exhausted/dead-letter visibility, manual retry API, settings UI, admin delivery visibility, and delivery-claim hardening
+- Integration edit hardening that preserves signing secrets unless explicitly cleared and deduplicates event subscriptions
 - Vitest fast test harness covering pricing, checkout, discount math, checkout creation, webhook logging/replay/retry/diagnostics, collections, refund/return services, outbound webhook services, and outbound webhook APIs
 - `DATABASE_URL_TEST`-gated integration specs for checkout/inventory/idempotency/race scenarios and refund/return lifecycle coverage
 
@@ -60,6 +62,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Replacing the handcrafted admin with schema-generated CRUD UI
 - Multi-tenant architecture before the single-store flow is stable
 - Packaging full theme directories before branding tokens and reusable storefront components are settled
+- Running local shell commands from the browser Setup tab
 
 ## Architecture Decisions
 
@@ -91,13 +94,17 @@ Browser redirects are not the source of truth.
 
 The repo uses a typed internal event map plus a static server-side integration registry.
 
-Outbound merchant webhooks are queued from the same typed event seam and delivered through persisted `OutboundWebhookDelivery` records with signing, retry/backoff, and admin visibility.
+Outbound merchant webhooks are queued from the same typed event seam and delivered through persisted `OutboundWebhookDelivery` records with signing, retry/backoff, delivery claiming, and admin visibility.
 
 That remains the right intermediate step before any public plugin platform.
 
 ### 5. The Admin Stays Handcrafted
 
 Code generation can help later with scaffolding, but the current admin is product-specific and useful. Replacing it now would create churn instead of value.
+
+### 6. Setup Automation Belongs In A CLI Plus Safe Status APIs
+
+The Settings -> Setup tab should verify setup state and guide next actions. Local file writes, provider CLI/API calls, Prisma commands, and Vercel/Neon/Stripe automation should run from a local CLI, not from browser-executed shell commands.
 
 ## Phase Plan
 
@@ -137,7 +144,7 @@ Status: shipped initial implementation, expanded in Phase 4
 - first-party consumers for logging and confirmation email delivery
 - event emission from product, order, fulfillment, failed-checkout, refund, and return flows
 - outbound webhook queueing through `queueOutboundWebhooks()`
-- outbound merchant webhook delivery service with signing, retry/backoff, manual retry, and admin visibility
+- outbound merchant webhook delivery service with signing, retry/backoff, delivery claiming, manual retry, and admin visibility
 
 ### Next Expansion
 
@@ -166,7 +173,7 @@ Status: shipped — all slices 3A–3E complete as of April 27, 2026
 
 ## Phase 4 - Merchant Lifecycle And Outbound Integrations
 
-Status: active; refund/return and outbound webhook foundations are shipped. Transactional email observability is next.
+Status: active; refund/return and outbound webhook foundations are shipped. Current work is correctness hardening followed by transactional email observability.
 
 ### Goals
 
@@ -187,6 +194,7 @@ Status: active; refund/return and outbound webhook foundations are shipped. Tran
 - refund failure persistence without order/payment/inventory mutation
 - item-level refund/restock validation
 - return-to-refund linkage
+- close-with-refund quantity and variant validation against actual return items
 - fast tests and gated integration coverage for refund/return lifecycle behavior
 
 #### Outbound Merchant Webhooks
@@ -194,14 +202,17 @@ Status: active; refund/return and outbound webhook foundations are shipped. Tran
 - Prisma-backed integration, event subscription, secret, and outbound delivery models
 - integration settings APIs and admin UI
 - encrypted signing secrets and encrypted custom header secrets
+- signing-secret preservation on integration edit unless explicitly cleared
+- deduplicated event subscriptions plus a unique integration/event constraint
 - typed-event-based delivery queueing
 - timestamped HMAC signatures
 - response-code/body recording
 - retry/backoff and exhausted/dead-letter state
+- delivery claim step before send to reduce duplicate overlapping retry jobs
 - cron-compatible due retry processing through the existing retry runner
 - manual retry API and admin retry button
 - inbound/outbound delivery visibility in `/admin/webhooks`
-- fast service and API coverage for queueing, signing, delivery, retry, exhaustion, listing, and manual retry
+- fast service and API coverage for queueing, signing, delivery, retry, exhaustion, listing, manual retry, and claim behavior
 
 ### Next Phase 4 Slice: Transactional Email Observability
 
@@ -220,13 +231,36 @@ Target work:
 
 - an admin can issue a partial or full refund and the order, payment, and inventory are consistent afterward — foundation shipped
 - a return moves through its state machine and triggers a refund correctly — foundation shipped
-- outbound webhook deliveries are signed, retried with backoff, and visible in the admin — foundation shipped
+- outbound webhook deliveries are signed, retried with backoff, claimed before send, and visible in the admin — foundation shipped
 - integration secrets never appear unencrypted at rest — foundation shipped for integration/webhook secrets; continue coverage
 - a bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — next slice
 
-## Phase 5 - Platform Extraction
+## Phase 5 - Setup Wizard, CLI, And Launch Operations
 
-Status: deferred until after Phase 4 is stable
+Status: planned after Phase 4 email observability foundation is stable
+
+See `SETUP_AND_CLI_PLAN.md`.
+
+### Goals
+
+- add `doopify doctor` for read-only local setup diagnostics
+- add setup status service and `/api/setup/status`
+- add Settings -> Setup checklist tab
+- add interactive `doopify setup`
+- later automate Vercel, Neon, Stripe webhook, and email provider setup where safe
+- keep sensitive provider tokens out of long-lived app storage unless scoped lifecycle is designed
+
+### Acceptance Checks
+
+- `doopify doctor` identifies missing setup pieces and exits non-zero for required failures
+- Settings -> Setup shows setup health without running shell commands from the browser
+- `doopify setup` can generate/update local env, run database setup, and bootstrap owner/store
+- setup automation redacts secrets and never commits generated secrets
+- setup checks are testable and reusable between CLI and app status API
+
+## Phase 6 - Platform Extraction
+
+Status: deferred until after Phase 4 and setup/deployment foundations are stable
 
 ### Goals
 
@@ -235,9 +269,9 @@ Status: deferred until after Phase 4 is stable
 - add a scaffolder CLI or template tool for new resources
 - keep the main app as the proving ground until extraction is justified by real reuse
 
-## Phase 6 - Public Plugin Platform
+## Phase 7 - Public Plugin Platform
 
-Status: deferred until after Phase 5 proves out
+Status: deferred until after platform extraction proves out
 
 ### Requirements Before We Market This
 
@@ -274,6 +308,7 @@ Next automated coverage priorities:
 - safe email resend without duplicate commerce side effects
 - outbound webhook real-DB retry/idempotency
 - integration secret encryption at rest
+- setup status derivation and CLI doctor checks
 - analytics fan-out once implemented
 
 ## Marketing Positioning
@@ -295,3 +330,4 @@ Near-term marketing should not emphasize:
 - schema-generated admin
 - multi-tenant platform
 - theme marketplace
+- one-click deployment claims before the Setup Wizard and CLI are implemented and verified
