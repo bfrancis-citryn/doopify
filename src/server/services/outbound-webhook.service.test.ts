@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
   decrypt: vi.fn((value: string) => value),
@@ -29,6 +30,7 @@ describe('outbound webhook service', () => {
     vi.clearAllMocks()
     vi.useRealTimers()
     global.fetch = vi.fn()
+    mocks.prisma.outboundWebhookDelivery.updateMany.mockResolvedValue({ count: 1 })
   })
 
   it('creates timestamped HMAC signatures', () => {
@@ -73,7 +75,7 @@ describe('outbound webhook service', () => {
     )
   })
 
-  it('delivers signed payloads and records success', async () => {
+  it('claims, delivers signed payloads, and records success', async () => {
     vi.setSystemTime(new Date('2026-04-28T12:00:00.000Z'))
     vi.useFakeTimers()
     mocks.prisma.outboundWebhookDelivery.findUnique.mockResolvedValue({
@@ -83,6 +85,7 @@ describe('outbound webhook service', () => {
       payload: '{"event":"order.paid"}',
       status: 'PENDING',
       attempts: 0,
+      nextRetryAt: null,
       integration: {
         id: 'int-1',
         status: 'ACTIVE',
@@ -100,6 +103,10 @@ describe('outbound webhook service', () => {
 
     const result = await processOutboundWebhook('delivery-1')
 
+    expect(mocks.prisma.outboundWebhookDelivery.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'delivery-1', status: 'PENDING' },
+      data: expect.objectContaining({ status: 'RETRYING' }),
+    }))
     expect(global.fetch).toHaveBeenCalledWith(
       'https://merchant.example/webhooks',
       expect.objectContaining({
@@ -123,6 +130,25 @@ describe('outbound webhook service', () => {
     expect(result).toEqual({ id: 'delivery-1', status: 'SUCCESS' })
   })
 
+  it('skips delivery when another worker already claimed it', async () => {
+    mocks.prisma.outboundWebhookDelivery.findUnique.mockResolvedValue({
+      id: 'delivery-claimed',
+      integrationId: 'int-1',
+      event: 'order.paid',
+      payload: '{}',
+      status: 'PENDING',
+      attempts: 0,
+      nextRetryAt: null,
+      integration: { id: 'int-1', status: 'ACTIVE', webhookUrl: 'https://merchant.example/webhooks', webhookSecret: null, secrets: [] },
+    })
+    mocks.prisma.outboundWebhookDelivery.updateMany.mockResolvedValue({ count: 0 })
+
+    const result = await processOutboundWebhook('delivery-claimed')
+
+    expect(result).toBeNull()
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
   it('schedules retry on failed delivery and exhausts after max attempts', async () => {
     vi.setSystemTime(new Date('2026-04-28T12:00:00.000Z'))
     vi.useFakeTimers()
@@ -133,6 +159,7 @@ describe('outbound webhook service', () => {
       payload: '{}',
       status: 'RETRYING',
       attempts: 4,
+      nextRetryAt: null,
       integration: {
         id: 'int-1',
         status: 'ACTIVE',
@@ -159,7 +186,11 @@ describe('outbound webhook service', () => {
 
   it('processes due deliveries and supports manual retry', async () => {
     mocks.prisma.outboundWebhookDelivery.findMany.mockResolvedValue([{ id: 'delivery-1' }, { id: 'delivery-2' }])
-    mocks.prisma.outboundWebhookDelivery.findUnique.mockResolvedValue(null)
+    mocks.prisma.outboundWebhookDelivery.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'delivery-3', status: 'EXHAUSTED' })
+      .mockResolvedValueOnce(null)
     mocks.prisma.outboundWebhookDelivery.update.mockResolvedValue({ id: 'delivery-3', status: 'PENDING' })
 
     const due = await processDueOutboundDeliveries(25)
@@ -173,5 +204,13 @@ describe('outbound webhook service', () => {
         data: expect.objectContaining({ status: 'PENDING', nextRetryAt: null, processedAt: null, lastError: null }),
       })
     )
+  })
+
+  it('returns null when manual retry targets a missing or successful delivery', async () => {
+    mocks.prisma.outboundWebhookDelivery.findUnique.mockResolvedValueOnce(null)
+    await expect(retryOutboundWebhookDelivery('missing')).resolves.toBeNull()
+
+    mocks.prisma.outboundWebhookDelivery.findUnique.mockResolvedValueOnce({ id: 'delivery-success', status: 'SUCCESS' })
+    await expect(retryOutboundWebhookDelivery('delivery-success')).resolves.toBeNull()
   })
 })
