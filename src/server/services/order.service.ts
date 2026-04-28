@@ -147,8 +147,14 @@ export async function getOrder(orderNumber: number) {
       payments: true,
       fulfillments: { include: { items: true } },
       events: { orderBy: { createdAt: 'desc' } },
-      refunds: true,
-      returns: true,
+      refunds: { include: { items: true }, orderBy: { createdAt: 'desc' } },
+      returns: {
+        include: {
+          items: true,
+          refund: { select: { id: true, amount: true, status: true, stripeRefundId: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
       discountApplications: { include: { discount: true } },
     },
   })
