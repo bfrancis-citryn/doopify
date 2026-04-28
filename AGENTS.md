@@ -9,13 +9,13 @@ Documentation refresh: April 28, 2026
 
 Before writing code, read:
 
-1. `STATUS.md`
-2. `PROJECT_INTENT.md`
-3. `features-roadmap.md`
-4. `HARDENING.md`
-5. `CONTRIBUTING.md`
+1. `docs/STATUS.md`
+2. `docs/PROJECT_INTENT.md`
+3. `docs/features-roadmap.md`
+4. `docs/HARDENING.md`
+5. `docs/CONTRIBUTING.md`
 
-If these files conflict, treat `STATUS.md` as the current state, `features-roadmap.md` as the build sequence, and `HARDENING.md` as the security/correctness backlog.
+If these files conflict, treat `docs/STATUS.md` as the current state, `docs/features-roadmap.md` as the build sequence, and `docs/HARDENING.md` as the security/correctness backlog.
 
 ## Current Repo Truth
 
@@ -44,6 +44,8 @@ Implemented:
 - durable Stripe webhook delivery logging with verified local payload storage and retry metadata
 - local-payload replay API, retry scheduling and exhaustion, cron-compatible retry runner (`POST /api/webhook-retries/run`)
 - admin webhook visibility workspace at `/admin/webhooks` with support diagnostics
+- Phase 4 refund service with pending refund persistence, Stripe idempotency keys, payment/order status updates, validated item-level restocking, and return linkage
+- Phase 4 return service with state-machine transitions, order-owned item validation, received-return close-with-refund support, and admin order action panels
 - typed internal event dispatcher
 - static integration registry
 - first-party logging and order confirmation email consumers
@@ -53,15 +55,15 @@ Current active phase:
 
 - **Phase 4 - Merchant Lifecycle And Outbound Integrations**
 
-Phase 3 is fully complete (all slices 3A–3E shipped and verified).
+Phase 3 is fully complete (all slices 3A-3E shipped and verified). Phase 4 refund/return foundations are now partially shipped; outbound merchant webhooks, per-integration secrets, transactional email observability, and analytics fan-out remain active priorities.
 
 Current priorities:
 
-1. Refund flow connected to Stripe, payment records, order state, and inventory restocking
-2. Return flow with a state machine connected to refunds
-3. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility — built on the existing typed event dispatcher
-4. Per-integration settings and secrets management, encrypted at rest
-5. Transactional email observability and analytics event fan-out
+1. Extend refund/return real-DB coverage and refine admin UX around closing received returns with refunds
+2. Outbound merchant webhooks: subscriptions, signing, retry/backoff, dead-letter visibility — built on the existing typed event dispatcher
+3. Per-integration settings and secrets management, encrypted at rest
+4. Transactional email observability
+5. Analytics event fan-out
 
 ## What Not To Rebuild
 
@@ -76,6 +78,7 @@ Do not rebuild these foundations unless source inspection proves they are broken
 - Stripe webhook route
 - checkout status route
 - collection service/API/storefront foundation
+- refund/return service foundation
 - typed event dispatcher
 - static integration registry
 
@@ -159,11 +162,14 @@ The following are shipped and must not be rebuilt from scratch:
 - configurable shipping zones/rates and jurisdiction-aware tax rules — **shipped**
 - shared rate-limit store, Postgres SSL normalization, audit logging — **shipped** (Phase 3 complete)
 - storefront merchandising: `FeaturedCollectionsGrid`, branding tokens from settings — **shipped**
+- refund service with pending persistence, Stripe idempotency, item validation, status updates, and restocking — **shipped foundation**
+- return service with validated state machine and close-with-refund path — **shipped foundation**
+- admin order refund/return action panels — **shipped foundation**
 
 The strongest remaining tasks are:
 
-1. Build the refund flow against Stripe, payment records, order state, and inventory restocking with admin UX
-2. Build the return flow as a state machine connected to refunds with admin UX
+1. Add real-DB integration coverage for refunds, restocking bounds, and return-to-refund linkage
+2. Add a richer admin workflow for received returns to close with a refund directly from the order page
 3. Build outbound merchant webhooks (subscriptions, signing, retry with backoff, dead-letter visibility) on top of the existing typed event dispatcher and static integration registry
 4. Build per-integration settings and secrets management, encrypted at rest, with admin surface
 5. Add transactional email observability (delivery status, bounce/complaint handling, resend tooling)
@@ -174,7 +180,7 @@ The strongest remaining tasks are:
 A change is complete when:
 
 - it fits the existing architecture
-- it does not contradict `STATUS.md`
+- it does not contradict `docs/STATUS.md`
 - it keeps Prisma/Postgres as the source of truth
 - it preserves server-owned checkout
 - it does not expose private fields publicly
@@ -197,9 +203,9 @@ If `npm run test` does not exist yet, do not silently ignore the gap for revenue
 
 When a shipped/pending/deferred status changes, update:
 
-- `STATUS.md`
-- `features-roadmap.md`
-- `HARDENING.md` if security/correctness/ops changed
+- `docs/STATUS.md`
+- `docs/features-roadmap.md`
+- `docs/HARDENING.md` if security/correctness/ops changed
 - `README.md` if onboarding or public repo orientation changed
 
 Do not recreate `CLAUDE.md`.
