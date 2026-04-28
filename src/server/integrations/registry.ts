@@ -25,6 +25,7 @@ export const integrationRegistry = [
       }
 
       await sendOrderConfirmationEmail({
+        orderId: payload.orderId,
         orderNumber: payload.orderNumber,
         email: payload.email,
         currency: payload.currency,
