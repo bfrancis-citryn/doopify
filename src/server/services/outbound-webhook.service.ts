@@ -1,65 +1,131 @@
 import crypto from 'crypto'
+
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/server/utils/crypto'
+import type { DoopifyEventName, DoopifyEvents } from '@/server/events/types'
 import type { OutboundWebhookDelivery } from '@prisma/client'
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 5
+const MAX_RESPONSE_BODY_LENGTH = 1000
 
-function calculateNextRetry(attempt: number): Date {
-  const baseDelayMs = 1000 * 60; // 1 minute
-  const delay = baseDelayMs * Math.pow(3, attempt - 1); // 1m, 3m, 9m, 27m, 81m
-  return new Date(Date.now() + delay);
+function calculateNextRetry(attempt: number, now = new Date()): Date {
+  const baseDelayMs = 1000 * 60
+  const delay = baseDelayMs * Math.pow(3, Math.max(0, attempt - 1))
+  return new Date(now.getTime() + delay)
 }
 
-function signPayload(payloadStr: string, secret: string): string {
-  return crypto.createHmac('sha256', secret).update(payloadStr).digest('base64');
+export function createOutboundWebhookSignature(input: {
+  payload: string
+  secret: string
+  timestamp: string | number
+}) {
+  return `sha256=${crypto
+    .createHmac('sha256', input.secret)
+    .update(`${input.timestamp}.${input.payload}`)
+    .digest('hex')}`
+}
+
+function safeResponseBody(body: string) {
+  return body.slice(0, MAX_RESPONSE_BODY_LENGTH)
+}
+
+function normalizeError(error: unknown) {
+  return error instanceof Error ? error.message : 'Outbound webhook delivery failed'
+}
+
+export async function queueOutboundWebhooks<K extends DoopifyEventName>(
+  event: K,
+  payload: DoopifyEvents[K]
+) {
+  const activeIntegrations = await prisma.integration.findMany({
+    where: {
+      status: 'ACTIVE',
+      webhookUrl: { not: null },
+      events: {
+        some: { event },
+      },
+    },
+    select: { id: true },
+  })
+
+  if (!activeIntegrations.length) {
+    return { queued: 0 }
+  }
+
+  const payloadString = JSON.stringify({
+    event,
+    data: payload,
+    createdAt: new Date().toISOString(),
+  })
+
+  await prisma.outboundWebhookDelivery.createMany({
+    data: activeIntegrations.map((integration) => ({
+      integrationId: integration.id,
+      event,
+      payload: payloadString,
+      status: 'PENDING',
+    })),
+  })
+
+  return { queued: activeIntegrations.length }
 }
 
 export async function processOutboundWebhook(deliveryId: string) {
   const delivery = await prisma.outboundWebhookDelivery.findUnique({
     where: { id: deliveryId },
-    include: { integration: { include: { secrets: true } } }
-  });
+    include: { integration: { include: { secrets: true } } },
+  })
 
   if (!delivery || !delivery.integration || (delivery.status !== 'PENDING' && delivery.status !== 'RETRYING')) {
-    return;
+    return null
   }
 
-  const integration = delivery.integration;
-  if (!integration.webhookUrl) {
-    await prisma.outboundWebhookDelivery.update({
+  const integration = delivery.integration
+  if (!integration.webhookUrl || integration.status !== 'ACTIVE') {
+    return prisma.outboundWebhookDelivery.update({
       where: { id: deliveryId },
-      data: { status: 'FAILED', lastError: 'Missing webhook URL on integration' }
-    });
-    return;
+      data: {
+        status: 'EXHAUSTED',
+        lastError: integration.status !== 'ACTIVE'
+          ? 'Integration is inactive'
+          : 'Missing webhook URL on integration',
+        processedAt: new Date(),
+      },
+    })
   }
 
-  const newAttempts = delivery.attempts + 1;
-  let status = 'SUCCESS';
-  let lastError = null;
-  let statusCode = null;
-  let responseBody = null;
+  const attemptedAt = new Date()
+  const newAttempts = delivery.attempts + 1
+  let status: OutboundWebhookDelivery['status'] = 'SUCCESS'
+  let lastError: string | null = null
+  let statusCode: number | null = null
+  let responseBody: string | null = null
 
   try {
+    const timestamp = Math.floor(attemptedAt.getTime() / 1000)
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'User-Agent': 'Doopify-Webhook-Dispatcher/1.0',
+      'X-Doopify-Delivery': delivery.id,
       'X-Doopify-Event': delivery.event,
-    };
-
-    if (integration.webhookSecret) {
-      const decryptedSecret = decrypt(integration.webhookSecret);
-      headers['X-Doopify-Signature'] = signPayload(delivery.payload, decryptedSecret);
+      'X-Doopify-Timestamp': String(timestamp),
     }
 
-    const payloadObj = JSON.parse(delivery.payload);
-    
-    // Inject custom headers if provided as secrets
-    const customHeaderPrefix = 'HEADER_';
+    if (integration.webhookSecret) {
+      const decryptedSecret = decrypt(integration.webhookSecret)
+      headers['X-Doopify-Signature'] = createOutboundWebhookSignature({
+        payload: delivery.payload,
+        secret: decryptedSecret,
+        timestamp,
+      })
+    }
+
     for (const secret of integration.secrets) {
-      if (secret.key.startsWith(customHeaderPrefix)) {
-        const headerName = secret.key.substring(customHeaderPrefix.length);
-        headers[headerName] = decrypt(secret.value);
+      if (secret.key.startsWith('HEADER_')) {
+        const headerName = secret.key.substring('HEADER_'.length).trim()
+        if (headerName) {
+          headers[headerName] = decrypt(secret.value)
+        }
       }
     }
 
@@ -67,56 +133,68 @@ export async function processOutboundWebhook(deliveryId: string) {
       method: 'POST',
       headers,
       body: delivery.payload,
-      // Setting an aggressive timeout can be configured here 
-    });
+      cache: 'no-store',
+    })
 
-    statusCode = response.status;
-    const bodyText = await response.text();
-    responseBody = bodyText.substring(0, 1000); // Truncate highly large responses
+    statusCode = response.status
+    responseBody = safeResponseBody(await response.text())
 
     if (!response.ok) {
-      throw new Error(`HTTP Error ${response.status}`);
+      throw new Error(`HTTP Error ${response.status}`)
     }
-
-  } catch (error: any) {
-    lastError = error.message;
-    status = newAttempts >= MAX_ATTEMPTS ? 'EXHAUSTED' : 'RETRYING';
+  } catch (error) {
+    lastError = normalizeError(error)
+    status = newAttempts >= MAX_ATTEMPTS ? 'EXHAUSTED' : 'RETRYING'
   }
 
-  await prisma.outboundWebhookDelivery.update({
+  return prisma.outboundWebhookDelivery.update({
     where: { id: deliveryId },
     data: {
-      status: status as any,
+      status,
       attempts: newAttempts,
       statusCode,
       responseBody,
       lastError,
-      lastRetriedAt: new Date(),
+      lastRetriedAt: attemptedAt,
       processedAt: status === 'SUCCESS' || status === 'EXHAUSTED' ? new Date() : null,
-      nextRetryAt: status === 'RETRYING' ? calculateNextRetry(newAttempts) : null,
-    }
-  });
+      nextRetryAt: status === 'RETRYING' ? calculateNextRetry(newAttempts, attemptedAt) : null,
+    },
+  })
 }
 
-export async function processDueOutboundDeliveries() {
+export async function processDueOutboundDeliveries(limit = 50) {
   const dueDeliveries = await prisma.outboundWebhookDelivery.findMany({
     where: {
       OR: [
         { status: 'PENDING' },
-        { status: 'RETRYING', nextRetryAt: { lte: new Date() } }
-      ]
+        { status: 'RETRYING', nextRetryAt: { lte: new Date() } },
+      ],
     },
-    take: 50,
-    orderBy: { createdAt: 'asc' }
-  });
+    take: Math.max(1, Math.min(100, limit)),
+    orderBy: { createdAt: 'asc' },
+  })
 
   const results = await Promise.allSettled(
-    dueDeliveries.map(delivery => processOutboundWebhook(delivery.id))
-  );
+    dueDeliveries.map((delivery) => processOutboundWebhook(delivery.id))
+  )
 
   return {
     processed: results.length,
-    success: results.filter(r => r.status === 'fulfilled').length,
-    failures: results.filter(r => r.status === 'rejected').length,
-  };
+    success: results.filter((result) => result.status === 'fulfilled').length,
+    failures: results.filter((result) => result.status === 'rejected').length,
+  }
+}
+
+export async function retryOutboundWebhookDelivery(deliveryId: string) {
+  const delivery = await prisma.outboundWebhookDelivery.update({
+    where: { id: deliveryId },
+    data: {
+      status: 'PENDING',
+      nextRetryAt: null,
+      processedAt: null,
+      lastError: null,
+    },
+  })
+
+  return processOutboundWebhook(delivery.id)
 }
