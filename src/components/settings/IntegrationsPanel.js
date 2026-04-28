@@ -18,6 +18,7 @@ const EMPTY_FORM = {
   type: 'CUSTOM',
   webhookUrl: '',
   webhookSecret: '',
+  clearWebhookSecret: false,
   status: 'ACTIVE',
   events: [],
   secrets: [],
@@ -29,6 +30,7 @@ function integrationToDraft(integration) {
     type: integration.type || 'CUSTOM',
     webhookUrl: integration.webhookUrl || '',
     webhookSecret: '',
+    clearWebhookSecret: false,
     status: integration.status || 'ACTIVE',
     events: (integration.events || []).map((event) => event.event),
     secrets: (integration.secrets || []).map((secret) => ({ key: secret.key, value: '' })),
@@ -73,7 +75,7 @@ function SecretRows({ secrets, onChange }) {
   return (
     <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
       <span>Custom headers / secrets</span>
-      <p className={styles.cardSubtext}>Use keys like HEADER_X-API-Key to send encrypted custom headers with outbound deliveries.</p>
+      <p className={styles.cardSubtext}>Use keys like HEADER_X-API-Key to send encrypted custom headers with outbound deliveries. Existing values are preserved when the value field is blank.</p>
       {secrets.map((secret, index) => (
         <div key={`${secret.key}-${index}`} style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <input className={styles.input} value={secret.key} onChange={(event) => updateSecret(index, { key: event.target.value })} placeholder="HEADER_X-API-Key" />
@@ -136,7 +138,18 @@ function IntegrationEditor({ integration, onSaved, onCancel }) {
         </label>
         <label className={styles.field}>
           <span>Signing secret</span>
-          <input className={styles.input} type="password" value={draft.webhookSecret} onChange={(event) => setDraft((current) => ({ ...current, webhookSecret: event.target.value }))} placeholder="Leave blank to remove / unchanged on create" />
+          <input
+            className={styles.input}
+            disabled={draft.clearWebhookSecret}
+            type="password"
+            value={draft.webhookSecret}
+            onChange={(event) => setDraft((current) => ({ ...current, webhookSecret: event.target.value }))}
+            placeholder="Leave blank to keep existing"
+          />
+        </label>
+        <label className={styles.checkboxField}>
+          <input checked={draft.clearWebhookSecret} onChange={(event) => setDraft((current) => ({ ...current, clearWebhookSecret: event.target.checked, webhookSecret: event.target.checked ? '' : current.webhookSecret }))} type="checkbox" />
+          <span>Clear existing signing secret</span>
         </label>
         <div style={{ gridColumn: '1 / -1' }}>
           <span>Subscribed events</span>
