@@ -50,15 +50,18 @@ Phase 3 is fully complete. Phase 4 refund/return and outbound webhook foundation
 
 Current priorities:
 
-1. Transactional email observability and safe resend tooling
-2. Bounce/complaint handling for the selected email provider
-3. Analytics event fan-out through the existing dispatcher
-4. Broader real-DB coverage for outbound webhook and email retry/idempotency behavior
-5. Continued audit-log expansion for lifecycle operations
+1. Finish Phase 4 correctness hardening around refunds, returns, integration secrets, and outbound webhook retry/idempotency
+2. Transactional email observability and safe resend tooling
+3. Bounce/complaint handling for the selected email provider
+4. Analytics event fan-out through the existing dispatcher
+5. Setup Wizard and CLI foundation: `doopify doctor`, Setup status API, Settings -> Setup tab, then `doopify setup`
+6. Broader real-DB coverage for outbound webhook and email retry/idempotency behavior
+7. Continued audit-log expansion for lifecycle operations
 
 ### Known follow-up gaps
 
 - Transactional email observability and resend tooling
+- Setup Wizard and CLI implementation
 - Analytics event fan-out
 - Broader real-DB coverage for outbound webhook retry/idempotency
 - Integration secret encryption verification tests
@@ -75,7 +78,8 @@ Start here when returning to the repo:
 5. [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) - development rules and definition of done
 6. [`AGENTS.md`](./AGENTS.md) - instructions for AI coding agents and future maintainers
 7. [`docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`](./docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md) - next Phase 4 email observability implementation plan
-8. [`docs/LAUNCH_ROLLOUT.md`](./docs/LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
+8. [`docs/SETUP_AND_CLI_PLAN.md`](./docs/SETUP_AND_CLI_PLAN.md) - planned Setup Wizard and CLI deployment automation sequence
+9. [`docs/LAUNCH_ROLLOUT.md`](./docs/LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
 
 Historical planning files live in `docs/archive/`. Do not use archived docs as current repo status.
 
@@ -140,6 +144,7 @@ Historical planning files live in `docs/archive/`. Do not use archived docs as c
 - Verified Stripe webhooks finalize paid orders.
 - Internal integrations use typed server-side events before any public plugin platform exists.
 - The admin remains handcrafted until real reuse justifies scaffolding or generation.
+- Setup automation should run through a local CLI and safe setup-status APIs; the browser must not run local shell commands.
 - Platform extraction comes after the single-store commerce loop is reliable.
 
 ## Development
