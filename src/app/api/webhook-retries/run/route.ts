@@ -7,6 +7,7 @@ import {
   markWebhookDeliveryProcessed,
 } from '@/server/services/webhook-delivery.service'
 import { parseStripeWebhookEventPayload, processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
+import { processDueOutboundDeliveries } from '@/server/services/outbound-webhook.service'
 
 export const runtime = 'nodejs'
 
@@ -109,8 +110,12 @@ export async function POST(req: Request) {
     }
   }
 
+  const outboundResults = await processDueOutboundDeliveries()
+
   return ok({
-    processed: results.length,
+    processedInbound: results.length,
+    processedOutbound: outboundResults.processed,
     results,
+    outboundResults,
   })
 }

@@ -697,3 +697,77 @@ model DiscountApplication {
   @@unique([orderId, discountId])
   @@map("discount_applications")
 }
+
+model Integration {
+  id            String             @id @default(cuid())
+  name          String
+  type          String             @default("CUSTOM")
+  webhookUrl    String?
+  webhookSecret String?
+  status        IntegrationStatus  @default(ACTIVE)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  events        IntegrationEvent[]
+  secrets       IntegrationSecret[]
+  deliveries    OutboundWebhookDelivery[]
+
+  @@map("integrations")
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model IntegrationEvent {
+  id            String      @id @default(cuid())
+  integrationId String
+  event         String      // e.g., "order.paid"
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@map("integration_events")
+}
+
+model IntegrationSecret {
+  id            String      @id @default(cuid())
+  integrationId String
+  key           String      // e.g., "API_KEY"
+  value         String      @db.Text // Encrypted value
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, key])
+  @@map("integration_secrets")
+}
+
+model OutboundWebhookDelivery {
+  id            String                @id @default(cuid())
+  integrationId String
+  event         String
+  payload       String                @db.Text
+  status        OutboundDeliveryStatus @default(PENDING)
+  statusCode    Int?
+  responseBody  String?               @db.Text
+  attempts      Int                   @default(0)
+  lastRetriedAt DateTime?
+  nextRetryAt   DateTime?
+  processedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId, status])
+  @@index([status, nextRetryAt])
+  @@map("outbound_webhook_deliveries")
+}
+
+enum OutboundDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  RETRYING
+  EXHAUSTED
+}

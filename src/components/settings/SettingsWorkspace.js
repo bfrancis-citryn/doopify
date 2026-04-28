@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../AppShell';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './SettingsWorkspace.module.css';
+import IntegrationsPanel from './IntegrationsPanel';
 
 const SETTINGS_SECTIONS = [
   { id: 'general', label: 'General' },
@@ -13,6 +14,7 @@ const SETTINGS_SECTIONS = [
   { id: 'payments', label: 'Payments' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'users', label: 'Users & permissions' },
+  { id: 'integrations', label: 'Integrations & Webhooks' },
 ];
 
 const EMPTY_ZONE_FORM = {
@@ -901,6 +903,10 @@ export default function SettingsWorkspace() {
 
             {!loading && !error && activeSection === 'users' ? (
               <div className={styles.infoBlock}>Staff accounts, roles, permissions, and approval rules should live here.</div>
+            ) : null}
+
+            {!loading && !error && activeSection === 'integrations' ? (
+              <IntegrationsPanel />
             ) : null}
           </div>
         </div>

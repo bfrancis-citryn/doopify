@@ -20,7 +20,7 @@ function formatTimelineDate(value) {
 }
 
 // ── Refund Panel ──────────────────────────────────────────────────────────────
-function RefundPanel({ order, onClose, onSuccess }) {
+function RefundPanel({ order, returnIdForRefund, onClose, onSuccess }) {
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('requested_by_customer');
   const [note, setNote] = useState('');
@@ -41,10 +41,14 @@ function RefundPanel({ order, onClose, onSuccess }) {
     setError(null);
     try {
       const orderNum = order.orderNumber.replace('#', '');
+      const payload = { paymentId: payment.id, amount: parsedAmount, reason, note: note || undefined, restockItems };
+      if (returnIdForRefund) {
+        payload.returnId = returnIdForRefund;
+      }
       const res = await fetch(`/api/orders/${orderNum}/refunds`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId: payment.id, amount: parsedAmount, reason, note: note || undefined, restockItems }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Refund failed');
@@ -193,10 +197,11 @@ function ReturnPanel({ order, onClose, onSuccess }) {
   );
 }
 
-export default function OrderDetailView({ order, onUpdateOrder }) {
+export default function OrderDetailView({ order, onUpdateOrder, onRefetch }) {
   const { settings } = useSettings();
   const [tagInput, setTagInput] = useState('');
   const [activePanel, setActivePanel] = useState(null); // 'refund' | 'return' | null
+  const [returnIdForRefund, setReturnIdForRefund] = useState(null);
   const [shippingLabelDraft, setShippingLabelDraft] = useState({
     packageType: 'Small box',
     carrierService: 'UPS Ground',
@@ -254,6 +259,25 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
     );
   };
 
+  const updateReturnStatus = async (returnId, status) => {
+    try {
+      const orderNum = order.orderNumber.replace('#', '');
+      const res = await fetch(`/api/orders/${orderNum}/returns/${returnId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        onRefetch?.();
+      } else {
+        const json = await res.json();
+        alert(json.error || 'Failed to update return');
+      }
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+
   if (!order) {
     return (
       <div className={styles.orderDetailPage}>
@@ -278,6 +302,23 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </Link>
       </div>
 
+      {activePanel === 'refund' && (
+        <RefundPanel 
+          order={order} 
+          returnIdForRefund={returnIdForRefund}
+          onClose={() => { setActivePanel(null); setReturnIdForRefund(null); }} 
+          onSuccess={() => { setActivePanel(null); setReturnIdForRefund(null); onRefetch?.(); }} 
+        />
+      )}
+      
+      {activePanel === 'return' && (
+        <ReturnPanel 
+          order={order} 
+          onClose={() => setActivePanel(null)} 
+          onSuccess={() => { setActivePanel(null); onRefetch?.(); }} 
+        />
+      )}
+
       <div className={styles.shopifyHeaderBarClean}> 
         <div className={styles.shopifyHeaderIdentity}>
           <div className={styles.shopifyHeaderTitleRow}>
@@ -290,8 +331,8 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
           <p className={styles.shopifyOrderMeta}>Created {new Date(order.createdAt).toLocaleString()} from {order.channel}</p>
         </div>
         <div className={styles.shopifyHeaderActionsClean}>
-          <button className={styles.secondaryAction} type="button">Refund</button>
-          <button className={styles.secondaryAction} type="button">Return</button>
+          <button className={styles.secondaryAction} onClick={() => setActivePanel('refund')} type="button">Refund</button>
+          <button className={styles.secondaryAction} onClick={() => setActivePanel('return')} type="button">Return</button>
           <button className={styles.secondaryAction} type="button">Edit</button>
           <button className={styles.secondaryAction} type="button">Print</button>
           <button className={styles.primaryAction} type="button">More actions</button>
@@ -369,6 +410,33 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
               </div>
             </div>
           </div>
+
+          {(order.returns && order.returns.length > 0) && (
+            <div className={styles.shopifyPanelClean}>
+              <div className={styles.sectionCardHeader}>
+                <h3>Returns</h3>
+              </div>
+              <div className={styles.shopifyLineItemTable}>
+                {order.returns.map(ret => (
+                  <div key={ret.id} className={styles.shopifyLineItemRowClean} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px' }}>
+                    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong>Return {ret.id.substring(0, 8)}</strong>
+                      <StatusPill tone={ret.status === 'CLOSED' ? 'closed' : 'default'}>{ret.status}</StatusPill>
+                    </div>
+                    {ret.status !== 'CLOSED' && ret.status !== 'DECLINED' && (
+                       <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                         {ret.status === 'REQUESTED' && <button className={styles.secondaryAction} onClick={() => updateReturnStatus(ret.id, 'APPROVED')}>Approve</button>}
+                         {ret.status === 'APPROVED' && <button className={styles.secondaryAction} onClick={() => updateReturnStatus(ret.id, 'IN_TRANSIT')}>Mark In Transit</button>}
+                         {(ret.status === 'APPROVED' || ret.status === 'IN_TRANSIT') && <button className={styles.primaryAction} onClick={() => updateReturnStatus(ret.id, 'RECEIVED')}>Mark Received</button>}
+                         {ret.status === 'RECEIVED' && <button className={styles.primaryAction} onClick={() => { setReturnIdForRefund(ret.id); setActivePanel('refund'); }}>Issue Refund for Return</button>}
+                         {ret.status === 'REQUESTED' && <button className={styles.textActionButton} onClick={() => updateReturnStatus(ret.id, 'DECLINED')}>Decline</button>}
+                       </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className={styles.shopifyPanelClean}>
             <div className={styles.sectionCardHeader}>
