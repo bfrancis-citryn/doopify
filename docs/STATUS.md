@@ -48,6 +48,7 @@ The repo currently includes:
 - Phase 4 refund service with pending refund persistence, Stripe idempotency keys, payment/order status updates, validated item-level restocking, and return linkage
 - Phase 4 return service with state-machine transitions, order-owned item validation, received-return close-with-refund support, and admin order action panels
 - Phase 4 outbound merchant webhook foundation with subscriptions, timestamped HMAC signatures, retry/backoff, manual retry API, dead-letter/exhausted visibility, integration settings UI, and admin delivery visibility
+- Phase 4 correctness hardening for outbound webhook delivery claiming, manual retry eligibility, integration secret preservation, event-subscription deduplication, and return refund quantity validation
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs
 
 ## Phase 3 Status
@@ -88,6 +89,7 @@ Shipped:
 - restocking occurs only after Stripe refund success
 - returns validate order-owned items and follow the `REQUESTED -> APPROVED -> IN_TRANSIT -> RECEIVED -> CLOSED` state machine
 - received returns can close with a linked refund
+- close-with-refund now validates refund quantities and variants against the actual returned items
 - fast tests cover refund/return services and API behavior
 - gated integration coverage was added for partial/full refund, restocking, Stripe failure, return state transitions, and return-to-refund linkage
 
@@ -97,8 +99,12 @@ Shipped:
 
 - `Integration`, `IntegrationEvent`, `IntegrationSecret`, and `OutboundWebhookDelivery` Prisma-backed models
 - settings APIs for creating/updating/deleting integrations with encrypted webhook secrets and custom header secrets
+- integration edits preserve existing signing secrets unless explicitly cleared
+- event subscriptions are deduplicated and constrained unique per integration/event
 - `queueOutboundWebhooks()` service for creating outbound delivery records from typed internal events
 - `processOutboundWebhook()` service for signed delivery, response recording, backoff, retrying, and exhausted/dead-letter state
+- delivery claiming before outbound sends to reduce duplicate overlapping cron delivery
+- manual retry eligibility checks for missing, successful, and non-retryable deliveries
 - timestamped HMAC signatures in the `sha256=<hex>` format
 - delivery headers: `X-Doopify-Delivery`, `X-Doopify-Event`, `X-Doopify-Timestamp`, and `X-Doopify-Signature`
 - custom encrypted outbound headers using `IntegrationSecret` keys prefixed with `HEADER_`
@@ -113,8 +119,9 @@ Shipped:
 
 1. Transactional email observability: delivery status, bounce/complaint handling, and safe resend tooling
 2. Analytics event fan-out through the existing dispatcher
-3. Broader real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
-4. Continued audit-log expansion where admin lifecycle operations need durable traces
+3. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
+4. Broader real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
+5. Continued audit-log expansion where admin lifecycle operations need durable traces
 
 ## Phase 4 Acceptance Checks
 
@@ -125,6 +132,7 @@ Status by acceptance check:
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
 - Integration secrets never appear unencrypted at rest — **foundation shipped for integration/webhook secrets; continue verification tests**
 - A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **next planned slice**
+- Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **planned after email observability foundation**
 - Build and typecheck stay green throughout — **must be re-run after every change**
 
 ## Transactional Email Observability Plan
@@ -145,12 +153,29 @@ First implementation target:
 - admin visibility and safe resend controls
 - tests proving email failure/resend never duplicate order, payment, inventory, refund, return, webhook, or analytics side effects
 
+## Setup Wizard And CLI Plan
+
+The planned setup/deployment automation sequence is documented in:
+
+```txt
+SETUP_AND_CLI_PLAN.md
+```
+
+Planned sequence:
+
+- `doopify doctor` read-only local diagnostics
+- setup status service and `/api/setup/status`
+- Settings -> Setup checklist tab
+- interactive `doopify setup`
+- later Vercel, Neon, Stripe, and email-provider automation
+
 ## Remaining Product Work
 
 ### Highest Priority
 
 - Transactional email observability and resend tooling
 - Analytics event fan-out
+- Setup Wizard and CLI foundation
 - Broader real-DB race/idempotency coverage as Phase 4 behaviors expand
 
 ### Medium Priority
@@ -198,6 +223,8 @@ Do not market or build around these yet:
 - replacing the handcrafted admin with schema-generated CRUD UI
 - multi-tenant architecture before the single-store flow is stable
 - packaging full theme directories before branding tokens and reusable storefront components are settled
+- running local shell commands from the browser Setup tab
+- storing broad Vercel, Neon, or Stripe account tokens in the app before a scoped token lifecycle is designed
 
 ## Explicitly Rejected Technical Directions
 
