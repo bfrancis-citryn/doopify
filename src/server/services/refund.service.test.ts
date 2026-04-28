@@ -19,8 +19,12 @@ const mocks = vi.hoisted(() => ({
     },
     refund: {
       create: vi.fn(),
+      update: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
+    },
+    return: {
+      update: vi.fn(),
     },
     productVariant: {
       update: vi.fn(),
@@ -40,28 +44,55 @@ vi.mock('@/server/events/dispatcher', () => ({ emitInternalEvent: mocks.emitInte
 
 import { getOrderRefunds, getRefund, issueRefund } from './refund.service'
 
-const baseOrder = { id: ORDER_ID, orderNumber: 1001, currency: 'USD', paymentStatus: 'PAID' }
+const baseOrder = {
+  id: ORDER_ID,
+  orderNumber: 1001,
+  currency: 'USD',
+  paymentStatus: 'PAID',
+  items: [{ id: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 2, price: 50, total: 100 }],
+  refunds: [],
+}
 const basePayment = {
   id: PAYMENT_ID,
+  orderId: ORDER_ID,
   amount: 100,
   stripePaymentIntentId: 'pi_test',
   stripeChargeId: 'ch_test',
   refunds: [],
 }
-const baseRefund = {
+const pendingRefund = {
   id: REFUND_ID,
   orderId: ORDER_ID,
   paymentId: PAYMENT_ID,
-  stripeRefundId: STRIPE_REFUND_ID,
-  status: 'ISSUED',
+  stripeRefundId: null,
+  status: 'PENDING',
   amount: 50,
   reason: 'requested_by_customer',
   restockItems: false,
   items: [],
 }
+const issuedRefund = {
+  ...pendingRefund,
+  stripeRefundId: STRIPE_REFUND_ID,
+  status: 'ISSUED',
+}
 
 function setupTx() {
   mocks.prisma.$transaction.mockImplementation(async (fn: (tx: typeof mocks.prisma) => Promise<unknown>) => fn(mocks.prisma))
+}
+
+function setupSuccess(overrides: { order?: unknown; payment?: unknown; refund?: unknown } = {}) {
+  mocks.prisma.order.findUnique.mockResolvedValue(overrides.order ?? baseOrder)
+  mocks.prisma.payment.findUnique.mockResolvedValue(overrides.payment ?? basePayment)
+  mocks.prisma.refund.create.mockResolvedValue(overrides.refund ?? pendingRefund)
+  mocks.createStripeRefund.mockResolvedValue({ id: STRIPE_REFUND_ID })
+  mocks.prisma.refund.update.mockResolvedValue(issuedRefund)
+  mocks.prisma.payment.update.mockResolvedValue({})
+  mocks.prisma.order.update.mockResolvedValue({})
+  mocks.prisma.orderEvent.create.mockResolvedValue({})
+  mocks.prisma.productVariant.update.mockResolvedValue({})
+  mocks.prisma.return.update.mockResolvedValue({})
+  mocks.emitInternalEvent.mockResolvedValue(undefined)
 }
 
 beforeEach(() => {
@@ -70,15 +101,8 @@ beforeEach(() => {
 })
 
 describe('issueRefund', () => {
-  it('creates a Stripe refund and persists a Refund record', async () => {
-    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
-    mocks.prisma.payment.findUnique.mockResolvedValue(basePayment)
-    mocks.createStripeRefund.mockResolvedValue({ id: STRIPE_REFUND_ID })
-    mocks.prisma.refund.create.mockResolvedValue(baseRefund)
-    mocks.prisma.payment.update.mockResolvedValue({})
-    mocks.prisma.order.update.mockResolvedValue({})
-    mocks.prisma.orderEvent.create.mockResolvedValue({})
-    mocks.emitInternalEvent.mockResolvedValue(undefined)
+  it('creates a pending refund, calls Stripe idempotently, and marks it issued', async () => {
+    setupSuccess()
 
     const result = await issueRefund({
       orderId: ORDER_ID,
@@ -87,22 +111,25 @@ describe('issueRefund', () => {
       reason: 'requested_by_customer',
     })
 
-    expect(mocks.createStripeRefund).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 5000 }) // 50 * 100 cents
-    )
     expect(mocks.prisma.refund.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          status: 'ISSUED',
-          stripeRefundId: STRIPE_REFUND_ID,
+          status: 'PENDING',
           amount: 50,
         }),
       })
     )
-    expect(mocks.prisma.payment.update).toHaveBeenCalledWith(
+    expect(mocks.createStripeRefund).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 5000, idempotencyKey: `refund:${REFUND_ID}` })
+    )
+    expect(mocks.prisma.refund.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { status: 'PARTIALLY_REFUNDED' },
+        where: { id: REFUND_ID },
+        data: expect.objectContaining({ status: 'ISSUED', stripeRefundId: STRIPE_REFUND_ID }),
       })
+    )
+    expect(mocks.prisma.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'PARTIALLY_REFUNDED' } })
     )
     expect(mocks.emitInternalEvent).toHaveBeenCalledWith('order.refunded', expect.objectContaining({
       refundId: REFUND_ID,
@@ -112,14 +139,7 @@ describe('issueRefund', () => {
   })
 
   it('marks payment as REFUNDED when full amount is refunded', async () => {
-    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
-    mocks.prisma.payment.findUnique.mockResolvedValue({ ...basePayment, amount: 50 })
-    mocks.createStripeRefund.mockResolvedValue({ id: STRIPE_REFUND_ID })
-    mocks.prisma.refund.create.mockResolvedValue({ ...baseRefund, amount: 50 })
-    mocks.prisma.payment.update.mockResolvedValue({})
-    mocks.prisma.order.update.mockResolvedValue({})
-    mocks.prisma.orderEvent.create.mockResolvedValue({})
-    mocks.emitInternalEvent.mockResolvedValue(undefined)
+    setupSuccess({ payment: { ...basePayment, amount: 50 } })
 
     await issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 50 })
 
@@ -128,16 +148,11 @@ describe('issueRefund', () => {
     )
   })
 
-  it('restocks inventory when restockItems is true', async () => {
-    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
-    mocks.prisma.payment.findUnique.mockResolvedValue(basePayment)
-    mocks.createStripeRefund.mockResolvedValue({ id: STRIPE_REFUND_ID })
-    mocks.prisma.refund.create.mockResolvedValue({ ...baseRefund, restockItems: true, items: [{ id: 'ri-1', refundId: REFUND_ID, orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amount: 50 }] })
-    mocks.prisma.payment.update.mockResolvedValue({})
-    mocks.prisma.order.update.mockResolvedValue({})
-    mocks.prisma.orderEvent.create.mockResolvedValue({})
-    mocks.prisma.productVariant.update.mockResolvedValue({})
-    mocks.emitInternalEvent.mockResolvedValue(undefined)
+  it('restocks validated inventory when restockItems is true', async () => {
+    setupSuccess({
+      refund: { ...pendingRefund, restockItems: true, items: [{ id: 'ri-1', refundId: REFUND_ID, orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amount: 50 }] },
+    })
+    mocks.prisma.refund.update.mockResolvedValue({ ...issuedRefund, restockItems: true })
 
     await issueRefund({
       orderId: ORDER_ID,
@@ -155,6 +170,29 @@ describe('issueRefund', () => {
     )
   })
 
+  it('links a refund to a return when returnId is provided', async () => {
+    setupSuccess()
+
+    await issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 50, returnId: 'ret-1' })
+
+    expect(mocks.prisma.return.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'ret-1' }, data: { refundId: REFUND_ID } })
+    )
+  })
+
+  it('marks pending refund failed when Stripe fails before issuing', async () => {
+    setupSuccess()
+    mocks.createStripeRefund.mockRejectedValue(new Error('Stripe unavailable'))
+
+    await expect(
+      issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 50 })
+    ).rejects.toThrow('Stripe refund failed before issuing')
+
+    expect(mocks.prisma.refund.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: REFUND_ID }, data: expect.objectContaining({ status: 'FAILED' }) })
+    )
+  })
+
   it('throws when refund amount exceeds refundable amount', async () => {
     mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
     mocks.prisma.payment.findUnique.mockResolvedValue({
@@ -166,6 +204,21 @@ describe('issueRefund', () => {
     await expect(
       issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 30 })
     ).rejects.toThrow('exceeds refundable amount')
+  })
+
+  it('throws when refund item does not belong to the order', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.prisma.payment.findUnique.mockResolvedValue(basePayment)
+
+    await expect(
+      issueRefund({
+        orderId: ORDER_ID,
+        paymentId: PAYMENT_ID,
+        amount: 10,
+        restockItems: true,
+        items: [{ orderItemId: 'wrong-item', quantity: 1, amount: 10 }],
+      })
+    ).rejects.toThrow('Refund item does not belong to this order')
   })
 
   it('throws when order is not found', async () => {
@@ -180,7 +233,7 @@ describe('issueRefund', () => {
 
 describe('getOrderRefunds', () => {
   it('returns all refunds for an order', async () => {
-    mocks.prisma.refund.findMany.mockResolvedValue([baseRefund])
+    mocks.prisma.refund.findMany.mockResolvedValue([issuedRefund])
     const result = await getOrderRefunds(ORDER_ID)
     expect(result).toHaveLength(1)
     expect(mocks.prisma.refund.findMany).toHaveBeenCalledWith(
@@ -191,7 +244,7 @@ describe('getOrderRefunds', () => {
 
 describe('getRefund', () => {
   it('returns a single refund by id', async () => {
-    mocks.prisma.refund.findUnique.mockResolvedValue(baseRefund)
+    mocks.prisma.refund.findUnique.mockResolvedValue(issuedRefund)
     const result = await getRefund(REFUND_ID)
     expect(result?.id).toBe(REFUND_ID)
   })

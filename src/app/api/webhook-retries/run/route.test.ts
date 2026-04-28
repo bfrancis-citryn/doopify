@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookDeliveryProcessed: vi.fn(),
   markWebhookDeliveryFailed: vi.fn(),
   processStripeWebhookEvent: vi.fn(),
+  processDueOutboundDeliveries: vi.fn(),
 }))
 
 vi.mock('@/lib/env', () => ({
@@ -32,11 +33,19 @@ vi.mock('@/server/services/stripe-webhook.service', () => ({
   processStripeWebhookEvent: mocks.processStripeWebhookEvent,
 }))
 
+vi.mock('@/server/services/outbound-webhook.service', () => ({
+  processDueOutboundDeliveries: mocks.processDueOutboundDeliveries,
+}))
+
 import { POST } from './route'
 
 describe('POST /api/webhook-retries/run', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.processDueOutboundDeliveries.mockResolvedValue({
+      processed: 0,
+      results: [],
+    })
     mocks.getDueWebhookDeliveriesForRetry.mockResolvedValue([
       {
         id: 'delivery_1',
@@ -68,6 +77,7 @@ describe('POST /api/webhook-retries/run', () => {
 
     expect(response.status).toBe(401)
     expect(mocks.getDueWebhookDeliveriesForRetry).not.toHaveBeenCalled()
+    expect(mocks.processDueOutboundDeliveries).not.toHaveBeenCalled()
   })
 
   it('processes due retries from verified local payloads', async () => {
@@ -92,6 +102,7 @@ describe('POST /api/webhook-retries/run', () => {
       provider: 'stripe',
       providerEventId: 'evt_1',
     })
+    expect(mocks.processDueOutboundDeliveries).toHaveBeenCalled()
   })
 
   it('reschedules processing failures through the delivery service', async () => {
@@ -117,5 +128,6 @@ describe('POST /api/webhook-retries/run', () => {
       error: 'Order finalization failed',
       retryable: true,
     })
+    expect(mocks.processDueOutboundDeliveries).toHaveBeenCalled()
   })
 })
