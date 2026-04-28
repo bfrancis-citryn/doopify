@@ -723,9 +723,10 @@ enum IntegrationStatus {
 model IntegrationEvent {
   id            String      @id @default(cuid())
   integrationId String
-  event         String      // e.g., "order.paid"
+  event         String
   integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
+  @@unique([integrationId, event])
   @@index([integrationId])
   @@map("integration_events")
 }
@@ -733,8 +734,8 @@ model IntegrationEvent {
 model IntegrationSecret {
   id            String      @id @default(cuid())
   integrationId String
-  key           String      // e.g., "API_KEY"
-  value         String      @db.Text // Encrypted value
+  key           String
+  value         String      @db.Text
   integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
   @@unique([integrationId, key])
