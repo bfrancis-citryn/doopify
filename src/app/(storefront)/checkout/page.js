@@ -6,8 +6,10 @@ export const metadata = {
   description: 'Secure checkout',
 };
 
-export default async function CheckoutPage() {
+export default async function CheckoutPage({ searchParams }) {
   let store = null;
+  const params = await searchParams;
+  const recoveryToken = typeof params?.recovery_token === 'string' ? params.recovery_token : '';
 
   try {
     store = await getPublicStorefrontSettings();
@@ -18,6 +20,7 @@ export default async function CheckoutPage() {
   return (
     <CheckoutClientPage
       publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
+      recoveryToken={recoveryToken}
       store={store}
     />
   );

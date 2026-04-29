@@ -1,7 +1,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useCart } from '@/context/CartContext';
@@ -79,9 +79,57 @@ function isAddressComplete(address) {
   )
 }
 
-export default function CheckoutClientPage({ publishableKey, store }) {
+function resolveCheckoutLogo(store) {
+  return store?.checkoutLogoUrl || store?.logoUrl || '';
+}
+
+function resolveButtonPresentation(store) {
+  const style = store?.buttonStyle || 'solid';
+  const transform = store?.buttonTextTransform === 'uppercase' ? 'uppercase' : 'none';
+  const radius = (() => {
+    switch (store?.buttonRadius) {
+      case 'none':
+        return '0px';
+      case 'sm':
+        return '6px';
+      case 'md':
+        return '12px';
+      case 'lg':
+        return '18px';
+      case 'full':
+        return '9999px';
+      default:
+        return '9999px';
+    }
+  })();
+
+  const accent = store?.accentColor || store?.primaryColor || '#c9a86c';
+
+  const primaryStyle =
+    style === 'outline'
+      ? {
+          background: 'transparent',
+          color: accent,
+          border: `1px solid ${accent}`,
+        }
+      : style === 'soft'
+        ? {
+            background: `${accent}33`,
+            color: '#f3efe7',
+            border: `1px solid ${accent}66`,
+          }
+        : {
+            background: accent,
+            color: '#080808',
+            border: 'none',
+          };
+
+  return { transform, radius, primaryStyle };
+}
+
+export default function CheckoutClientPage({ publishableKey, store, recoveryToken }) {
   const router = useRouter();
-  const { items, total: cartSubtotal } = useCart();
+  const { items, total: cartSubtotal, replaceItems } = useCart();
   const [email, setEmail] = useState('');
   const [shippingAddress, setShippingAddress] = useState(EMPTY_ADDRESS);
   const [billingAddress, setBillingAddress] = useState(EMPTY_ADDRESS);
@@ -94,16 +142,80 @@ export default function CheckoutClientPage({ publishableKey, store }) {
   const [discountCode, setDiscountCode] = useState('');
   const [showDiscount, setShowDiscount] = useState(false);
   const [discountError, setDiscountError] = useState('');
+  const [recoveryNotice, setRecoveryNotice] = useState('');
 
   const stripeRef = useRef(null);
   const elementsRef = useRef(null);
   const paymentElementRef = useRef(null);
+  const lastRecoveredTokenRef = useRef(null);
 
   const currency = checkout?.currency || store?.currency || 'USD';
+  const checkoutLogo = resolveCheckoutLogo(store);
+  const buttonPresentation = resolveButtonPresentation(store);
+  const brandButtonBaseStyle = {
+    borderRadius: buttonPresentation.radius,
+    textTransform: buttonPresentation.transform,
+  };
   const lineCount = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
   );
+
+  useEffect(() => {
+    if (!recoveryToken || recoveryToken === lastRecoveredTokenRef.current) return;
+
+    let isCancelled = false;
+
+    async function loadRecoveryCheckout() {
+      setRecoveryNotice('');
+      setError('');
+      setDiscountError('');
+      if (checkout) {
+        resetPaymentStep();
+      }
+
+      try {
+        const response = await fetch(`/api/checkout/recover?token=${encodeURIComponent(recoveryToken)}`, {
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.success) {
+          throw new Error(payload?.error || 'Checkout recovery link is invalid or expired');
+        }
+
+        if (isCancelled) return;
+
+        const recoveredCheckout = payload.data;
+        setEmail(recoveredCheckout.email || '');
+        setShippingAddress((current) => ({ ...current, ...(recoveredCheckout.shippingAddress || {}) }));
+        setBillingAddress((current) => ({ ...current, ...(recoveredCheckout.billingAddress || recoveredCheckout.shippingAddress || {}) }));
+        setBillingSameAsShipping(false);
+        replaceItems(
+          (recoveredCheckout.items || []).map((item) => ({
+            variantId: item.variantId,
+            productId: item.productId,
+            title: item.title,
+            variantTitle: item.variantTitle,
+            quantity: item.quantity,
+            price: item.price,
+          }))
+        );
+        setRecoveryNotice('Your abandoned checkout has been restored. Review details and continue to payment.');
+        lastRecoveredTokenRef.current = recoveryToken;
+      } catch (recoveryError) {
+        if (isCancelled) return;
+        const message = recoveryError instanceof Error ? recoveryError.message : 'Checkout recovery failed';
+        setError(message);
+        lastRecoveredTokenRef.current = recoveryToken;
+      }
+    }
+
+    void loadRecoveryCheckout();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [recoveryToken, replaceItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function resetPaymentStep() {
     if (paymentElementRef.current) {
@@ -143,7 +255,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
       appearance: {
         theme: 'night',
         variables: {
-          colorPrimary: store?.primaryColor || '#c9a86c',
+          colorPrimary: store?.accentColor || store?.primaryColor || '#c9a86c',
           colorBackground: '#111114',
           colorText: '#f5f5f5',
           colorDanger: '#ef4444',
@@ -318,7 +430,17 @@ export default function CheckoutClientPage({ publishableKey, store }) {
 
       <div className="checkout-root">
         <nav className="checkout-nav">
-          <Link className="checkout-logo" href="/">{store?.name || 'Doopify'}</Link>
+          <Link className="checkout-logo" href="/">
+            {checkoutLogo ? (
+              <img
+                alt={store?.name || 'Doopify'}
+                src={checkoutLogo}
+                style={{ display: 'block', maxHeight: 36, width: 'auto' }}
+              />
+            ) : (
+              store?.name || 'Doopify'
+            )}
+          </Link>
           <Link style={{ color: 'rgba(255,255,255,0.58)', textDecoration: 'none', fontSize: 13 }} href="/shop">
             Continue shopping
           </Link>
@@ -341,6 +463,11 @@ export default function CheckoutClientPage({ publishableKey, store }) {
               <>
                 <div className="section">
                   <div className="section-title">Contact</div>
+                  {recoveryNotice ? (
+                    <div style={{ marginBottom: 14, padding: '10px 12px', border: '1px solid rgba(16,185,129,0.4)', borderRadius: 12, background: 'rgba(6,78,59,0.25)', color: '#6ee7b7', fontSize: 13 }}>
+                      {recoveryNotice}
+                    </div>
+                  ) : null}
                   <div className="grid">
                     <label className="field full">
                       <span>Email</span>
@@ -471,7 +598,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
                         <button
                           className="secondary-btn"
                           onClick={() => { setShowDiscount(false); setDiscountCode(''); setDiscountError(''); if (checkout) resetPaymentStep(); }}
-                          style={{ padding: '0 16px', minHeight: 44, flexShrink: 0 }}
+                          style={{ ...brandButtonBaseStyle, padding: '0 16px', minHeight: 44, flexShrink: 0 }}
                           type="button"
                         >
                           Remove
@@ -487,7 +614,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
                     <button
                       className="secondary-btn"
                       onClick={() => setShowDiscount(true)}
-                      style={{ fontSize: 12, minHeight: 38, padding: '0 14px' }}
+                      style={{ ...brandButtonBaseStyle, fontSize: 12, minHeight: 38, padding: '0 14px' }}
                       type="button"
                     >
                       + Add promo code
@@ -504,12 +631,22 @@ export default function CheckoutClientPage({ publishableKey, store }) {
 
                 <div className="cta-row">
                   {!paymentReady ? (
-                    <button className="primary-btn" disabled={creatingIntent || !items.length} type="submit">
+                    <button
+                      className="primary-btn"
+                      disabled={creatingIntent || !items.length}
+                      style={{ ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }}
+                      type="submit"
+                    >
                       {creatingIntent ? 'Loading payment...' : 'Review payment'}
                     </button>
                   ) : (
                     <>
-                      <button className="primary-btn" disabled={confirmingPayment} type="submit">
+                      <button
+                        className="primary-btn"
+                        disabled={confirmingPayment}
+                        style={{ ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }}
+                        type="submit"
+                      >
                         {confirmingPayment ? 'Placing order...' : 'Place order'}
                       </button>
                       <button
@@ -519,6 +656,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
                           event.preventDefault();
                           resetPaymentStep();
                         }}
+                        style={brandButtonBaseStyle}
                         type="button"
                       >
                         Edit details
@@ -543,7 +681,7 @@ export default function CheckoutClientPage({ publishableKey, store }) {
 
           <aside className="checkout-card summary">
             <p className="eyebrow">Order summary</p>
-            <h2 style={{ margin: '0 0 6px', fontSize: 26, fontFamily: 'var(--font-headline), sans-serif' }}>
+            <h2 style={{ margin: '0 0 6px', fontSize: 26, fontFamily: 'var(--brand-heading-font, var(--font-headline), sans-serif)' }}>
               {lineCount} item{lineCount === 1 ? '' : 's'} ready to go
             </h2>
             <p style={{ margin: '0 0 28px', color: 'rgba(255,255,255,0.56)', lineHeight: 1.7 }}>

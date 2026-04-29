@@ -6,6 +6,9 @@ import type { DoopifyEventName, DoopifyEvents } from '@/server/events/types'
 export const ANALYTICS_EVENT_NAMES = [
   'checkout.created',
   'checkout.failed',
+  'checkout.abandoned',
+  'checkout.recovery_email_sent',
+  'checkout.recovered',
   'order.created',
   'order.paid',
   'refund.issued',
@@ -38,6 +41,9 @@ function extractAnalyticsReferences<K extends AnalyticsEventName>(
   switch (context.event) {
     case 'checkout.created':
     case 'checkout.failed':
+    case 'checkout.abandoned':
+    case 'checkout.recovery_email_sent':
+    case 'checkout.recovered':
       return {}
     case 'order.created':
     case 'order.paid':

@@ -74,6 +74,9 @@ Never trust the browser for:
 
 The browser can initiate checkout. The server and Stripe webhook finalize the commerce state.
 
+Abandoned checkout recovery must use cents-based totals, server-side repricing, safe tokenized recovery links, and require admin auth for admin actions.
+Brand Kit fields should be centralized through settings service APIs. Do not scatter branding constants across storefront, checkout, and email templates.
+
 ### Protect Public Data
 
 Storefront responses should use public DTOs.

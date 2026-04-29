@@ -70,8 +70,29 @@ export const integrationRegistry = [
       logEvent('checkout.failed', payload)
     },
   }),
+  defineHandler({
+    event: 'checkout.abandoned',
+    handle: async (payload: DoopifyEvents['checkout.abandoned']) => {
+      logEvent('checkout.abandoned', payload)
+    },
+  }),
+  defineHandler({
+    event: 'checkout.recovery_email_sent',
+    handle: async (payload: DoopifyEvents['checkout.recovery_email_sent']) => {
+      logEvent('checkout.recovery_email_sent', payload)
+    },
+  }),
+  defineHandler({
+    event: 'checkout.recovered',
+    handle: async (payload: DoopifyEvents['checkout.recovered']) => {
+      logEvent('checkout.recovered', payload)
+    },
+  }),
   defineAnalyticsHandler('checkout.created'),
   defineAnalyticsHandler('checkout.failed'),
+  defineAnalyticsHandler('checkout.abandoned'),
+  defineAnalyticsHandler('checkout.recovery_email_sent'),
+  defineAnalyticsHandler('checkout.recovered'),
   defineAnalyticsHandler('order.created'),
   defineAnalyticsHandler('order.paid'),
   defineAnalyticsHandler('refund.issued'),

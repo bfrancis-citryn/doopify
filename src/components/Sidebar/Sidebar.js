@@ -15,6 +15,8 @@ const NAV_ITEMS = [
   { href: '/media', label: 'Media', icon: 'photo_library' },
   { href: '/customers', label: 'Customers', icon: 'groups' },
   { href: '/discounts', label: 'Discounts', icon: 'sell' },
+  { href: '/admin/brand-kit', label: 'Brand Kit', icon: 'palette' },
+  { href: '/admin/abandoned-checkouts', label: 'Abandoned', icon: 'mark_email_unread' },
   { href: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
   { href: '/analytics', label: 'Analytics', icon: 'analytics' },
 ];

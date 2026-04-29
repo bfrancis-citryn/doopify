@@ -224,6 +224,8 @@ These invariants should not be broken by future work:
 
 - Background side effects are persisted as jobs and processed with claiming, retries, backoff, and exhaustion.
 - Core commerce truth such as payment success, order creation, inventory decrement, refunds, returns, and discount usage must not depend on background job success.
+- Abandoned checkout recovery can send recovery emails and rebuild checkout intent, but it must never create orders, mark payments paid, decrement inventory, or trust saved/client totals. Verified Stripe webhook success remains the only paid-order finalization path.
+- Brand Kit public payloads must expose only safe branding fields. Brand Kit changes must not affect checkout/payment/order correctness.
 
 ## Transactional Email Hardening Target
 

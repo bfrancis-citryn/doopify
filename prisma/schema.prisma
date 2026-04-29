@@ -144,8 +144,25 @@ model Store {
   currency          String   @default("USD")
   timezone          String   @default("America/New_York")
   logoUrl           String?
+  faviconUrl        String?
+  emailLogoUrl      String?
+  checkoutLogoUrl   String?
   primaryColor      String   @default("#000000")
   secondaryColor    String   @default("#ffffff")
+  accentColor       String?
+  textColor         String?
+  headingFont       String?
+  bodyFont          String?
+  buttonRadius      String?  @default("md")
+  buttonStyle       String?  @default("solid")
+  buttonTextTransform String? @default("normal")
+  emailHeaderColor  String?
+  emailFooterText   String?
+  supportEmail      String?
+  instagramUrl      String?
+  facebookUrl       String?
+  tiktokUrl         String?
+  youtubeUrl        String?
   address1          String?
   address2          String?
   city              String?
@@ -546,14 +563,23 @@ model CheckoutSession {
   totalCents           Int                   @default(0)
   payload         Json
   failureReason   String?
+  abandonedAt     DateTime?
+  recoveryToken   String?               @unique
+  recoveryEmailSentAt DateTime?
+  recoveryEmailCount  Int               @default(0)
+  recoveredAt     DateTime?
   completedAt     DateTime?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   customer        Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([customerId])
+  @@index([status, createdAt])
   @@index([status])
   @@index([createdAt])
+  @@index([abandonedAt])
+  @@index([recoveryToken])
+  @@index([recoveryEmailSentAt])
   @@map("checkout_sessions")
 }
 

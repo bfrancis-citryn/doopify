@@ -47,6 +47,8 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - First-party event consumers for logging and order confirmation email delivery
 - Durable server-side analytics event fan-out and `AnalyticsEvent` persistence for checkout/order/refund/return/email/webhook lifecycle events
 - Prisma-backed background job abstraction for side effects with claiming, retries/backoff, exhaustion, and cron-compatible runner API
+- Abandoned checkout recovery foundation with persisted checkout recovery fields, admin review APIs/UI, safe tokenized recovery payload API, and secret-protected due-send processing
+- Brand Kit foundation with centralized Store branding fields, admin Brand Kit screen/API, and safe storefront/checkout/email branding defaults
 - Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
 - Public storefront settings endpoint for branding-safe store data
 - Collection service layer and storefront-safe collection DTOs
@@ -231,6 +233,22 @@ Status: active; refund/return, outbound webhook, transactional email observabili
 - job service with enqueue, claiming, running, retry scheduling, failure exhaustion, and safe admin-oriented payload redaction
 - secure cron-compatible runner route at `POST /api/jobs/run`
 - initial integration of order-confirmation email dispatch through the job abstraction so checkout/order/payment/inventory truth remains decoupled from email send success
+
+#### Abandoned Checkout Recovery
+
+- `CheckoutSession` recovery metadata (`abandonedAt`, token, send counters, recovered timestamp) persisted in Prisma/Postgres
+- admin APIs for abandoned checkout list/detail, mark-due, due-send, and manual send actions
+- secret-protected due-send route for cron execution and admin-triggered processing
+- token-protected storefront recovery payload API at `GET /api/checkout/recover` with server-side repricing and safe payload shaping
+- checkout completion marks `recoveredAt` only after verified payment success when recovery outreach occurred
+
+#### Brand Kit
+
+- Store branding fields persist logo/favicon, colors, fonts, button settings, email branding, checkout branding, and social links in Prisma/Postgres
+- admin Brand Kit APIs at `GET/PATCH /api/settings/brand-kit` enforce route-level admin authorization and validation
+- admin Brand Kit workspace at `/admin/brand-kit` provides visual identity editing with a live preview
+- public storefront settings now include safe Brand Kit fields for storefront and checkout visual theming
+- transactional email templates consume Brand Kit branding with safe fallbacks that do not block delivery
 
 ### Next Phase 4 Slice: Transactional Email Observability
 

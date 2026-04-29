@@ -1,5 +1,113 @@
 import { prisma } from '@/lib/prisma'
 import { centsToDollars } from '@/lib/money'
+import {
+  DEFAULT_BRAND_FONT,
+  DEFAULT_BUTTON_RADIUS,
+  DEFAULT_BUTTON_STYLE,
+  DEFAULT_BUTTON_TEXT_TRANSFORM,
+  brandKitUpdateSchema,
+  normalizeOptionalValue,
+} from '@/lib/brand-kit'
+
+type BrandKitRecord = {
+  id: string
+  name: string
+  logoUrl: string | null
+  faviconUrl: string | null
+  emailLogoUrl: string | null
+  checkoutLogoUrl: string | null
+  primaryColor: string
+  secondaryColor: string
+  accentColor: string | null
+  textColor: string | null
+  headingFont: string | null
+  bodyFont: string | null
+  buttonRadius: string | null
+  buttonStyle: string | null
+  buttonTextTransform: string | null
+  emailHeaderColor: string | null
+  emailFooterText: string | null
+  supportEmail: string | null
+  email: string | null
+  instagramUrl: string | null
+  facebookUrl: string | null
+  tiktokUrl: string | null
+  youtubeUrl: string | null
+}
+
+const DEFAULT_PRIMARY_COLOR = '#000000'
+const DEFAULT_SECONDARY_COLOR = '#ffffff'
+const DEFAULT_ACCENT_COLOR = '#c9a86c'
+const DEFAULT_TEXT_COLOR = '#111111'
+
+function mapStoreBrandKit(store: BrandKitRecord | null) {
+  if (!store) {
+    return {
+      id: null,
+      name: 'Doopify',
+      logoUrl: null,
+      faviconUrl: null,
+      emailLogoUrl: null,
+      checkoutLogoUrl: null,
+      primaryColor: DEFAULT_PRIMARY_COLOR,
+      secondaryColor: DEFAULT_SECONDARY_COLOR,
+      accentColor: DEFAULT_ACCENT_COLOR,
+      textColor: DEFAULT_TEXT_COLOR,
+      headingFont: DEFAULT_BRAND_FONT,
+      bodyFont: DEFAULT_BRAND_FONT,
+      buttonRadius: DEFAULT_BUTTON_RADIUS,
+      buttonStyle: DEFAULT_BUTTON_STYLE,
+      buttonTextTransform: DEFAULT_BUTTON_TEXT_TRANSFORM,
+      emailHeaderColor: DEFAULT_PRIMARY_COLOR,
+      emailFooterText: '',
+      supportEmail: null,
+      instagramUrl: null,
+      facebookUrl: null,
+      tiktokUrl: null,
+      youtubeUrl: null,
+    }
+  }
+
+  return {
+    id: store.id,
+    name: store.name,
+    logoUrl: store.logoUrl,
+    faviconUrl: store.faviconUrl,
+    emailLogoUrl: store.emailLogoUrl,
+    checkoutLogoUrl: store.checkoutLogoUrl,
+    primaryColor: store.primaryColor || DEFAULT_PRIMARY_COLOR,
+    secondaryColor: store.secondaryColor || DEFAULT_SECONDARY_COLOR,
+    accentColor: store.accentColor || store.primaryColor || DEFAULT_ACCENT_COLOR,
+    textColor: store.textColor || DEFAULT_TEXT_COLOR,
+    headingFont: store.headingFont || DEFAULT_BRAND_FONT,
+    bodyFont: store.bodyFont || DEFAULT_BRAND_FONT,
+    buttonRadius: store.buttonRadius || DEFAULT_BUTTON_RADIUS,
+    buttonStyle: store.buttonStyle || DEFAULT_BUTTON_STYLE,
+    buttonTextTransform: store.buttonTextTransform || DEFAULT_BUTTON_TEXT_TRANSFORM,
+    emailHeaderColor: store.emailHeaderColor || store.primaryColor || DEFAULT_PRIMARY_COLOR,
+    emailFooterText: store.emailFooterText || '',
+    supportEmail: store.supportEmail || store.email || null,
+    instagramUrl: store.instagramUrl,
+    facebookUrl: store.facebookUrl,
+    tiktokUrl: store.tiktokUrl,
+    youtubeUrl: store.youtubeUrl,
+  }
+}
+
+async function ensureStoreRow() {
+  const existing = await prisma.store.findFirst()
+  if (existing) return existing
+
+  return prisma.store.create({
+    data: {
+      name: 'Doopify',
+      currency: 'USD',
+      timezone: 'America/New_York',
+      primaryColor: DEFAULT_PRIMARY_COLOR,
+      secondaryColor: DEFAULT_SECONDARY_COLOR,
+    },
+  })
+}
 
 export async function getStoreSettings() {
   return prisma.store.findFirst({
@@ -49,17 +157,134 @@ export async function updateStoreSettings(
   })
 }
 
+export async function getBrandKit() {
+  const store = (await prisma.store.findFirst({
+    select: {
+      id: true,
+      name: true,
+      logoUrl: true,
+      faviconUrl: true,
+      emailLogoUrl: true,
+      checkoutLogoUrl: true,
+      primaryColor: true,
+      secondaryColor: true,
+      accentColor: true,
+      textColor: true,
+      headingFont: true,
+      bodyFont: true,
+      buttonRadius: true,
+      buttonStyle: true,
+      buttonTextTransform: true,
+      emailHeaderColor: true,
+      emailFooterText: true,
+      supportEmail: true,
+      email: true,
+      instagramUrl: true,
+      facebookUrl: true,
+      tiktokUrl: true,
+      youtubeUrl: true,
+    },
+  })) as BrandKitRecord | null
+
+  return mapStoreBrandKit(store)
+}
+
+export async function updateBrandKit(input: unknown) {
+  const parsed = brandKitUpdateSchema.parse(input)
+  const store = await ensureStoreRow()
+
+  const updated = await prisma.store.update({
+    where: { id: store.id },
+    data: {
+      ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+      ...(parsed.logoUrl !== undefined ? { logoUrl: normalizeOptionalValue(parsed.logoUrl) } : {}),
+      ...(parsed.faviconUrl !== undefined ? { faviconUrl: normalizeOptionalValue(parsed.faviconUrl) } : {}),
+      ...(parsed.emailLogoUrl !== undefined
+        ? { emailLogoUrl: normalizeOptionalValue(parsed.emailLogoUrl) }
+        : {}),
+      ...(parsed.checkoutLogoUrl !== undefined
+        ? { checkoutLogoUrl: normalizeOptionalValue(parsed.checkoutLogoUrl) }
+        : {}),
+      ...(parsed.primaryColor !== undefined ? { primaryColor: parsed.primaryColor } : {}),
+      ...(parsed.secondaryColor !== undefined ? { secondaryColor: parsed.secondaryColor } : {}),
+      ...(parsed.accentColor !== undefined ? { accentColor: parsed.accentColor } : {}),
+      ...(parsed.textColor !== undefined ? { textColor: parsed.textColor } : {}),
+      ...(parsed.headingFont !== undefined ? { headingFont: parsed.headingFont } : {}),
+      ...(parsed.bodyFont !== undefined ? { bodyFont: parsed.bodyFont } : {}),
+      ...(parsed.buttonRadius !== undefined ? { buttonRadius: parsed.buttonRadius } : {}),
+      ...(parsed.buttonStyle !== undefined ? { buttonStyle: parsed.buttonStyle } : {}),
+      ...(parsed.buttonTextTransform !== undefined
+        ? { buttonTextTransform: parsed.buttonTextTransform }
+        : {}),
+      ...(parsed.emailHeaderColor !== undefined ? { emailHeaderColor: parsed.emailHeaderColor } : {}),
+      ...(parsed.emailFooterText !== undefined
+        ? { emailFooterText: normalizeOptionalValue(parsed.emailFooterText) }
+        : {}),
+      ...(parsed.supportEmail !== undefined ? { supportEmail: normalizeOptionalValue(parsed.supportEmail) } : {}),
+      ...(parsed.instagramUrl !== undefined
+        ? { instagramUrl: normalizeOptionalValue(parsed.instagramUrl) }
+        : {}),
+      ...(parsed.facebookUrl !== undefined ? { facebookUrl: normalizeOptionalValue(parsed.facebookUrl) } : {}),
+      ...(parsed.tiktokUrl !== undefined ? { tiktokUrl: normalizeOptionalValue(parsed.tiktokUrl) } : {}),
+      ...(parsed.youtubeUrl !== undefined ? { youtubeUrl: normalizeOptionalValue(parsed.youtubeUrl) } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      logoUrl: true,
+      faviconUrl: true,
+      emailLogoUrl: true,
+      checkoutLogoUrl: true,
+      primaryColor: true,
+      secondaryColor: true,
+      accentColor: true,
+      textColor: true,
+      headingFont: true,
+      bodyFont: true,
+      buttonRadius: true,
+      buttonStyle: true,
+      buttonTextTransform: true,
+      emailHeaderColor: true,
+      emailFooterText: true,
+      supportEmail: true,
+      email: true,
+      instagramUrl: true,
+      facebookUrl: true,
+      tiktokUrl: true,
+      youtubeUrl: true,
+    },
+  })
+
+  return mapStoreBrandKit(updated as BrandKitRecord)
+}
+
 export async function getPublicStorefrontSettings() {
   const store = await getStoreSettings()
   if (!store) return null
 
+  const brandKit = mapStoreBrandKit(store as BrandKitRecord)
+
   return {
-    name: store.name,
+    name: brandKit.name,
     email: store.email,
     currency: store.currency,
-    logoUrl: store.logoUrl,
-    primaryColor: store.primaryColor,
-    secondaryColor: store.secondaryColor,
+    logoUrl: brandKit.logoUrl,
+    faviconUrl: brandKit.faviconUrl,
+    checkoutLogoUrl: brandKit.checkoutLogoUrl,
+    primaryColor: brandKit.primaryColor,
+    secondaryColor: brandKit.secondaryColor,
+    accentColor: brandKit.accentColor,
+    textColor: brandKit.textColor,
+    headingFont: brandKit.headingFont,
+    bodyFont: brandKit.bodyFont,
+    buttonRadius: brandKit.buttonRadius,
+    buttonStyle: brandKit.buttonStyle,
+    buttonTextTransform: brandKit.buttonTextTransform,
+    supportEmail: brandKit.supportEmail,
+    instagramUrl: brandKit.instagramUrl,
+    facebookUrl: brandKit.facebookUrl,
+    tiktokUrl: brandKit.tiktokUrl,
+    youtubeUrl: brandKit.youtubeUrl,
     shippingThreshold: store.shippingThresholdCents == null ? null : centsToDollars(store.shippingThresholdCents),
     shippingDomesticRate: centsToDollars(store.shippingDomesticRateCents),
     shippingInternationalRate: centsToDollars(store.shippingInternationalRateCents),

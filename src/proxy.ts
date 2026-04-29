@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   '/api/storefront',
   '/api/webhooks',
   '/api/webhook-retries',
+  '/api/abandoned-checkouts/send-due',
   '/api/jobs/run',
   '/_next',
   '/favicon',

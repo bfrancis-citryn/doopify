@@ -10,6 +10,7 @@ import {
   type CheckoutPricingTaxDecision,
 } from '@/server/checkout/pricing'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import { markCheckoutRecoveredByPaymentIntent } from '@/server/services/abandoned-checkout.service'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
 import { createOrder, getOrderByPaymentIntentId } from '@/server/services/order.service'
 import { getStoreSettings } from '@/server/services/settings.service'
@@ -374,6 +375,7 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
       where: { paymentIntentId: intent.id },
       data: { status: 'COMPLETED', completedAt: new Date(), failureReason: null },
     })
+    await markCheckoutRecoveredByPaymentIntent(intent.id)
     return existingOrder
   }
 
@@ -413,6 +415,7 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
       failureReason: null,
     },
   })
+  await markCheckoutRecoveredByPaymentIntent(intent.id)
 
   return order
 }

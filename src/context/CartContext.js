@@ -61,6 +61,14 @@ export function CartProvider({ children }) {
   }, [removeItem]);
 
   const clearCart = useCallback(() => { updateItems([]); }, [updateItems]);
+  const replaceItems = useCallback((nextItems) => {
+    const normalized = Array.isArray(nextItems)
+      ? nextItems
+          .filter(item => item && item.variantId && Number(item.quantity) > 0)
+          .map(item => ({ ...item, quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)) }))
+      : [];
+    updateItems(normalized);
+  }, [updateItems]);
   const openCart = useCallback(() => setIsOpen(true), []);
   const closeCart = useCallback(() => setIsOpen(false), []);
 
@@ -68,9 +76,9 @@ export function CartProvider({ children }) {
   const count = useMemo(() => items.reduce((sum, i) => sum + i.quantity, 0), [items]);
 
   const value = useMemo(() => ({
-    items, addItem, removeItem, updateQuantity, clearCart,
+    items, addItem, removeItem, updateQuantity, clearCart, replaceItems,
     total, count, isOpen, setIsOpen, openCart, closeCart,
-  }), [items, addItem, removeItem, updateQuantity, clearCart, total, count, isOpen, openCart, closeCart]);
+  }), [items, addItem, removeItem, updateQuantity, clearCart, replaceItems, total, count, isOpen, openCart, closeCart]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }

@@ -11,6 +11,25 @@ export type DoopifyEvents = {
     email?: string | null
     reason?: string | null
   }
+  'checkout.abandoned': {
+    checkoutSessionId: string
+    email?: string | null
+    total: number
+    currency: string
+  }
+  'checkout.recovery_email_sent': {
+    checkoutSessionId: string
+    email: string
+    total: number
+    currency: string
+    recoveryEmailCount: number
+  }
+  'checkout.recovered': {
+    checkoutSessionId: string
+    email: string
+    total: number
+    currency: string
+  }
   'order.created': {
     orderId: string
     orderNumber: number

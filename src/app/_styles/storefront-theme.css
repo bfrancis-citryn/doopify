@@ -1,6 +1,14 @@
 :root {
   --storefront-background: #080808;
   --storefront-text: #f2ede4;
+  --brand-primary: #c9a86c;
+  --brand-secondary: #f2ede4;
+  --brand-accent: #c9a86c;
+  --brand-text: #f2ede4;
+  --brand-heading-font: var(--font-headline), sans-serif;
+  --brand-body-font: var(--font-body), sans-serif;
+  --brand-button-radius: 12px;
+  --brand-button-transform: none;
 }
 
 html {
@@ -8,6 +16,16 @@ html {
 }
 
 body.storefront-body {
-  color: var(--storefront-text);
+  color: var(--brand-text, var(--storefront-text));
   background: var(--storefront-background);
+  font-family: var(--brand-body-font, var(--font-body), sans-serif);
+}
+
+body.storefront-body h1,
+body.storefront-body h2,
+body.storefront-body h3,
+body.storefront-body h4,
+body.storefront-body h5,
+body.storefront-body h6 {
+  font-family: var(--brand-heading-font, var(--font-headline), sans-serif);
 }

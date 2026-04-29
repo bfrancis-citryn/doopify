@@ -1,0 +1,18 @@
+ALTER TABLE "stores"
+  ADD COLUMN "faviconUrl" TEXT,
+  ADD COLUMN "emailLogoUrl" TEXT,
+  ADD COLUMN "checkoutLogoUrl" TEXT,
+  ADD COLUMN "accentColor" TEXT,
+  ADD COLUMN "textColor" TEXT,
+  ADD COLUMN "headingFont" TEXT,
+  ADD COLUMN "bodyFont" TEXT,
+  ADD COLUMN "buttonRadius" TEXT DEFAULT 'md',
+  ADD COLUMN "buttonStyle" TEXT DEFAULT 'solid',
+  ADD COLUMN "buttonTextTransform" TEXT DEFAULT 'normal',
+  ADD COLUMN "emailHeaderColor" TEXT,
+  ADD COLUMN "emailFooterText" TEXT,
+  ADD COLUMN "supportEmail" TEXT,
+  ADD COLUMN "instagramUrl" TEXT,
+  ADD COLUMN "facebookUrl" TEXT,
+  ADD COLUMN "tiktokUrl" TEXT,
+  ADD COLUMN "youtubeUrl" TEXT;

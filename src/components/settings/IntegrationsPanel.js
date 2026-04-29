@@ -9,6 +9,9 @@ const AVAILABLE_EVENTS = [
   'order.return_updated',
   'fulfillment.created',
   'checkout.failed',
+  'checkout.abandoned',
+  'checkout.recovery_email_sent',
+  'checkout.recovered',
   'product.created',
   'product.updated',
 ];

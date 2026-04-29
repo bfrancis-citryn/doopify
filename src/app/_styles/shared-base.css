@@ -10,7 +10,7 @@ html {
 
 body {
   min-height: 100vh;
-  font-family: var(--font-body), sans-serif;
+  font-family: var(--brand-body-font, var(--font-body), sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

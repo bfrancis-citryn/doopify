@@ -54,6 +54,8 @@ The repo currently includes:
 - Phase 4 transactional email observability foundation with `EmailDelivery` persistence, provider adapter seam, order-confirmation delivery tracking, and fast service tests
 - Phase 4 analytics event fan-out foundation with typed lifecycle events, `AnalyticsEvent` persistence, and side-effect-safe consumer handling
 - Phase 4 background side-effect job foundation with persisted `Job` records, claiming, retry/backoff/exhaustion lifecycle, secure runner route, and initial order-confirmation email job integration
+- Phase 4 abandoned checkout recovery foundation with persisted recovery metadata, admin review/send controls, safe tokenized recovery payload API, and secret-protected due-send processing
+- Brand Kit foundation with Store-backed branding fields, admin Brand Kit screen/API, safe public brand payloads, and branded checkout/email defaults
 - GitHub Actions CI workflow for push/PR verification plus optional integration workflow gated by `DATABASE_URL_TEST` secret
 - production runbook docs for deployment checklist, environment variables, webhooks/provider setup, backup/restore, and admin recovery
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs
@@ -152,6 +154,16 @@ Shipped foundation:
 - analytics consumer registered in the existing internal event registry
 - checkout/refund/return/email/webhook services now emit analytics lifecycle events from server-owned flows
 - analytics failures are isolated from commerce durability through handler failure containment
+
+#### Abandoned Checkout Recovery
+
+Shipped foundation:
+
+- recovery lifecycle metadata persisted on `CheckoutSession` (`abandonedAt`, `recoveryToken`, send counters/timestamps, `recoveredAt`)
+- admin abandoned checkout APIs and workspace for list/detail, mark-due, due-send, and manual recovery sends
+- secret-protected cron-compatible due-send route with summary counts
+- token-protected checkout recovery API with server-side repricing and safe payload shaping
+- checkout completion now marks recovery success only after verified paid completion when recovery outreach occurred
 
 ### Remaining Phase 4 Priorities
 

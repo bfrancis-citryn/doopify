@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   createOrder: vi.fn(),
   getOrderByPaymentIntentId: vi.fn(),
   emitInternalEvent: vi.fn(),
+  markCheckoutRecoveredByPaymentIntent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -51,6 +52,10 @@ vi.mock('@/server/services/order.service', () => ({
 
 vi.mock('@/server/events/dispatcher', () => ({
   emitInternalEvent: mocks.emitInternalEvent,
+}))
+
+vi.mock('@/server/services/abandoned-checkout.service', () => ({
+  markCheckoutRecoveredByPaymentIntent: mocks.markCheckoutRecoveredByPaymentIntent,
 }))
 
 import {
