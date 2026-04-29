@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { createVariant } from '@/server/services/product.service'
 
 interface Params { params: Promise<{ id: string }> }
@@ -16,6 +17,9 @@ const createSchema = z.object({
 })
 
 export async function POST(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { id: productId } = await params
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
