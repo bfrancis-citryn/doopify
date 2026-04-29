@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   getOrderByPaymentIntentId: vi.fn(),
   emitInternalEvent: vi.fn(),
   markCheckoutRecoveredByPaymentIntent: vi.fn(),
+  getShippingRatesForCheckout: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -58,6 +59,10 @@ vi.mock('@/server/services/abandoned-checkout.service', () => ({
   markCheckoutRecoveredByPaymentIntent: mocks.markCheckoutRecoveredByPaymentIntent,
 }))
 
+vi.mock('@/server/shipping/shipping-rate.service', () => ({
+  getShippingRatesForCheckout: mocks.getShippingRatesForCheckout,
+}))
+
 import {
   completeCheckoutFromPaymentIntent,
   createCheckoutPaymentIntent,
@@ -81,6 +86,15 @@ describe('checkout service', () => {
       shippingThresholdCents: 7500,
     })
     mocks.getCustomerByEmail.mockResolvedValue(null)
+    mocks.getShippingRatesForCheckout.mockImplementation(async ({ shippingAddress }) => [
+      {
+        id: shippingAddress?.country === 'CA' ? 'manual:fallback:international' : 'manual:fallback:domestic',
+        source: 'MANUAL',
+        displayName: shippingAddress?.country === 'CA' ? 'International shipping' : 'Domestic shipping',
+        amountCents: shippingAddress?.country === 'CA' ? 1999 : 999,
+        currency: 'USD',
+      },
+    ])
   })
 
   it('creates a Stripe payment intent from server-owned live pricing', async () => {
@@ -498,5 +512,78 @@ describe('checkout service', () => {
 
     expect(mocks.createStripePaymentIntent).not.toHaveBeenCalled()
     expect(mocks.prisma.checkoutSession.create).not.toHaveBeenCalled()
+  })
+
+  it('revalidates selected shipping quote before creating stripe amount', async () => {
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValue([
+      {
+        id: 'manual:cheap',
+        source: 'MANUAL',
+        displayName: 'Economy',
+        amountCents: 900,
+        currency: 'USD',
+      },
+      {
+        id: 'manual:premium',
+        source: 'MANUAL',
+        displayName: 'Premium',
+        amountCents: 3000,
+        currency: 'USD',
+      },
+    ])
+    mocks.createStripePaymentIntent.mockResolvedValue({
+      id: 'pi_selected_shipping',
+      client_secret: 'secret_selected_shipping',
+      amount: 8000,
+      currency: 'usd',
+      status: 'requires_payment_method',
+    })
+    mocks.prisma.checkoutSession.create.mockResolvedValue({
+      id: 'checkout_selected_shipping',
+    })
+
+    const checkout = await createCheckoutPaymentIntent({
+      email: 'ada@example.com',
+      items: [{ variantId: 'variant_1', quantity: 2 }],
+      shippingAddress: address,
+      selectedShippingQuoteId: 'manual:premium',
+    })
+
+    expect(mocks.createStripePaymentIntent).toHaveBeenCalledWith({
+      amount: 8000,
+      currency: 'USD',
+      email: 'ada@example.com',
+      metadata: {
+        checkoutEmail: 'ada@example.com',
+      },
+    })
+    expect(mocks.prisma.checkoutSession.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        shippingAmountCents: 3000,
+        totalCents: 8000,
+      }),
+    })
+    expect(checkout).toMatchObject({
+      shippingAmountCents: 3000,
+      totalCents: 8000,
+      selectedShippingRate: {
+        id: 'manual:premium',
+        amountCents: 3000,
+      },
+    })
   })
 })

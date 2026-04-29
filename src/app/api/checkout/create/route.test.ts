@@ -96,4 +96,35 @@ describe('POST /api/checkout/create', () => {
       discountCode: 'LAUNCH10',
     })
   })
+
+  it('passes selected shipping quote id for server-side revalidation', async () => {
+    mocks.createCheckoutPaymentIntent.mockResolvedValue({
+      checkoutSessionId: 'checkout_2',
+      paymentIntentId: 'pi_test_2',
+      clientSecret: 'secret_test_2',
+      currency: 'USD',
+      subtotal: 50,
+      shippingAmount: 15,
+      taxAmount: 0,
+      discountAmount: 0,
+      total: 65,
+      items: [],
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/checkout/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...validPayload,
+          selectedShippingQuoteId: ' manual:fallback:domestic ',
+        }),
+      })
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.createCheckoutPaymentIntent).toHaveBeenCalledWith({
+      ...validPayload,
+      selectedShippingQuoteId: 'manual:fallback:domestic',
+    })
+  })
 })

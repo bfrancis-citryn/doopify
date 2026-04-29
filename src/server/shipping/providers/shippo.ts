@@ -15,6 +15,20 @@ function normalizeMoneyToCents(value: unknown) {
   return Math.round(parsed * 100)
 }
 
+function resolveShippoLabelFileType(input: { labelFormat?: string; labelSize?: string }) {
+  const format = String(input.labelFormat ?? 'PDF')
+    .trim()
+    .toUpperCase()
+  const size = String(input.labelSize ?? '4x6')
+    .trim()
+    .toLowerCase()
+
+  if (format === 'PNG') return 'PNG'
+  if (format === 'ZPL') return 'ZPLII'
+  if (size === '8.5x11') return 'PDF'
+  return 'PDF_4x6'
+}
+
 export const shippoProviderAdapter: ShippingProviderAdapter = {
   async testConnection(input) {
     try {
@@ -159,5 +173,59 @@ export const shippoProviderAdapter: ShippingProviderAdapter = {
       .sort((a, b) => a.amountCents - b.amountCents)
 
     return quotes as ShippingRateQuote[]
+  },
+  async purchaseLabel(input) {
+    const response = await fetch(`${SHIPPO_API_BASE}/transactions/`, {
+      method: 'POST',
+      headers: {
+        Authorization: `ShippoToken ${input.apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        rate: input.rateId,
+        async: false,
+        label_file_type: resolveShippoLabelFileType({
+          labelFormat: input.labelFormat,
+          labelSize: input.labelSize,
+        }),
+      }),
+    })
+
+    const bodyText = await response.text()
+    if (!response.ok) {
+      throw new Error(`Shippo label purchase failed (${response.status}): ${truncate(bodyText || 'Request failed')}`)
+    }
+
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(bodyText) as Record<string, unknown>
+    } catch {
+      payload = null
+    }
+
+    const status = String(payload?.status ?? '').toUpperCase()
+    if (status && status !== 'SUCCESS' && status !== 'QUEUED') {
+      const message = typeof payload?.messages === 'string' ? payload.messages : 'Transaction was not successful'
+      throw new Error(`Shippo label purchase failed: ${message}`)
+    }
+
+    const rate = payload?.rate as Record<string, unknown> | undefined
+
+    return {
+      providerShipmentId: typeof payload?.shipment === 'string' ? payload.shipment : undefined,
+      providerRateId: typeof rate?.object_id === 'string' ? rate.object_id : input.rateId,
+      providerLabelId: typeof payload?.object_id === 'string' ? payload.object_id : undefined,
+      carrier: typeof payload?.carrier === 'string' ? payload.carrier : undefined,
+      service: typeof payload?.servicelevel_name === 'string' ? payload.servicelevel_name : undefined,
+      status: status || 'PURCHASED',
+      labelUrl: typeof payload?.label_url === 'string' ? payload.label_url : undefined,
+      trackingNumber: typeof payload?.tracking_number === 'string' ? payload.tracking_number : undefined,
+      trackingUrl: typeof payload?.tracking_url_provider === 'string' ? payload.tracking_url_provider : undefined,
+      rateAmountCents: normalizeMoneyToCents(rate?.amount) ?? undefined,
+      labelAmountCents: normalizeMoneyToCents(payload?.amount ?? rate?.amount) ?? undefined,
+      currency: String(payload?.currency ?? rate?.currency ?? input.request.currency ?? 'USD').toUpperCase(),
+      rawResponse: payload ?? undefined,
+    }
   },
 }

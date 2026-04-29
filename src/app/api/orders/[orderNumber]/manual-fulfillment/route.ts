@@ -1,0 +1,80 @@
+import { z } from 'zod'
+
+import { err, ok, parseBody, unprocessable } from '@/lib/api'
+import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
+import { createManualFulfillment } from '@/server/services/order.service'
+
+interface Params {
+  params: Promise<{ orderNumber: string }>
+}
+
+const schema = z.object({
+  carrier: z.string().trim().max(120).optional(),
+  service: z.string().trim().max(120).optional(),
+  trackingNumber: z.string().trim().max(200).optional(),
+  trackingUrl: z.string().trim().url().max(500).optional(),
+  shippedDate: z.string().datetime().optional(),
+  sendTrackingEmail: z.boolean().optional(),
+  items: z
+    .array(
+      z.object({
+        orderItemId: z.string().min(1),
+        variantId: z.string().min(1).optional(),
+        quantity: z.number().int().min(1),
+      })
+    )
+    .min(1, 'At least one item is required'),
+})
+
+export async function POST(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
+  const { orderNumber } = await params
+  const parsedOrderNumber = Number.parseInt(orderNumber, 10)
+  if (!Number.isFinite(parsedOrderNumber) || parsedOrderNumber <= 0) {
+    return err('Invalid order number', 400)
+  }
+
+  const body = await parseBody(req)
+  if (!body) return err('Invalid request body', 400)
+
+  const parsed = schema.safeParse(body)
+  if (!parsed.success) {
+    return unprocessable('Manual fulfillment payload is invalid', parsed.error.flatten())
+  }
+
+  const order = await prisma.order.findUnique({
+    where: {
+      orderNumber: parsedOrderNumber,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (!order) {
+    return err('Order not found', 404)
+  }
+
+  try {
+    const fulfillment = await createManualFulfillment({
+      orderId: order.id,
+      items: parsed.data.items,
+      carrier: parsed.data.carrier,
+      service: parsed.data.service,
+      trackingNumber: parsed.data.trackingNumber,
+      trackingUrl: parsed.data.trackingUrl,
+      shippedAt: parsed.data.shippedDate ? new Date(parsed.data.shippedDate) : undefined,
+      sendTrackingEmail: parsed.data.sendTrackingEmail,
+    })
+
+    return ok(fulfillment, 201)
+  } catch (error) {
+    console.error('[POST /api/orders/[orderNumber]/manual-fulfillment]', error)
+    const message = error instanceof Error ? error.message : 'Failed to create manual fulfillment'
+    return err(message, 400)
+  }
+}
+

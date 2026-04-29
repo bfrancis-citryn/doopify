@@ -59,6 +59,40 @@ function buildRefundItems(selectedItems) {
     });
 }
 
+function fulfilledQuantityByOrderItem(order) {
+  const quantities = new Map();
+  const fulfillments = order.fulfillments || [];
+
+  for (const fulfillment of fulfillments) {
+    const status = String(fulfillment.status || '').toUpperCase();
+    if (['CANCELLED', 'ERROR', 'FAILURE'].includes(status)) {
+      continue;
+    }
+
+    for (const item of fulfillment.items || []) {
+      quantities.set(item.orderItemId, (quantities.get(item.orderItemId) || 0) + Number(item.quantity || 0));
+    }
+  }
+
+  return quantities;
+}
+
+function buildManualFulfillmentItems(order) {
+  const fulfilledByItem = fulfilledQuantityByOrderItem(order);
+  return lineItemsForOrder(order).map((item) => {
+    const ordered = Number(item.quantity || 0);
+    const fulfilled = fulfilledByItem.get(item.id) || 0;
+    const remaining = Math.max(0, ordered - fulfilled);
+    return {
+      ...item,
+      selected: false,
+      fulfillQty: remaining > 0 ? 1 : 0,
+      maxFulfillable: remaining,
+      alreadyFulfilled: fulfilled,
+    };
+  });
+}
+
 function RefundPanel({ order, onClose, onSuccess }) {
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('requested_by_customer');
@@ -155,6 +189,409 @@ function RefundPanel({ order, onClose, onSuccess }) {
           <button className={styles.secondaryAction} onClick={onClose} type="button">Cancel</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ManualFulfillmentPanel({ order, onClose, onSuccess }) {
+  const [selectedItems, setSelectedItems] = useState(buildManualFulfillmentItems(order));
+  const [carrier, setCarrier] = useState('');
+  const [service, setService] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [trackingUrl, setTrackingUrl] = useState('');
+  const [shippedDate, setShippedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [sendTrackingEmail, setSendTrackingEmail] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    const items = selectedItems
+      .filter(item => item.selected)
+      .map(item => ({
+        orderItemId: item.id,
+        variantId: lineItemVariantId(item),
+        quantity: parseInt(item.fulfillQty, 10) || 0,
+      }));
+
+    if (!items.length) {
+      setError('Select at least one item to fulfill');
+      return;
+    }
+
+    if (items.some(item => item.quantity <= 0)) {
+      setError('Fulfillment quantities must be at least 1');
+      return;
+    }
+
+    const overLimitItem = selectedItems.find(item => item.selected && (parseInt(item.fulfillQty, 10) || 0) > Number(item.maxFulfillable || 0));
+    if (overLimitItem) {
+      setError('One or more selected items exceed the remaining fulfillable quantity');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/orders/${normalizeOrderNumber(order.orderNumber)}/manual-fulfillment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          carrier: carrier || undefined,
+          service: service || undefined,
+          trackingNumber: trackingNumber || undefined,
+          trackingUrl: trackingUrl || undefined,
+          shippedDate: shippedDate ? new Date(`${shippedDate}T12:00:00.000Z`).toISOString() : undefined,
+          sendTrackingEmail,
+          items,
+        }),
+      });
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error || 'Failed to create manual fulfillment');
+      }
+
+      onSuccess(
+        'Order fulfilled manually',
+        `${items.length} item${items.length === 1 ? '' : 's'} fulfilled${trackingNumber ? ` with tracking ${trackingNumber}` : ''}.`
+      );
+    } catch (fulfillmentError) {
+      setError(fulfillmentError instanceof Error ? fulfillmentError.message : 'Failed to create manual fulfillment');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className={styles.shopifyPanelClean} style={{ border: '2px solid #e3e3e3', marginBottom: 16 }}>
+      <div className={styles.shopifyPanelHeaderClean}>
+        <strong>Mark fulfilled manually</strong>
+        <button className={styles.textActionButton} onClick={onClose} type="button">Close</button>
+      </div>
+      <form onSubmit={handleSubmit} style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {error && <p style={{ color: '#c0392b', fontSize: 13, margin: 0 }}>{error}</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {selectedItems.map(item => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <input
+                checked={item.selected}
+                disabled={item.maxFulfillable <= 0}
+                onChange={() => setSelectedItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, selected: !entry.selected } : entry)))}
+                type="checkbox"
+              />
+              <span style={{ flex: 1 }}>
+                {lineItemTitle(item)}{lineItemVariantTitle(item) ? ` - ${lineItemVariantTitle(item)}` : ''}
+              </span>
+              <span style={{ color: '#666', width: 130, textAlign: 'right' }}>
+                Remaining: {item.maxFulfillable}
+              </span>
+              <input
+                className={styles.detailInput}
+                disabled={!item.selected || item.maxFulfillable <= 0}
+                max={item.maxFulfillable}
+                min="1"
+                onChange={(event) => setSelectedItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, fulfillQty: event.target.value } : entry)))}
+                style={{ width: 74 }}
+                type="number"
+                value={item.fulfillQty}
+              />
+            </div>
+          ))}
+        </div>
+        <label style={{ fontSize: 13 }}>
+          Carrier
+          <input className={styles.detailInput} onChange={(event) => setCarrier(event.target.value)} type="text" value={carrier} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          Service
+          <input className={styles.detailInput} onChange={(event) => setService(event.target.value)} type="text" value={service} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          Tracking number
+          <input className={styles.detailInput} onChange={(event) => setTrackingNumber(event.target.value)} type="text" value={trackingNumber} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          Tracking URL
+          <input className={styles.detailInput} onChange={(event) => setTrackingUrl(event.target.value)} type="url" value={trackingUrl} />
+        </label>
+        <label style={{ fontSize: 13 }}>
+          Shipped date
+          <input className={styles.detailInput} onChange={(event) => setShippedDate(event.target.value)} type="date" value={shippedDate} />
+        </label>
+        <label style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input checked={sendTrackingEmail} onChange={(event) => setSendTrackingEmail(event.target.checked)} type="checkbox" />
+          Send tracking email when configured
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className={styles.primaryAction} disabled={submitting} type="submit">
+            {submitting ? 'Saving fulfillment...' : 'Save manual fulfillment'}
+          </button>
+          <button className={styles.secondaryAction} disabled={submitting} onClick={onClose} type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function LabelPurchasePanel({ order, onClose, onSuccess }) {
+  const [selectedItems, setSelectedItems] = useState(buildManualFulfillmentItems(order));
+  const [packageWeightOz, setPackageWeightOz] = useState('12');
+  const [packageLengthIn, setPackageLengthIn] = useState('10');
+  const [packageWidthIn, setPackageWidthIn] = useState('8');
+  const [packageHeightIn, setPackageHeightIn] = useState('4');
+  const [labelFormat, setLabelFormat] = useState('PDF');
+  const [labelSize, setLabelSize] = useState('4x6');
+  const [rates, setRates] = useState([]);
+  const [selectedRateId, setSelectedRateId] = useState('');
+  const [labelResult, setLabelResult] = useState(null);
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [buyingLabel, setBuyingLabel] = useState(false);
+  const [error, setError] = useState(null);
+
+  function buildSelectedItemsPayload() {
+    return selectedItems
+      .filter(item => item.selected)
+      .map(item => ({
+        orderItemId: item.id,
+        variantId: lineItemVariantId(item),
+        quantity: parseInt(item.fulfillQty, 10) || 0,
+      }));
+  }
+
+  function buildParcelPayload() {
+    return {
+      weightOz: Number(packageWeightOz),
+      lengthIn: Number(packageLengthIn),
+      widthIn: Number(packageWidthIn),
+      heightIn: Number(packageHeightIn),
+    };
+  }
+
+  function validateSelection() {
+    const items = buildSelectedItemsPayload();
+    if (!items.length) {
+      setError('Select at least one item to ship');
+      return null;
+    }
+    if (items.some(item => item.quantity <= 0)) {
+      setError('Selected quantities must be at least 1');
+      return null;
+    }
+    const overLimitItem = selectedItems.find(item => item.selected && (parseInt(item.fulfillQty, 10) || 0) > Number(item.maxFulfillable || 0));
+    if (overLimitItem) {
+      setError('One or more selected items exceed the remaining fulfillable quantity');
+      return null;
+    }
+
+    const parcel = buildParcelPayload();
+    if (!Number.isFinite(parcel.weightOz) || parcel.weightOz <= 0) {
+      setError('Package weight must be greater than zero');
+      return null;
+    }
+    if (!Number.isFinite(parcel.lengthIn) || parcel.lengthIn <= 0 || !Number.isFinite(parcel.widthIn) || parcel.widthIn <= 0 || !Number.isFinite(parcel.heightIn) || parcel.heightIn <= 0) {
+      setError('Package dimensions must be greater than zero');
+      return null;
+    }
+
+    return { items, parcel };
+  }
+
+  async function handleLoadRates() {
+    const payload = validateSelection();
+    if (!payload) return;
+
+    setLoadingRates(true);
+    setError(null);
+    setLabelResult(null);
+    try {
+      const response = await fetch(`/api/orders/${normalizeOrderNumber(order.orderNumber)}/shipping-rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error || 'Failed to load label rates');
+      }
+
+      const nextRates = Array.isArray(json.data?.quotes) ? json.data.quotes : [];
+      if (!nextRates.length) {
+        throw new Error('No rates were returned for this package');
+      }
+      setRates(nextRates);
+      setSelectedRateId(nextRates[0].providerRateId || nextRates[0].id || '');
+    } catch (ratesError) {
+      setRates([]);
+      setSelectedRateId('');
+      setError(ratesError instanceof Error ? ratesError.message : 'Failed to load rates');
+    } finally {
+      setLoadingRates(false);
+    }
+  }
+
+  async function handleBuyLabel() {
+    const payload = validateSelection();
+    if (!payload) return;
+    if (!selectedRateId) {
+      setError('Select a rate before buying a label');
+      return;
+    }
+
+    setBuyingLabel(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/orders/${normalizeOrderNumber(order.orderNumber)}/shipping-labels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          providerRateId: selectedRateId,
+          labelFormat,
+          labelSize,
+        }),
+      });
+      const json = await response.json();
+      if (!json.success) {
+        throw new Error(json.error || 'Failed to buy shipping label');
+      }
+
+      setLabelResult(json.data);
+      if (json.data?.shippingLabel?.labelUrl) {
+        window.open(json.data.shippingLabel.labelUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      onSuccess(
+        json.data?.duplicate ? 'Shipping label reused' : 'Shipping label purchased',
+        json.data?.shippingLabel?.trackingNumber
+          ? `Tracking ${json.data.shippingLabel.trackingNumber} saved on fulfillment.`
+          : 'Label purchased and fulfillment updated.'
+      );
+    } catch (labelError) {
+      setError(labelError instanceof Error ? labelError.message : 'Failed to buy label');
+    } finally {
+      setBuyingLabel(false);
+    }
+  }
+
+  return (
+    <div className={styles.shopifyPanelClean} style={{ border: '2px solid #e3e3e3', marginBottom: 16 }}>
+      <div className={styles.shopifyPanelHeaderClean}>
+        <strong>Buy shipping label</strong>
+        <button className={styles.textActionButton} onClick={onClose} type="button">Close</button>
+      </div>
+      <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {error && <p style={{ color: '#c0392b', fontSize: 13, margin: 0 }}>{error}</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {selectedItems.map(item => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <input
+                checked={item.selected}
+                disabled={item.maxFulfillable <= 0}
+                onChange={() => {
+                  setRates([]);
+                  setSelectedRateId('');
+                  setSelectedItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, selected: !entry.selected } : entry)));
+                }}
+                type="checkbox"
+              />
+              <span style={{ flex: 1 }}>
+                {lineItemTitle(item)}{lineItemVariantTitle(item) ? ` - ${lineItemVariantTitle(item)}` : ''}
+              </span>
+              <span style={{ color: '#666', width: 130, textAlign: 'right' }}>
+                Remaining: {item.maxFulfillable}
+              </span>
+              <input
+                className={styles.detailInput}
+                disabled={!item.selected || item.maxFulfillable <= 0}
+                max={item.maxFulfillable}
+                min="1"
+                onChange={(event) => {
+                  setRates([]);
+                  setSelectedRateId('');
+                  setSelectedItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, fulfillQty: event.target.value } : entry)));
+                }}
+                style={{ width: 74 }}
+                type="number"
+                value={item.fulfillQty}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8 }}>
+          <label style={{ fontSize: 13 }}>
+            Weight (oz)
+            <input className={styles.detailInput} min="1" onChange={(event) => { setPackageWeightOz(event.target.value); setRates([]); setSelectedRateId(''); }} type="number" value={packageWeightOz} />
+          </label>
+          <label style={{ fontSize: 13 }}>
+            Length (in)
+            <input className={styles.detailInput} min="1" onChange={(event) => { setPackageLengthIn(event.target.value); setRates([]); setSelectedRateId(''); }} type="number" value={packageLengthIn} />
+          </label>
+          <label style={{ fontSize: 13 }}>
+            Width (in)
+            <input className={styles.detailInput} min="1" onChange={(event) => { setPackageWidthIn(event.target.value); setRates([]); setSelectedRateId(''); }} type="number" value={packageWidthIn} />
+          </label>
+          <label style={{ fontSize: 13 }}>
+            Height (in)
+            <input className={styles.detailInput} min="1" onChange={(event) => { setPackageHeightIn(event.target.value); setRates([]); setSelectedRateId(''); }} type="number" value={packageHeightIn} />
+          </label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+          <label style={{ fontSize: 13 }}>
+            Label format
+            <select className={styles.detailSelect} onChange={(event) => setLabelFormat(event.target.value)} value={labelFormat}>
+              <option value="PDF">PDF</option>
+              <option value="PNG">PNG</option>
+              <option value="ZPL">ZPL</option>
+            </select>
+          </label>
+          <label style={{ fontSize: 13 }}>
+            Label size
+            <select className={styles.detailSelect} onChange={(event) => setLabelSize(event.target.value)} value={labelSize}>
+              <option value="4x6">4x6</option>
+              <option value="8.5x11">8.5x11</option>
+            </select>
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className={styles.secondaryAction} disabled={loadingRates} onClick={handleLoadRates} type="button">
+            {loadingRates ? 'Loading rates...' : 'Get rates'}
+          </button>
+        </div>
+
+        {rates.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rates.map(rate => {
+              const rateId = rate.providerRateId || rate.id;
+              return (
+                <label key={rate.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid #e4e4e4', borderRadius: 10, padding: 10 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input checked={selectedRateId === rateId} onChange={() => setSelectedRateId(rateId)} type="radio" />
+                    <span>{rate.displayName}</span>
+                  </span>
+                  <strong>{formatOrderMoney((Number(rate.amountCents || 0) / 100))}</strong>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className={styles.primaryAction} disabled={buyingLabel || !selectedRateId} onClick={handleBuyLabel} type="button">
+            {buyingLabel ? 'Buying label...' : 'Buy shipping label'}
+          </button>
+          <button className={styles.secondaryAction} disabled={buyingLabel} onClick={onClose} type="button">Cancel</button>
+        </div>
+
+        {labelResult?.shippingLabel?.labelUrl && (
+          <a href={labelResult.shippingLabel.labelUrl} rel="noreferrer" style={{ fontSize: 13 }} target="_blank">
+            Open label PDF
+          </a>
+        )}
+      </div>
     </div>
   );
 }
@@ -498,6 +935,10 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
   const paymentTone = statusTone(currentOrder.paymentStatus);
   const fulfillmentTone = statusTone(currentOrder.fulfillmentStatus);
   const canRefundOrReturn = ['PAID', 'PARTIALLY_REFUNDED'].includes(normalizePaymentStatus(currentOrder.paymentStatus));
+  const canManualFulfill =
+    ['PAID', 'PARTIALLY_REFUNDED'].includes(normalizePaymentStatus(currentOrder.paymentStatus)) &&
+    normalizePaymentStatus(currentOrder.fulfillmentStatus) !== 'FULFILLED';
+  const canBuyShippingLabel = ['PAID', 'PARTIALLY_REFUNDED'].includes(normalizePaymentStatus(currentOrder.paymentStatus));
   const orderLineItems = lineItemsForOrder(currentOrder);
   const timelineEntries = timelineForOrder(currentOrder);
 
@@ -521,12 +962,16 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
           <button className={styles.secondaryAction} disabled={refreshing} onClick={refreshOrder} type="button">{refreshing ? 'Refreshing...' : 'Refresh'}</button>
           <button className={styles.secondaryAction} disabled={!canRefundOrReturn} onClick={() => setActivePanel(activePanel === 'refund' ? null : 'refund')} type="button">Refund</button>
           <button className={styles.secondaryAction} disabled={!canRefundOrReturn} onClick={() => setActivePanel(activePanel === 'return' ? null : 'return')} type="button">Return</button>
+          <button className={styles.secondaryAction} disabled={!canManualFulfill} onClick={() => setActivePanel(activePanel === 'manual-fulfillment' ? null : 'manual-fulfillment')} type="button">Mark Fulfilled Manually</button>
+          <button className={styles.secondaryAction} disabled={!canBuyShippingLabel} onClick={() => setActivePanel(activePanel === 'label-purchase' ? null : 'label-purchase')} type="button">Buy Shipping Label</button>
           <button className={styles.secondaryAction} type="button">Print</button>
         </div>
       </div>
 
       {activePanel === 'refund' && <RefundPanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
       {activePanel === 'return' && <ReturnPanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
+      {activePanel === 'manual-fulfillment' && <ManualFulfillmentPanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
+      {activePanel === 'label-purchase' && <LabelPurchasePanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
 
       <div className={styles.shopifyDetailGridClean}>
         <div className={styles.shopifyMainColumn}>

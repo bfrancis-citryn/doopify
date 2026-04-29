@@ -51,8 +51,12 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - checkout failure state is persisted and surfaced on the success-page polling flow
 - checkout-native code discounts are calculated through the server pricing authority
 - checkout pricing applies persisted shipping-zone/rate and jurisdiction tax-rule configuration from admin-managed settings
+- checkout shipping options now load through `POST /api/checkout/shipping-rates`, and selected shipping quotes are revalidated server-side before payment-intent amounts are created
 - checkout payload snapshots persist shipping/tax resolution decisions for historical accuracy after config changes
 - discount applications and usage counts are persisted only after verified paid order creation succeeds
+- manual fulfillment now uses an admin-only API (`POST /api/orders/[orderNumber]/manual-fulfillment`) with order-item ownership checks, over-fulfillment rejection, and paid-order gating
+- shipping label rates and purchases now use admin-only order APIs (`POST /api/orders/[orderNumber]/shipping-rates`, `POST /api/orders/[orderNumber]/shipping-labels`) with provider-rate revalidation against fresh server-fetched rates
+- shipping label purchase persists a separate `ShippingLabel.labelAmountCents` value and must not mutate checkout/order totals or payment status
 - inbound Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
 - inbound webhook replay uses verified local payloads instead of refetching from Stripe
 - inbound webhook retry/support diagnostics are available through admin API/UI

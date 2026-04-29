@@ -584,6 +584,196 @@ export async function createFulfillment(data: {
   return fulfillment
 }
 
+type ManualFulfillmentItemInput = {
+  orderItemId: string
+  variantId?: string
+  quantity: number
+}
+
+function normalizeFulfilledQuantities(input: {
+  orderItems: Array<{ id: string; quantity: number }>
+  fulfillmentRows: Array<{
+    status: string
+    items: Array<{ orderItemId: string; quantity: number }>
+  }>
+}) {
+  const fulfilledByOrderItemId = new Map<string, number>()
+
+  for (const item of input.orderItems) {
+    fulfilledByOrderItemId.set(item.id, 0)
+  }
+
+  for (const fulfillment of input.fulfillmentRows) {
+    if (['CANCELLED', 'ERROR', 'FAILURE'].includes(String(fulfillment.status).toUpperCase())) {
+      continue
+    }
+
+    for (const item of fulfillment.items) {
+      const current = fulfilledByOrderItemId.get(item.orderItemId) ?? 0
+      fulfilledByOrderItemId.set(item.orderItemId, current + Number(item.quantity))
+    }
+  }
+
+  return fulfilledByOrderItemId
+}
+
+function resolveFulfillmentStatusFromQuantities(input: {
+  orderItems: Array<{ id: string; quantity: number }>
+  fulfilledByOrderItemId: Map<string, number>
+}): FulfillmentStatus {
+  const allUnfulfilled = input.orderItems.every(
+    (item) => (input.fulfilledByOrderItemId.get(item.id) ?? 0) <= 0
+  )
+  if (allUnfulfilled) return 'UNFULFILLED'
+
+  const allFulfilled = input.orderItems.every((item) => {
+    const fulfilled = input.fulfilledByOrderItemId.get(item.id) ?? 0
+    return fulfilled >= Number(item.quantity)
+  })
+  if (allFulfilled) return 'FULFILLED'
+
+  return 'PARTIALLY_FULFILLED'
+}
+
+export async function createManualFulfillment(data: {
+  orderId: string
+  items: ManualFulfillmentItemInput[]
+  carrier?: string
+  service?: string
+  trackingNumber?: string
+  trackingUrl?: string
+  shippedAt?: Date
+  sendTrackingEmail?: boolean
+}) {
+  if (!data.items.length) {
+    throw new Error('At least one fulfillment item is required')
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: data.orderId },
+    include: {
+      items: {
+        select: {
+          id: true,
+          variantId: true,
+          quantity: true,
+        },
+      },
+      fulfillments: {
+        select: {
+          status: true,
+          items: {
+            select: {
+              orderItemId: true,
+              quantity: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!order) {
+    throw new Error('Order not found')
+  }
+
+  if (!['PAID', 'PARTIALLY_REFUNDED'].includes(order.paymentStatus)) {
+    throw new Error('Manual fulfillment is only available for paid orders')
+  }
+
+  const orderItemById = new Map(order.items.map((item) => [item.id, item]))
+  const fulfilledByOrderItemId = normalizeFulfilledQuantities({
+    orderItems: order.items,
+    fulfillmentRows: order.fulfillments,
+  })
+
+  for (const item of data.items) {
+    if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+      throw new Error('Fulfillment item quantity must be a positive integer')
+    }
+
+    const orderItem = orderItemById.get(item.orderItemId)
+    if (!orderItem) {
+      throw new Error('Fulfillment item does not belong to this order')
+    }
+
+    const alreadyFulfilled = fulfilledByOrderItemId.get(item.orderItemId) ?? 0
+    const remainingQuantity = Number(orderItem.quantity) - alreadyFulfilled
+
+    if (item.quantity > remainingQuantity) {
+      throw new Error(
+        `Cannot fulfill ${item.quantity} unit(s) for item ${item.orderItemId}. Remaining fulfillable quantity is ${remainingQuantity}.`
+      )
+    }
+
+    if (item.variantId && orderItem.variantId && item.variantId !== orderItem.variantId) {
+      throw new Error('Fulfillment item variant does not match this order item')
+    }
+
+    fulfilledByOrderItemId.set(item.orderItemId, alreadyFulfilled + item.quantity)
+  }
+
+  const nextFulfillmentStatus = resolveFulfillmentStatusFromQuantities({
+    orderItems: order.items,
+    fulfilledByOrderItemId,
+  })
+
+  const fulfillment = await prisma.$transaction(async (tx) => {
+    const createdFulfillment = await tx.fulfillment.create({
+      data: {
+        orderId: data.orderId,
+        status: 'SUCCESS',
+        carrier: data.carrier,
+        service: data.service,
+        trackingNumber: data.trackingNumber,
+        trackingUrl: data.trackingUrl,
+        shippedAt: data.shippedAt ?? new Date(),
+        items: {
+          create: data.items.map((item) => ({
+            orderItemId: item.orderItemId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+          })),
+        },
+      },
+      include: {
+        items: true,
+      },
+    })
+
+    await tx.order.update({
+      where: { id: data.orderId },
+      data: {
+        fulfillmentStatus: nextFulfillmentStatus,
+      },
+    })
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: data.orderId,
+        type: 'MANUAL_FULFILLMENT_CREATED',
+        title: data.trackingNumber
+          ? `Manual fulfillment created with tracking ${data.trackingNumber}`
+          : 'Manual fulfillment created',
+        detail: data.sendTrackingEmail
+          ? 'Tracking email requested from manual fulfillment.'
+          : undefined,
+        actorType: 'STAFF',
+      },
+    })
+
+    return createdFulfillment
+  })
+
+  await emitInternalEvent('fulfillment.created', {
+    fulfillmentId: fulfillment.id,
+    orderId: data.orderId,
+    trackingNumber: fulfillment.trackingNumber ?? undefined,
+  })
+
+  return fulfillment
+}
+
 export async function getAnalytics() {
   const [totalRevenue, orderCount, customerCount, topProducts] = await Promise.all([
     prisma.order.aggregate({

@@ -10,6 +10,10 @@ import {
   type CheckoutPricingTaxDecision,
 } from '@/server/checkout/pricing'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import {
+  getShippingRatesForCheckout,
+} from '@/server/shipping/shipping-rate.service'
+import type { ShippingRateQuote } from '@/server/shipping/shipping-rate.types'
 import { markCheckoutRecoveredByPaymentIntent } from '@/server/services/abandoned-checkout.service'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
 import { createOrder, getOrderByPaymentIntentId } from '@/server/services/order.service'
@@ -57,6 +61,17 @@ type CheckoutPayload = {
     totalCents: number
     shippingDecision: CheckoutPricingShippingDecision
     taxDecision: CheckoutPricingTaxDecision
+  }
+  selectedShippingRate?: {
+    id: string
+    source: 'MANUAL' | 'EASYPOST' | 'SHIPPO'
+    carrier?: string
+    service?: string
+    displayName: string
+    amountCents: number
+    currency: string
+    estimatedDays?: number
+    providerRateId?: string
   }
 }
 
@@ -122,6 +137,20 @@ function mapCheckoutPricingForPresentation(pricing: {
   }
 }
 
+function mapShippingQuoteForSnapshot(quote: ShippingRateQuote) {
+  return {
+    id: quote.id,
+    source: quote.source,
+    carrier: quote.carrier,
+    service: quote.service,
+    displayName: quote.displayName,
+    amountCents: quote.amountCents,
+    currency: quote.currency,
+    estimatedDays: quote.estimatedDays,
+    providerRateId: quote.providerRateId,
+  }
+}
+
 async function resolveLineItems(items: CheckoutItemInput[]) {
   const uniqueVariantIds = Array.from(new Set(items.map((item) => item.variantId)))
 
@@ -162,6 +191,53 @@ async function resolveLineItems(items: CheckoutItemInput[]) {
       quantity: item.quantity,
     }
   })
+}
+
+function toShippingRateAddress(address: CheckoutAddress) {
+  return {
+    name: [address.firstName, address.lastName].filter(Boolean).join(' ').trim() || null,
+    phone: address.phone ?? null,
+    address1: address.address1,
+    address2: address.address2 ?? null,
+    city: address.city,
+    province: address.province ?? null,
+    postalCode: address.postalCode,
+    country: address.country,
+  }
+}
+
+function subtotalFromLineItems(lineItems: Array<{ priceCents: number; quantity: number }>) {
+  return lineItems.reduce((sum, item) => sum + item.priceCents * item.quantity, 0)
+}
+
+async function resolveSelectedShippingQuote(input: {
+  storeId?: string
+  lineItems: Array<{ priceCents: number; quantity: number }>
+  shippingAddress: CheckoutAddress
+  selectedShippingQuoteId?: string
+}) {
+  const quotes = await getShippingRatesForCheckout({
+    storeId: input.storeId,
+    subtotalCents: subtotalFromLineItems(input.lineItems),
+    shippingAddress: toShippingRateAddress(input.shippingAddress),
+  })
+
+  if (!quotes.length) {
+    throw new Error('No shipping rates are available for this checkout')
+  }
+
+  const selectedQuote = input.selectedShippingQuoteId
+    ? quotes.find((quote) => quote.id === input.selectedShippingQuoteId)
+    : quotes[0]
+
+  if (!selectedQuote) {
+    throw new Error('Selected shipping option is no longer available. Please refresh shipping options and try again.')
+  }
+
+  return {
+    selectedQuote,
+    quotes,
+  }
 }
 
 async function resolveDiscountCode(discountCode?: string) {
@@ -229,6 +305,7 @@ export async function createCheckoutPaymentIntent(input: {
   shippingAddress: CheckoutAddress
   billingAddress?: CheckoutAddress
   discountCode?: string
+  selectedShippingQuoteId?: string
 }) {
   const store = await getStoreSettings()
   const normalizedEmail = normalizeEmail(input.email)
@@ -237,6 +314,12 @@ export async function createCheckoutPaymentIntent(input: {
   const billingAddress = normalizeAddress(input.billingAddress ?? input.shippingAddress)
   const discount = await resolveDiscountCode(input.discountCode)
   const currency = (store?.currency || 'USD').toUpperCase()
+  const shippingResolution = await resolveSelectedShippingQuote({
+    storeId: store?.id,
+    lineItems,
+    shippingAddress,
+    selectedShippingQuoteId: input.selectedShippingQuoteId,
+  })
 
   const pricing = buildCheckoutPricingWithDecisionsCents(lineItems, store?.shippingThresholdCents, {
     discount: discount
@@ -288,11 +371,22 @@ export async function createCheckoutPaymentIntent(input: {
         }
       : {}),
   })
+  const selectedShippingRate = mapShippingQuoteForSnapshot(shippingResolution.selectedQuote)
+  const shippingAmountCents = selectedShippingRate.amountCents
+  const discountAmountCents =
+    pricing.appliedDiscount?.method === 'FREE_SHIPPING' ? shippingAmountCents : pricing.discountAmountCents ?? 0
+  const totalCents = (pricing.subtotalCents ?? 0) + shippingAmountCents + (pricing.taxAmountCents ?? 0) - discountAmountCents
+  const appliedDiscount = pricing.appliedDiscount
+    ? {
+        ...pricing.appliedDiscount,
+        amountCents: discountAmountCents,
+      }
+    : null
 
   const customer = await getCustomerByEmail(normalizedEmail)
 
   const paymentIntent = await createStripePaymentIntent({
-    amount: pricing.totalCents ?? 0,
+    amount: totalCents,
     currency,
     email: normalizedEmail,
     metadata: {
@@ -313,14 +407,15 @@ export async function createCheckoutPaymentIntent(input: {
       computedAt: new Date().toISOString(),
       currency,
       subtotalCents: pricing.subtotalCents ?? 0,
-      shippingAmountCents: pricing.shippingAmountCents ?? 0,
+      shippingAmountCents,
       taxAmountCents: pricing.taxAmountCents ?? 0,
-      discountAmountCents: pricing.discountAmountCents ?? 0,
-      totalCents: pricing.totalCents ?? 0,
+      discountAmountCents,
+      totalCents,
       shippingDecision: pricing.shippingDecision,
       taxDecision: pricing.taxDecision,
     },
-    ...(pricing.appliedDiscount ? { discountApplications: [pricing.appliedDiscount] } : {}),
+    selectedShippingRate,
+    ...(appliedDiscount ? { discountApplications: [appliedDiscount] } : {}),
   }
 
   const checkoutSession = await prisma.checkoutSession.create({
@@ -331,9 +426,9 @@ export async function createCheckoutPaymentIntent(input: {
       currency,
       subtotalCents: pricing.subtotalCents ?? 0,
       taxAmountCents: pricing.taxAmountCents ?? 0,
-      shippingAmountCents: pricing.shippingAmountCents ?? 0,
-      discountAmountCents: pricing.discountAmountCents ?? 0,
-      totalCents: pricing.totalCents ?? 0,
+      shippingAmountCents,
+      discountAmountCents,
+      totalCents,
       payload: payload as Prisma.InputJsonValue,
     },
   })
@@ -342,7 +437,7 @@ export async function createCheckoutPaymentIntent(input: {
     checkoutSessionId: checkoutSession.id,
     paymentIntentId: paymentIntent.id,
     email: normalizedEmail,
-    total: centsToDollars(pricing.totalCents ?? 0),
+    total: centsToDollars(totalCents),
     currency,
   })
 
@@ -352,19 +447,50 @@ export async function createCheckoutPaymentIntent(input: {
     clientSecret: paymentIntent.client_secret,
     currency,
     ...mapCheckoutPricingForPresentation(pricing),
+    shippingAmountCents,
+    discountAmountCents,
+    totalCents,
+    shippingAmount: centsToDollars(shippingAmountCents),
+    discountAmount: centsToDollars(discountAmountCents),
+    total: centsToDollars(totalCents),
+    availableShippingRates: shippingResolution.quotes.map(mapShippingQuoteForSnapshot),
+    selectedShippingRate,
     items: payload.items.map((item) => ({
       ...item,
       price: centsToDollars(item.priceCents ?? 0),
     })),
-    appliedDiscount: pricing.appliedDiscount
+    appliedDiscount: appliedDiscount
       ? {
-        ...pricing.appliedDiscount,
+        ...appliedDiscount,
           amount: centsToDollars(
-            pricing.appliedDiscount.amountCents ??
-              dollarsToCents((pricing.appliedDiscount as { amount?: number }).amount ?? 0)
+            appliedDiscount.amountCents ??
+              dollarsToCents((appliedDiscount as { amount?: number }).amount ?? 0)
           ),
         }
       : undefined,
+  }
+}
+
+export async function getCheckoutShippingRates(input: {
+  items: CheckoutItemInput[]
+  shippingAddress: CheckoutAddress
+}) {
+  const store = await getStoreSettings()
+  const lineItems = await resolveLineItems(input.items)
+  const shippingAddress = normalizeAddress(input.shippingAddress)
+
+  const quotes = await getShippingRatesForCheckout({
+    storeId: store?.id,
+    subtotalCents: subtotalFromLineItems(lineItems),
+    shippingAddress: toShippingRateAddress(shippingAddress),
+  })
+
+  return {
+    currency: (store?.currency || 'USD').toUpperCase(),
+    quotes: quotes.map((quote) => ({
+      ...mapShippingQuoteForSnapshot(quote),
+      amount: centsToDollars(quote.amountCents),
+    })),
   }
 }
 

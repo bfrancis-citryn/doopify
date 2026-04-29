@@ -68,6 +68,13 @@ function buildAddressPayload(address) {
   }
 }
 
+function buildCheckoutItemsPayload(items) {
+  return items.map((item) => ({
+    variantId: item.variantId,
+    quantity: item.quantity,
+  }));
+}
+
 function isAddressComplete(address) {
   return (
     address.firstName.trim() &&
@@ -143,6 +150,10 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
   const [showDiscount, setShowDiscount] = useState(false);
   const [discountError, setDiscountError] = useState('');
   const [recoveryNotice, setRecoveryNotice] = useState('');
+  const [shippingQuotes, setShippingQuotes] = useState([]);
+  const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState('');
+  const [shippingRatesLoading, setShippingRatesLoading] = useState(false);
+  const [shippingRatesError, setShippingRatesError] = useState('');
 
   const stripeRef = useRef(null);
   const elementsRef = useRef(null);
@@ -160,6 +171,13 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
   );
+  const selectedShippingQuote = useMemo(
+    () => shippingQuotes.find((quote) => quote.id === selectedShippingQuoteId) || null,
+    [shippingQuotes, selectedShippingQuoteId]
+  );
+  const previewSubtotal = checkout?.subtotal ?? cartSubtotal;
+  const previewShipping = checkout?.shippingAmount ?? selectedShippingQuote?.amount ?? null;
+  const previewTotal = checkout?.total ?? (previewSubtotal + (selectedShippingQuote?.amount || 0));
 
   useEffect(() => {
     if (!recoveryToken || recoveryToken === lastRecoveredTokenRef.current) return;
@@ -170,6 +188,8 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       setRecoveryNotice('');
       setError('');
       setDiscountError('');
+      setShippingRatesError('');
+      resetShippingSelection();
       if (checkout) {
         resetPaymentStep();
       }
@@ -229,14 +249,77 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setPaymentReady(false);
   }
 
+  function resetShippingSelection() {
+    setShippingQuotes([]);
+    setSelectedShippingQuoteId('');
+    setShippingRatesError('');
+  }
+
   function updateShippingField(field, value) {
     if (checkout) resetPaymentStep();
+    if (shippingQuotes.length || selectedShippingQuoteId || shippingRatesError) {
+      resetShippingSelection();
+    }
     setShippingAddress((current) => ({ ...current, [field]: value }));
   }
 
   function updateBillingField(field, value) {
     if (checkout) resetPaymentStep();
     setBillingAddress((current) => ({ ...current, [field]: value }));
+  }
+
+  async function loadShippingRates() {
+    setShippingRatesError('');
+    setDiscountError('');
+    setError('');
+
+    if (!items.length) {
+      setShippingRatesError('Your cart is empty.');
+      return;
+    }
+
+    if (!isAddressComplete(shippingAddress)) {
+      setShippingRatesError('Complete the shipping address to load shipping options.');
+      return;
+    }
+
+    setShippingRatesLoading(true);
+    try {
+      const response = await fetch('/api/checkout/shipping-rates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: buildCheckoutItemsPayload(items),
+          shippingAddress: buildAddressPayload(shippingAddress),
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || 'Failed to load shipping options');
+      }
+
+      const quotes = Array.isArray(payload?.data?.quotes) ? payload.data.quotes : [];
+      if (!quotes.length) {
+        throw new Error('No shipping options are available for this address');
+      }
+
+      setShippingQuotes(quotes);
+      setSelectedShippingQuoteId((current) => {
+        if (current && quotes.some((quote) => quote.id === current)) {
+          return current;
+        }
+        return quotes[0].id;
+      });
+    } catch (shippingError) {
+      resetShippingSelection();
+      const message = shippingError instanceof Error ? shippingError.message : 'Failed to load shipping options';
+      setShippingRatesError(message);
+    } finally {
+      setShippingRatesLoading(false);
+    }
   }
 
   async function initializePaymentElement(clientSecret) {
@@ -305,6 +388,11 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       return;
     }
 
+    if (!selectedShippingQuoteId) {
+      setError('Select a shipping option before continuing to payment.');
+      return;
+    }
+
     setCreatingIntent(true);
 
     try {
@@ -315,13 +403,11 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         },
         body: JSON.stringify({
           email: email.trim(),
-          items: items.map((item) => ({
-            variantId: item.variantId,
-            quantity: item.quantity,
-          })),
+          items: buildCheckoutItemsPayload(items),
           shippingAddress: buildAddressPayload(shippingAddress),
           billingAddress: billingSameAsShipping ? buildAddressPayload(shippingAddress) : buildAddressPayload(billingAddress),
           ...(showDiscount && discountCode.trim() ? { discountCode: discountCode.trim() } : {}),
+          selectedShippingQuoteId,
         }),
       });
 
@@ -331,6 +417,18 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       }
 
       setCheckout(payload.data);
+      if (payload.data?.selectedShippingRate?.id) {
+        setSelectedShippingQuoteId(payload.data.selectedShippingRate.id);
+      }
+      if (Array.isArray(payload.data?.availableShippingRates) && payload.data.availableShippingRates.length) {
+        setShippingQuotes(payload.data.availableShippingRates.map((quote) => ({
+          ...quote,
+          amount:
+            typeof quote.amount === 'number'
+              ? quote.amount
+              : Number((Number(quote.amountCents || 0) / 100).toFixed(2)),
+        })));
+      }
       await initializePaymentElement(payload.data.clientSecret);
     } catch (checkoutError) {
       const message = checkoutError instanceof Error ? checkoutError.message : 'Failed to start checkout';
@@ -542,6 +640,70 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                   </label>
                 </div>
 
+                <div className="section">
+                  <div className="section-title">Shipping method</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <button
+                      className="secondary-btn"
+                      disabled={shippingRatesLoading || !isAddressComplete(shippingAddress)}
+                      onClick={loadShippingRates}
+                      style={{ ...brandButtonBaseStyle, alignSelf: 'flex-start', minHeight: 40, padding: '0 16px' }}
+                      type="button"
+                    >
+                      {shippingRatesLoading ? 'Loading shipping options...' : shippingQuotes.length ? 'Refresh shipping options' : 'Load shipping options'}
+                    </button>
+                    {shippingRatesError ? (
+                      <div style={{ padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(127,29,29,0.2)', color: '#fca5a5', fontSize: 13 }}>
+                        {shippingRatesError}
+                      </div>
+                    ) : null}
+                    {shippingQuotes.length ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {shippingQuotes.map((quote) => (
+                          <label
+                            key={quote.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 10,
+                              border: quote.id === selectedShippingQuoteId ? '1px solid rgba(110,231,183,0.75)' : '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 14,
+                              padding: '10px 12px',
+                              background: quote.id === selectedShippingQuoteId ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.02)',
+                            }}
+                          >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <input
+                                checked={quote.id === selectedShippingQuoteId}
+                                name="shipping-rate"
+                                onChange={() => {
+                                  if (checkout) resetPaymentStep();
+                                  setSelectedShippingQuoteId(quote.id);
+                                }}
+                                type="radio"
+                                value={quote.id}
+                              />
+                              <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                <span style={{ fontSize: 14, color: '#f3efe7' }}>{quote.displayName}</span>
+                                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                                  {quote.carrier || quote.source}{quote.service ? ` • ${quote.service}` : ''}
+                                  {Number.isFinite(quote.estimatedDays) ? ` • ${quote.estimatedDays} day${quote.estimatedDays === 1 ? '' : 's'}` : ''}
+                                </span>
+                              </span>
+                            </span>
+                            <strong style={{ fontSize: 14, color: '#f3efe7' }}>{formatMoney(quote.amount, quote.currency || currency)}</strong>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.52)' }}>
+                        Load shipping options after entering the address.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 {!billingSameAsShipping && (
                   <div className="section">
                     <div className="section-title">Billing address</div>
@@ -633,7 +795,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                   {!paymentReady ? (
                     <button
                       className="primary-btn"
-                      disabled={creatingIntent || !items.length}
+                      disabled={creatingIntent || !items.length || !selectedShippingQuoteId}
                       style={{ ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }}
                       type="submit"
                     >
@@ -708,11 +870,15 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
 
             <div className="summary-row">
               <span>Subtotal</span>
-              <span>{formatMoney(checkout?.subtotal ?? cartSubtotal, currency)}</span>
+              <span>{formatMoney(previewSubtotal, currency)}</span>
             </div>
             <div className="summary-row">
               <span>Shipping</span>
-              <span>{checkout ? formatMoney(checkout.shippingAmount, currency) : 'Calculated at payment step'}</span>
+              <span>
+                {previewShipping == null
+                  ? 'Select shipping option'
+                  : formatMoney(previewShipping, checkout?.selectedShippingRate?.currency || selectedShippingQuote?.currency || currency)}
+              </span>
             </div>
             <div className="summary-row">
               <span>Tax</span>
@@ -726,7 +892,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
             ) : null}
             <div className="summary-row total">
               <span>Total</span>
-              <span>{formatMoney(checkout?.total ?? cartSubtotal, currency)}</span>
+              <span>{formatMoney(previewTotal, currency)}</span>
             </div>
           </aside>
         </div>

@@ -6,7 +6,10 @@ import type { ShippingRateQuote, ShippingRateRequest } from '@/server/shipping/s
 
 import { easypostProviderAdapter } from './providers/easypost'
 import { shippoProviderAdapter } from './providers/shippo'
-import type { ShippingProviderConnectionResult } from './providers/types'
+import type {
+  ShippingProviderConnectionResult,
+  ShippingProviderPurchaseLabelRequest,
+} from './providers/types'
 
 const PROVIDER_INTEGRATION_TYPE: Record<ShippingLiveProvider, string> = {
   EASYPOST: 'SHIPPING_EASYPOST',
@@ -244,4 +247,12 @@ export async function getShippingProviderLiveRates(input: {
   return adapter.getRates({
     ...input.request,
   })
+}
+
+export async function purchaseShippingProviderLabel(input: {
+  provider: ShippingLiveProvider
+  request: ShippingProviderPurchaseLabelRequest
+}) {
+  const adapter = resolveProviderAdapter(input.provider)
+  return adapter.purchaseLabel(input.request)
 }

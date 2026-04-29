@@ -149,4 +149,74 @@ export const easypostProviderAdapter: ShippingProviderAdapter = {
 
     return normalizedQuotes as ShippingRateQuote[]
   },
+  async purchaseLabel(input) {
+    const shipmentId = input.shipmentId?.trim()
+    if (!shipmentId) {
+      throw new Error('EasyPost label purchase requires a shipment id from the selected live quote')
+    }
+
+    const response = await fetch(`${EASYPOST_API_BASE}/shipments/${encodeURIComponent(shipmentId)}/buy`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${buildBasicAuthToken(input.apiKey)}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        rate: {
+          id: input.rateId,
+        },
+      }),
+    })
+
+    const bodyText = await response.text()
+    if (!response.ok) {
+      throw new Error(
+        `EasyPost label purchase failed (${response.status}): ${truncate(bodyText || 'Request failed')}`
+      )
+    }
+
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(bodyText) as Record<string, unknown>
+    } catch {
+      payload = null
+    }
+
+    const selectedRate = payload?.selected_rate as Record<string, unknown> | undefined
+    const postageLabel = payload?.postage_label as Record<string, unknown> | undefined
+    const tracker = payload?.tracker as Record<string, unknown> | undefined
+    const trackingNumber =
+      typeof payload?.tracking_code === 'string'
+        ? payload.tracking_code
+        : typeof tracker?.tracking_code === 'string'
+          ? tracker.tracking_code
+          : undefined
+
+    return {
+      providerShipmentId: typeof payload?.id === 'string' ? payload.id : shipmentId,
+      providerRateId: typeof selectedRate?.id === 'string' ? selectedRate.id : input.rateId,
+      providerLabelId: typeof postageLabel?.id === 'string' ? postageLabel.id : undefined,
+      carrier: typeof selectedRate?.carrier === 'string' ? selectedRate.carrier : undefined,
+      service: typeof selectedRate?.service === 'string' ? selectedRate.service : undefined,
+      status: 'PURCHASED',
+      labelUrl:
+        typeof postageLabel?.label_url === 'string'
+          ? postageLabel.label_url
+          : typeof postageLabel?.label_pdf_url === 'string'
+            ? postageLabel.label_pdf_url
+            : undefined,
+      trackingNumber,
+      trackingUrl:
+        typeof tracker?.public_url === 'string'
+          ? tracker.public_url
+          : typeof payload?.tracking_url === 'string'
+            ? payload.tracking_url
+            : undefined,
+      labelAmountCents: normalizeMoneyToCents(selectedRate?.rate) ?? undefined,
+      rateAmountCents: normalizeMoneyToCents(selectedRate?.rate) ?? undefined,
+      currency: String(selectedRate?.currency ?? input.request.currency ?? 'USD').toUpperCase(),
+      rawResponse: payload ?? undefined,
+    }
+  },
 }

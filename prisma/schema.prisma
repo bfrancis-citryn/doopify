@@ -506,6 +506,7 @@ model Order {
   refunds              Refund[]
   returns              Return[]
   discountApplications DiscountApplication[]
+  shippingLabels       ShippingLabel[]
 
   @@index([orderNumber])
   @@index([customerId])
@@ -664,6 +665,7 @@ model Fulfillment {
   updatedAt      DateTime         @updatedAt
   order          Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   items          FulfillmentItem[]
+  shippingLabels ShippingLabel[]
 
   @@index([orderId])
   @@map("fulfillments")
@@ -681,6 +683,36 @@ model FulfillmentItem {
 
   @@index([fulfillmentId])
   @@map("fulfillment_items")
+}
+
+model ShippingLabel {
+  id                 String   @id @default(cuid())
+  fulfillmentId      String?
+  orderId            String
+  provider           String
+  providerShipmentId String?
+  providerRateId     String?
+  providerLabelId    String?
+  carrier            String?
+  service            String?
+  status             String   @default("PURCHASED")
+  labelUrl           String?
+  labelFormat        String?
+  trackingNumber     String?
+  trackingUrl        String?
+  rateAmountCents    Int?
+  labelAmountCents   Int?
+  currency           String   @default("USD")
+  rawResponse        Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fulfillment        Fulfillment? @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([fulfillmentId])
+  @@index([provider, providerLabelId])
+  @@map("shipping_labels")
 }
 
 model Refund {

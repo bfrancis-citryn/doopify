@@ -45,6 +45,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Shipping setup Phase 2 foundation: setup wizard workspace at `/admin/settings/shipping/setup`, persisted origin/default-package/fallback fields on `Store`, setup-status derivation API, and admin test-rates route
 - Shipping setup Phase 3 foundation: provider connect/disconnect/test APIs for EasyPost/Shippo with encrypted integration-secret credential storage and setup-wizard provider actions
 - Shipping setup Phase 4 foundation: normalized shipping-rate service for manual/live/hybrid modes with provider adapters and hybrid manual fallback behavior
+- Shipping setup Phase 5 foundation: public checkout shipping-rate quote API (`POST /api/checkout/shipping-rates`), checkout shipping-option selection UX, and server-side selected-rate revalidation before payment intent creation
+- Shipping setup Phase 6 foundation: admin manual-fulfillment API (`POST /api/orders/[orderNumber]/manual-fulfillment`) with paid-order gating, over-fulfillment protection, fulfillment-item persistence, and fulfillment-status progression
+- Shipping setup Phase 7 foundation: `ShippingLabel` model plus admin order label-rates and label-purchase APIs (`POST /api/orders/[orderNumber]/shipping-rates`, `POST /api/orders/[orderNumber]/shipping-labels`), provider-backed label purchase, fulfillment linkage, and label print/download UX entry point on order detail
 - Checkout pricing snapshots that persist shipping/tax resolution decisions into checkout payloads
 - Durable inbound Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, retry metadata, local-payload replay, diagnostics, cron-compatible retry tooling, and admin visibility
 - Internal typed event dispatcher plus a static integration registry
