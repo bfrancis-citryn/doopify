@@ -36,7 +36,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} glass-panel refraction-edge admin-spotlight`}>
       <div className={styles.brand}>
         <div className={styles.brandLockup}>
           {settings.logoUrl ? (
@@ -61,7 +61,7 @@ export default function Sidebar() {
               ? activePathname === item.href
               : activePathname === item.href || activePathname.startsWith(`${item.href}/`));
           return (
-            <Link key={item.label} href={item.href} className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''} text-sm font-semibold font-headline tracking-tight`}>
+            <Link key={item.label} href={item.href} className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''} admin-spotlight text-sm font-semibold font-headline tracking-tight`}>
               <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
               <span>{item.label}</span>
             </Link>
@@ -72,12 +72,12 @@ export default function Sidebar() {
       <div className={styles.bottomNav}>
         <Link
           href="/settings"
-          className={`${styles.navLink} ${isSettingsActive ? styles.navLinkActive : ''} text-sm font-semibold font-headline tracking-tight`}
+          className={`${styles.navLink} ${isSettingsActive ? styles.navLinkActive : ''} admin-spotlight text-sm font-semibold font-headline tracking-tight`}
         >
           <span className="material-symbols-outlined" style={isSettingsActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>settings</span>
           <span>Settings</span>
         </Link>
-        <button className={`${styles.navLink} text-sm font-semibold font-headline tracking-tight`} onClick={handleLogout} type="button">
+        <button className={`${styles.navLink} admin-spotlight text-sm font-semibold font-headline tracking-tight`} onClick={handleLogout} type="button">
           <span className="material-symbols-outlined">logout</span>
           <span>Log out</span>
         </button>

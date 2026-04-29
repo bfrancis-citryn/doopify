@@ -16,7 +16,7 @@ const STATIC_COMMANDS = [
   {
     id: "go-email-deliveries",
     label: "Open Email Deliveries",
-    path: "/admin/webhooks?tab=email",
+    path: "/admin/webhooks",
     keywords: ["resend", "bounces"],
   },
 ];
@@ -42,6 +42,28 @@ export default function AdminCommandPalette() {
     () => STATIC_COMMANDS.filter((command) => matchCommand(command, query)),
     [query]
   );
+
+  useEffect(() => {
+    const handlePaletteEvent = (event) => {
+      const action = event?.detail?.action || "open";
+      if (action === "close") {
+        setOpen(false);
+        return;
+      }
+      if (action === "toggle") {
+        setOpen((current) => !current);
+        return;
+      }
+
+      setOpen(true);
+    };
+
+    window.addEventListener("admin-command-palette", handlePaletteEvent);
+
+    return () => {
+      window.removeEventListener("admin-command-palette", handlePaletteEvent);
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {

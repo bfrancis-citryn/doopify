@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import AdminButton from '@/components/admin/ui/AdminButton';
+import AdminThemeToggle from '@/components/admin/ui/AdminThemeToggle';
 import styles from './Header.module.css';
 
 export default function Header({
@@ -10,8 +12,16 @@ export default function Header({
   searchPlaceholder = 'Search orders, products, customers...',
   searchValue = '',
 }) {
+  function openCommandPalette() {
+    window.dispatchEvent(
+      new CustomEvent('admin-command-palette', {
+        detail: { action: 'open' },
+      })
+    );
+  }
+
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header} glass-card refraction-edge admin-spotlight`}>
       <div className={styles.leftGroup}>
         <div className={`font-headline ${styles.consoleBadge}`}>
           <span className="material-symbols-outlined">blur_on</span>
@@ -28,21 +38,39 @@ export default function Header({
             value={searchValue}
           />
         </div>
+
+        <AdminButton
+          className={styles.commandButton}
+          onClick={openCommandPalette}
+          size="sm"
+          variant="secondary"
+        >
+          Search
+          <span className={styles.commandHint}>Cmd+K</span>
+        </AdminButton>
       </div>
 
       <div className={styles.rightGroup}>
-        <button className={`${styles.createBtn} text-sm font-bold tracking-tight font-headline`} onClick={onCreateOrder} type="button">
-          {primaryActionLabel}
-        </button>
+        <AdminThemeToggle className={styles.themeToggle} />
+
+        {primaryActionLabel ? (
+          <AdminButton
+            className={`${styles.createBtn} text-sm font-bold tracking-tight font-headline`}
+            onClick={onCreateOrder}
+            variant="primary"
+          >
+            {primaryActionLabel}
+          </AdminButton>
+        ) : null}
 
         <div className={styles.actionsGroup}>
-          <button className={styles.iconBtn} onClick={onQuickActionClick} type="button">
+          <AdminButton className={styles.iconBtn} onClick={onQuickActionClick} variant="icon">
             <span className="material-symbols-outlined">bolt</span>
-          </button>
-          <button className={`${styles.iconBtn} ${styles.relative}`} onClick={onNotificationsClick} type="button">
+          </AdminButton>
+          <AdminButton className={`${styles.iconBtn} ${styles.relative}`} onClick={onNotificationsClick} variant="icon">
             <span className="material-symbols-outlined">notifications</span>
             <span className={styles.badge}></span>
-          </button>
+          </AdminButton>
           <div className={styles.avatar}>
             <Image 
               src="/images/avatar.jpg" 
