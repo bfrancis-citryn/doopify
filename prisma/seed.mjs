@@ -6,6 +6,10 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
+function toMinorUnit(value) {
+  return Math.round(Number(value) * 100)
+}
+
 async function main() {
   console.log('🌱 Seeding Doopify database...')
 
@@ -195,7 +199,7 @@ async function main() {
           create: p.variants.map((v, i) => ({
             title: v.title,
             sku: v.sku,
-            price: v.price,
+            priceCents: toMinorUnit(v.price),
             inventory: v.inventory,
             position: i,
           })),
@@ -361,9 +365,10 @@ async function main() {
     })
     if (existingOrder) continue
 
-    const subtotal = variant.price * 2
-    const tax = parseFloat((subtotal * 0.08).toFixed(2))
-    const total = parseFloat((subtotal + tax + 9.99).toFixed(2))
+    const subtotalCents = variant.priceCents * 2
+    const taxAmountCents = Math.round(subtotalCents * 0.08)
+    const shippingAmountCents = toMinorUnit(9.99)
+    const totalCents = subtotalCents + taxAmountCents + shippingAmountCents
 
     await prisma.order.create({
       data: {
@@ -372,10 +377,10 @@ async function main() {
         status: 'OPEN',
         paymentStatus: orderStatuses[i],
         fulfillmentStatus: fulfillmentStatuses[i],
-        subtotal,
-        taxAmount: tax,
-        shippingAmount: 9.99,
-        total,
+        subtotalCents,
+        taxAmountCents,
+        shippingAmountCents,
+        totalCents,
         items: {
           create: {
             productId: product.id,
@@ -383,9 +388,9 @@ async function main() {
             title: product.title,
             variantTitle: variant.title,
             sku: variant.sku,
-            price: variant.price,
+            priceCents: variant.priceCents,
             quantity: 2,
-            total: subtotal,
+            totalCents: subtotalCents,
           },
         },
         addresses: {
@@ -403,7 +408,7 @@ async function main() {
         payments: {
           create: {
             provider: 'stripe',
-            amount: total,
+            amountCents: totalCents,
             currency: 'USD',
             status: orderStatuses[i],
           },
@@ -424,7 +429,7 @@ async function main() {
       where: { id: customer.id },
       data: {
         orderCount: { increment: 1 },
-        totalSpent: { increment: total },
+        totalSpentCents: { increment: totalCents },
       },
     })
 
@@ -443,7 +448,7 @@ async function main() {
         type: 'CODE',
         method: 'PERCENTAGE',
         value: 10,
-        minimumOrder: 50,
+        minimumOrderCents: toMinorUnit(50),
         status: 'ACTIVE',
       },
     })

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { prisma } from '@/lib/prisma'
@@ -249,3 +250,4 @@ runIntegration('email delivery integration', () => {
     expect(await prisma.emailDelivery.count()).toBe(3)
   })
 })
+

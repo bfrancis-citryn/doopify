@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { dollarsToCents } from '@/lib/money'
 import { getProducts, createProduct, upsertOptions } from '@/server/services/product.service'
 import type { ProductStatus } from '@prisma/client'
 
@@ -89,8 +90,9 @@ export async function POST(req: Request) {
       variants: variants?.map((variant) => ({
         title: variant.title,
         sku: variant.sku,
-        price: variant.price,
-        compareAtPrice: variant.compareAtPrice,
+        priceCents: dollarsToCents(variant.price),
+        compareAtPriceCents:
+          variant.compareAtPrice === undefined ? undefined : dollarsToCents(variant.compareAtPrice),
         inventory: variant.inventory,
         weight: variant.weight,
         weightUnit: variant.weightUnit,

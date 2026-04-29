@@ -1,12 +1,9 @@
 import { Prisma, type FulfillmentStatus, type OrderStatus, type PaymentStatus } from '@prisma/client'
 
+import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import type { CheckoutAppliedDiscount } from '@/server/checkout/pricing'
 import { emitInternalEvent } from '@/server/events/dispatcher'
-
-function roundCurrency(value: number) {
-  return Number(value.toFixed(2))
-}
 
 function parseOrderNumberSearch(search?: string) {
   const query = search?.trim()
@@ -19,25 +16,26 @@ function parseOrderNumberSearch(search?: string) {
 }
 
 function buildOrderTotals(input: {
-  items: Array<{ price: number; quantity: number }>
-  taxAmount?: number
-  shippingAmount?: number
-  discountAmount?: number
+  items: Array<{ priceCents: number; quantity: number }>
+  taxAmountCents?: number
+  shippingAmountCents?: number
+  discountAmountCents?: number
 }) {
-  const subtotal = roundCurrency(
-    input.items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0)
+  const subtotalCents = input.items.reduce(
+    (sum, item) => sum + Math.round(Number(item.priceCents)) * Number(item.quantity),
+    0
   )
-  const taxAmount = roundCurrency(input.taxAmount ?? 0)
-  const shippingAmount = roundCurrency(input.shippingAmount ?? 0)
-  const discountAmount = roundCurrency(input.discountAmount ?? 0)
-  const total = roundCurrency(subtotal + taxAmount + shippingAmount - discountAmount)
+  const taxAmountCents = Math.round(input.taxAmountCents ?? 0)
+  const shippingAmountCents = Math.round(input.shippingAmountCents ?? 0)
+  const discountAmountCents = Math.round(input.discountAmountCents ?? 0)
+  const totalCents = subtotalCents + taxAmountCents + shippingAmountCents - discountAmountCents
 
   return {
-    subtotal,
-    taxAmount,
-    shippingAmount,
-    discountAmount,
-    total,
+    subtotalCents,
+    taxAmountCents,
+    shippingAmountCents,
+    discountAmountCents,
+    totalCents,
   }
 }
 
@@ -151,7 +149,7 @@ export async function getOrder(orderNumber: number) {
       returns: {
         include: {
           items: true,
-          refund: { select: { id: true, amount: true, status: true, stripeRefundId: true } },
+          refund: { select: { id: true, amountCents: true, status: true, stripeRefundId: true } },
         },
         orderBy: { createdAt: 'desc' },
       },
@@ -199,7 +197,7 @@ export async function createOrder(data: {
     title: string
     variantTitle?: string
     sku?: string
-    price: number
+    priceCents: number
     quantity: number
   }>
   shippingAddress?: {
@@ -226,9 +224,9 @@ export async function createOrder(data: {
     country?: string
     phone?: string
   }
-  taxAmount?: number
-  shippingAmount?: number
-  discountAmount?: number
+  taxAmountCents?: number
+  shippingAmountCents?: number
+  discountAmountCents?: number
   currency?: string
   discountApplications?: CheckoutAppliedDiscount[]
   stripePaymentIntentId?: string
@@ -250,9 +248,9 @@ export async function createOrder(data: {
 
   const totals = buildOrderTotals({
     items: data.items,
-    taxAmount: data.taxAmount,
-    shippingAmount: data.shippingAmount,
-    discountAmount: data.discountAmount,
+    taxAmountCents: data.taxAmountCents,
+    shippingAmountCents: data.shippingAmountCents,
+    discountAmountCents: data.discountAmountCents,
   })
 
   const paymentStatus = data.paymentStatus ?? 'PAID'
@@ -283,11 +281,11 @@ export async function createOrder(data: {
           status: orderStatus,
           paymentStatus,
           fulfillmentStatus,
-          subtotal: totals.subtotal,
-          taxAmount: totals.taxAmount,
-          shippingAmount: totals.shippingAmount,
-          discountAmount: totals.discountAmount,
-          total: totals.total,
+          subtotalCents: totals.subtotalCents,
+          taxAmountCents: totals.taxAmountCents,
+          shippingAmountCents: totals.shippingAmountCents,
+          discountAmountCents: totals.discountAmountCents,
+          totalCents: totals.totalCents,
           currency: (data.currency ?? 'USD').toUpperCase(),
           channel: 'online',
           items: {
@@ -297,9 +295,9 @@ export async function createOrder(data: {
               title: item.title,
               variantTitle: item.variantTitle,
               sku: item.sku,
-              price: item.price,
+              priceCents: item.priceCents,
               quantity: item.quantity,
-              total: roundCurrency(item.price * item.quantity),
+              totalCents: item.priceCents * item.quantity,
             })),
           },
           addresses:
@@ -329,7 +327,7 @@ export async function createOrder(data: {
             ? {
                 create: {
                   provider: 'stripe',
-                  amount: totals.total,
+                  amountCents: totals.totalCents,
                   currency: (data.currency ?? 'USD').toUpperCase(),
                   status: paymentStatus,
                   stripePaymentIntentId: data.stripePaymentIntentId,
@@ -341,7 +339,7 @@ export async function createOrder(data: {
             ? {
                 create: paidDiscountApplications.map((discount) => ({
                   discountId: discount.discountId,
-                  amount: roundCurrency(discount.amount),
+                  amountCents: discount.amountCents ?? 0,
                 })),
               }
             : undefined,
@@ -383,7 +381,7 @@ export async function createOrder(data: {
             orderCount: { increment: 1 },
             ...(paymentStatus === 'PAID'
               ? {
-                  totalSpent: { increment: totals.total },
+                  totalSpentCents: { increment: totals.totalCents },
                 }
               : {}),
           },
@@ -406,7 +404,7 @@ export async function createOrder(data: {
       orderId: order.id,
       orderNumber: order.orderNumber,
       email: order.email,
-      total: order.total,
+      total: centsToDollars(order.totalCents),
       currency: order.currency,
     })
 
@@ -417,13 +415,13 @@ export async function createOrder(data: {
         orderId: order.id,
         orderNumber: order.orderNumber,
         email: order.email,
-        total: order.total,
+        total: centsToDollars(order.totalCents),
         currency: order.currency,
         items: order.items.map((item) => ({
           title: item.title,
           variantTitle: item.variantTitle,
           quantity: item.quantity,
-          price: item.price,
+          price: centsToDollars(item.priceCents),
         })),
         shippingAddress: shippingAddress
           ? {
@@ -491,13 +489,13 @@ export async function updatePaymentStatus(orderId: string, paymentStatus: Paymen
       orderId: order.id,
       orderNumber: order.orderNumber,
       email: order.email,
-      total: order.total,
+      total: centsToDollars(order.totalCents),
       currency: order.currency,
       items: order.items.map((item) => ({
         title: item.title,
         variantTitle: item.variantTitle,
         quantity: item.quantity,
-        price: item.price,
+        price: centsToDollars(item.priceCents),
       })),
       shippingAddress: shippingAddress
         ? {
@@ -590,26 +588,35 @@ export async function getAnalytics() {
   const [totalRevenue, orderCount, customerCount, topProducts] = await Promise.all([
     prisma.order.aggregate({
       where: { paymentStatus: 'PAID' },
-      _sum: { total: true },
+      _sum: { totalCents: true },
     }),
     prisma.order.count(),
     prisma.customer.count(),
     prisma.orderItem.groupBy({
       by: ['productId', 'title'],
-      _sum: { quantity: true, total: true },
-      orderBy: { _sum: { total: 'desc' } },
+      _sum: { quantity: true, totalCents: true },
+      orderBy: { _sum: { totalCents: 'desc' } },
       take: 5,
     }),
   ])
 
-  const totalRevenueAmount = totalRevenue._sum.total ?? 0
-  const aov = orderCount > 0 ? totalRevenueAmount / orderCount : 0
+  const totalRevenueCents = totalRevenue._sum.totalCents ?? 0
+  const aovCents = orderCount > 0 ? Math.round(totalRevenueCents / orderCount) : 0
 
   return {
-    totalRevenue: totalRevenueAmount,
+    totalRevenue: centsToDollars(totalRevenueCents),
+    totalRevenueCents,
     orderCount,
     customerCount,
-    averageOrderValue: aov,
-    topProducts,
+    averageOrderValue: centsToDollars(aovCents),
+    averageOrderValueCents: aovCents,
+    topProducts: topProducts.map((product) => ({
+      ...product,
+      _sum: {
+        quantity: product._sum.quantity,
+        totalCents: product._sum.totalCents,
+        total: centsToDollars(product._sum.totalCents ?? 0),
+      },
+    })),
   }
 }

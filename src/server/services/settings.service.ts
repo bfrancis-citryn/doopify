@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { centsToDollars } from '@/lib/money'
 
 export async function getStoreSettings() {
   return prisma.store.findFirst({
@@ -35,9 +36,9 @@ export async function updateStoreSettings(
     province: string
     postalCode: string
     country: string
-    shippingThreshold: number
-    shippingDomesticRate: number
-    shippingInternationalRate: number
+    shippingThresholdCents: number
+    shippingDomesticRateCents: number
+    shippingInternationalRateCents: number
     domesticTaxRate: number
     internationalTaxRate: number
   }>
@@ -59,9 +60,9 @@ export async function getPublicStorefrontSettings() {
     logoUrl: store.logoUrl,
     primaryColor: store.primaryColor,
     secondaryColor: store.secondaryColor,
-    shippingThreshold: store.shippingThreshold,
-    shippingDomesticRate: store.shippingDomesticRate,
-    shippingInternationalRate: store.shippingInternationalRate,
+    shippingThreshold: store.shippingThresholdCents == null ? null : centsToDollars(store.shippingThresholdCents),
+    shippingDomesticRate: centsToDollars(store.shippingDomesticRateCents),
+    shippingInternationalRate: centsToDollars(store.shippingInternationalRateCents),
     domesticTaxRate: store.domesticTaxRate,
     internationalTaxRate: store.internationalTaxRate,
   }

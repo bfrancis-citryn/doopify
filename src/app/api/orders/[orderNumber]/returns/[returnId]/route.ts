@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { err, getToken, ok, parseBody } from '@/lib/api'
 import { verifyToken } from '@/lib/auth'
+import { dollarsToCents } from '@/lib/money'
 import { closeReturnWithRefund, updateReturnStatus } from '@/server/services/return.service'
 
 interface Params { params: Promise<{ orderNumber: string; returnId: string }> }
@@ -42,11 +43,16 @@ export async function PATCH(req: Request, { params }: Params) {
       const result = await closeReturnWithRefund({
         returnId,
         paymentId: parsed.data.refund.paymentId,
-        amount: parsed.data.refund.amount,
+        amountCents: dollarsToCents(parsed.data.refund.amount),
         reason: parsed.data.refund.reason,
         note: parsed.data.note,
         restockItems: parsed.data.refund.restockItems,
-        items: parsed.data.refund.items,
+        items: parsed.data.refund.items.map((item) => ({
+          orderItemId: item.orderItemId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          amountCents: dollarsToCents(item.amount),
+        })),
       })
       return ok(result)
     }

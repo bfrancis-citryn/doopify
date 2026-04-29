@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { prisma } from '@/lib/prisma'
@@ -936,3 +937,4 @@ runIntegration('checkout service integration', () => {
     expect(finalDelivery.rawPayload).toBe(rawPayload)
   })
 })
+

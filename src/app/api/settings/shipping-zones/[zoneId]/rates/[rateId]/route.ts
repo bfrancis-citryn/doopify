@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
+import { dollarsToCents } from '@/lib/money'
 import { deleteShippingRate, updateShippingRate } from '@/server/services/shipping-tax-config.service'
 
 const updateShippingRateSchema = z
@@ -49,7 +50,22 @@ export async function PATCH(req: Request, context: RouteContext) {
   }
 
   try {
-    const updated = await updateShippingRate(zoneId, rateId, parsed.data)
+    const updated = await updateShippingRate(zoneId, rateId, {
+      ...parsed.data,
+      ...(parsed.data.amount !== undefined ? { amountCents: dollarsToCents(parsed.data.amount) } : {}),
+      ...(parsed.data.minSubtotal !== undefined
+        ? {
+            minSubtotalCents:
+              parsed.data.minSubtotal == null ? null : dollarsToCents(parsed.data.minSubtotal),
+          }
+        : {}),
+      ...(parsed.data.maxSubtotal !== undefined
+        ? {
+            maxSubtotalCents:
+              parsed.data.maxSubtotal == null ? null : dollarsToCents(parsed.data.maxSubtotal),
+          }
+        : {}),
+    })
     return ok(updated)
   } catch (error) {
     console.error('[PATCH /api/settings/shipping-zones/[zoneId]/rates/[rateId]]', error)

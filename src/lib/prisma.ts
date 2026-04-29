@@ -3,11 +3,6 @@ import { PrismaClient } from '@prisma/client'
 
 import { env } from '@/lib/env'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-  prismaAdapter: PrismaPg | undefined
-}
-
 function normalizePgConnectionString(connectionString: string) {
   try {
     const url = new URL(connectionString)
@@ -35,17 +30,30 @@ function getPrismaAdapter() {
   )
 }
 
-const adapter = getPrismaAdapter()
+function buildPrismaClient() {
+  const adapter = getPrismaAdapter()
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+  const client = new PrismaClient({
     adapter,
     log:
       env.NODE_ENV === 'development'
         ? ['query', 'error', 'warn']
         : ['error'],
   })
+
+  return { adapter, client }
+}
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+  prismaAdapter: PrismaPg | undefined
+}
+
+const { adapter, client } = globalForPrisma.prisma
+  ? { adapter: getPrismaAdapter(), client: globalForPrisma.prisma }
+  : buildPrismaClient()
+
+export const prisma = client
 
 if (env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma

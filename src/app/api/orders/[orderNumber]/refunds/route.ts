@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { err, getToken, ok, parseBody } from '@/lib/api'
 import { verifyToken } from '@/lib/auth'
+import { dollarsToCents } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { getOrderRefunds, issueRefund } from '@/server/services/refund.service'
 
@@ -69,7 +70,20 @@ export async function POST(req: Request, { params }: Params) {
     })
     if (!order) return err('Order not found', 404)
 
-    const refund = await issueRefund({ orderId: order.id, ...parsed.data })
+    const refund = await issueRefund({
+      orderId: order.id,
+      paymentId: parsed.data.paymentId,
+      amountCents: dollarsToCents(parsed.data.amount),
+      reason: parsed.data.reason,
+      note: parsed.data.note,
+      restockItems: parsed.data.restockItems,
+      items: parsed.data.items?.map((item) => ({
+        orderItemId: item.orderItemId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        amountCents: dollarsToCents(item.amount),
+      })),
+    })
     return ok(refund, 201)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to issue refund'

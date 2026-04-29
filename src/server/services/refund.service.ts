@@ -1,30 +1,18 @@
 import { type PaymentStatus, type Prisma } from '@prisma/client'
 
+import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { createStripeRefund } from '@/lib/stripe'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 
-function roundCurrency(value: number) {
-  return Number(value.toFixed(2))
-}
-
-function toMinorUnits(value: number) {
-  return Math.round(roundCurrency(value) * 100)
-}
-
-function derivePaymentStatus(
-  originalAmount: number,
-  refundedAmount: number
-): PaymentStatus {
-  return roundCurrency(refundedAmount) >= roundCurrency(originalAmount)
-    ? 'REFUNDED'
-    : 'PARTIALLY_REFUNDED'
+function derivePaymentStatus(originalAmountCents: number, refundedAmountCents: number): PaymentStatus {
+  return refundedAmountCents >= originalAmountCents ? 'REFUNDED' : 'PARTIALLY_REFUNDED'
 }
 
 export type IssueRefundInput = {
   orderId: string
   paymentId: string
-  amount: number
+  amountCents: number
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
   note?: string
   restockItems?: boolean
@@ -33,7 +21,7 @@ export type IssueRefundInput = {
     orderItemId: string
     variantId?: string
     quantity: number
-    amount: number
+    amountCents: number
   }>
 }
 
@@ -41,7 +29,7 @@ type ValidatedRefundItem = {
   orderItemId: string
   variantId?: string
   quantity: number
-  amount: number
+  amountCents: number
 }
 
 function validateRefundItems(input: {
@@ -50,21 +38,21 @@ function validateRefundItems(input: {
       id: string
       variantId: string | null
       quantity: number
-      total: number
-      price: number
+      totalCents: number
+      priceCents: number
     }>
     refunds?: Array<{
       status: string
       items: Array<{ orderItemId: string; quantity: number }>
     }>
   }
-  amount: number
+  amountCents: number
   items: IssueRefundInput['items']
 }) {
   const requestedItems = input.items ?? []
   if (!requestedItems.length) return []
 
-  const orderItems = new Map((input.order.items ?? []).map(item => [item.id, item]))
+  const orderItems = new Map((input.order.items ?? []).map((item) => [item.id, item]))
   const alreadyRefundedByItem = new Map<string, number>()
 
   for (const refund of input.order.refunds ?? []) {
@@ -77,7 +65,7 @@ function validateRefundItems(input: {
     }
   }
 
-  let itemAmountTotal = 0
+  let itemAmountTotalCents = 0
   const validated: ValidatedRefundItem[] = []
 
   for (const item of requestedItems) {
@@ -100,25 +88,28 @@ function validateRefundItems(input: {
       throw new Error('Refund item variant does not match the order item')
     }
 
-    if (roundCurrency(item.amount) <= 0) {
+    if (item.amountCents <= 0) {
       throw new Error('Refund item amount must be positive')
     }
 
-    const maxItemAmount = roundCurrency((orderItem.total || orderItem.price * orderItem.quantity) * (quantity / orderItem.quantity))
-    if (roundCurrency(item.amount) > maxItemAmount) {
+    const maxItemAmountCents = Math.round(
+      (orderItem.totalCents || orderItem.priceCents * orderItem.quantity) * (quantity / orderItem.quantity)
+    )
+
+    if (item.amountCents > maxItemAmountCents) {
       throw new Error('Refund item amount exceeds refundable item amount')
     }
 
-    itemAmountTotal += roundCurrency(item.amount)
+    itemAmountTotalCents += item.amountCents
     validated.push({
       orderItemId: item.orderItemId,
       variantId: orderItem.variantId ?? item.variantId,
       quantity,
-      amount: roundCurrency(item.amount),
+      amountCents: item.amountCents,
     })
   }
 
-  if (roundCurrency(itemAmountTotal) > roundCurrency(input.amount)) {
+  if (itemAmountTotalCents > input.amountCents) {
     throw new Error('Refund item amounts exceed the refund amount')
   }
 
@@ -126,9 +117,18 @@ function validateRefundItems(input: {
 }
 
 export async function issueRefund(input: IssueRefundInput) {
-  const { orderId, paymentId, amount, reason, note, restockItems = false, returnId, items = [] } = input
+  const {
+    orderId,
+    paymentId,
+    amountCents,
+    reason,
+    note,
+    restockItems = false,
+    returnId,
+    items = [],
+  } = input
 
-  if (roundCurrency(amount) <= 0) {
+  if (amountCents <= 0) {
     throw new Error('Refund amount must be positive')
   }
 
@@ -141,7 +141,7 @@ export async function issueRefund(input: IssueRefundInput) {
         currency: true,
         paymentStatus: true,
         items: {
-          select: { id: true, variantId: true, quantity: true, price: true, total: true },
+          select: { id: true, variantId: true, quantity: true, priceCents: true, totalCents: true },
         },
         refunds: {
           select: {
@@ -156,10 +156,10 @@ export async function issueRefund(input: IssueRefundInput) {
       select: {
         id: true,
         orderId: true,
-        amount: true,
+        amountCents: true,
         stripePaymentIntentId: true,
         stripeChargeId: true,
-        refunds: { select: { amount: true, status: true } },
+        refunds: { select: { amountCents: true, status: true } },
       },
     }),
   ])
@@ -171,36 +171,39 @@ export async function issueRefund(input: IssueRefundInput) {
     throw new Error('Only paid orders can be refunded')
   }
 
-  const alreadyRefunded = payment.refunds
-    .filter(r => r.status === 'ISSUED' || r.status === 'PENDING')
-    .reduce((sum, r) => sum + r.amount, 0)
+  const alreadyRefundedCents = payment.refunds
+    .filter((r) => r.status === 'ISSUED' || r.status === 'PENDING')
+    .reduce((sum, r) => sum + r.amountCents, 0)
 
-  const refundable = roundCurrency(payment.amount - alreadyRefunded)
-  if (roundCurrency(amount) > refundable) {
-    throw new Error(`Refund amount ${amount} exceeds refundable amount ${refundable}`)
+  const refundableCents = payment.amountCents - alreadyRefundedCents
+  if (amountCents > refundableCents) {
+    throw new Error(
+      `Refund amount ${centsToDollars(amountCents)} exceeds refundable amount ${centsToDollars(refundableCents)}`
+    )
   }
 
-  const validatedItems = validateRefundItems({ order, amount, items })
+  const validatedItems = validateRefundItems({ order, amountCents, items })
 
   const pendingRefund = await prisma.refund.create({
     data: {
       orderId,
       paymentId,
       status: 'PENDING',
-      amount: roundCurrency(amount),
+      amountCents,
       reason,
       note,
       restockItems,
-      items: validatedItems.length > 0
-        ? {
-            create: validatedItems.map(item => ({
-              orderItemId: item.orderItemId,
-              variantId: item.variantId,
-              quantity: item.quantity,
-              amount: item.amount,
-            })),
-          }
-        : undefined,
+      items:
+        validatedItems.length > 0
+          ? {
+              create: validatedItems.map((item) => ({
+                orderItemId: item.orderItemId,
+                variantId: item.variantId,
+                quantity: item.quantity,
+                amountCents: item.amountCents,
+              })),
+            }
+          : undefined,
     },
     include: { items: true },
   })
@@ -210,7 +213,7 @@ export async function issueRefund(input: IssueRefundInput) {
     stripeRefund = await createStripeRefund({
       chargeId: payment.stripeChargeId,
       paymentIntentId: payment.stripePaymentIntentId,
-      amount: toMinorUnits(amount),
+      amount: amountCents,
       reason,
       idempotencyKey: `refund:${pendingRefund.id}`,
     })
@@ -227,10 +230,7 @@ export async function issueRefund(input: IssueRefundInput) {
     throw new Error('Stripe refund failed before issuing')
   }
 
-  const newPaymentStatus = derivePaymentStatus(
-    payment.amount,
-    alreadyRefunded + amount
-  )
+  const newPaymentStatus = derivePaymentStatus(payment.amountCents, alreadyRefundedCents + amountCents)
 
   const refund = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const issued = await tx.refund.update({
@@ -275,7 +275,7 @@ export async function issueRefund(input: IssueRefundInput) {
         orderId,
         type: 'refund.issued',
         title: 'Refund issued',
-        detail: `Refunded ${order.currency} ${roundCurrency(amount)}${reason ? ` — ${reason.replace(/_/g, ' ')}` : ''}`,
+        detail: `Refunded ${order.currency} ${centsToDollars(amountCents)}${reason ? ` - ${reason.replace(/_/g, ' ')}` : ''}`,
         actorType: 'STAFF',
       },
     })
@@ -287,7 +287,7 @@ export async function issueRefund(input: IssueRefundInput) {
     orderId: order.id,
     orderNumber: order.orderNumber,
     refundId: refund.id,
-    amount: refund.amount,
+    amount: centsToDollars(refund.amountCents),
     currency: order.currency,
   })
 
@@ -295,7 +295,7 @@ export async function issueRefund(input: IssueRefundInput) {
     orderId: order.id,
     orderNumber: order.orderNumber,
     refundId: refund.id,
-    amount: refund.amount,
+    amount: centsToDollars(refund.amountCents),
     currency: order.currency,
   })
 

@@ -40,6 +40,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 ### Order And Checkout Correctness
 
 - order totals are recomputed server-side
+- persisted money fields now store integer minor units at rest to eliminate floating-point drift in database truth
 - checkout pricing flows through `src/server/checkout/pricing.ts`
 - checkout validates live variant pricing and inventory before creating the payment intent
 - orders are created only from verified Stripe webhook success
@@ -186,6 +187,9 @@ These invariants should not be broken by future work:
 - late payment-success webhook delivery can finalize an expired checkout session exactly once
 - order/payment/inventory commits remain durable even when order confirmation email delivery fails
 - failed checkout state is persisted and visible to the user
+- persisted money is stored in integer minor units (`*Cents` fields for USD)
+- Stripe `amount` values must use the same stored integer cents values directly
+- dollar display formatting belongs only at API/UI boundaries, never in persistence math
 
 ## Refund And Return Invariants
 

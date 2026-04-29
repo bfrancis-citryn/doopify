@@ -1,6 +1,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { dollarsToCents } from '@/lib/money'
 import { getProduct, updateProduct, archiveProduct, upsertOptions } from '@/server/services/product.service'
 
 interface Params {
@@ -84,7 +85,18 @@ export async function PATCH(req: Request, { params }: Params) {
     const { options, variants, media, ...productFields } = parsed.data
     let product = await updateProduct(id, {
       ...productFields,
-      variants,
+      variants: variants?.map((variant) => ({
+        id: variant.id,
+        title: variant.title,
+        sku: variant.sku,
+        priceCents: dollarsToCents(variant.price),
+        compareAtPriceCents:
+          variant.compareAtPrice === undefined ? undefined : dollarsToCents(variant.compareAtPrice),
+        inventory: variant.inventory,
+        weight: variant.weight,
+        weightUnit: variant.weightUnit,
+        position: variant.position,
+      })),
       media,
     })
 

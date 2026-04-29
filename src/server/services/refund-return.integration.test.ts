@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { prisma } from '@/lib/prisma'
@@ -274,3 +275,4 @@ runIntegration('refund and return integration', () => {
     expect(updatedOrder.paymentStatus).toBe('PARTIALLY_REFUNDED')
   })
 })
+

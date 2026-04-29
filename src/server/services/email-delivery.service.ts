@@ -1,5 +1,6 @@
 import type { EmailDeliveryStatus as PrismaEmailDeliveryStatus, Prisma } from '@prisma/client'
 
+import { centsToDollars, dollarsToCents } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 import { sendTransactionalEmail } from '@/server/email/provider'
@@ -85,6 +86,7 @@ export type EmailDeliveryDiagnostics = {
       paymentStatus: string
       fulfillmentStatus: string
       total: number
+      totalCents: number
       currency: string
       createdAt: Date
     } | null
@@ -385,7 +387,7 @@ export async function getEmailDeliveryById(id: string): Promise<EmailDeliveryDia
           status: true,
           paymentStatus: true,
           fulfillmentStatus: true,
-          total: true,
+          totalCents: true,
           currency: true,
           createdAt: true,
         },
@@ -402,7 +404,14 @@ export async function getEmailDeliveryById(id: string): Promise<EmailDeliveryDia
       blockers,
     },
     related: {
-      order,
+      order: order
+        ? {
+            ...order,
+            total: centsToDollars(order.totalCents ?? dollarsToCents((order as { total?: number }).total ?? 0)),
+            totalCents:
+              order.totalCents ?? dollarsToCents((order as { total?: number }).total ?? 0),
+          }
+        : null,
     },
   }
 }
@@ -450,12 +459,12 @@ export async function resendEmailDelivery(id: string): Promise<ResendEmailDelive
     orderNumber: order.orderNumber,
     email: existing.recipientEmail,
     currency: order.currency,
-    total: order.total,
+    total: centsToDollars(order.totalCents ?? dollarsToCents((order as { total?: number }).total ?? 0)),
     items: order.items.map((item) => ({
       title: item.title,
       variantTitle: item.variantTitle,
       quantity: item.quantity,
-      price: item.price,
+      price: centsToDollars(item.priceCents ?? dollarsToCents((item as { price?: number }).price ?? 0)),
     })),
     shippingAddress: shippingAddress
       ? {

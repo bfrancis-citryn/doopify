@@ -49,13 +49,13 @@ const baseOrder = {
   orderNumber: 1001,
   currency: 'USD',
   paymentStatus: 'PAID',
-  items: [{ id: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 2, price: 50, total: 100 }],
+  items: [{ id: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 2, priceCents: 5000, totalCents: 10000 }],
   refunds: [],
 }
 const basePayment = {
   id: PAYMENT_ID,
   orderId: ORDER_ID,
-  amount: 100,
+  amountCents: 10000,
   stripePaymentIntentId: 'pi_test',
   stripeChargeId: 'ch_test',
   refunds: [],
@@ -66,7 +66,7 @@ const pendingRefund = {
   paymentId: PAYMENT_ID,
   stripeRefundId: null,
   status: 'PENDING',
-  amount: 50,
+  amountCents: 5000,
   reason: 'requested_by_customer',
   restockItems: false,
   items: [],
@@ -107,7 +107,7 @@ describe('issueRefund', () => {
     const result = await issueRefund({
       orderId: ORDER_ID,
       paymentId: PAYMENT_ID,
-      amount: 50,
+      amountCents: 5000,
       reason: 'requested_by_customer',
     })
 
@@ -115,7 +115,7 @@ describe('issueRefund', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: 'PENDING',
-          amount: 50,
+          amountCents: 5000,
         }),
       })
     )
@@ -139,9 +139,9 @@ describe('issueRefund', () => {
   })
 
   it('marks payment as REFUNDED when full amount is refunded', async () => {
-    setupSuccess({ payment: { ...basePayment, amount: 50 } })
+    setupSuccess({ payment: { ...basePayment, amountCents: 5000 } })
 
-    await issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 50 })
+    await issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amountCents: 5000 })
 
     expect(mocks.prisma.payment.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'REFUNDED' } })
@@ -150,16 +150,16 @@ describe('issueRefund', () => {
 
   it('restocks validated inventory when restockItems is true', async () => {
     setupSuccess({
-      refund: { ...pendingRefund, restockItems: true, items: [{ id: 'ri-1', refundId: REFUND_ID, orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amount: 50 }] },
+      refund: { ...pendingRefund, restockItems: true, items: [{ id: 'ri-1', refundId: REFUND_ID, orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amountCents: 5000 }] },
     })
     mocks.prisma.refund.update.mockResolvedValue({ ...issuedRefund, restockItems: true })
 
     await issueRefund({
       orderId: ORDER_ID,
       paymentId: PAYMENT_ID,
-      amount: 50,
+      amountCents: 5000,
       restockItems: true,
-      items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amount: 50 }],
+      items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amountCents: 5000 }],
     })
 
     expect(mocks.prisma.productVariant.update).toHaveBeenCalledWith(
@@ -173,7 +173,7 @@ describe('issueRefund', () => {
   it('links a refund to a return when returnId is provided', async () => {
     setupSuccess()
 
-    await issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 50, returnId: 'ret-1' })
+    await issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amountCents: 5000, returnId: 'ret-1' })
 
     expect(mocks.prisma.return.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'ret-1' }, data: { refundId: REFUND_ID } })
@@ -185,7 +185,7 @@ describe('issueRefund', () => {
     mocks.createStripeRefund.mockRejectedValue(new Error('Stripe unavailable'))
 
     await expect(
-      issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 50 })
+      issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amountCents: 5000 })
     ).rejects.toThrow('Stripe refund failed before issuing')
 
     expect(mocks.prisma.refund.update).toHaveBeenCalledWith(
@@ -197,12 +197,12 @@ describe('issueRefund', () => {
     mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
     mocks.prisma.payment.findUnique.mockResolvedValue({
       ...basePayment,
-      amount: 100,
-      refunds: [{ amount: 80, status: 'ISSUED' }],
+      amountCents: 10000,
+      refunds: [{ amountCents: 8000, status: 'ISSUED' }],
     })
 
     await expect(
-      issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amount: 30 })
+      issueRefund({ orderId: ORDER_ID, paymentId: PAYMENT_ID, amountCents: 3000 })
     ).rejects.toThrow('exceeds refundable amount')
   })
 
@@ -214,9 +214,9 @@ describe('issueRefund', () => {
       issueRefund({
         orderId: ORDER_ID,
         paymentId: PAYMENT_ID,
-        amount: 10,
+        amountCents: 1000,
         restockItems: true,
-        items: [{ orderItemId: 'wrong-item', quantity: 1, amount: 10 }],
+        items: [{ orderItemId: 'wrong-item', quantity: 1, amountCents: 1000 }],
       })
     ).rejects.toThrow('Refund item does not belong to this order')
   })
@@ -226,7 +226,7 @@ describe('issueRefund', () => {
     mocks.prisma.payment.findUnique.mockResolvedValue(basePayment)
 
     await expect(
-      issueRefund({ orderId: 'missing', paymentId: PAYMENT_ID, amount: 10 })
+      issueRefund({ orderId: 'missing', paymentId: PAYMENT_ID, amountCents: 1000 })
     ).rejects.toThrow('Order not found')
   })
 })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { dollarsToCents } from '@/lib/money'
 import { createVariant } from '@/server/services/product.service'
 
 interface Params { params: Promise<{ id: string }> }
@@ -23,7 +24,12 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
-    const variant = await createVariant(productId, parsed.data)
+    const variant = await createVariant(productId, {
+      ...parsed.data,
+      priceCents: dollarsToCents(parsed.data.price),
+      compareAtPriceCents:
+        parsed.data.compareAtPrice === undefined ? undefined : dollarsToCents(parsed.data.compareAtPrice),
+    })
     return ok(variant, 201)
   } catch (e) {
     console.error('[POST /api/products/[id]/variants]', e)

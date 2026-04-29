@@ -51,9 +51,9 @@ export async function createShippingZone(input: {
   rates?: Array<{
     name: string
     method?: ShippingRateMethod
-    amount: number
-    minSubtotal?: number | null
-    maxSubtotal?: number | null
+    amountCents: number
+    minSubtotalCents?: number | null
+    maxSubtotalCents?: number | null
     isActive?: boolean
     priority?: number
   }>
@@ -73,9 +73,9 @@ export async function createShippingZone(input: {
             create: input.rates.map((rate) => ({
               name: rate.name.trim(),
               method: rate.method ?? 'FLAT',
-              amount: rate.amount,
-              minSubtotal: rate.minSubtotal ?? null,
-              maxSubtotal: rate.maxSubtotal ?? null,
+              amountCents: rate.amountCents,
+              minSubtotalCents: rate.minSubtotalCents ?? null,
+              maxSubtotalCents: rate.maxSubtotalCents ?? null,
               isActive: rate.isActive ?? true,
               priority: rate.priority ?? 100,
             })),
@@ -146,9 +146,9 @@ export async function createShippingRate(
   input: {
     name: string
     method?: ShippingRateMethod
-    amount: number
-    minSubtotal?: number | null
-    maxSubtotal?: number | null
+    amountCents: number
+    minSubtotalCents?: number | null
+    maxSubtotalCents?: number | null
     isActive?: boolean
     priority?: number
   }
@@ -168,9 +168,9 @@ export async function createShippingRate(
       shippingZoneId: zoneId,
       name: input.name.trim(),
       method: input.method ?? 'FLAT',
-      amount: input.amount,
-      minSubtotal: input.minSubtotal ?? null,
-      maxSubtotal: input.maxSubtotal ?? null,
+      amountCents: input.amountCents,
+      minSubtotalCents: input.minSubtotalCents ?? null,
+      maxSubtotalCents: input.maxSubtotalCents ?? null,
       isActive: input.isActive ?? true,
       priority: input.priority ?? 100,
     },
@@ -183,9 +183,9 @@ export async function updateShippingRate(
   input: Partial<{
     name: string
     method: ShippingRateMethod
-    amount: number
-    minSubtotal?: number | null
-    maxSubtotal?: number | null
+    amountCents: number
+    minSubtotalCents?: number | null
+    maxSubtotalCents?: number | null
     isActive: boolean
     priority: number
   }>
@@ -209,9 +209,9 @@ export async function updateShippingRate(
     data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.method !== undefined ? { method: input.method } : {}),
-      ...(input.amount !== undefined ? { amount: input.amount } : {}),
-      ...(input.minSubtotal !== undefined ? { minSubtotal: input.minSubtotal ?? null } : {}),
-      ...(input.maxSubtotal !== undefined ? { maxSubtotal: input.maxSubtotal ?? null } : {}),
+      ...(input.amountCents !== undefined ? { amountCents: input.amountCents } : {}),
+      ...(input.minSubtotalCents !== undefined ? { minSubtotalCents: input.minSubtotalCents ?? null } : {}),
+      ...(input.maxSubtotalCents !== undefined ? { maxSubtotalCents: input.maxSubtotalCents ?? null } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
     },

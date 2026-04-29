@@ -1,14 +1,15 @@
 import { Prisma, type CheckoutSessionStatus } from '@prisma/client'
 
-import { createStripePaymentIntent, type StripePaymentIntent } from '@/lib/stripe'
+import { centsToDollars, dollarsToCents } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
-import { emitInternalEvent } from '@/server/events/dispatcher'
+import { createStripePaymentIntent, type StripePaymentIntent } from '@/lib/stripe'
 import {
-  buildCheckoutPricingWithDecisions,
+  buildCheckoutPricingWithDecisionsCents,
   type CheckoutAppliedDiscount,
   type CheckoutPricingShippingDecision,
   type CheckoutPricingTaxDecision,
 } from '@/server/checkout/pricing'
+import { emitInternalEvent } from '@/server/events/dispatcher'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
 import { createOrder, getOrderByPaymentIntentId } from '@/server/services/order.service'
 import { getStoreSettings } from '@/server/services/settings.service'
@@ -39,7 +40,7 @@ type CheckoutPayload = {
     title: string
     variantTitle?: string
     sku?: string
-    price: number
+    priceCents: number
     quantity: number
   }>
   shippingAddress: CheckoutAddress
@@ -48,11 +49,11 @@ type CheckoutPayload = {
   pricingSnapshot?: {
     computedAt: string
     currency: string
-    subtotal: number
-    shippingAmount: number
-    taxAmount: number
-    discountAmount: number
-    total: number
+    subtotalCents: number
+    shippingAmountCents: number
+    taxAmountCents: number
+    discountAmountCents: number
+    totalCents: number
     shippingDecision: CheckoutPricingShippingDecision
     taxDecision: CheckoutPricingTaxDecision
   }
@@ -84,6 +85,40 @@ function getLatestChargeId(intent: StripePaymentIntent) {
 
 function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+}
+
+function mapCheckoutPricingForPresentation(pricing: {
+  subtotalCents?: number
+  shippingAmountCents?: number
+  taxAmountCents?: number
+  discountAmountCents?: number
+  totalCents?: number
+  subtotal?: number
+  shippingAmount?: number
+  taxAmount?: number
+  discountAmount?: number
+  total?: number
+}) {
+  const subtotalCents = pricing.subtotalCents ?? dollarsToCents(pricing.subtotal ?? 0)
+  const shippingAmountCents =
+    pricing.shippingAmountCents ?? dollarsToCents(pricing.shippingAmount ?? 0)
+  const taxAmountCents = pricing.taxAmountCents ?? dollarsToCents(pricing.taxAmount ?? 0)
+  const discountAmountCents =
+    pricing.discountAmountCents ?? dollarsToCents(pricing.discountAmount ?? 0)
+  const totalCents = pricing.totalCents ?? dollarsToCents(pricing.total ?? 0)
+
+  return {
+    subtotal: centsToDollars(subtotalCents),
+    shippingAmount: centsToDollars(shippingAmountCents),
+    taxAmount: centsToDollars(taxAmountCents),
+    discountAmount: centsToDollars(discountAmountCents),
+    total: centsToDollars(totalCents),
+    subtotalCents,
+    shippingAmountCents,
+    taxAmountCents,
+    discountAmountCents,
+    totalCents,
+  }
 }
 
 async function resolveLineItems(items: CheckoutItemInput[]) {
@@ -122,7 +157,7 @@ async function resolveLineItems(items: CheckoutItemInput[]) {
       title: variant.product.title,
       variantTitle: variant.title,
       sku: variant.sku ?? undefined,
-      price: variant.price,
+      priceCents: variant.priceCents ?? dollarsToCents((variant as { price?: number }).price ?? 0),
       quantity: item.quantity,
     }
   })
@@ -200,13 +235,21 @@ export async function createCheckoutPaymentIntent(input: {
   const shippingAddress = normalizeAddress(input.shippingAddress)
   const billingAddress = normalizeAddress(input.billingAddress ?? input.shippingAddress)
   const discount = await resolveDiscountCode(input.discountCode)
-  const pricing = buildCheckoutPricingWithDecisions(lineItems, store?.shippingThreshold, {
-    discount,
+  const currency = (store?.currency || 'USD').toUpperCase()
+
+  const pricing = buildCheckoutPricingWithDecisionsCents(lineItems, store?.shippingThresholdCents, {
+    discount: discount
+      ? {
+          ...discount,
+          minimumOrderCents: discount.minimumOrderCents,
+        }
+      : null,
     shippingAddress,
     storeCountry: store?.country,
+    currency,
     shippingRates: {
-      domestic: Number(store?.shippingDomesticRate ?? 9.99),
-      international: Number(store?.shippingInternationalRate ?? 19.99),
+      domesticCents: Number(store?.shippingDomesticRateCents ?? 999),
+      internationalCents: Number(store?.shippingInternationalRateCents ?? 1999),
     },
     shippingZones: store?.shippingZones?.map((zone) => ({
       id: zone.id,
@@ -219,9 +262,9 @@ export async function createCheckoutPaymentIntent(input: {
         id: rate.id,
         name: rate.name,
         method: rate.method,
-        amount: rate.amount,
-        minSubtotal: rate.minSubtotal,
-        maxSubtotal: rate.maxSubtotal,
+        amountCents: rate.amountCents,
+        minSubtotalCents: rate.minSubtotalCents,
+        maxSubtotalCents: rate.maxSubtotalCents,
         isActive: rate.isActive,
         priority: rate.priority,
       })),
@@ -244,11 +287,11 @@ export async function createCheckoutPaymentIntent(input: {
         }
       : {}),
   })
-  const currency = (store?.currency || 'USD').toUpperCase()
+
   const customer = await getCustomerByEmail(normalizedEmail)
 
   const paymentIntent = await createStripePaymentIntent({
-    amount: Math.round(pricing.total * 100),
+    amount: pricing.totalCents ?? 0,
     currency,
     email: normalizedEmail,
     metadata: {
@@ -268,11 +311,11 @@ export async function createCheckoutPaymentIntent(input: {
     pricingSnapshot: {
       computedAt: new Date().toISOString(),
       currency,
-      subtotal: pricing.subtotal,
-      shippingAmount: pricing.shippingAmount,
-      taxAmount: pricing.taxAmount,
-      discountAmount: pricing.discountAmount,
-      total: pricing.total,
+      subtotalCents: pricing.subtotalCents ?? 0,
+      shippingAmountCents: pricing.shippingAmountCents ?? 0,
+      taxAmountCents: pricing.taxAmountCents ?? 0,
+      discountAmountCents: pricing.discountAmountCents ?? 0,
+      totalCents: pricing.totalCents ?? 0,
       shippingDecision: pricing.shippingDecision,
       taxDecision: pricing.taxDecision,
     },
@@ -285,11 +328,11 @@ export async function createCheckoutPaymentIntent(input: {
       customerId: customer?.id,
       email: normalizedEmail,
       currency,
-      subtotal: pricing.subtotal,
-      taxAmount: pricing.taxAmount,
-      shippingAmount: pricing.shippingAmount,
-      discountAmount: pricing.discountAmount,
-      total: pricing.total,
+      subtotalCents: pricing.subtotalCents ?? 0,
+      taxAmountCents: pricing.taxAmountCents ?? 0,
+      shippingAmountCents: pricing.shippingAmountCents ?? 0,
+      discountAmountCents: pricing.discountAmountCents ?? 0,
+      totalCents: pricing.totalCents ?? 0,
       payload: payload as Prisma.InputJsonValue,
     },
   })
@@ -298,7 +341,7 @@ export async function createCheckoutPaymentIntent(input: {
     checkoutSessionId: checkoutSession.id,
     paymentIntentId: paymentIntent.id,
     email: normalizedEmail,
-    total: pricing.total,
+    total: centsToDollars(pricing.totalCents ?? 0),
     currency,
   })
 
@@ -307,8 +350,20 @@ export async function createCheckoutPaymentIntent(input: {
     paymentIntentId: paymentIntent.id,
     clientSecret: paymentIntent.client_secret,
     currency,
-    ...pricing,
-    items: payload.items,
+    ...mapCheckoutPricingForPresentation(pricing),
+    items: payload.items.map((item) => ({
+      ...item,
+      price: centsToDollars(item.priceCents ?? 0),
+    })),
+    appliedDiscount: pricing.appliedDiscount
+      ? {
+        ...pricing.appliedDiscount,
+          amount: centsToDollars(
+            pricing.appliedDiscount.amountCents ??
+              dollarsToCents((pricing.appliedDiscount as { amount?: number }).amount ?? 0)
+          ),
+        }
+      : undefined,
   }
 }
 
@@ -340,9 +395,9 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
     shippingAddress: payload.shippingAddress,
     billingAddress: payload.billingAddress,
     discountApplications: payload.discountApplications,
-    taxAmount: checkoutSession.taxAmount,
-    shippingAmount: checkoutSession.shippingAmount,
-    discountAmount: checkoutSession.discountAmount,
+    taxAmountCents: checkoutSession.taxAmountCents,
+    shippingAmountCents: checkoutSession.shippingAmountCents,
+    discountAmountCents: checkoutSession.discountAmountCents,
     currency: checkoutSession.currency,
     stripePaymentIntentId: intent.id,
     stripeChargeId: getLatestChargeId(intent),

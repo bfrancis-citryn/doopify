@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import { centsToDollars, dollarsToCents } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 
@@ -144,8 +145,8 @@ const storefrontCollectionDetailInclude = {
             select: {
               id: true,
               title: true,
-              price: true,
-              compareAtPrice: true,
+              priceCents: true,
+              compareAtPriceCents: true,
               inventory: true,
               weight: true,
               weightUnit: true,
@@ -294,8 +295,15 @@ function toStorefrontProduct(product: any) {
     variants: (product.variants || []).map((variant: any) => ({
       id: variant.id,
       title: variant.title,
-      price: variant.price,
-      compareAtPrice: variant.compareAtPrice,
+      price: centsToDollars(
+        variant.priceCents ?? dollarsToCents(variant.price ?? 0)
+      ),
+      compareAtPrice:
+        variant.compareAtPriceCents == null
+          ? variant.compareAtPrice == null
+            ? null
+            : Number(variant.compareAtPrice)
+          : centsToDollars(variant.compareAtPriceCents),
       inventory: variant.inventory,
       weight: variant.weight,
       weightUnit: variant.weightUnit,
@@ -313,11 +321,23 @@ function compareBySortOrder(a: any, b: any, sortOrder: string) {
   }
 
   if (sortOrder === 'PRICE_ASC') {
-    return Number(a.product.variants?.[0]?.price ?? 0) - Number(b.product.variants?.[0]?.price ?? 0)
+    return Number(
+      a.product.variants?.[0]?.priceCents ??
+        dollarsToCents(a.product.variants?.[0]?.price ?? 0)
+    ) - Number(
+      b.product.variants?.[0]?.priceCents ??
+        dollarsToCents(b.product.variants?.[0]?.price ?? 0)
+    )
   }
 
   if (sortOrder === 'PRICE_DESC') {
-    return Number(b.product.variants?.[0]?.price ?? 0) - Number(a.product.variants?.[0]?.price ?? 0)
+    return Number(
+      b.product.variants?.[0]?.priceCents ??
+        dollarsToCents(b.product.variants?.[0]?.price ?? 0)
+    ) - Number(
+      a.product.variants?.[0]?.priceCents ??
+        dollarsToCents(a.product.variants?.[0]?.price ?? 0)
+    )
   }
 
   return Number(a.position ?? 0) - Number(b.position ?? 0)

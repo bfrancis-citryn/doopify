@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import type { WebhookDeliveryStatus } from '@prisma/client'
 
+import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 
@@ -351,7 +352,7 @@ export async function getWebhookDeliveryDiagnostics(id: string) {
             id: true,
             status: true,
             email: true,
-            total: true,
+            totalCents: true,
             currency: true,
             failureReason: true,
             completedAt: true,
@@ -364,7 +365,7 @@ export async function getWebhookDeliveryDiagnostics(id: string) {
             id: true,
             orderId: true,
             status: true,
-            amount: true,
+            amountCents: true,
             currency: true,
             createdAt: true,
             order: {
@@ -373,7 +374,7 @@ export async function getWebhookDeliveryDiagnostics(id: string) {
                 orderNumber: true,
                 paymentStatus: true,
                 fulfillmentStatus: true,
-                total: true,
+                totalCents: true,
                 currency: true,
                 createdAt: true,
               },
@@ -409,7 +410,8 @@ export async function getWebhookDeliveryDiagnostics(id: string) {
             id: payment.id,
             orderId: payment.orderId,
             status: payment.status,
-            amount: payment.amount,
+            amount: centsToDollars(payment.amountCents),
+            amountCents: payment.amountCents,
             currency: payment.currency,
             createdAt: payment.createdAt,
           }

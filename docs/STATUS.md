@@ -32,6 +32,7 @@ Doopify is a real DB-backed commerce app, not a prototype.
 The repo currently includes:
 
 - Prisma/Postgres commerce schema for products, variants, media, customers, orders, discounts, settings, sessions, payments, fulfillments, refunds, returns, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
+- persisted commerce money fields now use integer minor units (cents) at rest with server-side conversion boundaries
 - Next.js App Router admin, storefront, and API surface
 - protected admin auth with session-backed JWT validation
 - private route protection through `src/proxy.ts`

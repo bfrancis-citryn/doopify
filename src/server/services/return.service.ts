@@ -182,7 +182,7 @@ export async function updateReturnStatus(
 export async function closeReturnWithRefund(input: {
   returnId: string
   paymentId: string
-  amount: number
+  amountCents: number
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
   note?: string
   restockItems?: boolean
@@ -190,7 +190,7 @@ export async function closeReturnWithRefund(input: {
     orderItemId: string
     variantId?: string
     quantity: number
-    amount: number
+    amountCents: number
   }>
 }) {
   const returnRecord = await prisma.return.findUnique({
@@ -229,7 +229,7 @@ export async function closeReturnWithRefund(input: {
   const refund = await issueRefund({
     orderId: returnRecord.orderId,
     paymentId: input.paymentId,
-    amount: input.amount,
+    amountCents: input.amountCents,
     reason: input.reason ?? 'requested_by_customer',
     note: input.note,
     restockItems: input.restockItems ?? true,
@@ -248,7 +248,7 @@ export async function closeReturnWithRefund(input: {
 export async function getOrderReturns(orderId: string) {
   return prisma.return.findMany({
     where: { orderId },
-    include: { items: true, refund: { select: { id: true, amount: true, status: true } } },
+    include: { items: true, refund: { select: { id: true, amountCents: true, status: true } } },
     orderBy: { createdAt: 'desc' },
   })
 }

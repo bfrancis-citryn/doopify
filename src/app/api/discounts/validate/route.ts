@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { dollarsToCents, formatCents } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 
 const schema = z.object({
@@ -28,8 +29,10 @@ export async function POST(req: Request) {
     if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
       return err('This discount code has reached its usage limit', 400)
     }
-    if (discount.minimumOrder && parsed.data.orderTotal < discount.minimumOrder) {
-      return err(`Minimum order of $${discount.minimumOrder} required`, 400)
+
+    const orderTotalCents = dollarsToCents(parsed.data.orderTotal)
+    if (discount.minimumOrderCents && orderTotalCents < discount.minimumOrderCents) {
+      return err(`Minimum order of ${formatCents(discount.minimumOrderCents)} required`, 400)
     }
 
     return ok({ discount, valid: true })

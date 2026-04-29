@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
+import { dollarsToCents } from '@/lib/money'
 import { createShippingZone, listShippingZones } from '@/server/services/shipping-tax-config.service'
 
 const rateSchema = z
@@ -60,7 +61,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const created = await createShippingZone(parsed.data)
+    const created = await createShippingZone({
+      ...parsed.data,
+      rates: parsed.data.rates?.map((rate) => ({
+        ...rate,
+        amountCents: dollarsToCents(rate.amount),
+        minSubtotalCents: rate.minSubtotal == null ? null : dollarsToCents(rate.minSubtotal),
+        maxSubtotalCents: rate.maxSubtotal == null ? null : dollarsToCents(rate.maxSubtotal),
+      })),
+    })
     return ok(created, 201)
   } catch (error) {
     console.error('[POST /api/settings/shipping-zones]', error)

@@ -24,6 +24,8 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - `POST /api/webhooks/stripe` for verified Stripe webhook processing
 - `GET /api/checkout/status` for success-page reconciliation
 - Checkout session persistence with paid and failed status tracking
+- Persisted commerce money fields stored as integer minor units (cents) at rest
+- Stripe charge/refund amount values now use the same persisted integer cents values directly
 - Idempotent paid-order creation keyed from verified Stripe payment success
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized server pricing path

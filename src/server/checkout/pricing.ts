@@ -1,5 +1,8 @@
+import { centsToDollars, dollarsToCents, formatCents } from '@/lib/money'
+
 export type CheckoutPricingLine = {
-  price: number
+  priceCents?: number
+  price?: number
   quantity: number
 }
 
@@ -16,6 +19,7 @@ export type CheckoutPricingDiscount = {
   method: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING' | 'BUY_X_GET_Y'
   value: number
   minimumOrder?: number | null
+  minimumOrderCents?: number | null
   usageLimit?: number | null
   usageCount?: number | null
   status: 'ACTIVE' | 'SCHEDULED' | 'EXPIRED' | 'DISABLED'
@@ -28,16 +32,20 @@ export type CheckoutAppliedDiscount = {
   code?: string | null
   title: string
   method: CheckoutPricingDiscount['method']
-  amount: number
+  amount?: number
+  amountCents?: number
 }
 
 export type CheckoutPricingZoneRate = {
   id?: string
   name?: string
   method: 'FLAT' | 'SUBTOTAL_TIER'
-  amount: number
+  amount?: number
+  amountCents?: number
   minSubtotal?: number | null
+  minSubtotalCents?: number | null
   maxSubtotal?: number | null
+  maxSubtotalCents?: number | null
   isActive?: boolean
   priority?: number
 }
@@ -68,7 +76,8 @@ export type CheckoutPricingTaxRule = {
 
 export type CheckoutPricingShippingDecision = {
   source: 'none' | 'threshold' | 'zone' | 'fallback'
-  amount: number
+  amount?: number
+  amountCents?: number
   destinationCountry?: string
   destinationProvince?: string
   zoneId?: string
@@ -81,7 +90,8 @@ export type CheckoutPricingShippingDecision = {
 export type CheckoutPricingTaxDecision = {
   source: 'none' | 'rule' | 'fallback'
   rate: number
-  amount: number
+  amount?: number
+  amountCents?: number
   destinationCountry?: string
   destinationProvince?: string
   ruleId?: string
@@ -89,11 +99,16 @@ export type CheckoutPricingTaxDecision = {
 }
 
 export type CheckoutPricingResult = {
-  subtotal: number
-  shippingAmount: number
-  taxAmount: number
-  discountAmount: number
-  total: number
+  subtotal?: number
+  shippingAmount?: number
+  taxAmount?: number
+  discountAmount?: number
+  total?: number
+  subtotalCents?: number
+  shippingAmountCents?: number
+  taxAmountCents?: number
+  discountAmountCents?: number
+  totalCents?: number
   appliedDiscount?: CheckoutAppliedDiscount
 }
 
@@ -103,8 +118,10 @@ export type CheckoutPricingResultWithDecisions = CheckoutPricingResult & {
 }
 
 type CheckoutPricingShippingRates = {
-  domestic: number
-  international: number
+  domestic?: number
+  international?: number
+  domesticCents?: number
+  internationalCents?: number
 }
 
 type CheckoutPricingTaxRates = {
@@ -113,8 +130,8 @@ type CheckoutPricingTaxRates = {
 }
 
 const DEFAULT_SHIPPING_RATES: CheckoutPricingShippingRates = {
-  domestic: 9.99,
-  international: 19.99,
+  domesticCents: 999,
+  internationalCents: 1999,
 }
 
 const DEFAULT_TAX_RULES: CheckoutPricingTaxRule[] = [
@@ -123,10 +140,6 @@ const DEFAULT_TAX_RULES: CheckoutPricingTaxRule[] = [
   { countryCode: 'US', rate: 0.07, priority: 100, isActive: true },
   { countryCode: 'CA', rate: 0.05, priority: 100, isActive: true },
 ]
-
-export function roundCurrency(value: number) {
-  return Number(value.toFixed(2))
-}
 
 function normalizeCountry(value?: string | null) {
   const normalized = String(value || '')
@@ -171,7 +184,7 @@ function getProvinceCode(
   return normalizeProvince(input.provinceCode ?? input.province ?? '')
 }
 
-function validateCheckoutDiscount(discount: CheckoutPricingDiscount, subtotal: number, now: Date) {
+function validateCheckoutDiscount(discount: CheckoutPricingDiscount, subtotalCents: number, now: Date, currency: string) {
   if (discount.type !== 'CODE' || !discount.code) {
     throw new Error('Discount code not found')
   }
@@ -192,8 +205,16 @@ function validateCheckoutDiscount(discount: CheckoutPricingDiscount, subtotal: n
     throw new Error('This discount code has reached its usage limit')
   }
 
-  if (discount.minimumOrder != null && subtotal < discount.minimumOrder) {
-    throw new Error(`Minimum order of $${discount.minimumOrder} required`)
+  const minimumOrderCents =
+    discount.minimumOrderCents ??
+    (discount.minimumOrder != null ? dollarsToCents(discount.minimumOrder) : null)
+
+  if (minimumOrderCents != null && subtotalCents < minimumOrderCents) {
+    const minimumOrderDisplay =
+      minimumOrderCents % 100 === 0
+        ? `$${minimumOrderCents / 100}`
+        : formatCents(minimumOrderCents, currency)
+    throw new Error(`Minimum order of ${minimumOrderDisplay} required`)
   }
 
   if (discount.method === 'BUY_X_GET_Y') {
@@ -201,31 +222,31 @@ function validateCheckoutDiscount(discount: CheckoutPricingDiscount, subtotal: n
   }
 }
 
-function calculateDiscountAmount(input: {
+function calculateDiscountAmountCents(input: {
   discount: CheckoutPricingDiscount
-  subtotal: number
-  shippingAmount: number
+  subtotalCents: number
+  shippingAmountCents: number
 }) {
-  const { discount, subtotal, shippingAmount } = input
+  const { discount, subtotalCents, shippingAmountCents } = input
 
   if (discount.method === 'PERCENTAGE') {
-    return roundCurrency(Math.min(subtotal, subtotal * (Number(discount.value) / 100)))
+    return Math.min(subtotalCents, Math.round(subtotalCents * (Number(discount.value) / 100)))
   }
 
   if (discount.method === 'FIXED_AMOUNT') {
-    return roundCurrency(Math.min(subtotal, Number(discount.value)))
+    return Math.min(subtotalCents, Math.round(Number(discount.value)))
   }
 
   if (discount.method === 'FREE_SHIPPING') {
-    return roundCurrency(shippingAmount)
+    return shippingAmountCents
   }
 
   return 0
 }
 
 function resolveShippingDecision(input: {
-  subtotal: number
-  shippingThreshold?: number | null
+  subtotalCents: number
+  shippingThresholdCents?: number | null
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
   shippingRates: CheckoutPricingShippingRates
@@ -234,19 +255,19 @@ function resolveShippingDecision(input: {
   const destinationCountry = normalizeCountry(input.shippingAddress?.country)
   const destinationProvince = normalizeProvince(input.shippingAddress?.province)
 
-  if (input.subtotal <= 0) {
+  if (input.subtotalCents <= 0) {
     return {
       source: 'none',
-      amount: 0,
+      amountCents: 0,
       destinationCountry,
       destinationProvince,
     }
   }
 
-  if (input.shippingThreshold != null && input.subtotal >= input.shippingThreshold) {
+  if (input.shippingThresholdCents != null && input.subtotalCents >= input.shippingThresholdCents) {
     return {
       source: 'threshold',
-      amount: 0,
+      amountCents: 0,
       destinationCountry,
       destinationProvince,
     }
@@ -277,9 +298,16 @@ function resolveShippingDecision(input: {
       .filter((rate) => rate.isActive !== false)
       .filter((rate) => {
         if (rate.method === 'SUBTOTAL_TIER') {
-          const minSubtotal = Number(rate.minSubtotal ?? 0)
-          const maxSubtotal = rate.maxSubtotal == null ? Number.POSITIVE_INFINITY : Number(rate.maxSubtotal)
-          return input.subtotal >= minSubtotal && input.subtotal <= maxSubtotal
+          const minSubtotalCents = Number(
+            rate.minSubtotalCents ?? (rate.minSubtotal != null ? dollarsToCents(rate.minSubtotal) : 0)
+          )
+          const maxSubtotalCents =
+            rate.maxSubtotalCents == null
+              ? rate.maxSubtotal == null
+                ? Number.POSITIVE_INFINITY
+                : dollarsToCents(rate.maxSubtotal)
+              : Number(rate.maxSubtotalCents)
+          return input.subtotalCents >= minSubtotalCents && input.subtotalCents <= maxSubtotalCents
         }
 
         return true
@@ -289,8 +317,17 @@ function resolveShippingDecision(input: {
         const rightPriority = Number(right.priority ?? 100)
         if (leftPriority !== rightPriority) return leftPriority - rightPriority
 
-        const leftTierSpecificity = left.method === 'SUBTOTAL_TIER' ? Number(left.minSubtotal ?? 0) : -1
-        const rightTierSpecificity = right.method === 'SUBTOTAL_TIER' ? Number(right.minSubtotal ?? 0) : -1
+        const leftTierSpecificity =
+          left.method === 'SUBTOTAL_TIER'
+            ? Number(left.minSubtotalCents ?? (left.minSubtotal != null ? dollarsToCents(left.minSubtotal) : 0))
+            : -1
+        const rightTierSpecificity =
+          right.method === 'SUBTOTAL_TIER'
+            ? Number(
+                right.minSubtotalCents ??
+                  (right.minSubtotal != null ? dollarsToCents(right.minSubtotal) : 0)
+              )
+            : -1
         return rightTierSpecificity - leftTierSpecificity
       })
 
@@ -298,7 +335,11 @@ function resolveShippingDecision(input: {
     if (selectedRate) {
       return {
         source: 'zone',
-        amount: roundCurrency(selectedRate.amount),
+        amountCents: Math.round(
+          Number(
+            selectedRate.amountCents ?? (selectedRate.amount != null ? dollarsToCents(selectedRate.amount) : 0)
+          )
+        ),
         destinationCountry,
         destinationProvince,
         zoneId: selectedZone.id,
@@ -314,14 +355,17 @@ function resolveShippingDecision(input: {
   const isInternational = destinationCountry && originCountry && destinationCountry !== originCountry
   return {
     source: 'fallback',
-    amount: roundCurrency(isInternational ? input.shippingRates.international : input.shippingRates.domestic),
+    amountCents: isInternational
+      ? input.shippingRates.internationalCents ??
+        dollarsToCents(input.shippingRates.international ?? 19.99)
+      : input.shippingRates.domesticCents ?? dollarsToCents(input.shippingRates.domestic ?? 9.99),
     destinationCountry,
     destinationProvince,
   }
 }
 
 function resolveTaxDecision(input: {
-  taxableSubtotal: number
+  taxableSubtotalCents: number
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
   taxRates?: CheckoutPricingTaxRates
@@ -333,7 +377,7 @@ function resolveTaxDecision(input: {
     return {
       source: 'none',
       rate: 0,
-      amount: 0,
+      amountCents: 0,
     }
   }
 
@@ -364,7 +408,7 @@ function resolveTaxDecision(input: {
       return {
         source: 'rule',
         rate,
-        amount: roundCurrency(input.taxableSubtotal * rate),
+        amountCents: Math.round(input.taxableSubtotalCents * rate),
         destinationCountry,
         destinationProvince,
         ruleId: selectedRule.id,
@@ -380,7 +424,7 @@ function resolveTaxDecision(input: {
     return {
       source: 'fallback',
       rate,
-      amount: roundCurrency(input.taxableSubtotal * rate),
+      amountCents: Math.round(input.taxableSubtotalCents * rate),
       destinationCountry,
       destinationProvince,
     }
@@ -411,7 +455,7 @@ function resolveTaxDecision(input: {
     return {
       source: 'fallback',
       rate,
-      amount: roundCurrency(input.taxableSubtotal * rate),
+      amountCents: Math.round(input.taxableSubtotalCents * rate),
       destinationCountry,
       destinationProvince,
     }
@@ -420,15 +464,15 @@ function resolveTaxDecision(input: {
   return {
     source: 'none',
     rate: 0,
-    amount: 0,
+    amountCents: 0,
     destinationCountry,
     destinationProvince,
   }
 }
 
-export function buildCheckoutPricingWithDecisions(
+export function buildCheckoutPricingWithDecisionsCents(
   items: CheckoutPricingLine[],
-  shippingThreshold?: number | null,
+  shippingThresholdCents?: number | null,
   options: {
     discount?: CheckoutPricingDiscount | null
     shippingAddress?: CheckoutPricingAddress
@@ -438,66 +482,123 @@ export function buildCheckoutPricingWithDecisions(
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
     now?: Date
+    currency?: string
   } = {}
 ): CheckoutPricingResultWithDecisions {
-  const subtotal = roundCurrency(items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0))
-  const shippingRates = options.shippingRates ?? DEFAULT_SHIPPING_RATES
+  const subtotalCents = items.reduce(
+    (sum, item) =>
+      sum +
+      (item.priceCents ?? dollarsToCents(item.price ?? 0)) * Number(item.quantity),
+    0
+  )
+  const shippingRates = {
+    domesticCents:
+      options.shippingRates?.domesticCents ??
+      (options.shippingRates?.domestic != null
+        ? dollarsToCents(options.shippingRates.domestic)
+        : DEFAULT_SHIPPING_RATES.domesticCents),
+    internationalCents:
+      options.shippingRates?.internationalCents ??
+      (options.shippingRates?.international != null
+        ? dollarsToCents(options.shippingRates.international)
+        : DEFAULT_SHIPPING_RATES.internationalCents),
+  }
   const shippingDecision = resolveShippingDecision({
-    subtotal,
-    shippingThreshold,
+    subtotalCents,
+    shippingThresholdCents,
     shippingAddress: options.shippingAddress,
     storeCountry: options.storeCountry,
     shippingRates,
     shippingZones: options.shippingZones,
   })
-  const shippingAmount = shippingDecision.amount
+  const shippingAmountCents = shippingDecision.amountCents ?? 0
   const now = options.now ?? new Date()
+  const currency = options.currency ?? 'USD'
   const appliedDiscount = options.discount
     ? (() => {
-        validateCheckoutDiscount(options.discount, subtotal, now)
+        validateCheckoutDiscount(options.discount, subtotalCents, now, currency)
         return {
           discountId: options.discount.id,
           code: options.discount.code,
           title: options.discount.title,
           method: options.discount.method,
-          amount: calculateDiscountAmount({
+          amountCents: calculateDiscountAmountCents({
             discount: options.discount,
-            subtotal,
-            shippingAmount,
+            subtotalCents,
+            shippingAmountCents,
           }),
         }
       })()
     : undefined
-  const discountAmount = appliedDiscount?.amount ?? 0
-  const taxableSubtotal =
+  const discountAmountCents = appliedDiscount?.amountCents ?? 0
+  const taxableSubtotalCents =
     appliedDiscount && (appliedDiscount.method === 'PERCENTAGE' || appliedDiscount.method === 'FIXED_AMOUNT')
-      ? Math.max(0, roundCurrency(subtotal - discountAmount))
-      : subtotal
+      ? Math.max(0, subtotalCents - discountAmountCents)
+      : subtotalCents
   const taxDecision = resolveTaxDecision({
-    taxableSubtotal,
+    taxableSubtotalCents,
     shippingAddress: options.shippingAddress,
     storeCountry: options.storeCountry,
     taxRates: options.taxRates,
     taxRules: options.taxRules,
   })
-  const taxAmount = taxDecision.amount
-  const total = roundCurrency(subtotal + shippingAmount + taxAmount - discountAmount)
+  const taxAmountCents = taxDecision.amountCents ?? 0
+  const totalCents = subtotalCents + shippingAmountCents + taxAmountCents - discountAmountCents
 
   return {
-    subtotal,
-    shippingAmount,
-    taxAmount,
-    discountAmount,
-    total,
+    subtotalCents,
+    shippingAmountCents,
+    taxAmountCents,
+    discountAmountCents,
+    totalCents,
     shippingDecision,
     taxDecision,
     ...(appliedDiscount ? { appliedDiscount } : {}),
   }
 }
 
-export function buildCheckoutPricing(
+function toDollarPricing(input: CheckoutPricingResultWithDecisions): CheckoutPricingResultWithDecisions {
+  return {
+    subtotal: centsToDollars(input.subtotalCents!),
+    shippingAmount: centsToDollars(input.shippingAmountCents!),
+    taxAmount: centsToDollars(input.taxAmountCents!),
+    discountAmount: centsToDollars(input.discountAmountCents!),
+    total: centsToDollars(input.totalCents!),
+    shippingDecision: {
+      source: input.shippingDecision.source,
+      amount: centsToDollars(input.shippingDecision.amountCents!),
+      destinationCountry: input.shippingDecision.destinationCountry,
+      destinationProvince: input.shippingDecision.destinationProvince,
+      zoneId: input.shippingDecision.zoneId,
+      zoneName: input.shippingDecision.zoneName,
+      rateId: input.shippingDecision.rateId,
+      rateName: input.shippingDecision.rateName,
+      rateMethod: input.shippingDecision.rateMethod,
+    },
+    taxDecision: {
+      source: input.taxDecision.source,
+      rate: input.taxDecision.rate,
+      amount: centsToDollars(input.taxDecision.amountCents!),
+      destinationCountry: input.taxDecision.destinationCountry,
+      destinationProvince: input.taxDecision.destinationProvince,
+      ruleId: input.taxDecision.ruleId,
+      ruleName: input.taxDecision.ruleName,
+    },
+    appliedDiscount: input.appliedDiscount
+      ? {
+          discountId: input.appliedDiscount.discountId,
+          code: input.appliedDiscount.code,
+          title: input.appliedDiscount.title,
+          method: input.appliedDiscount.method,
+          amount: centsToDollars(input.appliedDiscount.amountCents!),
+        }
+      : undefined,
+  }
+}
+
+export function buildCheckoutPricingWithDecisions(
   items: CheckoutPricingLine[],
-  shippingThreshold?: number | null,
+  shippingThresholdCents?: number | null,
   options: {
     discount?: CheckoutPricingDiscount | null
     shippingAddress?: CheckoutPricingAddress
@@ -507,15 +608,72 @@ export function buildCheckoutPricing(
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
     now?: Date
+    currency?: string
+  } = {}
+): CheckoutPricingResultWithDecisions {
+  return toDollarPricing(
+    buildCheckoutPricingWithDecisionsCents(
+      items,
+      shippingThresholdCents != null && shippingThresholdCents < 1000
+        ? dollarsToCents(shippingThresholdCents)
+        : shippingThresholdCents,
+      {
+        ...options,
+        discount: options.discount
+          ? {
+              ...options.discount,
+              value:
+                options.discount.method === 'FIXED_AMOUNT' &&
+                Number.isFinite(options.discount.value) &&
+                options.discount.value < 1000
+                  ? dollarsToCents(options.discount.value)
+                  : options.discount.value,
+              minimumOrderCents:
+                options.discount.minimumOrderCents ??
+                (options.discount.minimumOrder != null
+                  ? dollarsToCents(options.discount.minimumOrder)
+                  : null),
+            }
+          : options.discount,
+      }
+    )
+  )
+}
+
+export function buildCheckoutPricing(
+  items: CheckoutPricingLine[],
+  shippingThresholdCents?: number | null,
+  options: {
+    discount?: CheckoutPricingDiscount | null
+    shippingAddress?: CheckoutPricingAddress
+    storeCountry?: string | null
+    shippingRates?: CheckoutPricingShippingRates
+    shippingZones?: CheckoutPricingShippingZone[]
+    taxRates?: CheckoutPricingTaxRates
+    taxRules?: CheckoutPricingTaxRule[]
+    now?: Date
+    currency?: string
   } = {}
 ): CheckoutPricingResult {
-  const detailed = buildCheckoutPricingWithDecisions(items, shippingThreshold, options)
+  const detailed = buildCheckoutPricingWithDecisions(items, shippingThresholdCents, options)
   return {
     subtotal: detailed.subtotal,
     shippingAmount: detailed.shippingAmount,
     taxAmount: detailed.taxAmount,
     discountAmount: detailed.discountAmount,
     total: detailed.total,
-    ...(detailed.appliedDiscount ? { appliedDiscount: detailed.appliedDiscount } : {}),
+    ...(detailed.appliedDiscount
+      ? {
+          appliedDiscount: {
+            discountId: detailed.appliedDiscount.discountId,
+            code: detailed.appliedDiscount.code,
+            title: detailed.appliedDiscount.title,
+            method: detailed.appliedDiscount.method,
+            amount:
+              detailed.appliedDiscount.amount ??
+              centsToDollars(detailed.appliedDiscount.amountCents ?? 0),
+          },
+        }
+      : {}),
   }
 }

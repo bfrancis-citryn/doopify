@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 import type { ProductStatus, Prisma } from '@prisma/client'
@@ -25,8 +26,8 @@ type ProductVariantPayload = {
   id?: string
   title: string
   sku?: string
-  price: number
-  compareAtPrice?: number
+  priceCents: number
+  compareAtPriceCents?: number
   inventory?: number
   weight?: number
   weightUnit?: string
@@ -42,6 +43,12 @@ type ProductMediaPayload = {
 function attachMediaUrls(product: any) {
   return {
     ...product,
+    variants: (product.variants || []).map((variant: any) => ({
+      ...variant,
+      price: centsToDollars(variant.priceCents),
+      compareAtPrice:
+        variant.compareAtPriceCents == null ? null : centsToDollars(variant.compareAtPriceCents),
+    })),
     media: (product.media || []).map((media: any) => ({
       ...media,
       asset: media.asset
@@ -88,8 +95,9 @@ export function toStorefrontProduct(product: any) {
     variants: (product.variants || []).map((variant: any) => ({
       id: variant.id,
       title: variant.title,
-      price: variant.price,
-      compareAtPrice: variant.compareAtPrice,
+      price: centsToDollars(variant.priceCents),
+      compareAtPrice:
+        variant.compareAtPriceCents == null ? null : centsToDollars(variant.compareAtPriceCents),
       inventory: variant.inventory,
       weight: variant.weight,
       weightUnit: variant.weightUnit,
@@ -120,8 +128,8 @@ function createFallbackVariant(variant?: Partial<ProductVariantPayload>): Produc
   return {
     title: variant?.title || 'Default',
     sku: variant?.sku,
-    price: variant?.price ?? 0,
-    compareAtPrice: variant?.compareAtPrice,
+    priceCents: variant?.priceCents ?? 0,
+    compareAtPriceCents: variant?.compareAtPriceCents,
     inventory: variant?.inventory ?? 0,
     weight: variant?.weight,
     weightUnit: variant?.weightUnit ?? 'kg',
@@ -170,8 +178,8 @@ async function syncProductVariants(
     const variantData = {
       title: variant.title,
       sku: variant.sku,
-      price: variant.price,
-      compareAtPrice: variant.compareAtPrice ?? null,
+      priceCents: variant.priceCents,
+      compareAtPriceCents: variant.compareAtPriceCents ?? null,
       inventory: variant.inventory ?? 0,
       weight: variant.weight ?? null,
       weightUnit: variant.weightUnit ?? 'kg',
@@ -320,8 +328,8 @@ export async function createProduct(data: {
   variants?: Array<{
     title: string
     sku?: string
-    price: number
-    compareAtPrice?: number
+    priceCents: number
+    compareAtPriceCents?: number
     inventory?: number
     weight?: number
     weightUnit?: string
@@ -346,8 +354,8 @@ export async function createProduct(data: {
           create: variants.map((variant, index) => ({
             title: variant.title,
             sku: variant.sku,
-            price: variant.price,
-            compareAtPrice: variant.compareAtPrice,
+            priceCents: variant.priceCents,
+            compareAtPriceCents: variant.compareAtPriceCents,
             inventory: variant.inventory ?? 0,
             weight: variant.weight,
             weightUnit: variant.weightUnit,
@@ -442,8 +450,8 @@ export async function updateVariant(
   data: Partial<{
     title: string
     sku: string
-    price: number
-    compareAtPrice: number
+    priceCents: number
+    compareAtPriceCents: number
     inventory: number
     weight: number
   }>
@@ -456,8 +464,8 @@ export async function createVariant(
   data: {
     title: string
     sku?: string
-    price: number
-    compareAtPrice?: number
+    priceCents: number
+    compareAtPriceCents?: number
     inventory?: number
     weight?: number
     weightUnit?: string
@@ -469,8 +477,8 @@ export async function createVariant(
       productId,
       title: data.title,
       sku: data.sku,
-      price: data.price,
-      compareAtPrice: data.compareAtPrice,
+      priceCents: data.priceCents,
+      compareAtPriceCents: data.compareAtPriceCents,
       inventory: data.inventory ?? 0,
       weight: data.weight,
       weightUnit: data.weightUnit,

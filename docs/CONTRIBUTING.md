@@ -134,6 +134,8 @@ Rules:
 - Recompute totals on the server.
 - Add discounts, shipping, and tax through a central pricing path.
 - Persist snapshots for order history where product data can change later.
+- For USD this means `*Cents` fields at rest and Stripe `amount` values sent directly from those stored cents.
+- Convert dollar inputs to cents at route/schema boundaries; do not let service/domain logic receive dollar floats.
 
 ## Inventory Rules
 

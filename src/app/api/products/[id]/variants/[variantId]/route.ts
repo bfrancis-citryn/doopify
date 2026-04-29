@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { dollarsToCents } from '@/lib/money'
 import { updateVariant, deleteVariant } from '@/server/services/product.service'
 
 interface Params { params: Promise<{ id: string; variantId: string }> }
@@ -22,7 +23,13 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
-    const variant = await updateVariant(variantId, parsed.data)
+    const variant = await updateVariant(variantId, {
+      ...parsed.data,
+      ...(parsed.data.price !== undefined ? { priceCents: dollarsToCents(parsed.data.price) } : {}),
+      ...(parsed.data.compareAtPrice !== undefined
+        ? { compareAtPriceCents: dollarsToCents(parsed.data.compareAtPrice) }
+        : {}),
+    })
     return ok(variant)
   } catch (e) {
     console.error('[PATCH /api/products/[id]/variants/[variantId]]', e)

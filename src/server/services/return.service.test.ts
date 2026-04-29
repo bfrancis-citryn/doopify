@@ -131,13 +131,13 @@ describe('closeReturnWithRefund', () => {
     mocks.prisma.return.update.mockResolvedValue({ ...baseReturn, status: 'CLOSED' })
     mocks.prisma.orderEvent.create.mockResolvedValue({})
     mocks.emitInternalEvent.mockResolvedValue(undefined)
-    mocks.issueRefund.mockResolvedValue({ id: 'refund-1', amount: 50, status: 'ISSUED' })
+    mocks.issueRefund.mockResolvedValue({ id: 'refund-1', amountCents: 5000, status: 'ISSUED' })
 
     const result = await closeReturnWithRefund({
       returnId: RETURN_ID,
       paymentId: 'payment-1',
-      amount: 50,
-      items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amount: 50 }],
+      amountCents: 5000,
+      items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 1, amountCents: 5000 }],
     })
 
     expect(mocks.issueRefund).toHaveBeenCalledWith(expect.objectContaining({ orderId: ORDER_ID, returnId: RETURN_ID, restockItems: true }))
@@ -151,8 +151,8 @@ describe('closeReturnWithRefund', () => {
       closeReturnWithRefund({
         returnId: RETURN_ID,
         paymentId: 'payment-1',
-        amount: 100,
-        items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 2, amount: 100 }],
+        amountCents: 10000,
+        items: [{ orderItemId: ORDER_ITEM_ID, variantId: VARIANT_ID, quantity: 2, amountCents: 10000 }],
       })
     ).rejects.toThrow('Refund item quantity exceeds returned quantity')
 

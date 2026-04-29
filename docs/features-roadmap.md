@@ -37,6 +37,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - `GET /api/checkout/status` for success-page reconciliation
 - Idempotent order creation from verified Stripe payment success
 - Checkout session persistence plus paid and failed status tracking
+- persisted commerce money fields now use integer minor units (cents) at rest
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized pricing service
 - Configurable shipping zones/rates and jurisdiction-aware tax rules consumed by server-owned checkout pricing
@@ -167,6 +168,7 @@ Status: shipped — all slices 3A–3E complete as of April 27, 2026
 - checkout-native code discounts with server-owned validation
 - persisted shipping-zone/rate and jurisdiction tax-rule configuration consumed by checkout pricing
 - checkout payload pricing snapshots for historical order truth
+- persisted commerce money naming now uses explicit `*Cents` fields and cents-native Stripe amounts
 - private admin CRUD APIs for shipping zones, zone rates, and tax rules
 - settings shipping workspace editor
 - durable inbound Stripe webhook delivery logging, verified payload storage, replay, retry scheduling/exhaustion, support diagnostics, cron-compatible retry runner, and admin visibility

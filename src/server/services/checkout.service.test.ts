@@ -73,7 +73,7 @@ describe('checkout service', () => {
     vi.clearAllMocks()
     mocks.getStoreSettings.mockResolvedValue({
       currency: 'USD',
-      shippingThreshold: 75,
+      shippingThresholdCents: 7500,
     })
     mocks.getCustomerByEmail.mockResolvedValue(null)
   })
@@ -123,11 +123,11 @@ describe('checkout service', () => {
         paymentIntentId: 'pi_test',
         email: 'ada@example.com',
         currency: 'USD',
-        subtotal: 50,
-        shippingAmount: 9.99,
-        taxAmount: 0,
-        discountAmount: 0,
-        total: 59.99,
+        subtotalCents: 5000,
+        shippingAmountCents: 999,
+        taxAmountCents: 0,
+        discountAmountCents: 0,
+        totalCents: 5999,
       }),
     })
     expect(mocks.emitInternalEvent).toHaveBeenCalledWith('checkout.created', {
@@ -158,7 +158,7 @@ describe('checkout service', () => {
   it('uses destination shipping zone and tax rules for checkout totals', async () => {
     mocks.getStoreSettings.mockResolvedValue({
       currency: 'USD',
-      shippingThreshold: 1000,
+      shippingThresholdCents: 100000,
       country: 'US',
       domesticTaxRate: 0.07,
       internationalTaxRate: 0.05,
@@ -237,7 +237,7 @@ describe('checkout service', () => {
       type: 'CODE',
       method: 'PERCENTAGE',
       value: 10,
-      minimumOrder: null,
+      minimumOrderCents: null,
       usageLimit: null,
       usageCount: 0,
       status: 'ACTIVE',
@@ -276,11 +276,11 @@ describe('checkout service', () => {
     expect(mocks.prisma.checkoutSession.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         paymentIntentId: 'pi_discount',
-        subtotal: 50,
-        shippingAmount: 9.99,
-        taxAmount: 0,
-        discountAmount: 5,
-        total: 54.99,
+        subtotalCents: 5000,
+        shippingAmountCents: 999,
+        taxAmountCents: 0,
+        discountAmountCents: 500,
+        totalCents: 5499,
         payload: expect.objectContaining({
           discountApplications: [
             {
@@ -288,7 +288,7 @@ describe('checkout service', () => {
               code: 'LAUNCH10',
               title: 'Launch 10',
               method: 'PERCENTAGE',
-              amount: 5,
+              amountCents: 500,
             },
           ],
         }),
