@@ -25,6 +25,8 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 
 - `src/proxy.ts` uses boundary-safe public-prefix matching
 - admin and private API protection is running through the active Next.js 16 proxy hook
+- route-level auth helpers in `src/server/auth/require-auth.ts` provide a second authorization layer for sensitive API handlers
+- product and variant creation routes now call `requireAdmin(req)` before mutation work
 - the old idea of adding `src/middleware.ts` was intentionally not kept because the repo should not maintain both proxy and middleware flows
 
 ### Media And Public Data Safety
@@ -151,6 +153,7 @@ npm run build
 - Run the full local verification gate after the latest correctness patches
 - keep production runbooks synchronized with actual behavior as setup/deploy flows evolve
 - Keep transactional email observability decoupled from order/payment/inventory/refund/return durability as provider/event coverage expands
+- Expand route-level auth helper coverage across remaining high-risk mutations: refunds, returns, fulfillments, settings, integrations, media uploads, webhook replay/retry, and email resend routes
 - Expand real-DB lifecycle coverage for new consumers and race/idempotency paths as Phase 4 evolves
 - Keep the centralized pricing authority on the server as lifecycle flows evolve
 - Continue proving payment, inventory, refund, return, webhook, email, and setup behavior through real-DB tests where transaction behavior matters
