@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import AppShell from '../AppShell';
 import styles from './SettingsWorkspace.module.css';
@@ -383,9 +384,14 @@ export default function ShippingSettingsWorkspace() {
             <p>Configure manual rates, mode selection, and zone-level subtotal tiers.</p>
             {storeId ? <p className={styles.statusText}>Store: {storeId}</p> : null}
           </div>
-          <button className={styles.primaryButton} disabled={saving} onClick={saveShippingSettings} type="button">
-            {saving ? 'Saving...' : 'Save shipping settings'}
-          </button>
+          <div className={styles.actionRow}>
+            <Link className={styles.secondaryButton} href="/admin/settings/shipping/setup">
+              Open setup wizard
+            </Link>
+            <button className={styles.primaryButton} disabled={saving} onClick={saveShippingSettings} type="button">
+              {saving ? 'Saving...' : 'Save shipping settings'}
+            </button>
+          </div>
         </div>
 
         {loading ? <p className={styles.statusText}>Loading shipping settings...</p> : null}

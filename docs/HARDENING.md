@@ -198,6 +198,8 @@ These invariants should not be broken by future work:
 - label-purchase cost and checkout shipping charge are separate values and must never be conflated
 - buying labels must never mutate order totals or payment status
 - manual shipping and manual fulfillment paths must remain available without live carrier credentials
+- shipping setup wizard/status/test-rate admin routes must remain admin-authorized and must not expose provider credentials
+- shipping provider connect/disconnect/test routes must remain admin-authorized, store credentials only in encrypted `IntegrationSecret` rows, and never return credential values
 
 ## Refund And Return Invariants
 

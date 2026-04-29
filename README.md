@@ -30,6 +30,7 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized server pricing path
 - Configurable shipping zones/rates and jurisdiction-aware tax rules through the centralized server pricing path
+- Shipping setup Phase 3 provider connection APIs for EasyPost/Shippo with encrypted integration-secret credential storage
 - Discount applications and usage counts created only after verified paid-order creation succeeds
 - Durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry tooling, support diagnostics, and visibility at `/admin/webhooks`
 - Brand Kit admin screen with Store-backed logo/colors/fonts/button/email/checkout branding controls at `/admin/brand-kit`
@@ -96,6 +97,7 @@ Historical planning files live in `docs/archive/`. Do not use archived docs as c
 - `/admin/webhooks`
 - `/admin/abandoned-checkouts`
 - `/admin/settings/shipping`
+- `/admin/settings/shipping/setup`
 - `/admin/brand-kit`
 - `/draft-orders`
 - `/products`
@@ -125,6 +127,12 @@ Historical planning files live in `docs/archive/`. Do not use archived docs as c
 - `/api/discounts`
 - `/api/settings`
 - `/api/settings/shipping`
+- `/api/settings/shipping/setup`
+- `/api/settings/shipping/setup-status`
+- `/api/settings/shipping/test-rates`
+- `/api/settings/shipping/connect-provider`
+- `/api/settings/shipping/disconnect-provider`
+- `/api/settings/shipping/test-provider`
 - `/api/settings/brand-kit`
 - `/api/analytics`
 - `/api/media`

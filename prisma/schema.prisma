@@ -185,6 +185,21 @@ model Store {
   shippingInternationalRateCents Int @default(1999)
   shippingMode      ShippingMode @default(MANUAL)
   shippingLiveProvider ShippingLiveProvider?
+  shippingOriginName String?
+  shippingOriginPhone String?
+  shippingOriginAddress1 String?
+  shippingOriginAddress2 String?
+  shippingOriginCity String?
+  shippingOriginProvince String?
+  shippingOriginPostalCode String?
+  shippingOriginCountry String?
+  defaultPackageWeightOz Int?
+  defaultPackageLengthIn Float?
+  defaultPackageWidthIn Float?
+  defaultPackageHeightIn Float?
+  defaultLabelFormat String? @default("PDF")
+  defaultLabelSize String? @default("4x6")
+  shippingFallbackEnabled Boolean @default(true)
   domesticTaxRate   Float   @default(0.07)
   internationalTaxRate Float @default(0.0)
   createdAt         DateTime @default(now())
@@ -229,6 +244,20 @@ model ShippingRate {
 
   @@index([shippingZoneId, isActive, priority])
   @@map("shipping_rates")
+}
+
+model ShippingPackagePreset {
+  id        String   @id @default(cuid())
+  name      String
+  weightOz  Int?
+  lengthIn  Float
+  widthIn   Float
+  heightIn  Float
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shipping_package_presets")
 }
 
 model TaxRule {

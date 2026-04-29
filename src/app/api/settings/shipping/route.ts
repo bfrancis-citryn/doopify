@@ -9,24 +9,39 @@ import {
 } from '@/server/shipping/shipping-settings.service'
 
 function serializeShippingSettings(
-  store: NonNullable<Awaited<ReturnType<typeof getShippingSettingsStore>>>
+  store: any
 ) {
   return {
     storeId: store.id,
     storeCountry: store.country,
     shippingMode: store.shippingMode,
     shippingLiveProvider: store.shippingLiveProvider,
+    shippingOriginName: store.shippingOriginName,
+    shippingOriginPhone: store.shippingOriginPhone,
+    shippingOriginAddress1: store.shippingOriginAddress1,
+    shippingOriginAddress2: store.shippingOriginAddress2,
+    shippingOriginCity: store.shippingOriginCity,
+    shippingOriginProvince: store.shippingOriginProvince,
+    shippingOriginPostalCode: store.shippingOriginPostalCode,
+    shippingOriginCountry: store.shippingOriginCountry,
+    defaultPackageWeightOz: store.defaultPackageWeightOz,
+    defaultPackageLengthIn: store.defaultPackageLengthIn,
+    defaultPackageWidthIn: store.defaultPackageWidthIn,
+    defaultPackageHeightIn: store.defaultPackageHeightIn,
+    defaultLabelFormat: store.defaultLabelFormat,
+    defaultLabelSize: store.defaultLabelSize,
+    shippingFallbackEnabled: store.shippingFallbackEnabled,
     shippingThreshold: store.shippingThresholdCents == null ? null : centsToDollars(store.shippingThresholdCents),
     shippingDomesticRate: centsToDollars(store.shippingDomesticRateCents),
     shippingInternationalRate: centsToDollars(store.shippingInternationalRateCents),
-    shippingZones: store.shippingZones.map((zone) => ({
+    shippingZones: store.shippingZones.map((zone: any) => ({
       id: zone.id,
       name: zone.name,
       countryCode: zone.countryCode,
       provinceCode: zone.provinceCode,
       isActive: zone.isActive,
       priority: zone.priority,
-      rates: zone.rates.map((rate) => ({
+      rates: zone.rates.map((rate: any) => ({
         id: rate.id,
         name: rate.name,
         method: rate.method,
