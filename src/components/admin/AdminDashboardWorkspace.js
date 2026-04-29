@@ -161,7 +161,7 @@ export default function AdminDashboardWorkspace() {
     : 68;
 
   return (
-    <AppShell primaryActionLabel="">
+    <AppShell>
       <main className={`${styles.dashboardPage} admin-spotlight`}>
         <section className={styles.hero}>
           <div className={styles.heroCopy}>

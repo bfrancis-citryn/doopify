@@ -5,12 +5,16 @@ import { useDeferredValue, useMemo } from 'react';
 import {
   getProductFeaturedImage,
   getProductStockLabel,
-  getProductTotalInventory,
   getProductVariantCount,
   productMatchesFilter,
   productMatchesSearch,
 } from '../../lib/productUtils';
 import { useProductStore } from '../../context/ProductContext';
+import AdminButton from '../admin/ui/AdminButton';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminSkeleton from '../admin/ui/AdminSkeleton';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
+import AdminTable from '../admin/ui/AdminTable';
 import styles from './ProductCatalog.module.css';
 
 const FILTERS = [
@@ -42,11 +46,75 @@ export default function ProductCatalog() {
     [activeFilter, deferredSearchQuery, products]
   );
 
+  const isLoading = !editor.draftProduct && products.length === 0;
+
+  const columns = [
+    {
+      key: 'product',
+      header: 'Product',
+      render: product => {
+        const featuredImage = getProductFeaturedImage(product);
+        return (
+          <div className={styles.productCell}>
+            <div className={styles.rowMedia}>
+              {featuredImage ? (
+                <Image alt={featuredImage.alt} className={styles.thumbnail} fill src={featuredImage.src} unoptimized />
+              ) : (
+                <div className={styles.thumbnailPlaceholder}>
+                  <span className="material-symbols-outlined">image</span>
+                </div>
+              )}
+            </div>
+            <div className={styles.rowContent}>
+              <p className={`font-headline ${styles.productTitle}`}>{product.title}</p>
+              <p className={styles.productMeta}>{product.category || 'Uncategorized'}</p>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: product => (
+        <AdminStatusChip tone={product.status === 'active' ? 'success' : product.status === 'draft' ? 'warning' : 'neutral'}>
+          {STATUS_LABELS[product.status] || 'Draft'}
+        </AdminStatusChip>
+      ),
+    },
+    {
+      key: 'inventory',
+      header: 'Inventory',
+      render: product => {
+        const stockStatus = product.inventorySummary.stockStatus;
+        const stockLabel = getProductStockLabel(product);
+        return (
+          <AdminStatusChip tone={stockStatus === 'available' ? 'success' : stockStatus === 'low-stock' ? 'warning' : 'danger'}>
+            {stockLabel}
+          </AdminStatusChip>
+        );
+      },
+    },
+    {
+      key: 'variants',
+      header: 'Variants',
+      render: product => {
+        const variantCount = getProductVariantCount(product);
+        return `${variantCount} variant${variantCount > 1 ? 's' : ''}`;
+      },
+    },
+    {
+      key: 'price',
+      header: 'Price',
+      render: product => formatMoney(product.basePrice),
+    },
+  ];
+
   return (
-    <section className={styles.catalogShell}>
+    <AdminCard className={`admin-spotlight ${styles.catalogShell}`} variant="panel">
       <div className={styles.catalogHeader}>
         <div className={styles.catalogHeaderTopRow}>
-          <div className={styles.searchField}>
+          <div className={`admin-card admin-card--inset admin-spotlight ${styles.searchField}`}>
             <span className="material-symbols-outlined">search</span>
             <input
               aria-label="Search products"
@@ -58,107 +126,67 @@ export default function ProductCatalog() {
             />
           </div>
 
-          <button className={styles.newProductButton} onClick={() => actions.requestCreateProduct()} type="button">
-            <span className="material-symbols-outlined">add</span>
-          </button>
+          <AdminButton leftIcon={<span className="material-symbols-outlined">add</span>} onClick={() => actions.requestCreateProduct()} size="sm" variant="primary">
+            Add product
+          </AdminButton>
         </div>
       </div>
 
       <div className={styles.filterRow}>
         {FILTERS.map(filter => (
-          <button
+          <AdminButton
             key={filter.id}
             className={activeFilter === filter.id ? styles.filterButtonActive : styles.filterButton}
             onClick={() => actions.setActiveFilter(filter.id)}
+            size="sm"
             type="button"
+            variant={activeFilter === filter.id ? 'primary' : 'secondary'}
           >
             {filter.label}
-          </button>
+          </AdminButton>
         ))}
       </div>
 
       <div className={`custom-scrollbar ${styles.listArea}`}>
-        {!products.length ? (
+        {isLoading ? <AdminSkeleton rows={6} variant="table" /> : null}
+
+        {!isLoading && !products.length ? (
           <div className={styles.emptyState}>
             <p className={`font-headline ${styles.emptyTitle}`}>No products yet</p>
             <p className={styles.emptyText}>Create your first product to start managing inventory in the slide-in editor.</p>
-            <button className={styles.emptyAction} onClick={() => actions.requestCreateProduct()} type="button">
+            <AdminButton onClick={() => actions.requestCreateProduct()} variant="primary">
               Create product
-            </button>
+            </AdminButton>
           </div>
         ) : null}
 
-        {products.length > 0 && !visibleProducts.length ? (
+        {!isLoading && products.length > 0 && !visibleProducts.length ? (
           <div className={styles.emptyState}>
             <p className={`font-headline ${styles.emptyTitle}`}>No matching products</p>
             <p className={styles.emptyText}>Try a broader search or switch filters to explore the rest of the catalog.</p>
-            <button className={styles.emptyAction} onClick={() => actions.setActiveFilter('all')} type="button">
+            <AdminButton onClick={() => actions.setActiveFilter('all')} variant="secondary">
               Clear filters
-            </button>
+            </AdminButton>
           </div>
         ) : null}
 
-        {visibleProducts.map(product => {
-          const isSelected = selectedProductId === product.id || editor.draftProduct?.id === product.id;
-          const featuredImage = getProductFeaturedImage(product);
-          const totalInventory = getProductTotalInventory(product);
-          const variantCount = getProductVariantCount(product);
-          const stockLabel = getProductStockLabel(product);
-
-          return (
-            <button
-              key={product.id}
-              className={isSelected ? styles.productRowActive : styles.productRow}
-              onClick={event => {
-                event.preventDefault();
-                event.stopPropagation();
-                actions.requestSelectProduct(product.id);
-              }}
-              type="button"
-            >
-              <div className={styles.rowMedia}>
-                {featuredImage ? (
-                  <Image
-                    alt={featuredImage.alt}
-                    className={styles.thumbnail}
-                    fill
-                    src={featuredImage.src}
-                    unoptimized
-                  />
-                ) : (
-                  <div className={styles.thumbnailPlaceholder}>
-                    <span className="material-symbols-outlined">image</span>
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.rowContent}>
-                <div className={styles.rowTop}>
-                  <div>
-                    <p className={`font-headline ${styles.productTitle}`}>{product.title}</p>
-                    <p className={styles.productMeta}>{product.category || 'Uncategorized'}</p>
-                  </div>
-                  <span className={`${styles.statusChip} ${styles[`status_${product.status}`]}`}>
-                    {STATUS_LABELS[product.status]}
-                  </span>
-                </div>
-
-                <div className={styles.rowBottom}>
-                  <span className={`${styles.stockPill} ${styles[`stock_${product.inventorySummary.stockStatus}`]}`}>{stockLabel}</span>
-                  <span>{totalInventory} in stock</span>
-                  <span>{variantCount} variant{variantCount > 1 ? 's' : ''}</span>
-                  <span>{formatMoney(product.basePrice)}</span>
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {!isLoading && visibleProducts.length > 0 ? (
+          <AdminTable
+            columns={columns}
+            emptyDescription="Try changing filters or creating a new product."
+            emptyTitle="No products"
+            getRowId={product => product.id}
+            onRowClick={product => actions.requestSelectProduct(product.id)}
+            rows={visibleProducts}
+            selectedId={selectedProductId || editor.draftProduct?.id || null}
+          />
+        ) : null}
       </div>
 
       <div className={styles.catalogFooter}>
         <span>{visibleProducts.length} visible</span>
         <span>{products.length} total products</span>
       </div>
-    </section>
+    </AdminCard>
   );
 }

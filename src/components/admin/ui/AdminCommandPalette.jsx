@@ -5,20 +5,18 @@ import { useRouter } from "next/navigation";
 
 const STATIC_COMMANDS = [
   { id: "go-dashboard", label: "Go to Dashboard", path: "/admin", keywords: ["home", "overview"] },
+  { id: "go-orders", label: "Go to Orders", path: "/orders", keywords: ["sales", "fulfillment"] },
+  { id: "go-draft-orders", label: "Go to Draft Orders", path: "/draft-orders", keywords: ["quotes"] },
+  { id: "go-customers", label: "Go to Customers", path: "/customers", keywords: ["crm", "people"] },
   { id: "go-products", label: "Go to Products", path: "/products", keywords: ["catalog"] },
-  { id: "go-orders", label: "Go to Orders", path: "/orders", keywords: ["fulfillment"] },
   { id: "go-collections", label: "Go to Collections", path: "/admin/collections", keywords: ["merchandising"] },
-  { id: "go-customers", label: "Go to Customers", path: "/customers", keywords: ["people"] },
+  { id: "go-media", label: "Go to Media", path: "/media", keywords: ["assets", "library"] },
   { id: "go-discounts", label: "Go to Discounts", path: "/discounts", keywords: ["codes"] },
+  { id: "go-abandoned", label: "Go to Abandoned", path: "/admin/abandoned-checkouts", keywords: ["recovery"] },
+  { id: "go-analytics", label: "Go to Analytics", path: "/analytics", keywords: ["reports"] },
+  { id: "go-webhooks", label: "Open Webhooks", path: "/admin/webhooks", keywords: ["events"] },
   { id: "go-settings", label: "Go to Settings", path: "/settings", keywords: ["configuration"] },
   { id: "go-brand-kit", label: "Open Brand Kit", path: "/admin/brand-kit", keywords: ["branding"] },
-  { id: "go-webhooks", label: "Open Webhooks", path: "/admin/webhooks", keywords: ["events"] },
-  {
-    id: "go-email-deliveries",
-    label: "Open Email Deliveries",
-    path: "/admin/webhooks",
-    keywords: ["resend", "bounces"],
-  },
 ];
 
 function matchCommand(command, query) {

@@ -65,15 +65,10 @@ export default function ProductsWorkspace() {
       >
         <div className={styles.splitView}>
           <ProductCatalog />
-
-          <div className={editor.isOpen ? `${styles.detailDock} ${styles.detailDockOpen}` : styles.detailDock}>
-            <div className={editor.isOpen ? `${styles.detailPanel} ${styles.detailPanelOpen}` : styles.detailPanel}>
-              <ProductEditorDrawer />
-            </div>
-          </div>
         </div>
       </AppShell>
 
+      <ProductEditorDrawer />
       <ConfirmDialog />
       <ToastViewport />
     </>

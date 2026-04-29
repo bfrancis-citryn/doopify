@@ -5,17 +5,20 @@ import AppShell from '../AppShell';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './SettingsWorkspace.module.css';
 import IntegrationsPanel from './IntegrationsPanel';
+import AdminButton from '../admin/ui/AdminButton';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminLiveStatus from '../admin/ui/AdminLiveStatus';
+import AdminSavedState from '../admin/ui/AdminSavedState';
+import AdminThemeToggle from '../admin/ui/AdminThemeToggle';
+import { useAdminTheme } from '../admin/ui/AdminThemeProvider';
 
 const SETTINGS_SECTIONS = [
-  { id: 'general', label: 'General' },
-  { id: 'branding', label: 'Branding' },
-  { id: 'locations', label: 'Locations' },
-  { id: 'shipping', label: 'Shipping' },
+  { id: 'brand-kit', label: 'Brand kit' },
   { id: 'payments', label: 'Payments' },
-  { id: 'notifications', label: 'Notifications' },
-  { id: 'users', label: 'Users & permissions' },
+  { id: 'shipping', label: 'Shipping & tax' },
+  { id: 'webhooks', label: 'Webhooks' },
+  { id: 'email', label: 'Email' },
   { id: 'setup', label: 'Setup' },
-  { id: 'integrations', label: 'Integrations & Webhooks' },
 ];
 
 const SETUP_STATUS_PRIORITY = {
@@ -186,8 +189,9 @@ function extractEnvVariableHints(checks) {
 }
 
 export default function SettingsWorkspace() {
-  const [activeSection, setActiveSection] = useState('general');
+  const [activeSection, setActiveSection] = useState('brand-kit');
   const { settings, updateSettings, loading, error } = useSettings();
+  const { theme } = useAdminTheme();
   const [shippingConfigLoading, setShippingConfigLoading] = useState(false);
   const [shippingConfigError, setShippingConfigError] = useState('');
   const [shippingConfigLoaded, setShippingConfigLoaded] = useState(false);
@@ -200,6 +204,14 @@ export default function SettingsWorkspace() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState('');
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
+  const [savedState, setSavedState] = useState('saved');
+  const [lastSavedAt, setLastSavedAt] = useState(Date.now());
+  const [saveClock, setSaveClock] = useState(Date.now());
+  const [serviceFlags, setServiceFlags] = useState({
+    stripeTestMode: true,
+    emailObservability: true,
+    webhookRetryWorker: true,
+  });
 
   const activeTitle = useMemo(
     () => SETTINGS_SECTIONS.find((section) => section.id === activeSection)?.label || 'Settings',
@@ -314,6 +326,33 @@ export default function SettingsWorkspace() {
   }, [setupCheckById]);
 
   const setupMissingEnvVars = useMemo(() => extractEnvVariableHints(setupChecks), [setupChecks]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSaveClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const savedAgoText = useMemo(() => {
+    const elapsedSeconds = Math.max(1, Math.round((saveClock - lastSavedAt) / 1000));
+    if (elapsedSeconds < 60) {
+      return `${elapsedSeconds}s ago`;
+    }
+
+    const elapsedMinutes = Math.round(elapsedSeconds / 60);
+    return `${elapsedMinutes}m ago`;
+  }, [lastSavedAt, saveClock]);
+
+  async function handleSettingsPatch(patch) {
+    setSavedState('saving');
+
+    try {
+      await updateSettings(patch);
+      setSavedState('saved');
+      setLastSavedAt(Date.now());
+    } catch {
+      setSavedState('error');
+    }
+  }
 
   async function refreshShippingConfig() {
     setShippingConfigLoaded(false);
@@ -626,10 +665,10 @@ export default function SettingsWorkspace() {
       searchValue=""
     >
       <div className={styles.page}>
-        <div className={styles.navPanel}>
+        <div className={`${styles.navPanel} glass-card refraction-edge admin-spotlight`}>
           <div className={styles.navHeader}>
             <p className={styles.eyebrow}>Settings</p>
-            <h2 className={styles.title}>Store configuration</h2>
+            <h2 className={styles.title}>Brand controls</h2>
           </div>
           <div className={styles.sectionList}>
             {SETTINGS_SECTIONS.map((section) => (
@@ -647,20 +686,23 @@ export default function SettingsWorkspace() {
         </div>
 
         <div className={styles.detailPanel}>
-          <div aria-busy={loading || shippingConfigLoading || setupLoading} className={styles.detailCard}>
+          <div aria-busy={loading || shippingConfigLoading || setupLoading} className={`${styles.detailCard} glass-card refraction-edge admin-spotlight`}>
             <div className={styles.detailHeader}>
               <div>
                 <p className={styles.eyebrow}>Settings</p>
                 <h2 className={styles.title}>{activeTitle}</h2>
               </div>
               {activeSection === 'setup' ? (
-                <button className={styles.saveButton} disabled={setupLoading} onClick={() => refreshSetupStatus()} type="button">
+                <AdminButton disabled={setupLoading} onClick={() => refreshSetupStatus()} size="sm" variant="secondary">
                   {setupLoading ? 'Refreshing...' : 'Refresh diagnostics'}
-                </button>
+                </AdminButton>
               ) : (
-                <button className={styles.saveButton} disabled={loading || Boolean(error)} type="button">
-                  Save
-                </button>
+                <div className={styles.headerActions}>
+                  <AdminSavedState savedAgoText={savedAgoText} state={savedState} />
+                  <AdminButton disabled={loading || Boolean(error)} size="sm" variant="primary">
+                    Save changes
+                  </AdminButton>
+                </div>
               )}
             </div>
 
@@ -680,66 +722,115 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'general' ? (
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Store name</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ storeName: event.target.value })} value={settings.storeName} />
-                </label>
-                <label className={styles.field}>
-                  <span>Support email</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ supportEmail: event.target.value })} value={settings.supportEmail} />
-                </label>
-                <label className={styles.field}>
-                  <span>Phone</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ phone: event.target.value })} value={settings.phone} />
-                </label>
-                <label className={styles.field}>
-                  <span>Address</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ address: event.target.value })} value={settings.address} />
-                </label>
-                <label className={styles.field}>
-                  <span>Timezone</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ timezone: event.target.value })} value={settings.timezone} />
-                </label>
-                <label className={styles.field}>
-                  <span>Currency</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ currency: event.target.value })} value={settings.currency} />
-                </label>
-              </div>
-            ) : null}
+            {!loading && !error && activeSection === 'brand-kit' ? (
+              <div className={styles.brandKitLayout}>
+                <div className={styles.brandKitHeading}>
+                  <h3>Brand kit</h3>
+                  <p>Locked inside Settings. Theme + accent tokens live here long term.</p>
+                </div>
 
-            {!loading && !error && activeSection === 'branding' ? (
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Logo URL</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ logoUrl: event.target.value })} value={settings.logoUrl} />
-                </label>
-                <label className={styles.field}>
-                  <span>Primary brand color</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ brandPrimary: event.target.value })} value={settings.brandPrimary} />
-                </label>
-                <label className={styles.field}>
-                  <span>Accent color</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ brandAccent: event.target.value })} value={settings.brandAccent} />
-                </label>
-                <label className={styles.field}>
-                  <span>Order prefix</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ orderPrefix: event.target.value })} value={settings.orderPrefix} />
-                </label>
-              </div>
-            ) : null}
+                <AdminCard className={styles.brandRow} spotlight variant="inset">
+                  <div className={styles.rowMeta}>
+                    <h4>Store identity</h4>
+                    <p>Core naming and support details that power storefront and transactional surfaces.</p>
+                  </div>
+                  <div className={styles.rowInputs}>
+                    <label className={styles.field}>
+                      <span>Store name</span>
+                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ storeName: event.target.value })} value={settings.storeName} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Support email</span>
+                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ supportEmail: event.target.value })} value={settings.supportEmail} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Logo URL</span>
+                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ logoUrl: event.target.value })} value={settings.logoUrl} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Order prefix</span>
+                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ orderPrefix: event.target.value })} value={settings.orderPrefix} />
+                    </label>
+                  </div>
+                </AdminCard>
 
-            {!loading && !error && activeSection === 'locations' ? (
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Default location</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ defaultLocation: event.target.value })} value={settings.defaultLocation} />
-                </label>
-                <label className={styles.field}>
-                  <span>Shipping origin</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ shippingOrigin: event.target.value })} value={settings.shippingOrigin} />
-                </label>
+                <AdminCard className={styles.brandRow} spotlight variant="inset">
+                  <div className={styles.rowMeta}>
+                    <h4>Theme mode</h4>
+                    <p>Dark mode stays premium by default with an Apple-glass light mode fallback.</p>
+                  </div>
+                  <div className={styles.rowPreview}>
+                    <div className={`${styles.previewCard} admin-spotlight`}>
+                      <div className={styles.previewTop}>
+                        <p>Current mode: {theme === 'dark' ? 'Dark' : 'Light'}</p>
+                        <AdminThemeToggle />
+                      </div>
+                      <div className={styles.previewActions}>
+                        <AdminButton size="sm" variant="secondary">Preview shell</AdminButton>
+                        <AdminButton size="sm" variant="ghost">Inspect contrast</AdminButton>
+                      </div>
+                    </div>
+                  </div>
+                </AdminCard>
+
+                <AdminCard className={styles.brandRow} spotlight variant="inset">
+                  <div className={styles.rowMeta}>
+                    <h4>Accent direction</h4>
+                    <p>Ocean accent remains the locked default for active states, glows, and focus surfaces.</p>
+                  </div>
+                  <div className={styles.rowPreview}>
+                    <div className={`${styles.previewCard} admin-spotlight`}>
+                      <div className={styles.accentFields}>
+                        <label className={styles.field}>
+                          <span>Primary color</span>
+                          <input className={styles.input} onChange={(event) => handleSettingsPatch({ brandPrimary: event.target.value })} value={settings.brandPrimary} />
+                        </label>
+                        <label className={styles.field}>
+                          <span>Accent color</span>
+                          <input className={styles.input} onChange={(event) => handleSettingsPatch({ brandAccent: event.target.value })} value={settings.brandAccent} />
+                        </label>
+                      </div>
+                      <div className={styles.previewActions}>
+                        <AdminButton size="sm" variant="primary">Primary action</AdminButton>
+                        <AdminButton size="sm" variant="secondary">Secondary button</AdminButton>
+                      </div>
+                    </div>
+                  </div>
+                </AdminCard>
+
+                <AdminCard className={styles.brandRow} spotlight variant="inset">
+                  <div className={styles.rowMeta}>
+                    <h4>Connected services</h4>
+                    <p>Quick visibility for service modes that influence operations, observability, and retries.</p>
+                  </div>
+                  <div className={styles.serviceList}>
+                    <label className={styles.serviceRow}>
+                      <span>Stripe test mode</span>
+                      <input
+                        checked={serviceFlags.stripeTestMode}
+                        onChange={(event) => setServiceFlags((current) => ({ ...current, stripeTestMode: event.target.checked }))}
+                        type="checkbox"
+                      />
+                    </label>
+                    <label className={styles.serviceRow}>
+                      <span>Email observability</span>
+                      <input
+                        checked={serviceFlags.emailObservability}
+                        onChange={(event) => setServiceFlags((current) => ({ ...current, emailObservability: event.target.checked }))}
+                        type="checkbox"
+                      />
+                    </label>
+                    <label className={styles.serviceRow}>
+                      <span>Outbound webhook retry worker</span>
+                      <input
+                        checked={serviceFlags.webhookRetryWorker}
+                        onChange={(event) => setServiceFlags((current) => ({ ...current, webhookRetryWorker: event.target.checked }))}
+                        type="checkbox"
+                      />
+                    </label>
+                    <AdminLiveStatus label="Webhook worker live" />
+                  </div>
+                </AdminCard>
               </div>
             ) : null}
 
@@ -1100,17 +1191,32 @@ export default function SettingsWorkspace() {
               <div className={styles.infoBlock}>Set payment providers, capture mode, manual payment methods, and refund rules here next.</div>
             ) : null}
 
-            {!loading && !error && activeSection === 'notifications' ? (
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Sender email</span>
-                  <input className={styles.input} onChange={(event) => updateSettings({ senderEmail: event.target.value })} value={settings.senderEmail} />
-                </label>
+            {!loading && !error && activeSection === 'email' ? (
+              <div className={styles.brandKitLayout}>
+                <AdminCard className={styles.brandRow} spotlight variant="inset">
+                  <div className={styles.rowMeta}>
+                    <h4>Email delivery profile</h4>
+                    <p>Keep sender identity aligned with store branding while observability handles retries and provider health.</p>
+                  </div>
+                  <div className={styles.rowInputs}>
+                    <label className={styles.field}>
+                      <span>Sender email</span>
+                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ senderEmail: event.target.value })} value={settings.senderEmail} />
+                    </label>
+                  </div>
+                </AdminCard>
+                <AdminLiveStatus label="Email observability live" />
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'users' ? (
-              <div className={styles.infoBlock}>Staff accounts, roles, permissions, and approval rules should live here.</div>
+            {!loading && !error && activeSection === 'webhooks' ? (
+              <div className={styles.brandKitLayout}>
+                <div className={styles.brandKitHeading}>
+                  <h3>Webhooks</h3>
+                  <p>Integration subscriptions, signing secrets, and retry visibility remain in the existing panel.</p>
+                </div>
+                <IntegrationsPanel />
+              </div>
             ) : null}
 
             {!loading && !error && activeSection === 'setup' ? (
@@ -1230,9 +1336,6 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'integrations' ? (
-              <IntegrationsPanel />
-            ) : null}
           </div>
         </div>
       </div>

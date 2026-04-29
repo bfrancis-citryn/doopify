@@ -4,8 +4,8 @@
   border-radius: 1.55rem;
   border: 1px solid var(--glass-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-    rgba(9, 9, 9, 0.88);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+    var(--surface);
   box-shadow: var(--glass-shadow);
   overflow: hidden;
 }
@@ -16,8 +16,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 25%),
-    radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.06), transparent 20%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 25%),
+    radial-gradient(circle at 20% 16%, rgba(255, 255, 255, 0.035), transparent 20%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%);
   background-size: 25% 100%, auto, auto;
   opacity: 0.55;
@@ -44,7 +44,7 @@
 .eyebrow,
 .cardEyebrow {
   margin-bottom: 0.35rem;
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--on-surface-variant);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -60,7 +60,7 @@
 .subtitle {
   margin-top: 0.65rem;
   max-width: 34rem;
-  color: rgba(255, 255, 255, 0.66);
+  color: color-mix(in srgb, var(--on-surface-variant) 84%, transparent);
   font-size: 0.98rem;
   line-height: 1.6;
 }
@@ -72,9 +72,9 @@
   min-height: 2.1rem;
   padding: 0.45rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  color: var(--on-surface);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -86,8 +86,8 @@
   width: 0.55rem;
   height: 0.55rem;
   border-radius: 999px;
-  background: #8cffc6;
-  box-shadow: 0 0 0 0.25rem rgba(140, 255, 198, 0.08);
+  background: var(--emerald-500);
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--emerald-500) 22%, transparent);
 }
 
 .dashboardGrid {
@@ -105,11 +105,11 @@
 .statusCard {
   position: relative;
   border-radius: 1.35rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--glass-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.035)),
-    linear-gradient(135deg, rgba(124, 189, 255, 0.13), rgba(255, 255, 255, 0.02) 42%, rgba(120, 255, 211, 0.08)),
-    rgba(10, 12, 16, 0.58);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), rgba(255, 255, 255, 0.02) 42%, rgba(var(--accent2-rgb), 0.08)),
+    var(--surface-bright);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     inset 0 -1px 0 rgba(255, 255, 255, 0.03),
@@ -136,9 +136,9 @@
 .statusCard::before,
 .metricCard::before {
   background:
-    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.22), transparent 28%),
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 26%);
-  opacity: 0.85;
+  opacity: 0.62;
 }
 
 .activityCard::after,
@@ -164,9 +164,9 @@
   padding: 1.15rem;
   border-radius: 1.35rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.03)),
-    linear-gradient(140deg, rgba(128, 170, 255, 0.12), rgba(255, 255, 255, 0.015) 48%, rgba(120, 255, 212, 0.06)),
-    rgba(12, 14, 18, 0.5);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03)),
+    linear-gradient(140deg, rgba(var(--accent3-rgb), 0.1), rgba(255, 255, 255, 0.015) 48%, rgba(var(--accent2-rgb), 0.06)),
+    color-mix(in srgb, var(--surface-bright) 92%, transparent);
   display: grid;
   gap: 0.65rem;
   align-content: start;
@@ -181,11 +181,11 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--glass-border);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
     rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.76);
+  color: color-mix(in srgb, var(--on-surface) 88%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
     0 18px 30px rgba(0, 0, 0, 0.18);
@@ -194,7 +194,7 @@
 .metricLabel {
   position: relative;
   z-index: 1;
-  color: rgba(255, 255, 255, 0.54);
+  color: var(--on-surface-variant);
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -212,7 +212,7 @@
 .metricMeta {
   position: relative;
   z-index: 1;
-  color: rgba(255, 255, 255, 0.5);
+  color: color-mix(in srgb, var(--on-surface-variant) 86%, transparent);
   font-size: 0.84rem;
   line-height: 1.5;
 }
@@ -249,8 +249,8 @@
   min-height: 2rem;
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--glass-border);
+  color: var(--on-surface-variant);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -270,7 +270,7 @@
   align-items: center;
   min-height: 5.1rem;
   padding: 0.95rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--glass-border);
   transition: background-color 180ms ease;
 }
 
@@ -280,7 +280,7 @@
 }
 
 .activityRow:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
 }
 
 .activityIcon {
@@ -290,8 +290,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(255, 255, 255, 0.78);
+  background: color-mix(in srgb, var(--surface-container) 74%, transparent);
+  color: var(--on-surface);
 }
 
 .activityCopy {
@@ -307,13 +307,13 @@
 
 .activityCopy p {
   margin-top: 0.24rem;
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--on-surface-variant);
   font-size: 0.85rem;
   line-height: 1.5;
 }
 
 .activityTime {
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--on-surface-variant);
   font-size: 0.76rem;
   white-space: nowrap;
 }
@@ -321,7 +321,7 @@
 .statusText {
   position: relative;
   z-index: 1;
-  color: rgba(255, 255, 255, 0.64);
+  color: color-mix(in srgb, var(--on-surface-variant) 86%, transparent);
   font-size: 0.94rem;
   line-height: 1.6;
 }
@@ -332,14 +332,14 @@
   height: 0.3rem;
   margin: 1.25rem 0 1.35rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--surface-container) 84%, transparent);
   overflow: hidden;
 }
 
 .statusBarFill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.24));
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.9), rgba(var(--accent2-rgb), 0.45));
 }
 
 .statusMetrics {
@@ -353,7 +353,7 @@
 .statusMetrics span {
   display: block;
   margin-bottom: 0.35rem;
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--on-surface-variant);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;

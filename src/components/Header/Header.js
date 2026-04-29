@@ -1,17 +1,43 @@
-import Image from 'next/image';
 import AdminButton from '@/components/admin/ui/AdminButton';
 import AdminThemeToggle from '@/components/admin/ui/AdminThemeToggle';
+import { usePathname } from 'next/navigation';
 import styles from './Header.module.css';
+
+const PAGE_META = [
+  { match: '/admin/brand-kit', label: 'Brand kit', icon: 'palette' },
+  { match: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
+  { match: '/admin/collections', label: 'Collections', icon: 'dashboard_customize' },
+  { match: '/admin/abandoned-checkouts', label: 'Abandoned', icon: 'mark_email_unread' },
+  { match: '/settings', label: 'Settings', icon: 'settings' },
+  { match: '/orders', label: 'Orders', icon: 'shopping_cart' },
+  { match: '/draft-orders', label: 'Draft orders', icon: 'edit_document' },
+  { match: '/products', label: 'Products', icon: 'inventory_2' },
+  { match: '/customers', label: 'Customers', icon: 'groups' },
+  { match: '/discounts', label: 'Discounts', icon: 'sell' },
+  { match: '/analytics', label: 'Analytics', icon: 'analytics' },
+  { match: '/media', label: 'Media', icon: 'photo_library' },
+  { match: '/admin', label: 'Dashboard', icon: 'dashboard' },
+];
+
+function getPageMeta(pathname) {
+  if (!pathname) {
+    return { label: 'Dashboard', icon: 'dashboard' };
+  }
+
+  const matched = PAGE_META.find((item) =>
+    pathname === item.match || pathname.startsWith(`${item.match}/`)
+  );
+
+  return matched || { label: 'Dashboard', icon: 'dashboard' };
+}
 
 export default function Header({
   onCreateOrder,
-  onNotificationsClick,
-  onQuickActionClick,
-  onSearchChange,
   primaryActionLabel = 'New order',
-  searchPlaceholder = 'Search orders, products, customers...',
-  searchValue = '',
 }) {
+  const pathname = usePathname();
+  const pageMeta = getPageMeta(pathname);
+
   function openCommandPalette() {
     window.dispatchEvent(
       new CustomEvent('admin-command-palette', {
@@ -23,31 +49,22 @@ export default function Header({
   return (
     <header className={`${styles.header} glass-card refraction-edge admin-spotlight`}>
       <div className={styles.leftGroup}>
-        <div className={`font-headline ${styles.consoleBadge}`}>
-          <span className="material-symbols-outlined">blur_on</span>
-          <span>Live operations</span>
+        <div className={`${styles.pageIndicator} admin-spotlight`}>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            {pageMeta.icon}
+          </span>
+          <span>{pageMeta.label}</span>
         </div>
+      </div>
 
-        <div className={styles.searchContainer}>
-          <span className={`material-symbols-outlined ${styles.searchIcon} text-lg text-slate-400`}>search</span>
-          <input
-            className={`${styles.searchInput} text-sm`}
-            onChange={onSearchChange}
-            placeholder={searchPlaceholder}
-            type="text"
-            value={searchValue}
-          />
-        </div>
-
-        <AdminButton
-          className={styles.commandButton}
-          onClick={openCommandPalette}
-          size="sm"
-          variant="secondary"
-        >
-          Search
-          <span className={styles.commandHint}>Cmd+K</span>
-        </AdminButton>
+      <div className={styles.centerGroup}>
+        <button className={`${styles.commandTrigger} admin-spotlight`} onClick={openCommandPalette} type="button">
+          <span className="material-symbols-outlined" aria-hidden="true">
+            search
+          </span>
+          <span className={styles.commandText}>Search orders, products, customers...</span>
+          <kbd className={styles.commandKbd}>Cmd+K</kbd>
+        </button>
       </div>
 
       <div className={styles.rightGroup}>
@@ -62,25 +79,6 @@ export default function Header({
             {primaryActionLabel}
           </AdminButton>
         ) : null}
-
-        <div className={styles.actionsGroup}>
-          <AdminButton className={styles.iconBtn} onClick={onQuickActionClick} variant="icon">
-            <span className="material-symbols-outlined">bolt</span>
-          </AdminButton>
-          <AdminButton className={`${styles.iconBtn} ${styles.relative}`} onClick={onNotificationsClick} variant="icon">
-            <span className="material-symbols-outlined">notifications</span>
-            <span className={styles.badge}></span>
-          </AdminButton>
-          <div className={styles.avatar}>
-            <Image 
-              src="/images/avatar.jpg" 
-              alt="Profile" 
-              width={32} 
-              height={32} 
-              className={styles.avatarImg}
-            />
-          </div>
-        </div>
       </div>
     </header>
   );

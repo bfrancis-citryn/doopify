@@ -3,6 +3,11 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
+import AdminButton from '../admin/ui/AdminButton';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminLiveStatus from '../admin/ui/AdminLiveStatus';
+import AdminSkeleton from '../admin/ui/AdminSkeleton';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import { useOrders } from '../../context/OrdersContext';
 import {
   ORDER_DELIVERY_STATUSES,
@@ -16,8 +21,33 @@ import {
 } from '../../lib/ordersData';
 import styles from './OrdersWorkspace.module.css';
 
-function StatusPill({ children, tone }) {
-  return <span className={`${styles.statusPill} ${styles[`tone_${tone}`]}`}>{children}</span>;
+function getStatusTone(status) {
+  const normalized = String(status || '').toLowerCase();
+
+  if (['paid', 'fulfilled', 'delivered'].includes(normalized)) {
+    return 'success';
+  }
+
+  if (['failed', 'returned', 'refunded'].includes(normalized)) {
+    return 'danger';
+  }
+
+  if (
+    [
+      'pending',
+      'scheduled',
+      'packed',
+      'in-transit',
+      'out-for-delivery',
+      'ready-for-pickup',
+      'partially refunded',
+      'partially fulfilled',
+    ].includes(normalized)
+  ) {
+    return 'warning';
+  }
+
+  return 'neutral';
 }
 
 function BulkActionsBar({ selectedCount, onAction }) {
@@ -26,13 +56,13 @@ function BulkActionsBar({ selectedCount, onAction }) {
   }
 
   return (
-    <div className={styles.bulkBar}>
+    <div className={styles.bulkBarV7}>
       <span>{selectedCount} selected</span>
-      <div className={styles.bulkActions}>
-        <button className={styles.bulkActionButton} onClick={() => onAction('fulfilled')} type="button">Mark fulfilled</button>
-        <button className={styles.bulkActionButton} onClick={() => onAction('packed')} type="button">Mark packed</button>
-        <button className={styles.bulkActionButton} onClick={() => onAction('tag-priority')} type="button">Add priority tag</button>
-        <button className={styles.bulkActionButton} onClick={() => onAction('archive')} type="button">Archive</button>
+      <div className={styles.bulkActionsV7}>
+        <AdminButton onClick={() => onAction('fulfilled')} size="sm" variant="secondary">Mark fulfilled</AdminButton>
+        <AdminButton onClick={() => onAction('packed')} size="sm" variant="secondary">Mark packed</AdminButton>
+        <AdminButton onClick={() => onAction('tag-priority')} size="sm" variant="secondary">Add priority tag</AdminButton>
+        <AdminButton onClick={() => onAction('archive')} size="sm" variant="secondary">Archive</AdminButton>
       </div>
     </div>
   );
@@ -86,35 +116,6 @@ export default function OrdersWorkspace() {
 
   const pickupCount = useMemo(
     () => visibleOrders.filter(order => order.deliveryMethod.toLowerCase().includes('pickup')).length,
-    [visibleOrders]
-  );
-
-  const systemLog = useMemo(
-    () =>
-      visibleOrders
-        .flatMap(order =>
-          (order.timeline || []).map(entry => ({
-            ...entry,
-            orderNumber: order.orderNumber,
-            customer: order.customer.name,
-          }))
-        )
-        .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
-        .slice(0, 5),
-    [visibleOrders]
-  );
-
-  const focusQueue = useMemo(
-    () =>
-      visibleOrders
-        .filter(
-          order =>
-            order.riskLevel !== 'low' ||
-            order.tags?.includes('Priority') ||
-            ['pending', 'failed'].includes(order.paymentStatus) ||
-            order.deliveryStatus === 'returned'
-        )
-        .slice(0, 4),
     [visibleOrders]
   );
 
@@ -182,79 +183,100 @@ export default function OrdersWorkspace() {
       onCreateOrder={() => {}}
       onNotificationsClick={() => {}}
       onQuickActionClick={() => {}}
-      onSearchChange={event => setSearchQuery(event.target.value)}
+      onSearchChange={() => {}}
       searchValue={searchQuery}
     >
-      <div className={styles.ordersPage}>
-        <div className={styles.ordersPageHeader}>
-          <div className={styles.ordersPageHeading}>
-            <span className={styles.ordersEyebrow}>Obsidian order desk</span>
-            <h1>Order management</h1>
-            <p>Real-time orchestration for fulfillment, payment review, delivery updates, and customer follow-through.</p>
-          </div>
-
-          <div className={styles.ordersPageActions}>
-            <button className={styles.secondaryAction} type="button">Export</button>
-            <button className={styles.primaryAction} type="button">Create order</button>
-          </div>
-        </div>
-
+      <div className={styles.ordersPageV7}>
         {error ? <div className={styles.noticeBanner}>Unable to sync orders right now. Showing the latest loaded data.</div> : null}
 
-        <div className={styles.heroGrid}>
-          <section className={styles.ordersTableWrap}>
-            <div className={styles.ordersTableTopbar}>
+        <div className={styles.summaryGridV7}>
+          <AdminCard className={styles.statCardV7} variant="card">
+            <span className={styles.statLabelV7}>Total sales</span>
+            <strong className={styles.statValueV7}>{formatOrderMoney(grossSales)}</strong>
+            <small className={styles.statMetaV7}>{summary.orders} orders in view</small>
+          </AdminCard>
+
+          <AdminCard className={styles.statCardV7} variant="card">
+            <span className={styles.statLabelV7}>Active orders</span>
+            <strong className={styles.statValueV7}>{summary.orders}</strong>
+            <small className={styles.statMetaV7}>{summary.fulfilled} fulfilled so far</small>
+          </AdminCard>
+
+          <AdminCard className={styles.statCardV7} variant="card">
+            <span className={styles.statLabelV7}>Pending ship</span>
+            <strong className={styles.statValueV7}>{summary.toFulfill}</strong>
+            <small className={styles.statMetaV7}>{inTransitCount} already in transit</small>
+          </AdminCard>
+
+          <AdminCard className={styles.statCardV7} variant="card">
+            <span className={styles.statLabelV7}>Pending payment</span>
+            <strong className={styles.statValueV7}>{pendingPayments}</strong>
+            <small className={styles.statMetaV7}>{summary.returns} returns currently active</small>
+          </AdminCard>
+        </div>
+
+        <div className={styles.ordersLayoutV7}>
+          <AdminCard className={styles.ordersTablePanelV7} spotlight variant="panel">
+            <div className={styles.ordersTableTopbarV7}>
               <div>
-                <div className={styles.tableHeadingRow}>
+                <div className={styles.tableHeadingRowV7}>
                   <h2>Recent orders</h2>
-                  <span className={styles.liveBadge}>Live</span>
+                  <AdminLiveStatus label="Live" />
                 </div>
-                <p>{visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} in the current operational view</p>
+                <p className={styles.panelSubcopyV7}>{visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} in the current operational view</p>
               </div>
 
-              <div className={styles.ordersPageActions}>
-                <button className={styles.secondaryAction} type="button">Saved views</button>
-                <button className={styles.secondaryAction} type="button">Columns</button>
+              <div className={styles.topActionsV7}>
+                <AdminButton size="sm" variant="secondary">Saved views</AdminButton>
+                <AdminButton size="sm" variant="secondary">Columns</AdminButton>
               </div>
             </div>
 
-            <div className={styles.filterToolbar}>
-              <div className={styles.viewBar}>
+            <div className={styles.filterToolbarV7}>
+              <div className={styles.viewBarV7}>
                 {ORDER_VIEWS.map(view => (
-                  <button
+                  <AdminButton
                     key={view.id}
-                    className={activeView === view.id ? styles.viewButtonActive : styles.viewButton}
                     onClick={() => setActiveView(view.id)}
-                    type="button"
+                    size="sm"
+                    variant={activeView === view.id ? 'primary' : 'secondary'}
                   >
                     {view.label}
-                  </button>
+                  </AdminButton>
                 ))}
               </div>
 
-              <div className={styles.filterToolbarInner}>
-                <select className={styles.filterSelect} onChange={event => setPaymentFilter(event.target.value)} value={paymentFilter}>
+              <div className={styles.filterToolbarInnerV7}>
+                <input
+                  className={styles.searchInputV7}
+                  onChange={event => setSearchQuery(event.target.value)}
+                  placeholder="Search orders, customers, channels..."
+                  type="search"
+                  value={searchQuery}
+                />
+
+                <select className={styles.filterSelectV7} onChange={event => setPaymentFilter(event.target.value)} value={paymentFilter}>
                   <option value="all">All payments</option>
                   {ORDER_PAYMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
                 </select>
 
-                <select className={styles.filterSelect} onChange={event => setFulfillmentFilter(event.target.value)} value={fulfillmentFilter}>
+                <select className={styles.filterSelectV7} onChange={event => setFulfillmentFilter(event.target.value)} value={fulfillmentFilter}>
                   <option value="all">All fulfillment</option>
                   {ORDER_FULFILLMENT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
                 </select>
 
-                <select className={styles.filterSelect} onChange={event => setDeliveryFilter(event.target.value)} value={deliveryFilter}>
+                <select className={styles.filterSelectV7} onChange={event => setDeliveryFilter(event.target.value)} value={deliveryFilter}>
                   <option value="all">All delivery</option>
                   {ORDER_DELIVERY_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
                 </select>
 
-                <button className={styles.textActionButton} onClick={resetFilters} type="button">Reset</button>
+                <AdminButton onClick={resetFilters} size="sm" variant="ghost">Reset</AdminButton>
               </div>
             </div>
 
             <BulkActionsBar onAction={handleBulkAction} selectedCount={selectedIds.length} />
 
-            <div className={styles.tableHeader}>
+            <div className={styles.tableHeaderV7}>
               <span>
                 <input
                   checked={visibleOrders.length > 0 && selectedIds.length === visibleOrders.length}
@@ -269,182 +291,102 @@ export default function OrdersWorkspace() {
               <span>Total</span>
             </div>
 
-            <div className={`custom-scrollbar ${styles.tableBody}`}>
+            <div className={`custom-scrollbar ${styles.tableBodyV7}`}>
               {loading ? (
-                <div className={styles.emptyState}>
-                  <h2>Loading orders</h2>
-                  <p>Pulling the latest order activity into the dashboard.</p>
+                <div className={styles.loadingBlockV7}>
+                  <AdminSkeleton columns={6} rows={6} variant="table" />
                 </div>
               ) : null}
 
               {!loading && visibleOrders.length ? visibleOrders.map(order => (
-                <div key={order.id} className={styles.orderRow}>
-                  <div className={styles.checkboxCell}>
+                <div key={order.id} className={styles.orderRowV7}>
+                  <div className={styles.checkboxCellV7}>
                     <input checked={selectedIds.includes(order.id)} onChange={() => toggleSelectedRow(order.id)} type="checkbox" />
                   </div>
 
-                  <Link className={styles.rowButton} href={`/orders/${encodeURIComponent(order.orderNumber.replace('#', ''))}`}>
-                    <div className={styles.orderNumberCell}>
-                      <div className={styles.orderNumberPrimary}>
+                  <Link className={styles.rowButtonV7} href={`/orders/${encodeURIComponent(order.orderNumber.replace('#', ''))}`}>
+                    <div className={styles.orderNumberCellV7}>
+                      <div className={styles.orderNumberPrimaryV7}>
                         <strong>{order.orderNumber}</strong>
-                        <span className={styles.orderChannelBadge}>{order.channel}</span>
+                        <AdminStatusChip tone="neutral">{order.channel}</AdminStatusChip>
                       </div>
                       <small>{order.itemCount} item{order.itemCount === 1 ? '' : 's'}{order.tags?.[0] ? ` | ${order.tags[0]}` : ''}</small>
                     </div>
 
-                    <div className={styles.customerCell}>
+                    <div className={styles.customerCellV7}>
                       <strong>{order.customer.name}</strong>
                       <small>{order.customer.email}</small>
                     </div>
 
-                    <div className={styles.orderStat}>
+                    <div className={styles.orderStatV7}>
                       <strong>{formatDashboardDate(order.createdAt)}</strong>
-                      <small className={styles.orderStatMeta}>{formatDashboardTime(order.createdAt)}</small>
+                      <small className={styles.orderStatMetaV7}>{formatDashboardTime(order.createdAt)}</small>
                     </div>
 
-                    <div className={styles.statusStack}>
-                      <StatusPill tone={order.fulfillmentStatus.replace(/\s+/g, '-')}>{order.fulfillmentStatus}</StatusPill>
-                      <StatusPill tone={order.deliveryStatus.replace(/\s+/g, '-')}>{order.deliveryStatus}</StatusPill>
+                    <div className={styles.statusStackV7}>
+                      <AdminStatusChip tone={getStatusTone(order.fulfillmentStatus)}>{order.fulfillmentStatus}</AdminStatusChip>
+                      <AdminStatusChip tone={getStatusTone(order.deliveryStatus)}>{order.deliveryStatus}</AdminStatusChip>
                     </div>
 
-                    <div className={styles.orderStat}>
+                    <div className={styles.orderStatV7}>
                       <strong>{formatOrderMoney(order.total)}</strong>
-                      <small className={styles.orderStatMeta}>{order.paymentStatus}</small>
+                      <small className={styles.orderStatMetaV7}>{order.paymentStatus}</small>
                     </div>
                   </Link>
                 </div>
               )) : null}
 
               {!loading && !visibleOrders.length ? (
-                <div className={styles.emptyState}>
+                <div className={styles.emptyStateV7}>
                   <h2>No orders match these filters</h2>
                   <p>Try a broader view or reset the filters to repopulate the live order stream.</p>
-                  <button className={styles.secondaryAction} onClick={resetFilters} type="button">Reset everything</button>
+                  <AdminButton onClick={resetFilters} size="sm" variant="secondary">Reset everything</AdminButton>
                 </div>
               ) : null}
             </div>
-          </section>
+          </AdminCard>
 
-          <aside className={styles.sideRail}>
-            <section className={styles.sideCard}>
-              <div className={styles.sideCardHeader}>
+          <aside className={styles.sideRailV7}>
+            <AdminCard className={styles.sideCardV7} variant="card">
+              <div className={styles.sideCardHeaderV7}>
                 <div>
                   <h2>Shipment pulse</h2>
-                  <p>High level movement across the current queue.</p>
+                  <p className={styles.panelSubcopyV7}>High level movement across the current queue.</p>
                 </div>
               </div>
 
-              <div className={styles.sideMetricList}>
-                <div className={styles.sideMetricRow}><span>To fulfill</span><strong>{summary.toFulfill}</strong></div>
-                <div className={styles.sideMetricRow}><span>In transit</span><strong>{inTransitCount}</strong></div>
-                <div className={styles.sideMetricRow}><span>Delivered</span><strong>{summary.delivered}</strong></div>
-                <div className={styles.sideMetricRow}><span>Local pickup</span><strong>{pickupCount}</strong></div>
+              <div className={styles.sideMetricListV7}>
+                <div className={styles.sideMetricRowV7}><span>To fulfill</span><strong>{summary.toFulfill}</strong></div>
+                <div className={styles.sideMetricRowV7}><span>In transit</span><strong>{inTransitCount}</strong></div>
+                <div className={styles.sideMetricRowV7}><span>Delivered</span><strong>{summary.delivered}</strong></div>
+                <div className={styles.sideMetricRowV7}><span>Local pickup</span><strong>{pickupCount}</strong></div>
               </div>
-            </section>
+            </AdminCard>
 
-            <section className={styles.sideCard}>
-              <div className={styles.sideCardHeader}>
+            <AdminCard className={styles.sideCardV7} variant="card">
+              <div className={styles.sideCardHeaderV7}>
                 <div>
                   <h2>Quick links</h2>
-                  <p>Jump the desk to the queues that need attention.</p>
+                  <p className={styles.panelSubcopyV7}>Jump the desk to the queues that need attention.</p>
                 </div>
               </div>
 
-              <div className={styles.quickLinks}>
-                <button className={styles.quickLinkButton} onClick={() => setActiveView('returns')} type="button">
+              <div className={styles.quickLinksV7}>
+                <AdminButton className={styles.quickLinkButtonV7} onClick={() => setActiveView('returns')} variant="secondary">
                   <span>Return review</span>
                   <small>{summary.returns} active returns</small>
-                </button>
-                <button className={styles.quickLinkButton} onClick={() => setActiveView('unpaid')} type="button">
+                </AdminButton>
+                <AdminButton className={styles.quickLinkButtonV7} onClick={() => setActiveView('unpaid')} variant="secondary">
                   <span>Payment follow-up</span>
                   <small>{pendingPayments} awaiting capture</small>
-                </button>
-                <button className={styles.quickLinkButton} onClick={() => setActiveView('local-pickup')} type="button">
+                </AdminButton>
+                <AdminButton className={styles.quickLinkButtonV7} onClick={() => setActiveView('local-pickup')} variant="secondary">
                   <span>Pickup desk</span>
                   <small>{pickupCount} local pickup orders</small>
-                </button>
+                </AdminButton>
               </div>
-            </section>
+            </AdminCard>
           </aside>
-        </div>
-
-        <div className={styles.lowerGrid}>
-          <section className={styles.logCard}>
-            <div className={styles.sectionCardHeader}>
-              <div>
-                <h3>System log</h3>
-                <p className={styles.cardSubtext}>Recent timeline events pulled from active orders.</p>
-              </div>
-            </div>
-
-            <div className={styles.logList}>
-              {systemLog.length ? systemLog.map(entry => (
-                <div key={`${entry.orderNumber}-${entry.id}`} className={styles.logRow}>
-                  <div className={styles.logDot} />
-                  <div className={styles.logContent}>
-                    <strong>{entry.event}</strong>
-                    <p>{entry.orderNumber} | {entry.customer}</p>
-                  </div>
-                  <small>{formatDashboardDate(entry.createdAt)}</small>
-                </div>
-              )) : (
-                <div className={styles.emptyMiniState}>No recent activity yet.</div>
-              )}
-            </div>
-          </section>
-
-          <section className={styles.queueCard}>
-            <div className={styles.sectionCardHeader}>
-              <div>
-                <h3>Focus queue</h3>
-                <p className={styles.cardSubtext}>Orders with risk, priority, or return activity.</p>
-              </div>
-            </div>
-
-            <div className={styles.queueList}>
-              {focusQueue.length ? focusQueue.map(order => (
-                <Link
-                  key={order.id}
-                  className={styles.queueRow}
-                  href={`/orders/${encodeURIComponent(order.orderNumber.replace('#', ''))}`}
-                >
-                  <div>
-                    <strong>{order.orderNumber}</strong>
-                    <p>{order.customer.name}</p>
-                  </div>
-                  <StatusPill tone={order.paymentStatus.replace(/\s+/g, '-')}>{order.paymentStatus}</StatusPill>
-                </Link>
-              )) : (
-                <div className={styles.emptyMiniState}>Nothing needs special attention right now.</div>
-              )}
-            </div>
-          </section>
-        </div>
-
-        <div className={styles.summaryGrid}>
-          <div className={styles.summaryCard}>
-            <span>Total sales</span>
-            <strong>{formatOrderMoney(grossSales)}</strong>
-            <small>{summary.orders} orders in view</small>
-          </div>
-
-          <div className={styles.summaryCard}>
-            <span>Active orders</span>
-            <strong>{summary.orders}</strong>
-            <small>{summary.fulfilled} fulfilled so far</small>
-          </div>
-
-          <div className={styles.summaryCard}>
-            <span>Pending ship</span>
-            <strong>{summary.toFulfill}</strong>
-            <small>{inTransitCount} already in transit</small>
-          </div>
-
-          <div className={styles.summaryCard}>
-            <span>Pending payment</span>
-            <strong>{pendingPayments}</strong>
-            <small>{summary.returns} returns currently active</small>
-          </div>
         </div>
       </div>
     </AppShell>

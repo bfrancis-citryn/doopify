@@ -31,7 +31,11 @@ export default function AdminSavedState({
 
   return (
     <span className={buildClassName(["admin-saved-state", `is-${state}`, className])}>
-      {showCheck ? <span aria-hidden="true">✓</span> : null}
+      {showCheck ? (
+        <span className="material-symbols-outlined" aria-hidden="true">
+          check_small
+        </span>
+      ) : null}
       <span>{copy}</span>
     </span>
   );

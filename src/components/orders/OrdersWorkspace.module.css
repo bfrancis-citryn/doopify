@@ -7,6 +7,340 @@
   padding: 0.15rem 0 0.6rem;
 }
 
+.ordersPageV7 {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.82rem;
+  padding: 0.05rem 0 0.6rem;
+}
+
+.summaryGridV7 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.statCardV7 {
+  min-width: 0;
+  padding: 0.82rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.34rem;
+}
+
+.statLabelV7 {
+  margin: 0;
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  font-weight: 700;
+}
+
+.statValueV7 {
+  margin: 0;
+  color: var(--on-surface);
+  font-size: 1.45rem;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.statMetaV7 {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.76rem;
+}
+
+.ordersLayoutV7 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) 320px;
+  gap: 0.82rem;
+  align-items: start;
+}
+
+.ordersTablePanelV7 {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ordersTableTopbarV7 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.92rem 1rem 0.8rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tableHeadingRowV7 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.tableHeadingRowV7 h2,
+.sideCardHeaderV7 h2,
+.emptyStateV7 h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--on-surface);
+  letter-spacing: -0.02em;
+}
+
+.panelSubcopyV7 {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--on-surface-variant);
+}
+
+.topActionsV7 {
+  display: inline-flex;
+  gap: 0.42rem;
+}
+
+.filterToolbarV7 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.58rem;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.viewBarV7,
+.filterToolbarInnerV7 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.searchInputV7 {
+  width: min(19rem, 100%);
+}
+
+.filterSelectV7 {
+  min-width: 9.8rem;
+}
+
+.filterSelectV7 option {
+  background: var(--surface-bright);
+  color: var(--on-surface);
+}
+
+.bulkBarV7 {
+  margin: 0.8rem 1rem 0.65rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.bulkBarV7 span {
+  margin: 0;
+  color: var(--on-surface);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.bulkActionsV7 {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
+.tableHeaderV7,
+.rowButtonV7 {
+  display: grid;
+  grid-template-columns: 1.2fr 1.12fr 0.74fr 1.1fr 0.76fr;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.tableHeaderV7 {
+  grid-template-columns: 2rem 1.2fr 1.12fr 0.74fr 1.1fr 0.76fr;
+  padding: 0.8rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--glass-border) 66%, transparent);
+  border-bottom: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 42%, transparent);
+  color: var(--on-surface-variant);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.tableBodyV7 {
+  min-height: 16rem;
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.loadingBlockV7 {
+  padding: 0.72rem 1rem 1rem;
+}
+
+.orderRowV7 {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.72rem 1rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.orderRowV7:hover {
+  background: color-mix(in srgb, var(--surface-container-low) 38%, transparent);
+}
+
+.rowButtonV7 {
+  width: 100%;
+  color: inherit;
+}
+
+.checkboxCellV7 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkboxCellV7 input,
+.tableHeaderV7 input {
+  width: 0.92rem;
+  height: 0.92rem;
+  accent-color: var(--primary);
+}
+
+.orderNumberCellV7,
+.customerCellV7,
+.orderStatV7 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+}
+
+.orderNumberPrimaryV7 {
+  display: flex;
+  align-items: center;
+  gap: 0.36rem;
+  flex-wrap: wrap;
+}
+
+.orderNumberPrimaryV7 strong,
+.customerCellV7 strong,
+.orderStatV7 strong {
+  color: var(--on-surface);
+}
+
+.orderNumberCellV7 small,
+.customerCellV7 small,
+.orderStatMetaV7 {
+  color: var(--on-surface-variant);
+}
+
+.statusStackV7 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.emptyStateV7 {
+  min-height: 16rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 1.6rem 1rem;
+}
+
+.emptyStateV7 p {
+  margin: 0;
+  color: var(--on-surface-variant);
+}
+
+.sideRailV7 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.82rem;
+}
+
+.sideCardV7 {
+  padding: 0.88rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+}
+
+.sideCardHeaderV7 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sideMetricListV7 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sideMetricRowV7 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--glass-border);
+}
+
+.sideMetricRowV7:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.sideMetricRowV7 span {
+  color: var(--on-surface-variant);
+  font-size: 0.79rem;
+}
+
+.sideMetricRowV7 strong {
+  color: var(--on-surface);
+}
+
+.quickLinksV7 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+
+.quickLinkButtonV7 {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 2.65rem;
+  text-align: left;
+}
+
+.quickLinkButtonV7 span,
+.quickLinkButtonV7 small {
+  display: block;
+  line-height: 1.2;
+}
+
+.quickLinkButtonV7 small {
+  color: var(--on-surface-variant);
+}
+
 .ordersPageHeader,
 .ordersPageActions,
 .viewBar,
@@ -165,7 +499,11 @@
 
 .noticeBanner {
   padding: 0.9rem 1rem;
-  color: var(--slate-200);
+  color: var(--on-surface);
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    color-mix(in srgb, var(--surface-bright) 90%, transparent);
 }
 
 .heroGrid {
@@ -871,6 +1209,14 @@
 }
 
 @media (max-width: 1400px) {
+  .summaryGridV7 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ordersLayoutV7 {
+    grid-template-columns: 1fr;
+  }
+
   .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -883,6 +1229,28 @@
 }
 
 @media (max-width: 980px) {
+  .ordersTableTopbarV7,
+  .filterToolbarV7 {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tableHeaderV7,
+  .rowButtonV7 {
+    grid-template-columns: 1.15fr 1fr 0.85fr;
+  }
+
+  .tableHeaderV7 {
+    grid-template-columns: 2rem 1.15fr 1fr 0.85fr;
+  }
+
+  .tableHeaderV7 span:nth-child(5),
+  .tableHeaderV7 span:nth-child(6),
+  .rowButtonV7 > div:nth-child(4),
+  .rowButtonV7 > div:nth-child(5) {
+    display: none;
+  }
+
   .ordersPageHeader,
   .filterToolbar,
   .ordersTableTopbar,
@@ -927,6 +1295,36 @@
 }
 
 @media (max-width: 767px) {
+  .ordersPageV7 {
+    padding-bottom: 0.24rem;
+  }
+
+  .summaryGridV7 {
+    grid-template-columns: 1fr;
+  }
+
+  .tableHeaderV7,
+  .rowButtonV7 {
+    grid-template-columns: 1fr;
+  }
+
+  .tableHeaderV7 {
+    grid-template-columns: 2rem 1fr;
+  }
+
+  .tableHeaderV7 span:nth-child(3),
+  .tableHeaderV7 span:nth-child(4),
+  .rowButtonV7 > div:nth-child(2),
+  .rowButtonV7 > div:nth-child(3) {
+    display: none;
+  }
+
+  .filterSelectV7,
+  .searchInputV7 {
+    width: 100%;
+    min-width: 0;
+  }
+
   .ordersPage,
   .orderDetailPage {
     padding-bottom: 0.25rem;

@@ -8,6 +8,7 @@ import { ProductsProvider } from '@/context/ProductsContext';
 import { SettingsProvider } from '@/context/SettingsContext';
 import AdminThemeProvider from '@/components/admin/ui/AdminThemeProvider';
 import AdminCommandPalette from '@/components/admin/ui/AdminCommandPalette';
+import AdminSpotlightRuntime from '@/components/admin/ui/AdminSpotlightRuntime';
 
 export const metadata = {
   title: 'Doopify | Commerce OS',
@@ -31,6 +32,7 @@ export default function DashboardLayout({ children }) {
                 <CustomersProvider>
                   <DiscountsProvider>
                     {children}
+                    <AdminSpotlightRuntime />
                     <AdminCommandPalette />
                   </DiscountsProvider>
                 </CustomersProvider>

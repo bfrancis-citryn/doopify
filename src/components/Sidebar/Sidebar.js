@@ -6,19 +6,48 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './Sidebar.module.css';
 
-const NAV_ITEMS = [
-  { href: '/admin', label: 'Dashboard', icon: 'dashboard', exact: true },
-  { href: '/admin/collections', label: 'Collections', icon: 'dashboard_customize' },
-  { href: '/orders', label: 'Orders', icon: 'shopping_cart' },
-  { href: '/draft-orders', label: 'Draft Orders', icon: 'edit_document' },
-  { href: '/products', label: 'Products', icon: 'inventory_2' },
-  { href: '/media', label: 'Media', icon: 'photo_library' },
-  { href: '/customers', label: 'Customers', icon: 'groups' },
-  { href: '/discounts', label: 'Discounts', icon: 'sell' },
-  { href: '/admin/brand-kit', label: 'Brand Kit', icon: 'palette' },
-  { href: '/admin/abandoned-checkouts', label: 'Abandoned', icon: 'mark_email_unread' },
-  { href: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
-  { href: '/analytics', label: 'Analytics', icon: 'analytics' },
+const NAV_GROUPS = [
+  {
+    id: 'workspace',
+    label: 'Workspace',
+    items: [{ href: '/admin', label: 'Dashboard', icon: 'dashboard', exact: true }],
+  },
+  {
+    id: 'sales',
+    label: 'Sales',
+    items: [
+      { href: '/orders', label: 'Orders', icon: 'shopping_cart' },
+      { href: '/draft-orders', label: 'Draft Orders', icon: 'edit_document' },
+      { href: '/customers', label: 'Customers', icon: 'groups' },
+    ],
+  },
+  {
+    id: 'catalog',
+    label: 'Catalog',
+    items: [
+      { href: '/products', label: 'Products', icon: 'inventory_2' },
+      { href: '/admin/collections', label: 'Collections', icon: 'dashboard_customize' },
+      { href: '/media', label: 'Media', icon: 'photo_library' },
+    ],
+  },
+  {
+    id: 'marketing',
+    label: 'Marketing',
+    items: [
+      { href: '/discounts', label: 'Discounts', icon: 'sell' },
+      { href: '/admin/abandoned-checkouts', label: 'Abandoned', icon: 'mark_email_unread' },
+      { href: '/analytics', label: 'Analytics', icon: 'analytics' },
+    ],
+  },
+  {
+    id: 'system',
+    label: 'System',
+    items: [
+      { href: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
+      { href: '/admin/brand-kit', label: 'Brand Kit', icon: 'palette' },
+      { href: '/settings', label: 'Settings', icon: 'settings' },
+    ],
+  },
 ];
 
 const emptySubscribe = () => () => {};
@@ -28,7 +57,6 @@ export default function Sidebar() {
   const router = useRouter();
   const { settings } = useSettings();
   const activePathname = useSyncExternalStore(emptySubscribe, () => pathname, () => '');
-  const isSettingsActive = activePathname === '/settings' || activePathname.startsWith('/settings/');
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -47,37 +75,45 @@ export default function Sidebar() {
 
           <div className={styles.brandCopy}>
             <p className={`text-xs font-headline tracking-widest ${styles.brandEyebrow}`}>Obsidian Glass</p>
-            <h1 className={`text-xl font-bold tracking-tighter font-headline ${styles.brandTitle}`}>{settings.storeName}</h1>
+            <h1 className={`font-headline ${styles.brandTitle}`}>{settings.storeName}</h1>
             <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Commerce command layer</p>
           </div>
         </div>
       </div>
 
       <nav className={styles.nav}>
-        {NAV_ITEMS.map(item => {
-          const isActive =
-            item.href !== '#' &&
-            (item.exact
-              ? activePathname === item.href
-              : activePathname === item.href || activePathname.startsWith(`${item.href}/`));
-          return (
-            <Link key={item.label} href={item.href} className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''} admin-spotlight text-sm font-semibold font-headline tracking-tight`}>
-              <span className="material-symbols-outlined" style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        {NAV_GROUPS.map((group) => (
+          <section className={styles.navSection} key={group.id}>
+            <p className={`font-headline tracking-widest ${styles.sectionLabel}`}>{group.label}</p>
+            <div className={styles.sectionItems}>
+              {group.items.map((item) => {
+                const isActive =
+                  item.exact
+                    ? activePathname === item.href
+                    : activePathname === item.href || activePathname.startsWith(`${item.href}/`);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`${styles.navLink} ${isActive ? styles.navLinkActive : ''} font-headline`}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                    >
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </nav>
 
       <div className={styles.bottomNav}>
-        <Link
-          href="/settings"
-          className={`${styles.navLink} ${isSettingsActive ? styles.navLinkActive : ''} admin-spotlight text-sm font-semibold font-headline tracking-tight`}
-        >
-          <span className="material-symbols-outlined" style={isSettingsActive ? { fontVariationSettings: "'FILL' 1" } : undefined}>settings</span>
-          <span>Settings</span>
-        </Link>
-        <button className={`${styles.navLink} admin-spotlight text-sm font-semibold font-headline tracking-tight`} onClick={handleLogout} type="button">
+        <button className={`${styles.navLink} font-headline`} onClick={handleLogout} type="button">
           <span className="material-symbols-outlined">logout</span>
           <span>Log out</span>
         </button>

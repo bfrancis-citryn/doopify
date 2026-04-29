@@ -1,8 +1,8 @@
 :root,
 [data-dashboard-theme="dark"] {
   --background: #050508;
-  --surface: rgba(12, 12, 17, 0.74);
-  --surface-bright: rgba(22, 22, 29, 0.86);
+  --surface: rgba(12, 12, 17, 0.84);
+  --surface-bright: rgba(22, 22, 29, 0.88);
   --surface-container-highest: rgba(255, 255, 255, 0.12);
   --surface-container-high: rgba(255, 255, 255, 0.095);
   --surface-container: rgba(255, 255, 255, 0.072);
@@ -45,19 +45,19 @@
   --accent-rgb: 100, 210, 255;
   --accent2-rgb: 118, 242, 207;
   --accent3-rgb: 140, 168, 255;
-  --grid-dot: rgba(255, 255, 255, 0.11);
+  --grid-dot: rgba(255, 255, 255, 0.04);
   --spotlight: rgba(255, 255, 255, 0.11);
 }
 
 [data-dashboard-theme="light"] {
   --background: #f4f7fb;
-  --surface: rgba(255, 255, 255, 0.58);
-  --surface-bright: rgba(255, 255, 255, 0.78);
-  --surface-container-highest: rgba(255, 255, 255, 0.84);
-  --surface-container-high: rgba(255, 255, 255, 0.72);
-  --surface-container: rgba(255, 255, 255, 0.62);
-  --surface-container-low: rgba(255, 255, 255, 0.52);
-  --surface-container-lowest: rgba(255, 255, 255, 0.44);
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-bright: rgba(255, 255, 255, 0.86);
+  --surface-container-highest: rgba(255, 255, 255, 0.9);
+  --surface-container-high: rgba(255, 255, 255, 0.8);
+  --surface-container: rgba(255, 255, 255, 0.7);
+  --surface-container-low: rgba(255, 255, 255, 0.6);
+  --surface-container-lowest: rgba(255, 255, 255, 0.52);
   --on-surface: #111216;
   --on-surface-variant: #535862;
   --primary: #0f7ca7;
@@ -88,7 +88,7 @@
   --glass-shadow: 0 32px 90px rgba(35, 45, 75, 0.16);
   --glass-shadow-soft: 0 18px 54px rgba(35, 45, 75, 0.12);
   --spotlight: rgba(255, 255, 255, 0.65);
-  --grid-dot: rgba(16, 24, 40, 0.07);
+  --grid-dot: rgba(16, 24, 40, 0.035);
 }
 
 html {
@@ -101,9 +101,9 @@ body.dashboard-body {
     radial-gradient(circle at 16% 0%, rgba(var(--accent-rgb), 0.29), transparent 31%),
     radial-gradient(circle at 88% 9%, rgba(var(--accent2-rgb), 0.25), transparent 28%),
     radial-gradient(circle at 58% 96%, rgba(var(--accent3-rgb), 0.19), transparent 34%),
-    radial-gradient(circle, var(--grid-dot) 1px, transparent 1.2px),
+    radial-gradient(circle, var(--grid-dot) 1px, transparent 1.3px),
     linear-gradient(135deg, #050508 0%, #0a0a12 44%, #111119 100%);
-  background-size: auto, auto, auto, 24px 24px, auto;
+  background-size: auto, auto, auto, 28px 28px, auto;
   background-attachment: fixed;
 }
 
@@ -112,7 +112,7 @@ body.dashboard-body {
     radial-gradient(circle at 12% 0%, rgba(var(--accent-rgb), 0.24), transparent 28%),
     radial-gradient(circle at 90% 10%, rgba(var(--accent2-rgb), 0.2), transparent 26%),
     radial-gradient(circle at 58% 94%, rgba(var(--accent3-rgb), 0.14), transparent 32%),
-    radial-gradient(circle, var(--grid-dot) 1px, transparent 1.2px),
+    radial-gradient(circle, var(--grid-dot) 1px, transparent 1.3px),
     linear-gradient(135deg, #f4f7fb 0%, #e9eef7 44%, #fbfcff 100%);
 }
 
@@ -258,7 +258,10 @@ body.dashboard-body {
 }
 
 .admin-spotlight {
+  position: relative;
   overflow: hidden;
+  --spotlight-x: 50%;
+  --spotlight-y: 50%;
 }
 
 .admin-spotlight::before {
@@ -266,14 +269,36 @@ body.dashboard-body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(180px circle at 50% 50%, var(--spotlight), transparent 60%);
+  background: radial-gradient(160px circle at var(--spotlight-x) var(--spotlight-y), var(--spotlight), transparent 62%);
   opacity: 0;
-  transition: opacity 0.22s ease;
+  transition: opacity 0.2s ease;
 }
 
 .admin-spotlight:hover::before,
 .admin-spotlight:focus-within::before {
-  opacity: 0.34;
+  opacity: 0.12;
+}
+
+.admin-spotlight.is-spotlight-active::before {
+  opacity: 0.12;
+}
+
+.glass-panel.admin-spotlight:hover::before,
+.glass-panel.admin-spotlight:focus-within::before,
+.glass-card.admin-spotlight:hover::before,
+.glass-card.admin-spotlight:focus-within::before,
+.admin-card--panel.admin-spotlight:hover::before,
+.admin-card--panel.admin-spotlight:focus-within::before,
+.admin-card--card.admin-spotlight:hover::before,
+.admin-card--card.admin-spotlight:focus-within::before {
+  opacity: 0.08;
+}
+
+.glass-panel.admin-spotlight.is-spotlight-active::before,
+.glass-card.admin-spotlight.is-spotlight-active::before,
+.admin-card--panel.admin-spotlight.is-spotlight-active::before,
+.admin-card--card.admin-spotlight.is-spotlight-active::before {
+  opacity: 0.08;
 }
 
 .admin-btn {
@@ -377,7 +402,81 @@ body.dashboard-body {
 }
 
 .admin-theme-toggle {
-  min-width: 74px;
+  min-width: 82px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  min-height: 2rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03)),
+    color-mix(in srgb, var(--surface-container-low) 84%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.24rem;
+  color: var(--on-surface-variant);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.admin-theme-toggle:hover {
+  border-color: var(--glass-border-strong);
+}
+
+.admin-theme-toggle:active {
+  transform: scale(0.985);
+}
+
+.admin-theme-toggle__label {
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.admin-theme-toggle.is-dark .admin-theme-toggle__label:first-of-type,
+.admin-theme-toggle.is-light .admin-theme-toggle__label:last-of-type {
+  color: var(--on-surface);
+  opacity: 1;
+}
+
+.admin-theme-toggle__track {
+  width: 2.05rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container) 88%, transparent);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem;
+}
+
+.admin-theme-toggle__thumb {
+  width: 0.96rem;
+  height: 0.96rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08)),
+    color-mix(in srgb, var(--surface-bright) 88%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-surface-variant);
+  transform: translateX(0);
+  transition: transform 180ms ease, color 180ms ease;
+}
+
+.admin-theme-toggle.is-light .admin-theme-toggle__thumb {
+  transform: translateX(0.82rem);
+}
+
+.admin-theme-toggle.is-dark .admin-theme-toggle__thumb {
+  color: var(--on-surface);
+}
+
+.admin-theme-toggle__thumb .material-symbols-outlined {
+  font-size: 0.68rem;
 }
 
 .admin-drawer-root {
@@ -413,6 +512,7 @@ body.dashboard-body {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   display: flex;
   flex-direction: column;
+  animation: admin-drawer-in 180ms ease;
 }
 
 .admin-drawer__header {
@@ -780,6 +880,184 @@ body.dashboard-body {
   font-size: 0.82rem;
 }
 
+.admin-page {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-page--max {
+  width: min(1200px, 100%);
+}
+
+.admin-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.admin-page-header__eyebrow,
+.admin-form-section__eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.admin-page-header__title,
+.admin-form-section__title {
+  margin: 0.25rem 0 0;
+  font-size: 1.1rem;
+}
+
+.admin-page-header__description,
+.admin-form-section__description {
+  margin: 0.35rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.82rem;
+}
+
+.admin-page-header__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.admin-toolbar {
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--panel-radius) - 0.1rem);
+  background: color-mix(in srgb, var(--surface-container) 80%, transparent);
+  padding: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.admin-toolbar__left,
+.admin-toolbar__right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.admin-empty-state {
+  padding: 1.6rem 1rem;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+}
+
+.admin-empty-state__icon {
+  color: var(--on-surface-variant);
+}
+
+.admin-empty-state__title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-empty-state__description {
+  margin: 0;
+  color: var(--on-surface-variant);
+  max-width: 32rem;
+}
+
+.admin-form-section {
+  padding: 0.85rem;
+}
+
+.admin-form-section__body {
+  margin-top: 0.65rem;
+}
+
+.admin-split-pane {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+@media (max-width: 1024px) {
+  .admin-split-pane {
+    grid-template-columns: 1fr;
+  }
+}
+
+body.dashboard-body input[type="text"],
+body.dashboard-body input[type="email"],
+body.dashboard-body input[type="number"],
+body.dashboard-body input[type="search"],
+body.dashboard-body input[type="password"],
+body.dashboard-body select,
+body.dashboard-body textarea {
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 84%, transparent);
+  color: var(--on-surface);
+  border-radius: 0.72rem;
+  min-height: 2.2rem;
+  padding: 0.5rem 0.68rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+body.dashboard-body textarea {
+  min-height: 5.75rem;
+  resize: vertical;
+}
+
+body.dashboard-body input::placeholder,
+body.dashboard-body textarea::placeholder {
+  color: var(--on-surface-variant);
+}
+
+body.dashboard-body input:focus,
+body.dashboard-body select:focus,
+body.dashboard-body textarea:focus {
+  outline: none;
+  border-color: var(--glass-border-strong);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
+}
+
+body.dashboard-body label {
+  color: var(--on-surface-variant);
+}
+
+body.dashboard-body .glass-panel,
+body.dashboard-body .glass-card {
+  color: var(--on-surface);
+}
+
+body.dashboard-body .sectionCard,
+body.dashboard-body .summaryCard,
+body.dashboard-body .panel,
+body.dashboard-body .workspacePanel {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    color-mix(in srgb, var(--surface-bright) 90%, transparent);
+  color: var(--on-surface);
+}
+
+body.dashboard-body .sectionHeader,
+body.dashboard-body .panelHeader {
+  margin-bottom: 0.8rem;
+}
+
+body.dashboard-body .field,
+body.dashboard-body .setting-row,
+body.dashboard-body .summaryRows > div {
+  gap: 0.5rem;
+}
+
 .admin-command-palette-overlay {
   position: fixed;
   inset: 0;
@@ -895,6 +1173,17 @@ body.dashboard-body {
 @keyframes admin-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes admin-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
