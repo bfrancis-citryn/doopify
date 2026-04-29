@@ -17,7 +17,9 @@ const mocks = vi.hoisted(() => ({
   encrypt: vi.fn((value: string) => `enc:${value}`),
   decrypt: vi.fn((value: string) => value.replace(/^enc:/, '')),
   easypostTestConnection: vi.fn(),
+  easypostGetRates: vi.fn(),
   shippoTestConnection: vi.fn(),
+  shippoGetRates: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
@@ -28,11 +30,13 @@ vi.mock('@/server/utils/crypto', () => ({
 vi.mock('./providers/easypost', () => ({
   easypostProviderAdapter: {
     testConnection: mocks.easypostTestConnection,
+    getRates: mocks.easypostGetRates,
   },
 }))
 vi.mock('./providers/shippo', () => ({
   shippoProviderAdapter: {
     testConnection: mocks.shippoTestConnection,
+    getRates: mocks.shippoGetRates,
   },
 }))
 

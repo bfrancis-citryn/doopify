@@ -46,6 +46,7 @@ The repo currently includes:
 - shipping settings Phase 1 foundation with shipping mode/manual-rate API (`GET/PATCH /api/settings/shipping`) and admin workspace at `/admin/settings/shipping`
 - shipping setup Phase 2 foundation with setup wizard workspace (`/admin/settings/shipping/setup`) and setup APIs for status/save/test (`GET /api/settings/shipping/setup-status`, `PATCH /api/settings/shipping/setup`, `POST /api/settings/shipping/test-rates`)
 - shipping setup Phase 3 foundation with provider connect/disconnect/test APIs (`POST /api/settings/shipping/connect-provider`, `POST /api/settings/shipping/disconnect-provider`, `POST /api/settings/shipping/test-provider`) and encrypted provider credential storage through `IntegrationSecret`
+- shipping setup Phase 4 foundation with normalized shipping-rate resolution service (`src/server/shipping/shipping-rate.service.ts`) for manual/live/hybrid quoting and hybrid fallback behavior
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - typed internal event dispatcher and static integration registry

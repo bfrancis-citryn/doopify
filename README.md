@@ -31,6 +31,7 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Checkout-native code discounts through the centralized server pricing path
 - Configurable shipping zones/rates and jurisdiction-aware tax rules through the centralized server pricing path
 - Shipping setup Phase 3 provider connection APIs for EasyPost/Shippo with encrypted integration-secret credential storage
+- Shipping setup Phase 4 normalized shipping-rate service for manual/live/hybrid quote resolution consumed by admin shipping rate tests
 - Discount applications and usage counts created only after verified paid-order creation succeeds
 - Durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry tooling, support diagnostics, and visibility at `/admin/webhooks`
 - Brand Kit admin screen with Store-backed logo/colors/fonts/button/email/checkout branding controls at `/admin/brand-kit`

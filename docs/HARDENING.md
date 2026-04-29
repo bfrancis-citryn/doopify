@@ -200,6 +200,7 @@ These invariants should not be broken by future work:
 - manual shipping and manual fulfillment paths must remain available without live carrier credentials
 - shipping setup wizard/status/test-rate admin routes must remain admin-authorized and must not expose provider credentials
 - shipping provider connect/disconnect/test routes must remain admin-authorized, store credentials only in encrypted `IntegrationSecret` rows, and never return credential values
+- manual, EasyPost, and Shippo shipping quotes should flow through a normalized internal quote shape before checkout/admin consumers use rate data
 
 ## Refund And Return Invariants
 

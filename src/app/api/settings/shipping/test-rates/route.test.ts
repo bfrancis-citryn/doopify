@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   getShippingSetupStore: vi.fn(),
   buildShippingSetupStatus: vi.fn(),
-  buildCheckoutPricingWithDecisionsCents: vi.fn(),
+  getShippingRatesForCheckout: vi.fn(),
+  buildDefaultShippingAddressForRates: vi.fn(),
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
@@ -16,8 +17,10 @@ vi.mock('@/server/shipping/shipping-setup.service', () => ({
   buildShippingSetupStatus: mocks.buildShippingSetupStatus,
 }))
 
-vi.mock('@/server/checkout/pricing', () => ({
-  buildCheckoutPricingWithDecisionsCents: mocks.buildCheckoutPricingWithDecisionsCents,
+vi.mock('@/server/shipping/shipping-rate.service', () => ({
+  getShippingRatesForCheckout: mocks.getShippingRatesForCheckout,
+  buildDefaultShippingAddressForRates: mocks.buildDefaultShippingAddressForRates,
+  ShippingRateSetupError: class ShippingRateSetupError extends Error {},
 }))
 
 import { POST } from './route'
@@ -37,7 +40,7 @@ describe('settings shipping test-rates route', () => {
     expect(response.status).toBe(401)
   })
 
-  it('returns normalized manual quote', async () => {
+  it('returns normalized manual quotes', async () => {
     mocks.requireAdmin.mockResolvedValue({
       ok: true,
       user: { id: 'staff_1', email: 'staff@example.com', role: 'STAFF' },
@@ -56,13 +59,22 @@ describe('settings shipping test-rates route', () => {
       canUseManualRates: true,
       canUseLiveRates: false,
     })
-    mocks.buildCheckoutPricingWithDecisionsCents.mockReturnValue({
-      shippingAmountCents: 850,
-      shippingDecision: {
-        source: 'fallback',
-        amountCents: 850,
-      },
+    mocks.buildDefaultShippingAddressForRates.mockReturnValue({
+      country: 'US',
+      province: null,
+      address1: '1 Test St',
+      city: 'Test City',
+      postalCode: '00000',
     })
+    mocks.getShippingRatesForCheckout.mockResolvedValue([
+      {
+        id: 'manual:rate:1',
+        source: 'MANUAL',
+        displayName: 'Domestic shipping',
+        amountCents: 850,
+        currency: 'USD',
+      },
+    ])
 
     const response = await POST(
       new Request('http://localhost/api/settings/shipping/test-rates', {
@@ -80,12 +92,7 @@ describe('settings shipping test-rates route', () => {
     expect(payload).toMatchObject({
       success: true,
       data: {
-        quote: {
-          source: 'MANUAL',
-          amountCents: 850,
-          amount: 8.5,
-          currency: 'USD',
-        },
+        quotes: [{ source: 'MANUAL', amountCents: 850, amount: 8.5, currency: 'USD' }],
       },
     })
   })

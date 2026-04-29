@@ -2,6 +2,7 @@ import type { IntegrationStatus, ShippingLiveProvider } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { decrypt, encrypt } from '@/server/utils/crypto'
+import type { ShippingRateQuote, ShippingRateRequest } from '@/server/shipping/shipping-rate.types'
 
 import { easypostProviderAdapter } from './providers/easypost'
 import { shippoProviderAdapter } from './providers/shippo'
@@ -100,6 +101,11 @@ async function getProviderApiKey(provider: ShippingLiveProvider) {
     integrationId: integration.id,
     apiKey: decrypt(secret.value),
   }
+}
+
+export async function getShippingProviderApiKey(provider: ShippingLiveProvider) {
+  const credentials = await getProviderApiKey(provider)
+  return credentials?.apiKey ?? null
 }
 
 export async function getShippingProviderConnectionStatus(provider: ShippingLiveProvider) {
@@ -228,4 +234,14 @@ export async function testShippingProviderConnection(provider: ShippingLiveProvi
     status,
     result,
   }
+}
+
+export async function getShippingProviderLiveRates(input: {
+  provider: ShippingLiveProvider
+  request: ShippingRateRequest
+}): Promise<ShippingRateQuote[]> {
+  const adapter = resolveProviderAdapter(input.provider)
+  return adapter.getRates({
+    ...input.request,
+  })
 }

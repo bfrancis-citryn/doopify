@@ -44,6 +44,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Shipping settings Phase 1 foundation: `/api/settings/shipping` cents-safe admin API plus admin workspace at `/admin/settings/shipping` for shipping mode, manual flat rates, free-shipping threshold, zone/rate editing, and manual rate preview
 - Shipping setup Phase 2 foundation: setup wizard workspace at `/admin/settings/shipping/setup`, persisted origin/default-package/fallback fields on `Store`, setup-status derivation API, and admin test-rates route
 - Shipping setup Phase 3 foundation: provider connect/disconnect/test APIs for EasyPost/Shippo with encrypted integration-secret credential storage and setup-wizard provider actions
+- Shipping setup Phase 4 foundation: normalized shipping-rate service for manual/live/hybrid modes with provider adapters and hybrid manual fallback behavior
 - Checkout pricing snapshots that persist shipping/tax resolution decisions into checkout payloads
 - Durable inbound Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, retry metadata, local-payload replay, diagnostics, cron-compatible retry tooling, and admin visibility
 - Internal typed event dispatcher plus a static integration registry

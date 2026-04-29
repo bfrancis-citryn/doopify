@@ -72,7 +72,7 @@ export default function ShippingSetupWorkspace() {
     destinationCountry: 'US',
     destinationProvince: '',
   });
-  const [testQuote, setTestQuote] = useState(null);
+  const [testQuotes, setTestQuotes] = useState([]);
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerTesting, setProviderTesting] = useState(false);
   const [providerResult, setProviderResult] = useState(null);
@@ -183,7 +183,7 @@ export default function ShippingSetupWorkspace() {
         }),
       }).then(parseApiJson);
 
-      setTestQuote(data.quote);
+      setTestQuotes(Array.isArray(data.quotes) ? data.quotes : []);
       setStatus(data.status);
       setSuccess('Shipping rate test completed.');
     } catch (testError) {
@@ -752,10 +752,10 @@ export default function ShippingSetupWorkspace() {
                     {testing ? 'Testing...' : 'Run test'}
                   </button>
                 </div>
-                {testQuote ? (
+                {testQuotes.length ? (
                   <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Quote: ${Number(testQuote.amount ?? 0).toFixed(2)}</p>
-                    <p className={styles.statusText}>{testQuote.displayName}</p>
+                    <p className={styles.statusTitle}>Top quote: ${Number(testQuotes[0]?.amount ?? 0).toFixed(2)}</p>
+                    <p className={styles.statusText}>{testQuotes[0]?.displayName}</p>
                   </div>
                 ) : null}
               </section>
