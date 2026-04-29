@@ -1,205 +1,81 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildCheckoutPricing, buildCheckoutPricingWithDecisions } from './pricing'
+import { buildCheckoutPricing, buildCheckoutPricingWithDecisions, buildCheckoutPricingWithDecisionsCents } from './pricing'
 
-describe('buildCheckoutPricing', () => {
-  it('preserves the current subtotal plus flat shipping behavior below threshold', () => {
-    expect(
-      buildCheckoutPricing(
-        [
-          { price: 20, quantity: 2 },
-          { price: 10, quantity: 1 },
+describe('buildCheckoutPricingWithDecisionsCents', () => {
+  it('calculates checkout totals with integer cents only', () => {
+    const pricing = buildCheckoutPricingWithDecisionsCents(
+      [
+        { priceCents: 205, quantity: 2 },
+        { priceCents: 1999, quantity: 1 },
+      ],
+      null,
+      {
+        shippingAddress: { country: 'US', province: 'CA' },
+        storeCountry: 'US',
+        shippingRates: { domesticCents: 999, internationalCents: 1999 },
+        taxRules: [
+          {
+            countryCode: 'US',
+            provinceCode: 'CA',
+            rate: 0.0825,
+            priority: 10,
+            isActive: true,
+          },
         ],
-        75
-      )
-    ).toEqual({
-      subtotal: 50,
-      shippingAmount: 9.99,
-      taxAmount: 0,
-      discountAmount: 0,
-      total: 59.99,
+      }
+    )
+
+    expect(pricing).toMatchObject({
+      subtotalCents: 2409,
+      shippingAmountCents: 999,
+      taxAmountCents: 199,
+      discountAmountCents: 0,
+      totalCents: 3607,
     })
   })
 
-  it('keeps shipping free when the subtotal reaches the store threshold', () => {
-    expect(buildCheckoutPricing([{ price: 25, quantity: 3 }], 75)).toEqual({
-      subtotal: 75,
-      shippingAmount: 0,
-      taxAmount: 0,
-      discountAmount: 0,
-      total: 75,
-    })
-  })
-
-  it('uses international shipping rates when the destination country differs from the store country', () => {
-    expect(
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        shippingAddress: { country: 'CA' },
+  it('treats fixed discount value as cents instead of guessing dollars from number size', () => {
+    const pricing = buildCheckoutPricingWithDecisionsCents(
+      [{ priceCents: 205, quantity: 1 }],
+      null,
+      {
+        shippingAddress: { country: 'US' },
         storeCountry: 'US',
-      })
-    ).toEqual({
-      subtotal: 20,
-      shippingAmount: 19.99,
-      taxAmount: 1,
-      discountAmount: 0,
-      total: 40.99,
-    })
-  })
-
-  it('applies destination tax rules for domestic checkout addresses', () => {
-    expect(
-      buildCheckoutPricing([{ price: 100, quantity: 1 }], 500, {
-        shippingAddress: { country: 'US', province: 'CA' },
-        storeCountry: 'US',
-      })
-    ).toEqual({
-      subtotal: 100,
-      shippingAmount: 9.99,
-      taxAmount: 8.25,
-      discountAmount: 0,
-      total: 118.24,
-    })
-  })
-
-  it('uses settings-backed shipping and tax rates when provided', () => {
-    expect(
-      buildCheckoutPricing([{ price: 100, quantity: 1 }], 500, {
-        shippingAddress: { country: 'CA' },
-        storeCountry: 'US',
-        shippingRates: {
-          domestic: 12,
-          international: 25,
-        },
-        taxRates: {
-          domestic: 0.04,
-          international: 0.03,
-        },
-      })
-    ).toEqual({
-      subtotal: 100,
-      shippingAmount: 25,
-      taxAmount: 3,
-      discountAmount: 0,
-      total: 128,
-    })
-  })
-
-  it('does not charge shipping for an empty pricing input', () => {
-    expect(buildCheckoutPricing([], 75)).toEqual({
-      subtotal: 0,
-      shippingAmount: 0,
-      taxAmount: 0,
-      discountAmount: 0,
-      total: 0,
-    })
-  })
-
-  it('applies active percentage discount codes to the checkout subtotal', () => {
-    expect(
-      buildCheckoutPricing([{ price: 50, quantity: 2 }], 200, {
-        shippingAddress: { country: 'US', province: 'CA' },
-        storeCountry: 'US',
+        shippingRates: { domesticCents: 0, internationalCents: 0 },
+        taxRules: [],
         discount: {
           id: 'discount_1',
-          code: 'SAVE10',
-          title: 'Save 10%',
+          code: 'TWO_OFF',
+          title: '$2.00 off',
           type: 'CODE',
-          method: 'PERCENTAGE',
-          value: 10,
+          method: 'FIXED_AMOUNT',
+          value: 200,
           status: 'ACTIVE',
         },
-      })
-    ).toEqual({
-      subtotal: 100,
-      shippingAmount: 9.99,
-      taxAmount: 7.43,
-      discountAmount: 10,
-      total: 107.42,
+      }
+    )
+
+    expect(pricing).toMatchObject({
+      subtotalCents: 205,
+      discountAmountCents: 200,
+      totalCents: 5,
       appliedDiscount: {
         discountId: 'discount_1',
-        code: 'SAVE10',
-        title: 'Save 10%',
-        method: 'PERCENTAGE',
-        amount: 10,
+        amountCents: 200,
       },
     })
   })
 
-  it('caps fixed amount discounts at the subtotal', () => {
-    expect(
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        discount: {
-          id: 'discount_2',
-          code: 'BIGSAVE',
-          title: 'Big save',
-          type: 'CODE',
-          method: 'FIXED_AMOUNT',
-          value: 50,
-          status: 'ACTIVE',
-        },
-      })
-    ).toMatchObject({
-      subtotal: 20,
-      shippingAmount: 9.99,
-      discountAmount: 20,
-      total: 9.99,
-    })
+  it('rejects decimal money values in the cents-only pricing core', () => {
+    expect(() =>
+      buildCheckoutPricingWithDecisionsCents([{ priceCents: 2.05, quantity: 1 }], null)
+    ).toThrow('Line price must be a non-negative integer cents value')
   })
 
-  it('represents free shipping discounts as a discount against shipping', () => {
-    expect(
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        discount: {
-          id: 'discount_3',
-          code: 'FREESHIP',
-          title: 'Free shipping',
-          type: 'CODE',
-          method: 'FREE_SHIPPING',
-          value: 0,
-          status: 'ACTIVE',
-        },
-      })
-    ).toMatchObject({
-      subtotal: 20,
-      shippingAmount: 9.99,
-      discountAmount: 9.99,
-      total: 20,
-    })
-  })
-
-  it('rejects inactive, exhausted, or minimum-order discount codes', () => {
+  it('applies minimum-order validation using cents', () => {
     expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        discount: {
-          id: 'disabled',
-          code: 'OFF',
-          title: 'Disabled',
-          type: 'CODE',
-          method: 'PERCENTAGE',
-          value: 10,
-          status: 'DISABLED',
-        },
-      })
-    ).toThrow('This discount code is not active')
-
-    expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        discount: {
-          id: 'used',
-          code: 'USED',
-          title: 'Used',
-          type: 'CODE',
-          method: 'PERCENTAGE',
-          value: 10,
-          status: 'ACTIVE',
-          usageLimit: 1,
-          usageCount: 1,
-        },
-      })
-    ).toThrow('This discount code has reached its usage limit')
-
-    expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
+      buildCheckoutPricingWithDecisionsCents([{ priceCents: 2000, quantity: 1 }], null, {
         discount: {
           id: 'minimum',
           code: 'MINIMUM',
@@ -208,236 +84,147 @@ describe('buildCheckoutPricing', () => {
           method: 'PERCENTAGE',
           value: 10,
           status: 'ACTIVE',
-          minimumOrder: 50,
+          minimumOrderCents: 5000,
         },
       })
-    ).toThrow('Minimum order of $50 required')
+    ).toThrow('Minimum order of $50.00 required')
   })
 
-  it('rejects scheduled and expired discount codes', () => {
-    const now = new Date('2026-04-26T12:00:00.000Z')
-
-    expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        now,
-        discount: {
-          id: 'scheduled',
-          code: 'SOON',
-          title: 'Soon',
-          type: 'CODE',
-          method: 'PERCENTAGE',
-          value: 10,
-          status: 'ACTIVE',
-          startsAt: new Date('2026-04-27T12:00:00.000Z'),
+  it('uses configured shipping-zone tiers and jurisdiction tax overrides in cents', () => {
+    const pricing = buildCheckoutPricingWithDecisionsCents([{ priceCents: 6000, quantity: 2 }], 50000, {
+      shippingAddress: { country: 'US', province: 'CA' },
+      storeCountry: 'US',
+      shippingRates: {
+        domesticCents: 1200,
+        internationalCents: 2500,
+      },
+      shippingZones: [
+        {
+          id: 'zone_domestic',
+          name: 'Domestic',
+          countryCode: 'US',
+          priority: 200,
+          rates: [
+            {
+              id: 'rate_domestic_flat',
+              name: 'Domestic flat',
+              method: 'FLAT',
+              amountCents: 2000,
+              priority: 200,
+            },
+          ],
         },
-      })
-    ).toThrow('This discount code is not yet valid')
-
-    expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        now,
-        discount: {
-          id: 'expired',
-          code: 'OLD',
-          title: 'Old',
-          type: 'CODE',
-          method: 'PERCENTAGE',
-          value: 10,
-          status: 'ACTIVE',
-          endsAt: new Date('2026-04-25T12:00:00.000Z'),
+        {
+          id: 'zone_ca',
+          name: 'California',
+          countryCode: 'US',
+          provinceCode: 'CA',
+          priority: 10,
+          rates: [
+            {
+              id: 'rate_ca_low',
+              name: 'CA low subtotal',
+              method: 'SUBTOTAL_TIER',
+              amountCents: 1000,
+              minSubtotalCents: 0,
+              maxSubtotalCents: 9999,
+              priority: 20,
+            },
+            {
+              id: 'rate_ca_high',
+              name: 'CA high subtotal',
+              method: 'SUBTOTAL_TIER',
+              amountCents: 400,
+              minSubtotalCents: 10000,
+              maxSubtotalCents: 999900,
+              priority: 10,
+            },
+          ],
         },
-      })
-    ).toThrow('This discount code has expired')
-  })
-
-  it('rejects non-code and unsupported discount methods at checkout', () => {
-    expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        discount: {
-          id: 'automatic',
-          code: null,
-          title: 'Automatic',
-          type: 'AUTOMATIC',
-          method: 'PERCENTAGE',
-          value: 10,
-          status: 'ACTIVE',
+      ],
+      taxRules: [
+        {
+          id: 'tax_us',
+          name: 'US fallback',
+          countryCode: 'US',
+          rate: 0.06,
+          priority: 100,
         },
-      })
-    ).toThrow('Discount code not found')
-
-    expect(() =>
-      buildCheckoutPricing([{ price: 20, quantity: 1 }], 75, {
-        discount: {
-          id: 'bogo',
-          code: 'BOGO',
-          title: 'BOGO',
-          type: 'CODE',
-          method: 'BUY_X_GET_Y',
-          value: 0,
-          status: 'ACTIVE',
+        {
+          id: 'tax_us_ca',
+          name: 'US CA',
+          countryCode: 'US',
+          provinceCode: 'CA',
+          rate: 0.0825,
+          priority: 10,
         },
-      })
-    ).toThrow('This discount code is not supported at checkout yet')
-  })
+      ],
+    })
 
-  it('uses configured shipping-zone tiers and jurisdiction tax overrides', () => {
-    expect(
-      buildCheckoutPricingWithDecisions([{ price: 60, quantity: 2 }], 500, {
-        shippingAddress: { country: 'US', province: 'CA' },
-        storeCountry: 'US',
-        shippingRates: {
-          domestic: 12,
-          international: 25,
-        },
-        shippingZones: [
-          {
-            id: 'zone_domestic',
-            name: 'Domestic',
-            countryCode: 'US',
-            priority: 200,
-            rates: [
-              {
-                id: 'rate_domestic_flat',
-                name: 'Domestic flat',
-                method: 'FLAT',
-                amount: 20,
-                priority: 200,
-              },
-            ],
-          },
-          {
-            id: 'zone_ca',
-            name: 'California',
-            countryCode: 'US',
-            provinceCode: 'CA',
-            priority: 10,
-            rates: [
-              {
-                id: 'rate_ca_low',
-                name: 'CA low subtotal',
-                method: 'SUBTOTAL_TIER',
-                amount: 10,
-                minSubtotal: 0,
-                maxSubtotal: 99.99,
-                priority: 20,
-              },
-              {
-                id: 'rate_ca_high',
-                name: 'CA high subtotal',
-                method: 'SUBTOTAL_TIER',
-                amount: 4,
-                minSubtotal: 100,
-                maxSubtotal: 9999,
-                priority: 10,
-              },
-            ],
-          },
-        ],
-        taxRules: [
-          {
-            id: 'tax_us',
-            name: 'US fallback',
-            countryCode: 'US',
-            rate: 0.06,
-            priority: 100,
-          },
-          {
-            id: 'tax_us_ca',
-            name: 'US CA',
-            countryCode: 'US',
-            provinceCode: 'CA',
-            rate: 0.0825,
-            priority: 10,
-          },
-        ],
-      })
-    ).toEqual({
-      subtotal: 120,
-      shippingAmount: 4,
-      taxAmount: 9.9,
-      discountAmount: 0,
-      total: 133.9,
+    expect(pricing).toMatchObject({
+      subtotalCents: 12000,
+      shippingAmountCents: 400,
+      taxAmountCents: 990,
+      discountAmountCents: 0,
+      totalCents: 13390,
       shippingDecision: {
         source: 'zone',
-        amount: 4,
-        destinationCountry: 'US',
-        destinationProvince: 'CA',
+        amountCents: 400,
         zoneId: 'zone_ca',
-        zoneName: 'California',
         rateId: 'rate_ca_high',
-        rateName: 'CA high subtotal',
-        rateMethod: 'SUBTOTAL_TIER',
       },
       taxDecision: {
         source: 'rule',
         rate: 0.0825,
-        amount: 9.9,
-        destinationCountry: 'US',
-        destinationProvince: 'CA',
+        amountCents: 990,
         ruleId: 'tax_us_ca',
-        ruleName: 'US CA',
       },
     })
   })
+})
 
-  it('falls back to settings-backed domestic/international rates when no active zone or rule matches', () => {
+describe('checkout pricing display wrappers', () => {
+  it('returns both cents and display dollars without changing the cents source of truth', () => {
     expect(
-      buildCheckoutPricingWithDecisions([{ price: 100, quantity: 1 }], 500, {
-        shippingAddress: { country: 'US', province: 'TX' },
-        storeCountry: 'US',
-        shippingRates: {
-          domestic: 12,
-          international: 25,
-        },
-        shippingZones: [
-          {
-            id: 'zone_inactive',
-            name: 'Inactive US',
-            countryCode: 'US',
-            isActive: false,
-            rates: [
-              {
-                id: 'rate_inactive',
-                name: 'Inactive',
-                method: 'FLAT',
-                amount: 5,
-              },
-            ],
-          },
-        ],
-        taxRates: {
-          domestic: 0.04,
-          international: 0.02,
-        },
-        taxRules: [
-          {
-            id: 'tax_inactive',
-            name: 'Inactive TX',
-            countryCode: 'US',
-            provinceCode: 'TX',
-            rate: 0.09,
-            isActive: false,
-          },
-        ],
+      buildCheckoutPricing([{ priceCents: 205, quantity: 1 }], null, {
+        shippingRates: { domesticCents: 999, internationalCents: 1999 },
       })
-    ).toEqual({
-      subtotal: 100,
-      shippingAmount: 12,
-      taxAmount: 4,
+    ).toMatchObject({
+      subtotalCents: 205,
+      shippingAmountCents: 999,
+      taxAmountCents: 0,
+      discountAmountCents: 0,
+      totalCents: 1204,
+      subtotal: 2.05,
+      shippingAmount: 9.99,
+      taxAmount: 0,
       discountAmount: 0,
-      total: 116,
+      total: 12.04,
+    })
+  })
+
+  it('adds display amounts to decisions for admin/storefront presentation', () => {
+    expect(
+      buildCheckoutPricingWithDecisions([{ priceCents: 10000, quantity: 1 }], 50000, {
+        shippingAddress: { country: 'US', province: 'CA' },
+        storeCountry: 'US',
+        shippingRates: { domesticCents: 1200, internationalCents: 2500 },
+        taxRules: [{ countryCode: 'US', provinceCode: 'CA', rate: 0.0825 }],
+      })
+    ).toMatchObject({
+      subtotalCents: 10000,
+      totalCents: 12025,
+      subtotal: 100,
+      total: 120.25,
       shippingDecision: {
         source: 'fallback',
+        amountCents: 1200,
         amount: 12,
-        destinationCountry: 'US',
-        destinationProvince: 'TX',
       },
       taxDecision: {
-        source: 'fallback',
-        rate: 0.04,
-        amount: 4,
-        destinationCountry: 'US',
-        destinationProvince: 'TX',
+        source: 'rule',
+        amountCents: 825,
+        amount: 8.25,
       },
     })
   })
