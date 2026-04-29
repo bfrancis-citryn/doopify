@@ -127,6 +127,15 @@ Rules:
 - log enough internal context to debug failures
 - keep response shapes stable
 
+## Auth Rules
+
+- Keep `src/proxy.ts` as the outer route gate.
+- Sensitive API routes must also authorize themselves with route-level helpers from `src/server/auth/require-auth.ts`.
+- Use `requireAdmin(req)` for admin mutations such as products, variants, orders, fulfillments, refunds, returns, settings, integrations, media uploads, webhook replay/retry, and email resend actions.
+- Use `requireOwner(req)` for owner-only settings, staff/account management, or dangerous operational actions.
+- Do not trust client-submitted roles or raw `x-user-role` headers as the only authorization source.
+- Do not add admin auth to public storefront reads, checkout initiation/status, login/auth routes, Stripe webhooks, or email-provider webhooks.
+
 ## Money Rules
 
 - Store money in integer minor units.
