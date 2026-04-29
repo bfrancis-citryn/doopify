@@ -6,6 +6,8 @@ import { CustomersProvider } from '@/context/CustomersContext';
 import { DiscountsProvider } from '@/context/DiscountsContext';
 import { ProductsProvider } from '@/context/ProductsContext';
 import { SettingsProvider } from '@/context/SettingsContext';
+import AdminThemeProvider from '@/components/admin/ui/AdminThemeProvider';
+import AdminCommandPalette from '@/components/admin/ui/AdminCommandPalette';
 
 export const metadata = {
   title: 'Doopify | Commerce OS',
@@ -14,7 +16,7 @@ export const metadata = {
 
 export default function DashboardLayout({ children }) {
   return (
-    <html lang="en" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
@@ -22,17 +24,20 @@ export default function DashboardLayout({ children }) {
         />
       </head>
       <body className={`${inter.variable} ${manrope.variable} dashboard-body`} suppressHydrationWarning>
-        <SettingsProvider>
-          <ProductsProvider>
-            <OrdersProvider>
-              <CustomersProvider>
-                <DiscountsProvider>
-                  {children}
-                </DiscountsProvider>
-              </CustomersProvider>
-            </OrdersProvider>
-          </ProductsProvider>
-        </SettingsProvider>
+        <AdminThemeProvider>
+          <SettingsProvider>
+            <ProductsProvider>
+              <OrdersProvider>
+                <CustomersProvider>
+                  <DiscountsProvider>
+                    {children}
+                    <AdminCommandPalette />
+                  </DiscountsProvider>
+                </CustomersProvider>
+              </OrdersProvider>
+            </ProductsProvider>
+          </SettingsProvider>
+        </AdminThemeProvider>
       </body>
     </html>
   );
