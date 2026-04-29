@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getProducts, createProduct, upsertOptions } from '@/server/services/product.service'
 import type { ProductStatus } from '@prisma/client'
 
@@ -77,6 +78,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
 
