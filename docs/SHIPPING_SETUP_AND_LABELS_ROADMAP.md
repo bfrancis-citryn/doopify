@@ -544,6 +544,13 @@ PDF 4x6
 
 Use the `Job` system for tracking updates and later provider sync.
 
+### Current Foundation
+
+- `fulfillment.created` now queues `SYNC_SHIPPING_TRACKING` and opt-in `SEND_FULFILLMENT_EMAIL` jobs.
+- `SEND_FULFILLMENT_EMAIL` uses tracked `EmailDelivery` records (`fulfillment_tracking` template) so send success/failure is observable and retryable.
+- `SYNC_SHIPPING_TRACKING` performs safe fulfillment tracking backfill, provider tracking polling, `PENDING -> OPEN` promotion, and delivery confirmation updates that can set `Fulfillment.deliveredAt`.
+- Shipping provider webhooks are now ingested at `POST /api/webhooks/shipping-provider?provider=EASYPOST|SHIPPO` to update fulfillment/label tracking state and queue sync follow-up jobs.
+
 ### Job Types
 
 ```txt

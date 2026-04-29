@@ -29,6 +29,18 @@ function resolveShippoLabelFileType(input: { labelFormat?: string; labelSize?: s
   return 'PDF_4x6'
 }
 
+function normalizeLifecycleStatus(value: unknown) {
+  const status = String(value ?? '')
+    .trim()
+    .toUpperCase()
+  if (!status) return 'UNKNOWN' as const
+  if (status.includes('DELIVER')) return 'DELIVERED' as const
+  if (status.includes('TRANSIT')) return 'IN_TRANSIT' as const
+  if (status.includes('PRE_TRANSIT') || status.includes('LABEL')) return 'PRE_TRANSIT' as const
+  if (status.includes('FAIL') || status.includes('RETURN') || status.includes('EXCEPTION')) return 'FAILURE' as const
+  return 'UNKNOWN' as const
+}
+
 export const shippoProviderAdapter: ShippingProviderAdapter = {
   async testConnection(input) {
     try {
@@ -225,6 +237,72 @@ export const shippoProviderAdapter: ShippingProviderAdapter = {
       rateAmountCents: normalizeMoneyToCents(rate?.amount) ?? undefined,
       labelAmountCents: normalizeMoneyToCents(payload?.amount ?? rate?.amount) ?? undefined,
       currency: String(payload?.currency ?? rate?.currency ?? input.request.currency ?? 'USD').toUpperCase(),
+      rawResponse: payload ?? undefined,
+    }
+  },
+  async getTrackingStatus(input) {
+    const carrier = String(input.carrier ?? '')
+      .trim()
+      .toLowerCase()
+    const trackingNumber = String(input.trackingNumber ?? '').trim()
+
+    if (!carrier || !trackingNumber) {
+      throw new Error('Shippo tracking lookup requires carrier and tracking number')
+    }
+
+    const response = await fetch(
+      `${SHIPPO_API_BASE}/tracks/${encodeURIComponent(carrier)}/${encodeURIComponent(trackingNumber)}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `ShippoToken ${input.apiKey}`,
+          Accept: 'application/json',
+        },
+      }
+    )
+
+    const bodyText = await response.text()
+    if (!response.ok) {
+      throw new Error(
+        `Shippo tracking status request failed (${response.status}): ${truncate(bodyText || 'Request failed')}`
+      )
+    }
+
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(bodyText) as Record<string, unknown>
+    } catch {
+      payload = null
+    }
+
+    const trackingStatus = payload?.tracking_status as Record<string, unknown> | undefined
+    const providerStatus =
+      typeof trackingStatus?.status === 'string'
+        ? trackingStatus.status
+        : typeof payload?.status === 'string'
+          ? payload.status
+          : 'unknown'
+    const trackingUrl =
+      typeof payload?.tracking_url_provider === 'string'
+        ? payload.tracking_url_provider
+        : typeof payload?.tracking_url === 'string'
+          ? payload.tracking_url
+          : undefined
+    const deliveredAt =
+      normalizeLifecycleStatus(providerStatus) === 'DELIVERED'
+        ? typeof trackingStatus?.status_date === 'string'
+          ? trackingStatus.status_date
+          : typeof payload?.eta === 'string'
+            ? payload.eta
+            : undefined
+        : undefined
+
+    return {
+      providerStatus,
+      lifecycleStatus: normalizeLifecycleStatus(providerStatus),
+      deliveredAt,
+      trackingNumber,
+      trackingUrl,
       rawResponse: payload ?? undefined,
     }
   },

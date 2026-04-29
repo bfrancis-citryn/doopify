@@ -36,6 +36,20 @@ export type AbandonedCheckoutRecoveryInput = {
   }>
 }
 
+export type FulfillmentTrackingEmailInput = {
+  orderNumber: number
+  email: string
+  trackingNumber?: string | null
+  trackingUrl?: string | null
+  carrier?: string | null
+  service?: string | null
+  items: Array<{
+    title: string
+    variantTitle?: string | null
+    quantity: number
+  }>
+}
+
 type EmailBranding = {
   logoUrl: string | null
   headerColor: string
@@ -189,6 +203,56 @@ function buildAbandonedCheckoutRecoveryHtml(
   `
 }
 
+function buildFulfillmentTrackingHtml(
+  input: FulfillmentTrackingEmailInput,
+  storeName: string,
+  branding: EmailBranding
+) {
+  const itemRows = input.items
+    .map((item) => {
+      const itemLabel = item.variantTitle ? `${item.title} - ${item.variantTitle}` : item.title
+      return `<li style="margin:0 0 8px;color:#111827;">${escapeHtml(itemLabel)} x ${escapeHtml(
+        item.quantity
+      )}</li>`
+    })
+    .join('')
+
+  const carrierLine = [input.carrier, input.service].filter(Boolean).join(' ')
+  const trackingText = input.trackingNumber ? `Tracking #${input.trackingNumber}` : 'Tracking details pending'
+  const trackingHref = input.trackingUrl?.trim()
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;">
+      ${renderEmailHeader(storeName, branding)}
+      <div style="padding:28px 22px;background:#ffffff;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
+        <p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;margin-bottom:16px;">${escapeHtml(storeName)}</p>
+        <h1 style="font-size:28px;line-height:1.2;margin:0 0 12px;">Your order is on the way</h1>
+        <p style="font-size:16px;color:#4b5563;margin:0 0 16px;">Order <strong>#${escapeHtml(input.orderNumber)}</strong> has shipped.</p>
+        ${
+          carrierLine
+            ? `<p style="margin:0 0 12px;font-size:14px;color:#111827;"><strong>Carrier:</strong> ${escapeHtml(carrierLine)}</p>`
+            : ''
+        }
+        <p style="margin:0 0 20px;font-size:14px;color:#111827;"><strong>${escapeHtml(trackingText)}</strong></p>
+        ${
+          trackingHref
+            ? `<a href="${escapeHtml(trackingHref)}" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:22px;">Track shipment</a>`
+            : ''
+        }
+        ${
+          itemRows
+            ? `<div style="padding:20px;border:1px solid #e5e7eb;border-radius:16px;background:#f9fafb;">
+                <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Items in this shipment</p>
+                <ul style="padding-left:18px;margin:0;">${itemRows}</ul>
+              </div>`
+            : ''
+        }
+      </div>
+      ${renderEmailFooter(branding)}
+    </div>
+  `
+}
+
 export async function buildOrderConfirmationEmailMessage(input: OrderConfirmationInput) {
   const store = await getStoreSettings()
   const storeName = store?.name || 'Doopify'
@@ -211,6 +275,21 @@ export async function buildAbandonedCheckoutRecoveryEmailMessage(input: Abandone
   const branding = resolveEmailBranding(store)
   const subject = `${storeName}: you left something behind`
   const html = buildAbandonedCheckoutRecoveryHtml(input, storeName, branding)
+
+  return {
+    from,
+    subject,
+    html,
+  }
+}
+
+export async function buildFulfillmentTrackingEmailMessage(input: FulfillmentTrackingEmailInput) {
+  const store = await getStoreSettings()
+  const storeName = store?.name || 'Doopify'
+  const from = store?.email || 'orders@doopify.local'
+  const branding = resolveEmailBranding(store)
+  const subject = `${storeName} shipping update for order #${input.orderNumber}`
+  const html = buildFulfillmentTrackingHtml(input, storeName, branding)
 
   return {
     from,

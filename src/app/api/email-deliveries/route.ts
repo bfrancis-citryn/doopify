@@ -6,6 +6,7 @@ import { EMAIL_DELIVERY_STATUSES, getEmailDeliveries } from '@/server/services/e
 
 const EMAIL_DELIVERY_STATUS_FILTERS = ['ALL', ...EMAIL_DELIVERY_STATUSES] as const
 const statusSchema = z.enum(EMAIL_DELIVERY_STATUS_FILTERS)
+const templateSchema = z.enum(['ALL', 'order_confirmation', 'fulfillment_tracking'])
 
 function parsePage(value: string | null, fallback: number) {
   const parsed = Number(value ?? '')
@@ -26,9 +27,14 @@ export async function GET(req: Request) {
     if (!parsedStatus.success) {
       return err('Invalid email delivery status', 400)
     }
+    const parsedTemplate = templateSchema.safeParse(searchParams.get('template') ?? 'ALL')
+    if (!parsedTemplate.success) {
+      return err('Invalid email delivery template', 400)
+    }
 
     const deliveries = await getEmailDeliveries({
       status: parsedStatus.data,
+      template: parsedTemplate.data,
       page: parsePage(searchParams.get('page'), 1),
       pageSize: Math.min(100, parsePage(searchParams.get('pageSize'), 20)),
     })

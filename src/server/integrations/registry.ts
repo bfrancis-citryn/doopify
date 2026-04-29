@@ -1,6 +1,8 @@
 import type { AnyInternalEventHandler, DoopifyEvents, InternalEventHandler } from '@/server/events/types'
+import { queueShippingTrackingSyncJob } from '@/server/shipping/shipping-tracking-jobs.service'
 import type { AnalyticsEventName } from '@/server/services/analytics-event.service'
 import { recordAnalyticsEvent } from '@/server/services/analytics-event.service'
+import { queueFulfillmentTrackingEmailDelivery } from '@/server/services/email-delivery.service'
 import { sendOrderConfirmationEmail } from '@/server/services/email.service'
 
 function logEvent(name: string, payload: unknown) {
@@ -62,6 +64,28 @@ export const integrationRegistry = [
     event: 'fulfillment.created',
     handle: async (payload: DoopifyEvents['fulfillment.created']) => {
       logEvent('fulfillment.created', payload)
+
+      try {
+        await queueShippingTrackingSyncJob({
+          fulfillmentId: payload.fulfillmentId,
+          orderId: payload.orderId,
+        })
+      } catch (error) {
+        console.error('[fulfillment.created] failed to queue tracking sync job', error)
+      }
+
+      if (!payload.sendTrackingEmail) {
+        return
+      }
+
+      try {
+        await queueFulfillmentTrackingEmailDelivery({
+          fulfillmentId: payload.fulfillmentId,
+          orderId: payload.orderId,
+        })
+      } catch (error) {
+        console.error('[fulfillment.created] failed to queue fulfillment email job', error)
+      }
     },
   }),
   defineHandler({

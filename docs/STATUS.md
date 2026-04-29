@@ -50,6 +50,7 @@ The repo currently includes:
 - shipping setup Phase 5 foundation with public checkout shipping-rate quote API (`POST /api/checkout/shipping-rates`), checkout shipping-option selection, and server-side selected-rate revalidation before payment-intent amount creation
 - shipping setup Phase 6 foundation with admin manual-fulfillment API (`POST /api/orders/[orderNumber]/manual-fulfillment`), over-fulfillment validation, fulfillment-item persistence, and fulfillment-status progression without provider dependency
 - shipping setup Phase 7 foundation with `ShippingLabel` persistence, admin order-label rates and purchase APIs (`POST /api/orders/[orderNumber]/shipping-rates`, `POST /api/orders/[orderNumber]/shipping-labels`), provider-backed label purchasing, fulfillment linkage, and order-page label purchase controls
+- shipping setup Phase 8 expansion with provider-backed tracking polling plus webhook ingestion (`POST /api/webhooks/shipping-provider?provider=EASYPOST|SHIPPO`) that can drive `Fulfillment.deliveredAt`, alongside background fulfillment lifecycle jobs (`SYNC_SHIPPING_TRACKING`, `SEND_FULFILLMENT_EMAIL`) and tracked shipping-update email deliveries
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - typed internal event dispatcher and static integration registry
@@ -141,6 +142,7 @@ Shipped foundation:
 - tracked send flow with `PENDING -> SENT` and `PENDING -> FAILED` persistence
 - order-confirmation email delivery now creates delivery records and stores provider metadata when available
 - private email delivery APIs: `GET /api/email-deliveries`, `GET /api/email-deliveries/[id]`, `POST /api/email-deliveries/[id]/resend`
+- private email delivery listing now supports template filtering (`order_confirmation`, `fulfillment_tracking`) for shipment-email visibility
 - safe resend policy for `FAILED`/`BOUNCED`/`COMPLAINED` order-confirmation deliveries that creates a new tracked send without re-emitting commerce side effects
 - admin email delivery visibility in `/admin/webhooks` with status filters, detail inspection, resend controls, and pagination
 - provider webhook route at `POST /api/webhooks/email-provider` with Svix signature verification and bounced/complained status transitions

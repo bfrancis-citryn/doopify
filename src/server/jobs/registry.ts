@@ -1,11 +1,17 @@
 import { z } from 'zod'
 
-import { processOrderConfirmationEmailDeliveryJob } from '@/server/services/email-delivery.service'
+import { processShippingTrackingSyncJob } from '@/server/shipping/shipping-tracking-jobs.service'
+import {
+  processFulfillmentTrackingEmailDeliveryJob,
+  processOrderConfirmationEmailDeliveryJob,
+} from '@/server/services/email-delivery.service'
 import { ANALYTICS_EVENT_NAMES, recordAnalyticsEvent } from '@/server/services/analytics-event.service'
 import { processOutboundWebhook } from '@/server/services/outbound-webhook.service'
 
 export const JOB_TYPES = [
   'SEND_ORDER_CONFIRMATION_EMAIL',
+  'SEND_FULFILLMENT_EMAIL',
+  'SYNC_SHIPPING_TRACKING',
   'SEND_OUTBOUND_WEBHOOK',
   'RECORD_ANALYTICS_EVENT',
 ] as const
@@ -26,6 +32,17 @@ const sendOutboundWebhookPayloadSchema = z.object({
   deliveryId: z.string().min(1),
 })
 
+const sendFulfillmentEmailPayloadSchema = z.object({
+  deliveryId: z.string().min(1),
+  fulfillmentId: z.string().min(1),
+  orderId: z.string().min(1).optional(),
+})
+
+const syncShippingTrackingPayloadSchema = z.object({
+  fulfillmentId: z.string().min(1),
+  orderId: z.string().min(1).optional(),
+})
+
 const recordAnalyticsEventPayloadSchema = z.object({
   event: z.enum(ANALYTICS_EVENT_NAMES),
   payload: z.unknown(),
@@ -35,6 +52,17 @@ const handlers: Record<JobType, JobHandler> = {
   SEND_ORDER_CONFIRMATION_EMAIL: async (payload) => {
     const parsed = sendOrderConfirmationEmailPayloadSchema.parse(payload)
     await processOrderConfirmationEmailDeliveryJob(parsed)
+  },
+  SEND_FULFILLMENT_EMAIL: async (payload) => {
+    const parsed = sendFulfillmentEmailPayloadSchema.parse(payload)
+    await processFulfillmentTrackingEmailDeliveryJob(parsed)
+  },
+  SYNC_SHIPPING_TRACKING: async (payload, context) => {
+    const parsed = syncShippingTrackingPayloadSchema.parse(payload)
+    await processShippingTrackingSyncJob({
+      ...parsed,
+      jobId: context.jobId,
+    })
   },
   SEND_OUTBOUND_WEBHOOK: async (payload) => {
     const parsed = sendOutboundWebhookPayloadSchema.parse(payload)

@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 import { sendTransactionalEmail } from '@/server/email/provider'
 import { enqueueJob } from '@/server/jobs/job.service'
-import { buildOrderConfirmationEmailMessage } from '@/server/services/email-template.service'
+import {
+  buildFulfillmentTrackingEmailMessage,
+  buildOrderConfirmationEmailMessage,
+} from '@/server/services/email-template.service'
 import { getOrderById } from '@/server/services/order.service'
 
 export const EMAIL_DELIVERY_STATUSES = [
@@ -76,6 +79,12 @@ export type QueueOrderConfirmationEmailInput = {
   orderId: string
   orderNumber: number
   email: string
+  provider?: string
+}
+
+export type QueueFulfillmentTrackingEmailInput = {
+  orderId: string
+  fulfillmentId: string
   provider?: string
 }
 
@@ -347,12 +356,16 @@ export async function sendTrackedEmail(input: SendTrackedEmailInput) {
 
 export async function getEmailDeliveries(input: {
   status?: EmailDeliveryStatus | 'ALL'
+  template?: string | 'ALL'
   page?: number
   pageSize?: number
 }) {
   const page = Math.max(1, input.page ?? 1)
   const pageSize = Math.max(1, Math.min(100, input.pageSize ?? 20))
-  const where = input.status && input.status !== 'ALL' ? { status: input.status } : {}
+  const where = {
+    ...(input.status && input.status !== 'ALL' ? { status: input.status } : {}),
+    ...(input.template && input.template !== 'ALL' ? { template: input.template } : {}),
+  }
 
   const [total, deliveries] = await Promise.all([
     emailDeliveryClient().count({ where }),
@@ -401,6 +414,45 @@ export async function queueOrderConfirmationEmailDelivery(input: QueueOrderConfi
   return {
     delivery,
     job,
+  }
+}
+
+export async function queueFulfillmentTrackingEmailDelivery(input: QueueFulfillmentTrackingEmailInput) {
+  const order = await getOrderById(input.orderId)
+  if (!order || !order.email) {
+    return {
+      delivery: null,
+      job: null,
+      skippedReason: 'MISSING_ORDER_EMAIL' as const,
+    }
+  }
+
+  const delivery = await createEmailDelivery({
+    event: 'fulfillment.created',
+    template: 'fulfillment_tracking',
+    recipientEmail: order.email,
+    subject: `Order #${order.orderNumber} shipping update`,
+    provider: input.provider,
+    orderId: input.orderId,
+  })
+
+  const job = await enqueueJob(
+    'SEND_FULFILLMENT_EMAIL',
+    {
+      deliveryId: delivery.id,
+      orderId: input.orderId,
+      fulfillmentId: input.fulfillmentId,
+    },
+    {
+      runAt: new Date(),
+      maxAttempts: 5,
+    }
+  )
+
+  return {
+    delivery,
+    job,
+    skippedReason: null,
   }
 }
 
@@ -460,6 +512,101 @@ export async function processOrderConfirmationEmailDeliveryJob(input: { delivery
           country: shippingAddress.country,
         }
       : null,
+  })
+
+  try {
+    const result = await sendTransactionalEmail({
+      from: message.from,
+      to: [delivery.recipientEmail],
+      subject: message.subject,
+      html: message.html,
+    })
+
+    await markEmailDeliverySent({
+      deliveryId: delivery.id,
+      provider: result.provider,
+      providerMessageId: result.providerMessageId,
+    })
+  } catch (error) {
+    await markEmailDeliveryFailed({
+      deliveryId: delivery.id,
+      error,
+      retryable: true,
+    })
+    throw error
+  }
+}
+
+export async function processFulfillmentTrackingEmailDeliveryJob(input: {
+  deliveryId: string
+  fulfillmentId: string
+  orderId?: string
+}) {
+  const delivery = await emailDeliveryClient().findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      event: true,
+      template: true,
+      recipientEmail: true,
+      subject: true,
+      status: true,
+      provider: true,
+      orderId: true,
+      customerId: true,
+      refundId: true,
+      returnId: true,
+    },
+  })
+
+  if (!delivery || delivery.status === 'SENT') {
+    return
+  }
+
+  const orderId = input.orderId ?? delivery.orderId
+  if (!orderId) {
+    throw new Error('Fulfillment delivery is missing linked order context')
+  }
+
+  const [order, fulfillment] = await Promise.all([
+    getOrderById(orderId),
+    prisma.fulfillment.findUnique({
+      where: { id: input.fulfillmentId },
+      include: {
+        items: {
+          include: {
+            orderItem: {
+              select: {
+                title: true,
+                variantTitle: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ])
+
+  if (!order) {
+    throw new Error(`Order ${orderId} was not found for delivery ${delivery.id}`)
+  }
+
+  if (!fulfillment || fulfillment.orderId !== order.id) {
+    throw new Error(`Fulfillment ${input.fulfillmentId} is not valid for order ${order.id}`)
+  }
+
+  const message = await buildFulfillmentTrackingEmailMessage({
+    orderNumber: order.orderNumber,
+    email: delivery.recipientEmail,
+    trackingNumber: fulfillment.trackingNumber,
+    trackingUrl: fulfillment.trackingUrl,
+    carrier: fulfillment.carrier,
+    service: fulfillment.service,
+    items: fulfillment.items.map((item) => ({
+      title: item.orderItem?.title || 'Item',
+      variantTitle: item.orderItem?.variantTitle,
+      quantity: item.quantity,
+    })),
   })
 
   try {

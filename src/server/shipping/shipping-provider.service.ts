@@ -9,6 +9,7 @@ import { shippoProviderAdapter } from './providers/shippo'
 import type {
   ShippingProviderConnectionResult,
   ShippingProviderPurchaseLabelRequest,
+  ShippingProviderTrackingStatusRequest,
 } from './providers/types'
 
 const PROVIDER_INTEGRATION_TYPE: Record<ShippingLiveProvider, string> = {
@@ -255,4 +256,20 @@ export async function purchaseShippingProviderLabel(input: {
 }) {
   const adapter = resolveProviderAdapter(input.provider)
   return adapter.purchaseLabel(input.request)
+}
+
+export async function getShippingProviderTrackingStatus(input: {
+  provider: ShippingLiveProvider
+  request: Omit<ShippingProviderTrackingStatusRequest, 'apiKey'>
+}) {
+  const apiKey = await getShippingProviderApiKey(input.provider)
+  if (!apiKey) {
+    throw new Error(`${input.provider} is not connected. Connect provider credentials before polling tracking.`)
+  }
+
+  const adapter = resolveProviderAdapter(input.provider)
+  return adapter.getTrackingStatus({
+    apiKey,
+    ...input.request,
+  })
 }

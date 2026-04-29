@@ -57,6 +57,8 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - manual fulfillment now uses an admin-only API (`POST /api/orders/[orderNumber]/manual-fulfillment`) with order-item ownership checks, over-fulfillment rejection, and paid-order gating
 - shipping label rates and purchases now use admin-only order APIs (`POST /api/orders/[orderNumber]/shipping-rates`, `POST /api/orders/[orderNumber]/shipping-labels`) with provider-rate revalidation against fresh server-fetched rates
 - shipping label purchase persists a separate `ShippingLabel.labelAmountCents` value and must not mutate checkout/order totals or payment status
+- fulfillment lifecycle jobs now run through the shared job system: `SYNC_SHIPPING_TRACKING` for safe tracking-field sync plus provider polling-driven `deliveredAt` updates, and `SEND_FULFILLMENT_EMAIL` for tracked shipping-update delivery attempts
+- shipping provider webhook ingestion now supports `POST /api/webhooks/shipping-provider?provider=EASYPOST|SHIPPO` with signature verification and tracked fulfillment/shipping-label updates
 - inbound Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
 - inbound webhook replay uses verified local payloads instead of refetching from Stripe
 - inbound webhook retry/support diagnostics are available through admin API/UI

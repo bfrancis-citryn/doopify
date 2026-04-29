@@ -579,6 +579,7 @@ export async function createFulfillment(data: {
     fulfillmentId: fulfillment.id,
     orderId: data.orderId,
     trackingNumber: data.trackingNumber,
+    sendTrackingEmail: Boolean(data.trackingNumber || data.trackingUrl),
   })
 
   return fulfillment
@@ -769,6 +770,7 @@ export async function createManualFulfillment(data: {
     fulfillmentId: fulfillment.id,
     orderId: data.orderId,
     trackingNumber: fulfillment.trackingNumber ?? undefined,
+    sendTrackingEmail: Boolean(data.sendTrackingEmail),
   })
 
   return fulfillment

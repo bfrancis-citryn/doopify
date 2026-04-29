@@ -75,6 +75,7 @@ export type DoopifyEvents = {
     fulfillmentId: string
     orderId: string
     trackingNumber?: string | null
+    sendTrackingEmail?: boolean
   }
   'order.refunded': {
     orderId: string

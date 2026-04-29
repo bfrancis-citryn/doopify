@@ -8,6 +8,11 @@ import styles from './WebhookDeliveriesWorkspace.module.css';
 const INBOUND_STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
 const OUTBOUND_STATUS_OPTIONS = ['ALL', 'PENDING', 'SUCCESS', 'FAILED', 'RETRYING', 'EXHAUSTED'];
 const EMAIL_STATUS_OPTIONS = ['ALL', 'PENDING', 'SENT', 'FAILED', 'BOUNCED', 'COMPLAINED', 'RETRYING', 'RESEND_REQUESTED'];
+const EMAIL_TEMPLATE_OPTIONS = [
+  { value: 'ALL', label: 'All templates' },
+  { value: 'order_confirmation', label: 'Order confirmation' },
+  { value: 'fulfillment_tracking', label: 'Fulfillment tracking' },
+];
 const EMAIL_RESEND_ELIGIBLE_STATUSES = ['FAILED', 'BOUNCED', 'COMPLAINED'];
 
 function formatTimestamp(value, fallback = 'Not scheduled') {
@@ -75,6 +80,7 @@ export default function WebhookDeliveriesWorkspace() {
   const [status, setStatus] = useState('ALL');
   const [outboundStatus, setOutboundStatus] = useState('ALL');
   const [emailStatus, setEmailStatus] = useState('ALL');
+  const [emailTemplate, setEmailTemplate] = useState('ALL');
 
   const loadDeliveries = useCallback(async (nextPage = 1) => {
     setLoading(true);
@@ -154,6 +160,9 @@ export default function WebhookDeliveriesWorkspace() {
       if (emailStatus !== 'ALL') {
         params.set('status', emailStatus);
       }
+      if (emailTemplate !== 'ALL') {
+        params.set('template', emailTemplate);
+      }
 
       const response = await fetch(`/api/email-deliveries?${params.toString()}`, {
         cache: 'no-store',
@@ -175,7 +184,7 @@ export default function WebhookDeliveriesWorkspace() {
     } finally {
       setEmailLoading(false);
     }
-  }, [emailPagination.pageSize, emailStatus]);
+  }, [emailPagination.pageSize, emailStatus, emailTemplate]);
 
   useEffect(() => {
     if (mode === 'inbound') {
@@ -225,6 +234,20 @@ export default function WebhookDeliveriesWorkspace() {
 
   const emailSentCount = useMemo(
     () => emailDeliveries.filter((delivery) => delivery.status === 'SENT').length,
+    [emailDeliveries]
+  );
+  const fulfillmentQueuedCount = useMemo(
+    () =>
+      emailDeliveries.filter(
+        (delivery) => delivery.template === 'fulfillment_tracking' && ['PENDING', 'RETRYING'].includes(delivery.status)
+      ).length,
+    [emailDeliveries]
+  );
+  const fulfillmentSentCount = useMemo(
+    () =>
+      emailDeliveries.filter(
+        (delivery) => delivery.template === 'fulfillment_tracking' && delivery.status === 'SENT'
+      ).length,
     [emailDeliveries]
   );
 
@@ -426,6 +449,8 @@ export default function WebhookDeliveriesWorkspace() {
                   <span>{emailPagination.total} emails</span>
                   <span>{emailSentCount} sent</span>
                   <span>{emailRetryWatchCount} attention needed</span>
+                  <span>{fulfillmentQueuedCount} fulfillment queued</span>
+                  <span>{fulfillmentSentCount} fulfillment sent</span>
                 </>
               )}
             </div>
@@ -469,16 +494,28 @@ export default function WebhookDeliveriesWorkspace() {
                 </select>
               </label>
             ) : (
-              <label className={styles.control}>
-                <span>Status</span>
-                <select value={emailStatus} onChange={(event) => setEmailStatus(event.target.value)}>
-                  {EMAIL_STATUS_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'ALL' ? 'All statuses' : option}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <>
+                <label className={styles.control}>
+                  <span>Status</span>
+                  <select value={emailStatus} onChange={(event) => setEmailStatus(event.target.value)}>
+                    {EMAIL_STATUS_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option === 'ALL' ? 'All statuses' : option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.control}>
+                  <span>Template</span>
+                  <select value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)}>
+                    {EMAIL_TEMPLATE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
             <button
               className={styles.refreshButton}

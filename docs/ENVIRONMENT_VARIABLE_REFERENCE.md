@@ -29,6 +29,13 @@
 | `RESEND_API_KEY` | Optional (required for live sends) | Enables live transactional email sends. |
 | `RESEND_WEBHOOK_SECRET` | Required when email provider webhooks enabled | Svix signing secret for `/api/webhooks/email-provider`. |
 
+## Shipping Provider Webhooks
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `EASYPOST_WEBHOOK_SECRET` | Required when EasyPost webhook ingestion enabled | Signature verification secret for `/api/webhooks/shipping-provider?provider=EASYPOST`. |
+| `SHIPPO_WEBHOOK_SECRET` | Required when Shippo webhook ingestion enabled | Signature verification secret for `/api/webhooks/shipping-provider?provider=SHIPPO`. |
+
 ## Setup / Bootstrap Helpers
 
 | Variable | Required | Purpose |

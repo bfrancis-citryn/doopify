@@ -30,11 +30,14 @@ describe('GET /api/email-deliveries', () => {
       pagination: { page: 2, pageSize: 5, total: 1, totalPages: 1 },
     })
 
-    const response = await GET(new Request('http://localhost/api/email-deliveries?status=FAILED&page=2&pageSize=5'))
+    const response = await GET(
+      new Request('http://localhost/api/email-deliveries?status=FAILED&template=fulfillment_tracking&page=2&pageSize=5')
+    )
 
     expect(response.status).toBe(200)
     expect(mocks.getEmailDeliveries).toHaveBeenCalledWith({
       status: 'FAILED',
+      template: 'fulfillment_tracking',
       page: 2,
       pageSize: 5,
     })
@@ -46,6 +49,15 @@ describe('GET /api/email-deliveries', () => {
     expect(await response.json()).toEqual({
       success: false,
       error: 'Invalid email delivery status',
+    })
+  })
+
+  it('returns 400 for invalid template', async () => {
+    const response = await GET(new Request('http://localhost/api/email-deliveries?template=INVALID'))
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Invalid email delivery template',
     })
   })
 })

@@ -13,18 +13,25 @@ const mocks = vi.hoisted(() => ({
     order: {
       findUnique: vi.fn(),
     },
+    fulfillment: {
+      findUnique: vi.fn(),
+    },
   },
+  enqueueJob: vi.fn(),
   sendTransactionalEmail: vi.fn(),
   getOrderById: vi.fn(),
   buildOrderConfirmationEmailMessage: vi.fn(),
+  buildFulfillmentTrackingEmailMessage: vi.fn(),
   emitInternalEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
 vi.mock('@/server/email/provider', () => ({ sendTransactionalEmail: mocks.sendTransactionalEmail }))
+vi.mock('@/server/jobs/job.service', () => ({ enqueueJob: mocks.enqueueJob }))
 vi.mock('@/server/services/order.service', () => ({ getOrderById: mocks.getOrderById }))
 vi.mock('@/server/services/email-template.service', () => ({
   buildOrderConfirmationEmailMessage: mocks.buildOrderConfirmationEmailMessage,
+  buildFulfillmentTrackingEmailMessage: mocks.buildFulfillmentTrackingEmailMessage,
 }))
 vi.mock('@/server/events/dispatcher', () => ({
   emitInternalEvent: mocks.emitInternalEvent,
@@ -38,6 +45,8 @@ import {
   markEmailDeliveryFailed,
   markEmailDeliverySent,
   parseEmailProviderWebhookPayload,
+  processFulfillmentTrackingEmailDeliveryJob,
+  queueFulfillmentTrackingEmailDelivery,
   resendEmailDelivery,
   sendTrackedEmail,
 } from './email-delivery.service'
@@ -53,11 +62,18 @@ describe('email delivery service', () => {
     mocks.prisma.emailDelivery.findMany.mockResolvedValue([{ id: 'email-1', status: 'SENT' }])
     mocks.prisma.emailDelivery.findUnique.mockResolvedValue(null)
     mocks.prisma.order.findUnique.mockResolvedValue(null)
+    mocks.prisma.fulfillment.findUnique.mockResolvedValue(null)
+    mocks.enqueueJob.mockResolvedValue({ id: 'job-1', type: 'SEND_FULFILLMENT_EMAIL' })
     mocks.getOrderById.mockResolvedValue(null)
     mocks.buildOrderConfirmationEmailMessage.mockResolvedValue({
       from: 'orders@example.com',
       subject: 'Store order #1001 confirmation',
       html: '<p>Order confirmation</p>',
+    })
+    mocks.buildFulfillmentTrackingEmailMessage.mockResolvedValue({
+      from: 'orders@example.com',
+      subject: 'Store shipping update',
+      html: '<p>Shipping update</p>',
     })
   })
 
@@ -165,6 +181,110 @@ describe('email delivery service', () => {
       take: 10,
     }))
     expect(result.pagination).toEqual({ page: 2, pageSize: 10, total: 1, totalPages: 1 })
+  })
+
+  it('queues fulfillment tracking email delivery when order email exists', async () => {
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      items: [],
+      addresses: [],
+    })
+    mocks.prisma.emailDelivery.create.mockResolvedValue({ id: 'email-fulfillment-1', status: 'PENDING' })
+    mocks.enqueueJob.mockResolvedValue({ id: 'job-fulfillment-1', type: 'SEND_FULFILLMENT_EMAIL' })
+
+    const result = await queueFulfillmentTrackingEmailDelivery({
+      orderId: 'order-1',
+      fulfillmentId: 'ful-1',
+    })
+
+    expect(result).toEqual({
+      delivery: { id: 'email-fulfillment-1', status: 'PENDING' },
+      job: { id: 'job-fulfillment-1', type: 'SEND_FULFILLMENT_EMAIL' },
+      skippedReason: null,
+    })
+    expect(mocks.enqueueJob).toHaveBeenCalledWith(
+      'SEND_FULFILLMENT_EMAIL',
+      expect.objectContaining({
+        deliveryId: 'email-fulfillment-1',
+        orderId: 'order-1',
+        fulfillmentId: 'ful-1',
+      }),
+      expect.objectContaining({ maxAttempts: 5 })
+    )
+  })
+
+  it('processes fulfillment tracking email job with tracked delivery semantics', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-fulfillment-1',
+      event: 'fulfillment.created',
+      template: 'fulfillment_tracking',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order #1001 shipping update',
+      status: 'PENDING',
+      provider: 'resend',
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      items: [],
+      addresses: [],
+    })
+    mocks.prisma.fulfillment.findUnique.mockResolvedValue({
+      id: 'ful-1',
+      orderId: 'order-1',
+      carrier: 'UPS',
+      service: 'Ground',
+      trackingNumber: 'TRACK123',
+      trackingUrl: 'https://tracking.example.com/TRACK123',
+      items: [
+        {
+          quantity: 1,
+          orderItem: {
+            title: 'Tee',
+            variantTitle: 'Blue',
+          },
+        },
+      ],
+    })
+    mocks.sendTransactionalEmail.mockResolvedValue({ provider: 'resend', providerMessageId: 'resend-fulfillment-1' })
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-fulfillment-1', status: 'SENT' })
+
+    await processFulfillmentTrackingEmailDeliveryJob({
+      deliveryId: 'email-fulfillment-1',
+      fulfillmentId: 'ful-1',
+      orderId: 'order-1',
+    })
+
+    expect(mocks.buildFulfillmentTrackingEmailMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNumber: 1001,
+        trackingNumber: 'TRACK123',
+      })
+    )
+    expect(mocks.sendTransactionalEmail).toHaveBeenCalledWith({
+      from: 'orders@example.com',
+      to: ['customer@example.com'],
+      subject: 'Store shipping update',
+      html: '<p>Shipping update</p>',
+    })
+    expect(mocks.prisma.emailDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'email-fulfillment-1' },
+        data: expect.objectContaining({
+          status: 'SENT',
+          providerMessageId: 'resend-fulfillment-1',
+        }),
+      })
+    )
   })
 
   it('returns delivery diagnostics with resend policy', async () => {

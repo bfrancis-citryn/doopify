@@ -536,6 +536,7 @@ export async function buyOrderShippingLabel(input: {
     fulfillmentId: saved.fulfillment.id,
     orderId: rates.order.id,
     trackingNumber: saved.fulfillment.trackingNumber ?? undefined,
+    sendTrackingEmail: true,
   })
 
   return {

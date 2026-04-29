@@ -19,6 +19,18 @@ function normalizeMoneyToCents(value: unknown) {
   return Math.round(parsed * 100)
 }
 
+function normalizeLifecycleStatus(value: unknown) {
+  const status = String(value ?? '')
+    .trim()
+    .toUpperCase()
+  if (!status) return 'UNKNOWN' as const
+  if (status.includes('DELIVER')) return 'DELIVERED' as const
+  if (status.includes('TRANSIT')) return 'IN_TRANSIT' as const
+  if (status.includes('PRE_TRANSIT') || status.includes('LABEL')) return 'PRE_TRANSIT' as const
+  if (status.includes('FAIL') || status.includes('RETURN') || status.includes('EXCEPTION')) return 'FAILURE' as const
+  return 'UNKNOWN' as const
+}
+
 export const easypostProviderAdapter: ShippingProviderAdapter = {
   async testConnection(input) {
     try {
@@ -216,6 +228,85 @@ export const easypostProviderAdapter: ShippingProviderAdapter = {
       labelAmountCents: normalizeMoneyToCents(selectedRate?.rate) ?? undefined,
       rateAmountCents: normalizeMoneyToCents(selectedRate?.rate) ?? undefined,
       currency: String(selectedRate?.currency ?? input.request.currency ?? 'USD').toUpperCase(),
+      rawResponse: payload ?? undefined,
+    }
+  },
+  async getTrackingStatus(input) {
+    const headers = {
+      Authorization: `Basic ${buildBasicAuthToken(input.apiKey)}`,
+      Accept: 'application/json',
+    }
+
+    const shipmentId = input.providerShipmentId?.trim()
+    let response: Response
+
+    if (shipmentId) {
+      response = await fetch(`${EASYPOST_API_BASE}/shipments/${encodeURIComponent(shipmentId)}`, {
+        method: 'GET',
+        headers,
+      })
+    } else if (input.providerLabelId?.trim()) {
+      response = await fetch(`${EASYPOST_API_BASE}/trackers/${encodeURIComponent(input.providerLabelId.trim())}`, {
+        method: 'GET',
+        headers,
+      })
+    } else if (input.trackingNumber?.trim()) {
+      response = await fetch(`${EASYPOST_API_BASE}/trackers/${encodeURIComponent(input.trackingNumber.trim())}`, {
+        method: 'GET',
+        headers,
+      })
+    } else {
+      throw new Error('EasyPost tracking lookup requires shipment id, label id, or tracking number')
+    }
+
+    const bodyText = await response.text()
+    if (!response.ok) {
+      throw new Error(
+        `EasyPost tracking status request failed (${response.status}): ${truncate(bodyText || 'Request failed')}`
+      )
+    }
+
+    let payload: Record<string, unknown> | null = null
+    try {
+      payload = JSON.parse(bodyText) as Record<string, unknown>
+    } catch {
+      payload = null
+    }
+
+    const tracker = (payload?.tracker as Record<string, unknown> | undefined) ?? payload
+    const providerStatus =
+      typeof tracker?.status === 'string'
+        ? tracker.status
+        : typeof payload?.status === 'string'
+          ? payload.status
+          : 'unknown'
+    const trackingNumber =
+      typeof tracker?.tracking_code === 'string'
+        ? tracker.tracking_code
+        : typeof payload?.tracking_code === 'string'
+          ? payload.tracking_code
+          : input.trackingNumber
+    const trackingUrl =
+      typeof tracker?.public_url === 'string'
+        ? tracker.public_url
+        : typeof payload?.tracking_url === 'string'
+          ? payload.tracking_url
+          : undefined
+    const deliveredAt =
+      typeof tracker?.signed_by === 'string' || normalizeLifecycleStatus(providerStatus) === 'DELIVERED'
+        ? typeof tracker?.updated_at === 'string'
+          ? tracker.updated_at
+          : typeof payload?.updated_at === 'string'
+            ? payload.updated_at
+            : undefined
+        : undefined
+
+    return {
+      providerStatus,
+      lifecycleStatus: normalizeLifecycleStatus(providerStatus),
+      deliveredAt,
+      trackingNumber,
+      trackingUrl,
       rawResponse: payload ?? undefined,
     }
   },

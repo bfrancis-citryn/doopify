@@ -18,8 +18,12 @@ const mocks = vi.hoisted(() => ({
   decrypt: vi.fn((value: string) => value.replace(/^enc:/, '')),
   easypostTestConnection: vi.fn(),
   easypostGetRates: vi.fn(),
+  easypostPurchaseLabel: vi.fn(),
+  easypostGetTrackingStatus: vi.fn(),
   shippoTestConnection: vi.fn(),
   shippoGetRates: vi.fn(),
+  shippoPurchaseLabel: vi.fn(),
+  shippoGetTrackingStatus: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
@@ -31,12 +35,16 @@ vi.mock('./providers/easypost', () => ({
   easypostProviderAdapter: {
     testConnection: mocks.easypostTestConnection,
     getRates: mocks.easypostGetRates,
+    purchaseLabel: mocks.easypostPurchaseLabel,
+    getTrackingStatus: mocks.easypostGetTrackingStatus,
   },
 }))
 vi.mock('./providers/shippo', () => ({
   shippoProviderAdapter: {
     testConnection: mocks.shippoTestConnection,
     getRates: mocks.shippoGetRates,
+    purchaseLabel: mocks.shippoPurchaseLabel,
+    getTrackingStatus: mocks.shippoGetTrackingStatus,
   },
 }))
 
