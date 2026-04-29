@@ -1,4 +1,6 @@
 import type { AnyInternalEventHandler, DoopifyEvents, InternalEventHandler } from '@/server/events/types'
+import type { AnalyticsEventName } from '@/server/services/analytics-event.service'
+import { recordAnalyticsEvent } from '@/server/services/analytics-event.service'
 import { sendOrderConfirmationEmail } from '@/server/services/email.service'
 
 function logEvent(name: string, payload: unknown) {
@@ -7,6 +9,15 @@ function logEvent(name: string, payload: unknown) {
 
 function defineHandler<K extends keyof DoopifyEvents>(handler: InternalEventHandler<K>) {
   return handler
+}
+
+function defineAnalyticsHandler<K extends AnalyticsEventName>(event: K): InternalEventHandler<K> {
+  return defineHandler({
+    event,
+    handle: async (payload: DoopifyEvents[K]) => {
+      await recordAnalyticsEvent(event, payload)
+    },
+  })
 }
 
 export const integrationRegistry = [
@@ -59,4 +70,15 @@ export const integrationRegistry = [
       logEvent('checkout.failed', payload)
     },
   }),
+  defineAnalyticsHandler('checkout.created'),
+  defineAnalyticsHandler('checkout.failed'),
+  defineAnalyticsHandler('order.created'),
+  defineAnalyticsHandler('order.paid'),
+  defineAnalyticsHandler('refund.issued'),
+  defineAnalyticsHandler('return.requested'),
+  defineAnalyticsHandler('return.closed'),
+  defineAnalyticsHandler('email.sent'),
+  defineAnalyticsHandler('email.failed'),
+  defineAnalyticsHandler('webhook.delivered'),
+  defineAnalyticsHandler('webhook.failed'),
 ] satisfies AnyInternalEventHandler[]

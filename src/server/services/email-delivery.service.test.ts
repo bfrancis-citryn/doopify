@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   sendTransactionalEmail: vi.fn(),
   getOrderById: vi.fn(),
   buildOrderConfirmationEmailMessage: vi.fn(),
+  emitInternalEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
@@ -24,6 +25,9 @@ vi.mock('@/server/email/provider', () => ({ sendTransactionalEmail: mocks.sendTr
 vi.mock('@/server/services/order.service', () => ({ getOrderById: mocks.getOrderById }))
 vi.mock('@/server/services/email-template.service', () => ({
   buildOrderConfirmationEmailMessage: mocks.buildOrderConfirmationEmailMessage,
+}))
+vi.mock('@/server/events/dispatcher', () => ({
+  emitInternalEvent: mocks.emitInternalEvent,
 }))
 
 import {

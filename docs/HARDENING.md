@@ -2,8 +2,8 @@
 
 > Security, correctness, and operational readiness for the commerce loop.
 >
-> Documentation refresh: April 28, 2026
-> Last repo verification recorded in active docs: April 28, 2026
+> Documentation refresh: April 29, 2026
+> Last repo verification recorded in active docs: April 29, 2026
 > Companion to `STATUS.md` and `features-roadmap.md`.
 
 ## Why Hardening Matters
@@ -106,6 +106,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - event handlers execute through a static registry instead of a runtime filesystem loader
 - order confirmation email is driven from the `order.paid` event
 - outbound merchant webhooks are built on the same typed event dispatcher instead of a plugin marketplace abstraction
+- analytics lifecycle fan-out now runs through the same typed dispatcher with durable `AnalyticsEvent` persistence
 
 ## Verified
 
@@ -128,11 +129,26 @@ npm run build
 
 `npm run test:integration` should be run with a disposable Postgres database/schema before making release claims about real-DB behavior.
 
+## Production Readiness Foundation
+
+- push and pull request CI verification is now codified in `.github/workflows/ci.yml`
+- optional integration workflow exists in `.github/workflows/integration.yml` and runs when `DATABASE_URL_TEST` secret is configured
+- production runbook docs now cover:
+  - deployment checklist
+  - environment variable reference
+  - webhook/provider configuration
+  - Neon setup
+  - Stripe setup
+  - Resend setup
+  - backup/restore
+  - admin account recovery
+
 ## Remaining Hardening Work
 
 ### High Priority
 
 - Run the full local verification gate after the latest correctness patches
+- keep production runbooks synchronized with actual behavior as setup/deploy flows evolve
 - Keep transactional email observability decoupled from order/payment/inventory/refund/return durability as provider/event coverage expands
 - Expand real-DB lifecycle coverage for new consumers and race/idempotency paths as Phase 4 evolves
 - Keep the centralized pricing authority on the server as lifecycle flows evolve
@@ -219,7 +235,7 @@ The first setup hardening milestone is complete when:
 - `doopify doctor` can run read-only setup diagnostics locally
 - setup status is available through a safe server service and `/api/setup/status`
 - Settings -> Setup shows setup health and next actions without running shell commands from the browser
-- `doopify setup` can later write env files, run Prisma setup, and bootstrap owner/store from a local trusted environment
+- `doopify setup` can write env files, run Prisma setup, and bootstrap owner/store from a local trusted environment
 - secrets are redacted from logs and never exposed through setup-status APIs
 - broad Vercel, Neon, Stripe, or email-provider account tokens are not stored long term inside the app unless a scoped token lifecycle exists
 
@@ -339,6 +355,6 @@ The next hardening milestone is complete when:
 
 - transactional email delivery records, status transitions, bounce/complaint handling, and safe resend tooling remain stable as coverage expands
 - email failure/resend, outbound retry/idempotency, and integration secret-preservation behavior remain green in real-DB runs
-- analytics fan-out behavior is covered with side-effect safety checks once that consumer ships
+- analytics fan-out behavior remains covered with side-effect safety checks as lifecycle flows expand
 - setup diagnostics are implemented in a way that redacts secrets and reuses checks between CLI and admin Setup tab
 - operational logging is good enough to debug a missing email, duplicate delivery, stuck retry, exhausted outbound webhook, or broken setup without inspecting the database manually

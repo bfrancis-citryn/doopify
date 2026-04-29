@@ -6,8 +6,8 @@
 
 ## Current Status
 
-Documentation refresh: April 28, 2026
-Last repo verification recorded in active docs: April 28, 2026
+Documentation refresh: April 29, 2026
+Last repo verification recorded in active docs: April 29, 2026
 
 Doopify is no longer a prototype or only a UI shell. It has a working admin, storefront, checkout entry point, Stripe webhook path, Prisma/Postgres-backed commerce data, refunds/returns, inbound and outbound webhook observability, and typed internal event seams.
 
@@ -39,30 +39,28 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Public storefront settings endpoint for branding-safe store data
 - Typed internal event dispatcher
 - Static server-side integration registry
-- First-party event consumers for logging and order confirmation email delivery
+- First-party event consumers for logging, order confirmation email delivery, and durable lifecycle analytics fan-out
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated integration specs for checkout inventory, payment idempotency, discount usage, webhook retry, and refund/return behavior
 
 ### Active phase
 
 The current active product phase is **Phase 4: Merchant Lifecycle And Outbound Integrations**.
 
-Phase 3 is fully complete. Phase 4 refund/return and outbound webhook foundations are shipped. The next planned slice is transactional email observability.
+Phase 3 is fully complete. Phase 4 refund/return, outbound webhook, transactional email observability, and analytics fan-out foundations are shipped.
 
 Current priorities:
 
-1. Finish Phase 4 correctness hardening around refunds, returns, integration secrets, and outbound webhook retry/idempotency
-2. Transactional email observability and safe resend tooling
-3. Bounce/complaint handling for the selected email provider
-4. Analytics event fan-out through the existing dispatcher
-5. Setup Wizard and CLI foundation: `doopify doctor`, Setup status API, Settings -> Setup tab, then `doopify setup`
-6. Broader real-DB coverage for outbound webhook and email retry/idempotency behavior
-7. Continued audit-log expansion for lifecycle operations
+1. Finish Phase 4 correctness hardening around integration secrets and outbound webhook retry/idempotency
+2. Setup Wizard and CLI hardening: extend shipped deployment automation commands with non-interactive/dry-run and deeper provider provisioning
+3. Production hardening and launch readiness: CI enforcement, deployment runbooks, recovery runbooks
+4. Broader real-DB coverage for outbound webhook, analytics, and email retry/idempotency behavior
+5. Continued audit-log expansion for lifecycle operations
 
 ### Known follow-up gaps
 
 - Transactional email observability and resend tooling
-- Setup Wizard and CLI implementation
-- Analytics event fan-out
+- Setup Wizard and CLI non-interactive/provider-provisioning hardening
+- Production automation hardening for one-command provider provisioning
 - Broader real-DB coverage for outbound webhook retry/idempotency
 - Integration secret encryption verification tests
 - Moving media binary storage out of Postgres into object storage/CDN later
@@ -79,7 +77,8 @@ Start here when returning to the repo:
 6. [`AGENTS.md`](./AGENTS.md) - instructions for AI coding agents and future maintainers
 7. [`docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`](./docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md) - next Phase 4 email observability implementation plan
 8. [`docs/SETUP_AND_CLI_PLAN.md`](./docs/SETUP_AND_CLI_PLAN.md) - planned Setup Wizard and CLI deployment automation sequence
-9. [`docs/LAUNCH_ROLLOUT.md`](./docs/LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
+9. [`docs/PRODUCTION_RUNBOOK.md`](./docs/PRODUCTION_RUNBOOK.md) - production setup, deployment, and recovery runbooks
+10. [`docs/LAUNCH_ROLLOUT.md`](./docs/LAUNCH_ROLLOUT.md) - launch positioning and claim discipline
 
 Historical planning files live in `docs/archive/`. Do not use archived docs as current repo status.
 

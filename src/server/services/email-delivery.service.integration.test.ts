@@ -14,6 +14,7 @@ const runIntegration =
 const originalResendApiKey = process.env.RESEND_API_KEY
 
 async function cleanTestData() {
+  await prisma.analyticsEvent.deleteMany()
   await prisma.emailDelivery.deleteMany()
   await prisma.discountApplication.deleteMany()
   await prisma.discount.deleteMany()

@@ -139,7 +139,7 @@ No hidden hosted control plane is required for the core app.
 
 ## Launch Readiness Checklist
 
-Before making larger public claims. Honest state as of April 28, 2026:
+Before making larger public claims. Honest state as of April 29, 2026:
 
 - [x] Collections are demoable end-to-end
 - [x] Checkout test path is reliable
@@ -150,6 +150,10 @@ Before making larger public claims. Honest state as of April 28, 2026:
 - [x] `README.md` accurately matches current behavior (updated April 28, 2026)
 - [x] `STATUS.md`, `features-roadmap.md`, and `HARDENING.md` are up to date
 - [x] Known gaps are called out honestly in `README.md > Known follow-up gaps`
+- [x] GitHub Actions CI runs verification on push and pull request
+- [x] Production deployment checklist exists and is repeatable
+- [x] Environment variable reference and provider setup guides exist
+- [x] Backup/restore and admin recovery runbooks exist
 - [ ] Shared rate-limit store in place before multi-instance deployment
 - [ ] Audit logging for settings changes, payment events, and fulfillment operations
 - [ ] Production Postgres SSL normalized to `sslmode=verify-full`

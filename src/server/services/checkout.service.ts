@@ -294,6 +294,14 @@ export async function createCheckoutPaymentIntent(input: {
     },
   })
 
+  await emitInternalEvent('checkout.created', {
+    checkoutSessionId: checkoutSession.id,
+    paymentIntentId: paymentIntent.id,
+    email: normalizedEmail,
+    total: pricing.total,
+    currency,
+  })
+
   return {
     checkoutSessionId: checkoutSession.id,
     paymentIntentId: paymentIntent.id,

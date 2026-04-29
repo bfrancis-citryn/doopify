@@ -97,6 +97,12 @@ export async function createReturn(input: CreateReturnInput) {
     returnId: returnRecord.id,
   })
 
+  await emitInternalEvent('return.requested', {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    returnId: returnRecord.id,
+  })
+
   return returnRecord
 }
 
@@ -161,6 +167,14 @@ export async function updateReturnStatus(
     returnId,
     status: data.status,
   })
+
+  if (data.status === 'CLOSED') {
+    await emitInternalEvent('return.closed', {
+      orderId: existing.orderId,
+      orderNumber: existing.order.orderNumber,
+      returnId,
+    })
+  }
 
   return updated
 }

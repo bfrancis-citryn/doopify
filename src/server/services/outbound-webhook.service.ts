@@ -38,6 +38,16 @@ function uniqueEvents(events: string[] | undefined) {
   return [...new Set((events ?? []).map((event) => event.trim()).filter(Boolean))]
 }
 
+async function emitWebhookAnalyticsEvent(
+  event: 'webhook.delivered' | 'webhook.failed',
+  payload:
+    | DoopifyEvents['webhook.delivered']
+    | DoopifyEvents['webhook.failed']
+) {
+  const { emitInternalEvent } = await import('@/server/events/dispatcher')
+  await emitInternalEvent(event, payload)
+}
+
 export async function queueOutboundWebhooks<K extends DoopifyEventName>(
   event: K,
   payload: DoopifyEvents[K]
@@ -178,7 +188,7 @@ export async function processOutboundWebhook(deliveryId: string) {
     status = newAttempts >= MAX_ATTEMPTS ? 'EXHAUSTED' : 'RETRYING'
   }
 
-  return prisma.outboundWebhookDelivery.update({
+  const updated = await prisma.outboundWebhookDelivery.update({
     where: { id: deliveryId },
     data: {
       status,
@@ -191,6 +201,32 @@ export async function processOutboundWebhook(deliveryId: string) {
       nextRetryAt: status === 'RETRYING' ? calculateNextRetry(newAttempts, attemptedAt) : null,
     },
   })
+
+  if (updated.status === 'SUCCESS') {
+    await emitWebhookAnalyticsEvent('webhook.delivered', {
+      direction: 'outbound',
+      provider: 'merchant_webhook',
+      deliveryId: updated.id,
+      integrationId: updated.integrationId,
+      event: updated.event,
+      statusCode: updated.statusCode,
+      attempts: updated.attempts,
+    })
+  } else if (updated.status === 'RETRYING' || updated.status === 'EXHAUSTED') {
+    await emitWebhookAnalyticsEvent('webhook.failed', {
+      direction: 'outbound',
+      provider: 'merchant_webhook',
+      deliveryId: updated.id,
+      integrationId: updated.integrationId,
+      event: updated.event,
+      statusCode: updated.statusCode,
+      attempts: updated.attempts,
+      error: updated.lastError ?? 'Outbound webhook delivery failed',
+      retryable: updated.status === 'RETRYING',
+    })
+  }
+
+  return updated
 }
 
 export async function processDueOutboundDeliveries(limit = 50) {

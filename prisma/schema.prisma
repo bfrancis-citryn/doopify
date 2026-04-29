@@ -737,6 +737,25 @@ model EmailDelivery {
   @@map("email_deliveries")
 }
 
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  event      String
+  payload    Json
+  occurredAt DateTime @default(now())
+  orderId    String?
+  refundId   String?
+  returnId   String?
+  deliveryId String?
+  createdAt  DateTime @default(now())
+
+  @@index([event, occurredAt])
+  @@index([orderId])
+  @@index([refundId])
+  @@index([returnId])
+  @@index([deliveryId])
+  @@map("analytics_events")
+}
+
 model Integration {
   id            String             @id @default(cuid())
   name          String

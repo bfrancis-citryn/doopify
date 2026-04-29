@@ -291,6 +291,14 @@ export async function issueRefund(input: IssueRefundInput) {
     currency: order.currency,
   })
 
+  await emitInternalEvent('refund.issued', {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    refundId: refund.id,
+    amount: refund.amount,
+    currency: order.currency,
+  })
+
   return refund
 }
 

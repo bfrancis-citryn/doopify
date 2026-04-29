@@ -1,6 +1,7 @@
 import type { EmailDeliveryStatus as PrismaEmailDeliveryStatus, Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import { emitInternalEvent } from '@/server/events/dispatcher'
 import { sendTransactionalEmail } from '@/server/email/provider'
 import { buildOrderConfirmationEmailMessage } from '@/server/services/email-template.service'
 import { getOrderById } from '@/server/services/order.service'
@@ -176,7 +177,7 @@ export async function markEmailDeliverySent(input: {
   provider: string
   providerMessageId?: string
 }) {
-  return emailDeliveryClient().update({
+  const delivery = await emailDeliveryClient().update({
     where: { id: input.deliveryId },
     data: {
       status: 'SENT',
@@ -187,6 +188,21 @@ export async function markEmailDeliverySent(input: {
       attempts: { increment: 1 },
     },
   })
+
+  await emitInternalEvent('email.sent', {
+    deliveryId: delivery.id,
+    event: delivery.event,
+    template: delivery.template,
+    recipientEmail: delivery.recipientEmail,
+    provider: delivery.provider,
+    providerMessageId: delivery.providerMessageId,
+    orderId: delivery.orderId,
+    customerId: delivery.customerId,
+    refundId: delivery.refundId,
+    returnId: delivery.returnId,
+  })
+
+  return delivery
 }
 
 export async function markEmailDeliveryFailed(input: {
@@ -194,7 +210,7 @@ export async function markEmailDeliveryFailed(input: {
   error: unknown
   retryable?: boolean
 }) {
-  return emailDeliveryClient().update({
+  const delivery = await emailDeliveryClient().update({
     where: { id: input.deliveryId },
     data: {
       status: input.retryable ? 'RETRYING' : 'FAILED',
@@ -203,6 +219,22 @@ export async function markEmailDeliveryFailed(input: {
       nextRetryAt: input.retryable ? new Date(Date.now() + 1000 * 60 * 5) : null,
     },
   })
+
+  await emitInternalEvent('email.failed', {
+    deliveryId: delivery.id,
+    event: delivery.event,
+    template: delivery.template,
+    recipientEmail: delivery.recipientEmail,
+    provider: delivery.provider,
+    error: delivery.lastError ?? 'Email delivery failed',
+    status: delivery.status === 'RETRYING' ? 'RETRYING' : 'FAILED',
+    orderId: delivery.orderId,
+    customerId: delivery.customerId,
+    refundId: delivery.refundId,
+    returnId: delivery.returnId,
+  })
+
+  return delivery
 }
 
 export function parseEmailProviderWebhookPayload(payload: string): EmailProviderWebhookEvent | null {

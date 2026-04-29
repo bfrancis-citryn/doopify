@@ -130,6 +130,13 @@ describe('checkout service', () => {
         total: 59.99,
       }),
     })
+    expect(mocks.emitInternalEvent).toHaveBeenCalledWith('checkout.created', {
+      checkoutSessionId: 'checkout_1',
+      paymentIntentId: 'pi_test',
+      email: 'ada@example.com',
+      total: 59.99,
+      currency: 'USD',
+    })
     expect(checkout).toMatchObject({
       checkoutSessionId: 'checkout_1',
       paymentIntentId: 'pi_test',

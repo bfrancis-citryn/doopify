@@ -2,8 +2,8 @@
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Documentation refresh: April 28, 2026
-> Last repo verification recorded in active docs: April 28, 2026
+> Documentation refresh: April 29, 2026
+> Last repo verification recorded in active docs: April 29, 2026
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -44,6 +44,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Durable inbound Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, retry metadata, local-payload replay, diagnostics, cron-compatible retry tooling, and admin visibility
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
+- Durable server-side analytics event fan-out and `AnalyticsEvent` persistence for checkout/order/refund/return/email/webhook lifecycle events
 - Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
 - Public storefront settings endpoint for branding-safe store data
 - Collection service layer and storefront-safe collection DTOs
@@ -150,7 +151,6 @@ Status: shipped initial implementation, expanded in Phase 4
 ### Next Expansion
 
 - transactional email delivery observability
-- analytics event fan-out
 - additional audit log consumers around integration/lifecycle operations
 
 ## Phase 3 - Merchant Readiness And Storefront Differentiation
@@ -174,7 +174,7 @@ Status: shipped — all slices 3A–3E complete as of April 27, 2026
 
 ## Phase 4 - Merchant Lifecycle And Outbound Integrations
 
-Status: active; refund/return and outbound webhook foundations are shipped. Current work is correctness hardening followed by transactional email observability.
+Status: active; refund/return, outbound webhook, transactional email observability, and analytics fan-out foundations are shipped. Current work is setup/deployment hardening and broader lifecycle coverage.
 
 ### Goals
 
@@ -215,6 +215,13 @@ Status: active; refund/return and outbound webhook foundations are shipped. Curr
 - inbound/outbound delivery visibility in `/admin/webhooks`
 - fast service and API coverage for queueing, signing, delivery, retry, exhaustion, listing, manual retry, and claim behavior
 
+#### Analytics Event Fan-Out
+
+- `AnalyticsEvent` Prisma model for durable lifecycle analytics persistence
+- typed lifecycle analytics events for checkout creation/failure, order creation/payment, refund issuance, return requested/closed, email sent/failed, and webhook delivered/failed
+- analytics consumer wired into the existing typed internal event registry
+- analytics persistence isolated from commerce durability through handler-failure containment
+
 ### Next Phase 4 Slice: Transactional Email Observability
 
 See `TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`.
@@ -238,7 +245,7 @@ Target work:
 
 ## Phase 5 - Setup Wizard, CLI, And Launch Operations
 
-Status: active foundation with `doopify doctor`, setup status API, and Setup tab shipped; interactive setup still pending
+Status: active foundation with `doopify doctor`, setup status API, Setup tab, interactive `doopify setup`, and deployment automation commands shipped
 
 See `SETUP_AND_CLI_PLAN.md`.
 
@@ -247,8 +254,9 @@ See `SETUP_AND_CLI_PLAN.md`.
 - add `doopify doctor` for read-only local setup diagnostics — shipped
 - add setup status service and `/api/setup/status` — shipped
 - add Settings -> Setup checklist tab — shipped foundation
-- add interactive `doopify setup`
-- later automate Vercel, Neon, Stripe webhook, and email provider setup where safe
+- add interactive `doopify setup` — shipped foundation
+- add optional deployment automation commands: `doopify env push`, `doopify stripe webhook`, `doopify db check`, `doopify deploy` — shipped foundation
+- later harden non-interactive/dry-run and deeper provider provisioning flows
 - keep sensitive provider tokens out of long-lived app storage unless scoped lifecycle is designed
 
 ### Acceptance Checks
@@ -259,7 +267,44 @@ See `SETUP_AND_CLI_PLAN.md`.
 - setup automation redacts secrets and never commits generated secrets
 - setup checks are testable and reusable between CLI and app status API
 
-## Phase 6 - Platform Extraction
+## Phase 6 - Production Hardening And Launch Readiness
+
+Status: foundation shipped; continue operational hardening
+
+### Goals
+
+- enforce CI verification on every push and pull request
+- document repeatable production deployment steps
+- document backup/restore and rollback/recovery paths
+- document provider and environment setup for Neon, Stripe, and Resend
+- document admin account recovery for credential/access incidents
+
+### Shipped Foundation
+
+- `.github/workflows/ci.yml` for push/PR verification:
+  - `npm ci`
+  - `npm run db:generate`
+  - `npx tsc --noEmit`
+  - `npm run test`
+  - `npm run build`
+- `.github/workflows/integration.yml` optional integration workflow (`npm run test:integration`) gated by `DATABASE_URL_TEST` secret
+- production runbook pack:
+  - `PRODUCTION_DEPLOYMENT_CHECKLIST.md`
+  - `ENVIRONMENT_VARIABLE_REFERENCE.md`
+  - `WEBHOOK_CONFIGURATION_GUIDE.md`
+  - `STRIPE_SETUP_GUIDE.md`
+  - `RESEND_SETUP_GUIDE.md`
+  - `NEON_SETUP_GUIDE.md`
+  - `BACKUP_AND_RESTORE.md`
+  - `ADMIN_USER_RECOVERY_GUIDE.md`
+
+### Next Hardening
+
+- add non-interactive runbook validation scripts
+- add periodic restore drills and incident rehearsal cadence
+- expand runbooks as integration/event surfaces grow
+
+## Phase 7 - Platform Extraction
 
 Status: deferred until after Phase 4 and setup/deployment foundations are stable
 
@@ -270,7 +315,7 @@ Status: deferred until after Phase 4 and setup/deployment foundations are stable
 - add a scaffolder CLI or template tool for new resources
 - keep the main app as the proving ground until extraction is justified by real reuse
 
-## Phase 7 - Public Plugin Platform
+## Phase 8 - Public Plugin Platform
 
 Status: deferred until after platform extraction proves out
 
@@ -311,7 +356,6 @@ Next automated coverage priorities:
 - outbound webhook real-DB retry/idempotency
 - integration secret encryption at rest
 - setup status derivation and CLI doctor checks
-- analytics fan-out once implemented
 
 ## Marketing Positioning
 

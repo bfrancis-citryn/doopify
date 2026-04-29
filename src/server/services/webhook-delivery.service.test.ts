@@ -17,10 +17,14 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn(),
     },
   },
+  emitInternalEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: mocks.prisma,
+}))
+vi.mock('@/server/events/dispatcher', () => ({
+  emitInternalEvent: mocks.emitInternalEvent,
 }))
 
 import {
@@ -40,6 +44,14 @@ import {
 describe('webhook delivery service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.prisma.webhookDelivery.update.mockResolvedValue({
+      id: 'delivery_1',
+      provider: 'stripe',
+      providerEventId: 'evt_1',
+      eventType: 'payment_intent.succeeded',
+      status: 'PROCESSED',
+      attempts: 1,
+    })
   })
 
   it('records webhook delivery attempts with a durable payload hash', async () => {

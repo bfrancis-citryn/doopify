@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import type { WebhookDeliveryStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import { emitInternalEvent } from '@/server/events/dispatcher'
 
 export const MAX_WEBHOOK_DELIVERY_ATTEMPTS = 4
 
@@ -219,7 +220,7 @@ export async function markWebhookDeliveryProcessed(input: {
   provider: string
   providerEventId: string
 }) {
-  return prisma.webhookDelivery.update({
+  const delivery = await prisma.webhookDelivery.update({
     where: {
       provider_providerEventId: {
         provider: input.provider,
@@ -233,6 +234,16 @@ export async function markWebhookDeliveryProcessed(input: {
       nextRetryAt: null,
     },
   })
+
+  await emitInternalEvent('webhook.delivered', {
+    direction: 'inbound',
+    provider: delivery.provider,
+    providerEventId: delivery.providerEventId,
+    eventType: delivery.eventType,
+    attempts: delivery.attempts,
+  })
+
+  return delivery
 }
 
 export async function markWebhookDeliveryFailed(input: {
@@ -257,7 +268,7 @@ export async function markWebhookDeliveryFailed(input: {
     ? { status: input.status, nextRetryAt: null }
     : getRetrySchedule(delivery?.attempts ?? 1, input.retryable ?? true)
 
-  return prisma.webhookDelivery.update({
+  const updated = await prisma.webhookDelivery.update({
     where: {
       provider_providerEventId: {
         provider: input.provider,
@@ -271,6 +282,18 @@ export async function markWebhookDeliveryFailed(input: {
       nextRetryAt: schedule.nextRetryAt,
     },
   })
+
+  await emitInternalEvent('webhook.failed', {
+    direction: 'inbound',
+    provider: updated.provider,
+    providerEventId: updated.providerEventId,
+    eventType: updated.eventType,
+    error: input.error,
+    attempts: updated.attempts,
+    retryable: Boolean(schedule.nextRetryAt),
+  })
+
+  return updated
 }
 
 export async function claimWebhookDeliveryForRetry(id: string, now = new Date()) {

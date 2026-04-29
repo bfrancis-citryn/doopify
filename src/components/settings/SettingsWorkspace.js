@@ -44,14 +44,29 @@ const SETUP_COMMANDS = [
     command: 'npm run doopify:doctor',
   },
   {
-    id: 'db-generate',
-    label: 'Generate Prisma client',
-    command: 'npm run db:generate',
+    id: 'db-check',
+    label: 'Check Neon/DB',
+    command: 'npm run doopify:db:check',
   },
   {
-    id: 'bootstrap',
-    label: 'Bootstrap store/admin',
-    command: 'npm run db:seed:bootstrap',
+    id: 'setup',
+    label: 'Run guided setup',
+    command: 'npm run doopify:setup',
+  },
+  {
+    id: 'stripe-webhook',
+    label: 'Configure webhooks',
+    command: 'npm run doopify:stripe:webhook',
+  },
+  {
+    id: 'env-push',
+    label: 'Push Vercel env',
+    command: 'npm run doopify:env:push',
+  },
+  {
+    id: 'deploy',
+    label: 'Deploy production',
+    command: 'npm run doopify:deploy',
   },
 ];
 

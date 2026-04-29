@@ -2,8 +2,8 @@
 
 > Canonical status snapshot for developers, maintainers, and AI agents.
 >
-> Documentation refresh: April 28, 2026
-> Last repo verification recorded in active docs: April 28, 2026
+> Documentation refresh: April 29, 2026
+> Last repo verification recorded in active docs: April 29, 2026
 > Current active phase: **Phase 4 - Merchant Lifecycle And Outbound Integrations**
 
 ## Why This File Exists
@@ -50,6 +50,9 @@ The repo currently includes:
 - Phase 4 outbound merchant webhook foundation with subscriptions, timestamped HMAC signatures, retry/backoff, manual retry API, dead-letter/exhausted visibility, integration settings UI, and admin delivery visibility
 - Phase 4 correctness hardening for outbound webhook delivery claiming, manual retry eligibility, integration secret preservation, event-subscription deduplication, and return refund quantity validation
 - Phase 4 transactional email observability foundation with `EmailDelivery` persistence, provider adapter seam, order-confirmation delivery tracking, and fast service tests
+- Phase 4 analytics event fan-out foundation with typed lifecycle events, `AnalyticsEvent` persistence, and side-effect-safe consumer handling
+- GitHub Actions CI workflow for push/PR verification plus optional integration workflow gated by `DATABASE_URL_TEST` secret
+- production runbook docs for deployment checklist, environment variables, webhooks/provider setup, backup/restore, and admin recovery
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs
 
 ## Phase 3 Status
@@ -135,12 +138,22 @@ Shipped foundation:
 
 Ongoing expansion:
 
-- broaden real-DB lifecycle coverage as new event consumers (for example analytics fan-out) are added
+- broaden real-DB lifecycle coverage as lifecycle consumers and race paths expand
+
+#### Analytics Event Fan-Out
+
+Shipped foundation:
+
+- `AnalyticsEvent` Prisma model for durable server-side lifecycle analytics
+- typed analytics lifecycle events for checkout, order, refund, return, email, and webhook outcomes
+- analytics consumer registered in the existing internal event registry
+- checkout/refund/return/email/webhook services now emit analytics lifecycle events from server-owned flows
+- analytics failures are isolated from commerce durability through handler failure containment
 
 ### Remaining Phase 4 Priorities
 
-1. Analytics event fan-out through the existing dispatcher
-2. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
+1. Setup Wizard and CLI hardening: expand deployment automation with safer non-interactive/dry-run paths and deeper provider provisioning
+2. Production hardening and launch readiness: keep CI, deployment checklist, and recovery runbooks current as behavior changes
 3. Continued audit-log expansion where admin lifecycle operations need durable traces
 4. Broader real-DB lifecycle/race coverage as Phase 4 behavior expands
 
@@ -153,7 +166,8 @@ Status by acceptance check:
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
 - Integration secrets never appear unencrypted at rest — **foundation shipped with real-DB update-flow preservation coverage**
 - A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation shipped with real-DB resend/provider-transition coverage**
-- Setup can be diagnosed with `doopify doctor` and verified from Settings -> Setup — **doctor + setup status API + Setup tab shipped foundation**
+- Lifecycle analytics events are emitted from server-owned flows and persisted without becoming a commerce-side dependency — **foundation shipped**
+- Setup can be diagnosed with `doopify doctor`, verified from Settings -> Setup, and configured locally with `doopify setup` — **shipped foundation**
 - Build and typecheck stay green throughout — **must be re-run after every change**
 
 ## Transactional Email Observability Plan
@@ -177,7 +191,7 @@ First foundation shipped:
 
 Remaining target:
 
-- continue expanding lifecycle side-effect proofs as new event consumers (for example analytics fan-out) are added
+- continue expanding lifecycle side-effect proofs and race/idempotency coverage
 
 ## Setup Wizard And CLI Plan
 
@@ -192,15 +206,32 @@ Planned sequence:
 - `doopify doctor` read-only local diagnostics — **shipped**
 - setup status service and `/api/setup/status` — **shipped**
 - Settings -> Setup checklist tab — **shipped foundation**
-- interactive `doopify setup`
-- later Vercel, Neon, Stripe, and email-provider automation
+- interactive `doopify setup` — **shipped foundation**
+- deployment automation commands (`doopify env push`, `doopify stripe webhook`, `doopify db check`, `doopify deploy`) — **shipped foundation**
+- later deepen one-click provisioning and non-interactive/dry-run coverage
+
+## Production Hardening And Launch Readiness
+
+Production readiness foundation now includes:
+
+- CI verification on every push/PR via `.github/workflows/ci.yml`
+- optional integration workflow in `.github/workflows/integration.yml` (runs when `DATABASE_URL_TEST` secret is configured)
+- production runbook docs:
+  - `PRODUCTION_DEPLOYMENT_CHECKLIST.md`
+  - `ENVIRONMENT_VARIABLE_REFERENCE.md`
+  - `WEBHOOK_CONFIGURATION_GUIDE.md`
+  - `STRIPE_SETUP_GUIDE.md`
+  - `RESEND_SETUP_GUIDE.md`
+  - `NEON_SETUP_GUIDE.md`
+  - `BACKUP_AND_RESTORE.md`
+  - `ADMIN_USER_RECOVERY_GUIDE.md`
 
 ## Remaining Product Work
 
 ### Highest Priority
 
-- Analytics event fan-out
-- Setup Wizard and CLI foundation
+- Setup Wizard and CLI hardening (non-interactive/dry-run and deeper provider provisioning)
+- Production hardening maintenance for CI, deployment runbooks, and recovery runbooks
 - Broader real-DB race/idempotency coverage as Phase 4 behaviors expand
 
 ### Medium Priority

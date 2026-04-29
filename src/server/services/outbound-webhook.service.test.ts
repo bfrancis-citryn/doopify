@@ -12,10 +12,12 @@ const mocks = vi.hoisted(() => ({
     },
   },
   decrypt: vi.fn((value: string) => value),
+  emitInternalEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
 vi.mock('@/server/utils/crypto', () => ({ decrypt: mocks.decrypt }))
+vi.mock('@/server/events/dispatcher', () => ({ emitInternalEvent: mocks.emitInternalEvent }))
 
 import {
   createOutboundWebhookSignature,

@@ -23,6 +23,7 @@ const runIntegration =
     : describe.skip
 
 async function cleanTestData() {
+  await prisma.analyticsEvent.deleteMany()
   await prisma.webhookDelivery.deleteMany()
   await prisma.shippingRate.deleteMany()
   await prisma.shippingZone.deleteMany()

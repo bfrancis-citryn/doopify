@@ -3,6 +3,18 @@ import { queueOutboundWebhooks } from '@/server/services/outbound-webhook.servic
 
 import type { DoopifyEventName, DoopifyEvents, InternalEventHandler } from '@/server/events/types'
 
+const OUTBOUND_WEBHOOK_EVENTS = new Set<DoopifyEventName>([
+  'order.created',
+  'order.paid',
+  'product.created',
+  'product.updated',
+  'fulfillment.created',
+  'checkout.failed',
+  'order.refunded',
+  'order.return_requested',
+  'order.return_updated',
+])
+
 export async function emitInternalEvent<K extends DoopifyEventName>(
   event: K,
   payload: DoopifyEvents[K]
@@ -20,6 +32,10 @@ export async function emitInternalEvent<K extends DoopifyEventName>(
       }
     })
   )
+
+  if (!OUTBOUND_WEBHOOK_EVENTS.has(event)) {
+    return
+  }
 
   try {
     await queueOutboundWebhooks(event, payload)

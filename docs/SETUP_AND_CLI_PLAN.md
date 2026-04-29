@@ -3,7 +3,7 @@
 > Deployment setup plan for Doopify.
 >
 > Created: April 28, 2026
-> Status: active foundation; Phase A (`doopify doctor`) shipped on April 28, 2026
+> Status: active foundation; Phase A (`doopify doctor`) shipped on April 28, 2026, Phase C (`doopify setup`) shipped foundation on April 29, 2026, and Phase E deployment automation commands shipped foundation on April 29, 2026
 
 ## Goal
 
@@ -110,41 +110,40 @@ The Setup tab should display checklist cards and a completion percentage, but `d
 
 ## Phase C - `doopify setup`
 
-Status: planned after Setup status is reliable
+Status: shipped foundation on April 29, 2026
 
 Purpose: interactive setup command.
 
 Prompts:
 
 - store name
-- owner email/password
+- store email
+- owner email
+- owner password
 - public app URL
-- database provider choice
-- Neon connection string or Neon provisioning token
+- database URL / Neon connection
 - Stripe secret key
 - Stripe publishable key
-- Stripe webhook destination choice
-- webhook retry secret generation/confirmation
-- email provider choice and API key
-- Vercel project link/deploy choice
+- Stripe webhook secret
+- Resend API key
+- Resend webhook secret
+- webhook retry secret
 
 Actions:
 
 - write/update `.env.local`
-- optionally set Vercel env vars
-- run `npm install` when needed
+- generate missing secrets (for example `JWT_SECRET` and `WEBHOOK_RETRY_SECRET`)
 - run `npm run db:generate`
-- run `npm run db:push` or future migration command
-- run `npm run db:seed:bootstrap`
-- optionally configure Stripe webhook endpoint
-- run `npm run test` and `npm run build` when requested
+- run `npm run db:push` or `npm run db:migrate`
+- bootstrap store and owner user
+- run `npm run doopify:doctor` after setup
 
 Safety:
 
 - redact secrets in terminal output
 - ask before overwriting existing env values
-- support `--dry-run`
-- support `--non-interactive` with env/input file later
+- support `--dry-run` (pending)
+- support `--non-interactive` with env/input file later (pending)
 - never commit generated secrets
 
 ## Phase D - One-Click Deploy Flow
@@ -161,6 +160,23 @@ Target user path:
 6. CLI runs Prisma setup/bootstrap.
 7. User opens `/settings` and the Setup tab verifies completion.
 
+## Phase E - Deployment Automation Commands
+
+Status: shipped foundation on April 29, 2026
+
+Added optional local CLI actions:
+
+- `doopify env push` to link Vercel and sync required env vars
+- `doopify stripe webhook` to configure Stripe webhook endpoint and validate/create Resend webhook endpoint
+- `doopify db check` to validate database reachability and Neon-oriented connection context
+- `doopify deploy` to run production build preflight and trigger a Vercel production deploy
+
+Current constraints:
+
+- commands assume operator-provided provider credentials/tokens at runtime
+- `doopify env push` requires Vercel auth token and project identifier
+- non-interactive and dry-run automation paths remain pending
+
 ## Initial CLI Shape
 
 Recommended initial location:
@@ -174,7 +190,11 @@ Recommended npm scripts:
 ```json
 {
   "doopify:doctor": "node scripts/doopify-cli.mjs doctor",
-  "doopify:setup": "node scripts/doopify-cli.mjs setup"
+  "doopify:setup": "node scripts/doopify-cli.mjs setup",
+  "doopify:env:push": "node scripts/doopify-cli.mjs env push",
+  "doopify:stripe:webhook": "node scripts/doopify-cli.mjs stripe webhook",
+  "doopify:db:check": "node scripts/doopify-cli.mjs db check",
+  "doopify:deploy": "node scripts/doopify-cli.mjs deploy"
 }
 ```
 
@@ -228,8 +248,8 @@ Recommended order:
 2. Ship transactional email observability.
 3. Add `doopify doctor` and Setup status API.
 4. Add admin Setup tab.
-5. Add interactive `doopify setup`.
-6. Add Vercel/Neon/Stripe automation.
+5. Add interactive `doopify setup`. — shipped foundation on April 29, 2026.
+6. Add Vercel/Neon/Stripe automation. — shipped command foundation on April 29, 2026.
 
 ## Non-Goals For First Pass
 
