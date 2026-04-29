@@ -73,6 +73,7 @@ Never trust the browser for:
 - payment success
 
 The browser can initiate checkout. The server and Stripe webhook finalize the commerce state.
+Shipping amounts selected at checkout must be revalidated server-side from server-owned shipping configuration before payment amounts are created or updated.
 
 Abandoned checkout recovery must use cents-based totals, server-side repricing, safe tokenized recovery links, and require admin auth for admin actions.
 Brand Kit fields should be centralized through settings service APIs. Do not scatter branding constants across storefront, checkout, and email templates.
@@ -138,6 +139,7 @@ Rules:
 - Sensitive API routes must also authorize themselves with route-level helpers from `src/server/auth/require-auth.ts`.
 - Any API route that mutates products, orders, refunds, returns, settings, integrations, media, email delivery, webhook replay, or admin-only data must call `requireAdmin`, `requireOwner`, or `requireRole` inside the route handler.
 - Use `requireAdmin(req)` for admin mutations such as products, variants, orders, fulfillments, refunds, returns, settings, integrations, media uploads, webhook replay/retry, and email resend actions.
+- Shipping settings, shipping-zone/rate mutations, provider connect/disconnect actions, manual fulfillment, and shipping-label purchase routes must call `requireAdmin(req)`.
 - Use `requireOwner(req)` for owner-only settings, staff/account management, or dangerous operational actions.
 - Do not trust client-submitted roles or raw `x-user-role` headers as the only authorization source.
 - Do not add admin auth to public storefront reads, checkout initiation/status, login/auth routes, Stripe webhooks, or email-provider webhooks.
@@ -151,6 +153,7 @@ Rules:
 - Persist snapshots for order history where product data can change later.
 - For USD this means `*Cents` fields at rest and Stripe `amount` values sent directly from those stored cents.
 - Convert dollar inputs to cents at route/schema boundaries; do not let service/domain logic receive dollar floats.
+- Store carrier/provider credentials only in encrypted integration secrets and never return credential values to browser payloads.
 
 ## Inventory Rules
 

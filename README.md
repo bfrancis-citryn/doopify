@@ -95,6 +95,7 @@ Historical planning files live in `docs/archive/`. Do not use archived docs as c
 - `/admin/collections`
 - `/admin/webhooks`
 - `/admin/abandoned-checkouts`
+- `/admin/settings/shipping`
 - `/admin/brand-kit`
 - `/draft-orders`
 - `/products`
@@ -123,6 +124,7 @@ Historical planning files live in `docs/archive/`. Do not use archived docs as c
 - `/api/customers`
 - `/api/discounts`
 - `/api/settings`
+- `/api/settings/shipping`
 - `/api/settings/brand-kit`
 - `/api/analytics`
 - `/api/media`

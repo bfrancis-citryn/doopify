@@ -43,6 +43,7 @@ The repo currently includes:
 - centralized checkout pricing in `src/server/checkout/pricing.ts`
 - checkout-native discount-code validation and paid-order discount usage persistence
 - settings-backed shipping/tax rates plus persisted shipping zones/rates and jurisdiction-aware tax rules
+- shipping settings Phase 1 foundation with shipping mode/manual-rate API (`GET/PATCH /api/settings/shipping`) and admin workspace at `/admin/settings/shipping`
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - typed internal event dispatcher and static integration registry

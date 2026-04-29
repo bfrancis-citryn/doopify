@@ -66,6 +66,17 @@ enum ShippingRateMethod {
   SUBTOTAL_TIER
 }
 
+enum ShippingMode {
+  MANUAL
+  LIVE_RATES
+  HYBRID
+}
+
+enum ShippingLiveProvider {
+  EASYPOST
+  SHIPPO
+}
+
 enum DiscountStatus {
   ACTIVE
   SCHEDULED
@@ -172,6 +183,8 @@ model Store {
   shippingThresholdCents Int?
   shippingDomesticRateCents Int   @default(999)
   shippingInternationalRateCents Int @default(1999)
+  shippingMode      ShippingMode @default(MANUAL)
+  shippingLiveProvider ShippingLiveProvider?
   domesticTaxRate   Float   @default(0.07)
   internationalTaxRate Float @default(0.0)
   createdAt         DateTime @default(now())

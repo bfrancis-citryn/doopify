@@ -194,6 +194,10 @@ These invariants should not be broken by future work:
 - persisted money is stored in integer minor units (`*Cents` fields for USD)
 - Stripe `amount` values must use the same stored integer cents values directly
 - dollar display formatting belongs only at API/UI boundaries, never in persistence math
+- checkout shipping charges must be server-calculated and revalidated from server-owned shipping configuration
+- label-purchase cost and checkout shipping charge are separate values and must never be conflated
+- buying labels must never mutate order totals or payment status
+- manual shipping and manual fulfillment paths must remain available without live carrier credentials
 
 ## Refund And Return Invariants
 

@@ -94,6 +94,31 @@
   flex-direction: column;
 }
 
+.pageWrap {
+  border: 1px solid color-mix(in srgb, var(--slate-200) 70%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 90%, transparent);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.primaryButton {
+  padding: 0.65rem 0.95rem;
+  border-radius: 0.8rem;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 800;
+}
+
 .statusBlock {
   display: flex;
   flex-direction: column;

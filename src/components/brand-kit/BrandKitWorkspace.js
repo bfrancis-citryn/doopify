@@ -10,6 +10,8 @@ import {
   BUTTON_TEXT_TRANSFORM_VALUES,
 } from '@/lib/brand-kit';
 
+import styles from './BrandKitWorkspace.module.css';
+
 const COLOR_FIELDS = [
   ['primaryColor', 'Primary color'],
   ['secondaryColor', 'Secondary color'],
@@ -31,36 +33,6 @@ const SOCIAL_FIELDS = [
   ['tiktokUrl', 'TikTok URL'],
   ['youtubeUrl', 'YouTube URL'],
 ];
-
-function sectionStyle() {
-  return {
-    border: '1px solid #e5e7eb',
-    borderRadius: 14,
-    padding: 16,
-    background: '#fff',
-    display: 'grid',
-    gap: 12,
-  };
-}
-
-function inputStyle() {
-  return {
-    width: '100%',
-    border: '1px solid #d1d5db',
-    borderRadius: 10,
-    padding: '10px 12px',
-    fontSize: 14,
-  };
-}
-
-function labelStyle() {
-  return {
-    display: 'grid',
-    gap: 6,
-    fontSize: 13,
-    color: '#374151',
-  };
-}
 
 function normalizePatchValue(value) {
   if (typeof value !== 'string') return value;
@@ -103,6 +75,15 @@ function computeFontStack(font) {
     default:
       return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   }
+}
+
+function Field({ label, children }) {
+  return (
+    <label className={styles.field}>
+      <span>{label}</span>
+      {children}
+    </label>
+  );
 }
 
 export default function BrandKitWorkspace() {
@@ -201,148 +182,238 @@ export default function BrandKitWorkspace() {
 
   return (
     <AppShell searchPlaceholder="Search settings">
-      <div style={{ display: 'grid', gap: 16 }}>
-        <section style={{ ...sectionStyle(), gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
+      <div className={styles.pageWrap}>
+        <section className={styles.pageHeader}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 24 }}>Brand Kit</h1>
-            <p style={{ margin: '8px 0 0', color: '#6b7280' }}>
+            <h1 className={styles.pageTitle}>Brand Kit</h1>
+            <p className={styles.pageSubtitle}>
               Configure storefront, checkout, and email branding from one screen.
             </p>
           </div>
-          <button onClick={handleSave} disabled={saving || loading} type="button" style={{ padding: '10px 16px', borderRadius: 10, background: '#111827', color: '#fff' }}>
-            {saving ? 'Saving…' : 'Save Brand Kit'}
+          <button
+            className={styles.primaryButton}
+            onClick={handleSave}
+            disabled={saving || loading}
+            type="button"
+          >
+            {saving ? 'Saving...' : 'Save Brand Kit'}
           </button>
         </section>
 
-        {message ? <p style={{ margin: 0, color: '#047857' }}>{message}</p> : null}
-        {error ? <p style={{ margin: 0, color: '#b91c1c', whiteSpace: 'pre-wrap' }}>{error}</p> : null}
+        {message ? (
+          <div className={styles.statusBlock}>
+            <p className={styles.successText}>{message}</p>
+          </div>
+        ) : null}
+        {error ? (
+          <div className={styles.statusBlock}>
+            <p className={styles.errorText}>{error}</p>
+          </div>
+        ) : null}
 
         {loading || !brandKit ? (
-          <section style={sectionStyle()}>Loading brand kit…</section>
+          <section className={styles.configSection}>Loading brand kit...</section>
         ) : (
-          <>
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>1. Logo & Identity</h2>
-              <label style={labelStyle()}>
-                <span>Store name</span>
-                <input style={inputStyle()} value={brandKit.name || ''} onChange={(event) => updateField('name', event.target.value)} />
-              </label>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+          <div className={styles.configStack}>
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>1. Logo & Identity</h2>
+              <Field label="Store name">
+                <input
+                  className={styles.input}
+                  value={brandKit.name || ''}
+                  onChange={(event) => updateField('name', event.target.value)}
+                />
+              </Field>
+              <div className={styles.formGrid}>
                 {URL_FIELDS.map(([field, label]) => (
-                  <label key={field} style={labelStyle()}>
-                    <span>{label}</span>
-                    <input style={inputStyle()} value={brandKit[field] || ''} onChange={(event) => updateField(field, event.target.value)} placeholder="https://..." />
-                  </label>
+                  <Field key={field} label={label}>
+                    <input
+                      className={styles.input}
+                      value={brandKit[field] || ''}
+                      onChange={(event) => updateField(field, event.target.value)}
+                      placeholder="https://..."
+                    />
+                  </Field>
                 ))}
               </div>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>2. Colors</h2>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>2. Colors</h2>
+              <div className={styles.formGrid}>
                 {COLOR_FIELDS.map(([field, label]) => (
-                  <label key={field} style={labelStyle()}>
-                    <span>{label}</span>
-                    <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: 8 }}>
-                      <input type="color" value={brandKit[field] || '#000000'} onChange={(event) => updateField(field, event.target.value)} />
-                      <input style={inputStyle()} value={brandKit[field] || ''} onChange={(event) => updateField(field, event.target.value)} placeholder="#000000" />
+                  <Field key={field} label={label}>
+                    <div className={styles.colorRow}>
+                      <input
+                        className={styles.colorInput}
+                        type="color"
+                        value={brandKit[field] || '#000000'}
+                        onChange={(event) => updateField(field, event.target.value)}
+                      />
+                      <input
+                        className={styles.input}
+                        value={brandKit[field] || ''}
+                        onChange={(event) => updateField(field, event.target.value)}
+                        placeholder="#000000"
+                      />
                     </div>
-                  </label>
+                  </Field>
                 ))}
               </div>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>3. Fonts</h2>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-                <label style={labelStyle()}>
-                  <span>Heading font</span>
-                  <select style={inputStyle()} value={brandKit.headingFont || 'system'} onChange={(event) => updateField('headingFont', event.target.value)}>
-                    {BRAND_FONT_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>3. Fonts</h2>
+              <div className={styles.formGrid}>
+                <Field label="Heading font">
+                  <select
+                    className={styles.selectInput}
+                    value={brandKit.headingFont || 'system'}
+                    onChange={(event) => updateField('headingFont', event.target.value)}
+                  >
+                    {BRAND_FONT_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
                   </select>
-                </label>
-                <label style={labelStyle()}>
-                  <span>Body font</span>
-                  <select style={inputStyle()} value={brandKit.bodyFont || 'system'} onChange={(event) => updateField('bodyFont', event.target.value)}>
-                    {BRAND_FONT_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+                </Field>
+                <Field label="Body font">
+                  <select
+                    className={styles.selectInput}
+                    value={brandKit.bodyFont || 'system'}
+                    onChange={(event) => updateField('bodyFont', event.target.value)}
+                  >
+                    {BRAND_FONT_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
                   </select>
-                </label>
+                </Field>
               </div>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>4. Buttons</h2>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-                <label style={labelStyle()}>
-                  <span>Button radius</span>
-                  <select style={inputStyle()} value={brandKit.buttonRadius || 'md'} onChange={(event) => updateField('buttonRadius', event.target.value)}>
-                    {BUTTON_RADIUS_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>4. Buttons</h2>
+              <div className={styles.formGrid}>
+                <Field label="Button radius">
+                  <select
+                    className={styles.selectInput}
+                    value={brandKit.buttonRadius || 'md'}
+                    onChange={(event) => updateField('buttonRadius', event.target.value)}
+                  >
+                    {BUTTON_RADIUS_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
                   </select>
-                </label>
-                <label style={labelStyle()}>
-                  <span>Button style</span>
-                  <select style={inputStyle()} value={brandKit.buttonStyle || 'solid'} onChange={(event) => updateField('buttonStyle', event.target.value)}>
-                    {BUTTON_STYLE_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+                </Field>
+                <Field label="Button style">
+                  <select
+                    className={styles.selectInput}
+                    value={brandKit.buttonStyle || 'solid'}
+                    onChange={(event) => updateField('buttonStyle', event.target.value)}
+                  >
+                    {BUTTON_STYLE_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
                   </select>
-                </label>
-                <label style={labelStyle()}>
-                  <span>Button text transform</span>
-                  <select style={inputStyle()} value={brandKit.buttonTextTransform || 'normal'} onChange={(event) => updateField('buttonTextTransform', event.target.value)}>
-                    {BUTTON_TEXT_TRANSFORM_VALUES.map((value) => <option key={value} value={value}>{value}</option>)}
+                </Field>
+                <Field label="Button text transform">
+                  <select
+                    className={styles.selectInput}
+                    value={brandKit.buttonTextTransform || 'normal'}
+                    onChange={(event) => updateField('buttonTextTransform', event.target.value)}
+                  >
+                    {BUTTON_TEXT_TRANSFORM_VALUES.map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
                   </select>
-                </label>
+                </Field>
               </div>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>5. Email Branding</h2>
-              <label style={labelStyle()}>
-                <span>Email footer text</span>
-                <input style={inputStyle()} value={brandKit.emailFooterText || ''} onChange={(event) => updateField('emailFooterText', event.target.value)} />
-              </label>
-              <label style={labelStyle()}>
-                <span>Support email</span>
-                <input style={inputStyle()} value={brandKit.supportEmail || ''} onChange={(event) => updateField('supportEmail', event.target.value)} />
-              </label>
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>5. Email Branding</h2>
+              <Field label="Email footer text">
+                <input
+                  className={styles.input}
+                  value={brandKit.emailFooterText || ''}
+                  onChange={(event) => updateField('emailFooterText', event.target.value)}
+                />
+              </Field>
+              <Field label="Support email">
+                <input
+                  className={styles.input}
+                  value={brandKit.supportEmail || ''}
+                  onChange={(event) => updateField('supportEmail', event.target.value)}
+                />
+              </Field>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>6. Checkout Branding</h2>
-              <label style={labelStyle()}>
-                <span>Checkout logo URL</span>
-                <input style={inputStyle()} value={brandKit.checkoutLogoUrl || ''} onChange={(event) => updateField('checkoutLogoUrl', event.target.value)} />
-              </label>
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>6. Checkout Branding</h2>
+              <Field label="Checkout logo URL">
+                <input
+                  className={styles.input}
+                  value={brandKit.checkoutLogoUrl || ''}
+                  onChange={(event) => updateField('checkoutLogoUrl', event.target.value)}
+                  placeholder="https://..."
+                />
+              </Field>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>7. Social Links</h2>
-              <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>7. Social Links</h2>
+              <div className={styles.formGrid}>
                 {SOCIAL_FIELDS.map(([field, label]) => (
-                  <label key={field} style={labelStyle()}>
-                    <span>{label}</span>
-                    <input style={inputStyle()} value={brandKit[field] || ''} onChange={(event) => updateField(field, event.target.value)} />
-                  </label>
+                  <Field key={field} label={label}>
+                    <input
+                      className={styles.input}
+                      value={brandKit[field] || ''}
+                      onChange={(event) => updateField(field, event.target.value)}
+                      placeholder="https://..."
+                    />
+                  </Field>
                 ))}
               </div>
             </section>
 
-            <section style={sectionStyle()}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>Preview</h2>
+            <section className={styles.configSection}>
+              <h2 className={styles.sectionTitle}>Preview</h2>
               {preview ? (
-                <div style={{ border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden' }}>
-                  <div style={{ background: preview.primary, color: '#fff', padding: '10px 14px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontFamily: preview.headingFont }}>{brandKit.name || 'Doopify'}</span>
+                <div className={styles.previewCard}>
+                  <div
+                    className={styles.previewHeader}
+                    style={{ background: preview.primary, color: preview.secondary, fontFamily: preview.headingFont }}
+                  >
+                    <span>{brandKit.name || 'Doopify'}</span>
                     <span>{brandKit.supportEmail || 'support@example.com'}</span>
                   </div>
-                  <div style={{ padding: 16, color: preview.textColor, background: '#fff', fontFamily: preview.bodyFont }}>
-                    {(brandKit.logoUrl || brandKit.checkoutLogoUrl) ? (
-                      <img src={brandKit.logoUrl || brandKit.checkoutLogoUrl} alt="Brand logo preview" style={{ height: 36, width: 'auto', marginBottom: 12 }} />
+                  <div
+                    className={styles.previewBody}
+                    style={{ color: preview.textColor, background: '#fff', fontFamily: preview.bodyFont }}
+                  >
+                    {brandKit.logoUrl || brandKit.checkoutLogoUrl ? (
+                      <img
+                        src={brandKit.logoUrl || brandKit.checkoutLogoUrl}
+                        alt="Brand logo preview"
+                        className={styles.previewLogo}
+                      />
                     ) : null}
-                    <h3 style={{ margin: '0 0 10px', fontFamily: preview.headingFont }}>Sample heading</h3>
-                    <p style={{ margin: '0 0 14px' }}>
+                    <h3 className={styles.previewHeading} style={{ fontFamily: preview.headingFont }}>
+                      Sample heading
+                    </h3>
+                    <p className={styles.previewParagraph}>
                       This preview demonstrates storefront typography, button tone, and email header styling.
                     </p>
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <div className={styles.previewButtons}>
                       <button
                         type="button"
                         style={{
@@ -350,11 +421,12 @@ export default function BrandKitWorkspace() {
                           padding: '10px 14px',
                           textTransform: preview.transform,
                           border: brandKit.buttonStyle === 'outline' ? `1px solid ${preview.accent}` : 'none',
-                          background: brandKit.buttonStyle === 'outline'
-                            ? 'transparent'
-                            : brandKit.buttonStyle === 'soft'
-                              ? `${preview.accent}22`
-                              : preview.accent,
+                          background:
+                            brandKit.buttonStyle === 'outline'
+                              ? 'transparent'
+                              : brandKit.buttonStyle === 'soft'
+                                ? `${preview.accent}22`
+                                : preview.accent,
                           color: brandKit.buttonStyle === 'outline' ? preview.accent : '#111827',
                         }}
                       >
@@ -375,13 +447,13 @@ export default function BrandKitWorkspace() {
                       </button>
                     </div>
                   </div>
-                  <div style={{ padding: 12, background: '#f9fafb', borderTop: '1px solid #e5e7eb', fontSize: 12, color: '#6b7280' }}>
+                  <div className={styles.previewFooter}>
                     {brandKit.emailFooterText || 'Thanks for choosing our store.'}
                   </div>
                 </div>
               ) : null}
             </section>
-          </>
+          </div>
         )}
       </div>
     </AppShell>

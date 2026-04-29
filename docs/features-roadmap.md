@@ -41,6 +41,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Inventory decrement only after verified payment success
 - Checkout-native code discounts through the centralized pricing service
 - Configurable shipping zones/rates and jurisdiction-aware tax rules consumed by server-owned checkout pricing
+- Shipping settings Phase 1 foundation: `/api/settings/shipping` cents-safe admin API plus admin workspace at `/admin/settings/shipping` for shipping mode, manual flat rates, free-shipping threshold, zone/rate editing, and manual rate preview
 - Checkout pricing snapshots that persist shipping/tax resolution decisions into checkout payloads
 - Durable inbound Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, retry metadata, local-payload replay, diagnostics, cron-compatible retry tooling, and admin visibility
 - Internal typed event dispatcher plus a static integration registry
