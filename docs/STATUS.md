@@ -36,6 +36,7 @@ The repo currently includes:
 - Next.js App Router admin, storefront, and API surface
 - protected admin auth with session-backed JWT validation
 - private route protection through `src/proxy.ts`
+- route-level authorization helpers (`requireAuth`, `requireAdmin`, `requireOwner`, `requireRole`) applied across sensitive admin mutation and observability APIs as an inner authorization guard
 - public storefront routes for homepage, shop, product detail, collections, and collection detail
 - Stripe checkout creation, Stripe webhook processing, checkout status polling, checkout session persistence, and idempotent paid-order finalization
 - inventory decrement only after verified Stripe payment success
@@ -52,6 +53,7 @@ The repo currently includes:
 - Phase 4 correctness hardening for outbound webhook delivery claiming, manual retry eligibility, integration secret preservation, event-subscription deduplication, and return refund quantity validation
 - Phase 4 transactional email observability foundation with `EmailDelivery` persistence, provider adapter seam, order-confirmation delivery tracking, and fast service tests
 - Phase 4 analytics event fan-out foundation with typed lifecycle events, `AnalyticsEvent` persistence, and side-effect-safe consumer handling
+- Phase 4 background side-effect job foundation with persisted `Job` records, claiming, retry/backoff/exhaustion lifecycle, secure runner route, and initial order-confirmation email job integration
 - GitHub Actions CI workflow for push/PR verification plus optional integration workflow gated by `DATABASE_URL_TEST` secret
 - production runbook docs for deployment checklist, environment variables, webhooks/provider setup, backup/restore, and admin recovery
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs

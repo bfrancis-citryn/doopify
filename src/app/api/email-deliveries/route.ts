@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { err, ok } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { EMAIL_DELIVERY_STATUSES, getEmailDeliveries } from '@/server/services/email-delivery.service'
 
 const EMAIL_DELIVERY_STATUS_FILTERS = ['ALL', ...EMAIL_DELIVERY_STATUSES] as const
@@ -16,6 +17,9 @@ function parsePage(value: string | null, fallback: number) {
 }
 
 export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(req.url)
     const parsedStatus = statusSchema.safeParse(searchParams.get('status') ?? 'ALL')

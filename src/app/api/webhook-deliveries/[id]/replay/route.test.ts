@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   markWebhookDeliveryProcessed: vi.fn(),
   markWebhookDeliveryFailed: vi.fn(),
   processStripeWebhookEvent: vi.fn(),
+  requireAdmin: vi.fn(),
 }))
 
 vi.mock('@/server/services/webhook-delivery.service', () => ({
@@ -25,12 +26,19 @@ vi.mock('@/server/services/stripe-webhook.service', () => ({
   },
   processStripeWebhookEvent: mocks.processStripeWebhookEvent,
 }))
+vi.mock('@/server/auth/require-auth', () => ({
+  requireAdmin: mocks.requireAdmin,
+}))
 
 import { POST } from './route'
 
 describe('POST /api/webhook-deliveries/[id]/replay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'staff-1', email: 'staff@example.com', firstName: null, lastName: null, role: 'STAFF' },
+    })
     mocks.getWebhookDeliveryById.mockResolvedValue({
       id: 'delivery_1',
       provider: 'stripe',

@@ -1,5 +1,6 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { encrypt } from '@/server/utils/crypto'
 import { z } from 'zod'
 
@@ -37,6 +38,9 @@ function sanitizeSecretKeys(secrets: Array<{ key: string; value?: string }> | un
 interface Params { params: Promise<{ id: string }> }
 
 export async function GET(_req: Request, { params }: Params) {
+  const auth = await requireAdmin(_req)
+  if (!auth.ok) return auth.response
+
   try {
     const { id } = await params
     const integration = await prisma.integration.findUnique({
@@ -54,6 +58,9 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PUT(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { id } = await params
     const json = await req.json()
@@ -120,6 +127,9 @@ export async function PUT(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const auth = await requireAdmin(_req)
+  if (!auth.ok) return auth.response
+
   try {
     const { id } = await params
     await prisma.integration.delete({ where: { id } })

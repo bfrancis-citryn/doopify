@@ -1,8 +1,8 @@
 import { z } from 'zod'
 
-import { err, getToken, ok, parseBody } from '@/lib/api'
-import { verifyToken } from '@/lib/auth'
+import { err, ok, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { prisma } from '@/lib/prisma'
 import { getOrderRefunds, issueRefund } from '@/server/services/refund.service'
 
@@ -27,8 +27,8 @@ const issueRefundSchema = z.object({
 })
 
 export async function GET(req: Request, { params }: Params) {
-  const token = getToken(req)
-  if (!token || !(await verifyToken(token))) return err('Unauthorized', 401)
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
 
   const { orderNumber } = await params
   const num = parseInt(orderNumber, 10)
@@ -50,8 +50,8 @@ export async function GET(req: Request, { params }: Params) {
 }
 
 export async function POST(req: Request, { params }: Params) {
-  const token = getToken(req)
-  if (!token || !(await verifyToken(token))) return err('Unauthorized', 401)
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
 
   const { orderNumber } = await params
   const num = parseInt(orderNumber, 10)

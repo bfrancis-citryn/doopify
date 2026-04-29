@@ -4,6 +4,7 @@ import { centsToDollars, dollarsToCents } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 import { sendTransactionalEmail } from '@/server/email/provider'
+import { enqueueJob } from '@/server/jobs/job.service'
 import { buildOrderConfirmationEmailMessage } from '@/server/services/email-template.service'
 import { getOrderById } from '@/server/services/order.service'
 
@@ -69,6 +70,13 @@ export type CreateEmailDeliveryInput = {
 export type SendTrackedEmailInput = CreateEmailDeliveryInput & {
   from: string
   html: string
+}
+
+export type QueueOrderConfirmationEmailInput = {
+  orderId: string
+  orderNumber: number
+  email: string
+  provider?: string
 }
 
 export type EmailDeliveryDiagnostics = {
@@ -365,6 +373,115 @@ export async function getEmailDeliveries(input: {
       total,
       totalPages: Math.ceil(total / pageSize),
     },
+  }
+}
+
+export async function queueOrderConfirmationEmailDelivery(input: QueueOrderConfirmationEmailInput) {
+  const delivery = await createEmailDelivery({
+    event: 'order.paid',
+    template: 'order_confirmation',
+    recipientEmail: input.email,
+    subject: `Order #${input.orderNumber} confirmation`,
+    provider: input.provider,
+    orderId: input.orderId,
+  })
+
+  const job = await enqueueJob(
+    'SEND_ORDER_CONFIRMATION_EMAIL',
+    {
+      deliveryId: delivery.id,
+      orderId: input.orderId,
+    },
+    {
+      runAt: new Date(),
+      maxAttempts: 5,
+    }
+  )
+
+  return {
+    delivery,
+    job,
+  }
+}
+
+export async function processOrderConfirmationEmailDeliveryJob(input: { deliveryId: string; orderId?: string }) {
+  const delivery = await emailDeliveryClient().findUnique({
+    where: { id: input.deliveryId },
+    select: {
+      id: true,
+      event: true,
+      template: true,
+      recipientEmail: true,
+      subject: true,
+      status: true,
+      provider: true,
+      orderId: true,
+      customerId: true,
+      refundId: true,
+      returnId: true,
+    },
+  })
+
+  if (!delivery || delivery.status === 'SENT') {
+    return
+  }
+
+  const orderId = input.orderId ?? delivery.orderId
+  if (!orderId) {
+    throw new Error('Order confirmation delivery is missing linked order context')
+  }
+
+  const order = await getOrderById(orderId)
+  if (!order) {
+    throw new Error(`Order ${orderId} was not found for delivery ${delivery.id}`)
+  }
+
+  const shippingAddress = order.addresses.find((address) => address.type === 'SHIPPING')
+  const message = await buildOrderConfirmationEmailMessage({
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    email: delivery.recipientEmail,
+    currency: order.currency,
+    total: centsToDollars(order.totalCents ?? dollarsToCents((order as { total?: number }).total ?? 0)),
+    items: order.items.map((item) => ({
+      title: item.title,
+      variantTitle: item.variantTitle,
+      quantity: item.quantity,
+      price: centsToDollars(item.priceCents ?? dollarsToCents((item as { price?: number }).price ?? 0)),
+    })),
+    shippingAddress: shippingAddress
+      ? {
+          firstName: shippingAddress.firstName,
+          lastName: shippingAddress.lastName,
+          address1: shippingAddress.address1,
+          city: shippingAddress.city,
+          province: shippingAddress.province,
+          postalCode: shippingAddress.postalCode,
+          country: shippingAddress.country,
+        }
+      : null,
+  })
+
+  try {
+    const result = await sendTransactionalEmail({
+      from: message.from,
+      to: [delivery.recipientEmail],
+      subject: message.subject,
+      html: message.html,
+    })
+
+    await markEmailDeliverySent({
+      deliveryId: delivery.id,
+      provider: result.provider,
+      providerMessageId: result.providerMessageId,
+    })
+  } catch (error) {
+    await markEmailDeliveryFailed({
+      deliveryId: delivery.id,
+      error,
+      retryable: true,
+    })
+    throw error
   }
 }
 

@@ -1,5 +1,6 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -7,6 +8,9 @@ export const runtime = 'nodejs'
 const statusSchema = z.enum(['PENDING', 'SUCCESS', 'FAILED', 'RETRYING', 'EXHAUSTED', 'ALL'])
 
 export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, Number(searchParams.get('page') || 1))

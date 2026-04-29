@@ -1,8 +1,12 @@
 import { ok, err } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getOrders } from '@/server/services/order.service'
 import type { OrderStatus, PaymentStatus, FulfillmentStatus } from '@prisma/client'
 
 export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(req.url)
     const result = await getOrders({

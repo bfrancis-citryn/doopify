@@ -1,7 +1,11 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 
 export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(req.url)
     const pageSize = Math.min(Math.max(Number(searchParams.get('pageSize') || 48), 1), 100)

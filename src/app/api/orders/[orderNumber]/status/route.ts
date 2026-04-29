@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { updatePaymentStatus, updateFulfillmentStatus } from '@/server/services/order.service'
 import type { PaymentStatus, FulfillmentStatus } from '@prisma/client'
 
@@ -12,6 +13,9 @@ const schema = z.object({
 })
 
 export async function PATCH(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { orderNumber } = await params
   const num = parseInt(orderNumber, 10)
   if (isNaN(num)) return err('Invalid order number', 400)

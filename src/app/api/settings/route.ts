@@ -1,9 +1,13 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { centsToDollars, dollarsToCents } from '@/lib/money'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getStoreSettings, updateStoreSettings } from '@/server/services/settings.service'
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const store = await getStoreSettings()
     if (!store) return err('Store not configured', 404)
@@ -43,6 +47,9 @@ const updateSchema = z.object({
 })
 
 export async function PATCH(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
 

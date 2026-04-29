@@ -1,5 +1,6 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { encrypt } from '@/server/utils/crypto'
 import { z } from 'zod'
 
@@ -33,7 +34,10 @@ function sanitizeSecrets(secrets: Array<{ key: string; value?: string }> | undef
     })
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const integrations = await prisma.integration.findMany({
       include: {
@@ -52,6 +56,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const json = await req.json()
     const parsed = createSchema.parse(json)

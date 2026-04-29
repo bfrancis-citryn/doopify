@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { upsertOptions } from '@/server/services/product.service'
 
 interface Params { params: Promise<{ id: string }> }
@@ -21,6 +22,9 @@ const schema = z.object({
 
 // PUT replaces all options for a product atomically
 export async function PUT(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { id: productId } = await params
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')

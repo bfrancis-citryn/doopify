@@ -1,5 +1,6 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -45,6 +46,9 @@ function detectMimeType(buffer: Buffer) {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null

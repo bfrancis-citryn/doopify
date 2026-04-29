@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getEmailDeliveryById: vi.fn(),
+  requireAdmin: vi.fn(),
 }))
 
 vi.mock('@/server/services/email-delivery.service', () => ({
   getEmailDeliveryById: mocks.getEmailDeliveryById,
+}))
+vi.mock('@/server/auth/require-auth', () => ({
+  requireAdmin: mocks.requireAdmin,
 }))
 
 import { GET } from './route'
@@ -13,6 +17,10 @@ import { GET } from './route'
 describe('GET /api/email-deliveries/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'staff-1', email: 'staff@example.com', firstName: null, lastName: null, role: 'STAFF' },
+    })
   })
 
   it('returns an email delivery record', async () => {

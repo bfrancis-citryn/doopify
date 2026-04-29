@@ -42,6 +42,7 @@ Doopify is no longer a prototype or only a UI shell. It has a working admin, sto
 - Typed internal event dispatcher
 - Static server-side integration registry
 - First-party event consumers for logging, order confirmation email delivery, and durable lifecycle analytics fan-out
+- Prisma-backed background jobs for side effects with persisted status, claiming, retry/backoff, exhaustion, and secure cron runner
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated integration specs for checkout inventory, payment idempotency, discount usage, webhook retry, and refund/return behavior
 
 ### Active phase
@@ -127,6 +128,11 @@ Historical planning files live in `docs/archive/`. Do not use archived docs as c
 - `/api/webhook-deliveries/[id]`
 - `/api/webhook-deliveries/[id]/replay`
 - `/api/webhook-retries/run`
+- `/api/jobs`
+- `/api/jobs/[id]`
+- `/api/jobs/[id]/retry`
+- `/api/jobs/[id]/cancel`
+- `/api/jobs/run`
 - `/api/outbound-webhook-deliveries`
 - `/api/outbound-webhook-deliveries/[id]/retry`
 - `/api/checkout/create`
@@ -208,6 +214,7 @@ This repo expects PostgreSQL through Prisma.
 - Put `DATABASE_URL` and `DIRECT_URL` in `.env`
 - Put app/runtime secrets in `.env.local`
 - Set `WEBHOOK_RETRY_SECRET` for cron-compatible calls to `POST /api/webhook-retries/run`
+- Set `JOB_RUNNER_SECRET` (or reuse `WEBHOOK_RETRY_SECRET`) for cron-compatible calls to `POST /api/jobs/run`
 - Production Postgres SSL should be reviewed and normalized so environments explicitly use `sslmode=verify-full`
 
 ## Notes On Media

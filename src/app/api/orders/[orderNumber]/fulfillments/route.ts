@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { createFulfillment } from '@/server/services/order.service'
 
 interface Params { params: Promise<{ orderNumber: string }> }
@@ -19,6 +20,9 @@ const schema = z.object({
 })
 
 export async function POST(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { orderNumber } = await params
   const num = parseInt(orderNumber, 10)
   if (isNaN(num)) return err('Invalid order number', 400)

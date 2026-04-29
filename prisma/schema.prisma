@@ -125,6 +125,16 @@ enum EmailDeliveryStatus {
   RESEND_REQUESTED
 }
 
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  RETRYING
+  EXHAUSTED
+  CANCELLED
+}
+
 model Store {
   id                String   @id @default(cuid())
   name              String
@@ -735,6 +745,27 @@ model EmailDelivery {
   @@index([orderId])
   @@index([providerMessageId])
   @@map("email_deliveries")
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  runAt       DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  processedAt DateTime?
+  lastError   String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAt])
+  @@index([type, status])
+  @@index([lockedAt])
+  @@map("jobs")
 }
 
 model AnalyticsEvent {

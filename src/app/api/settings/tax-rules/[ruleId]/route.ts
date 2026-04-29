@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { deleteTaxRule, updateTaxRule } from '@/server/services/shipping-tax-config.service'
 
 const updateTaxRuleSchema = z.object({
@@ -19,6 +20,9 @@ type RouteContext = {
 }
 
 export async function PATCH(req: Request, context: RouteContext) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { ruleId } = await context.params
   const body = await parseBody(req)
   if (!body) {
@@ -41,6 +45,9 @@ export async function PATCH(req: Request, context: RouteContext) {
 }
 
 export async function DELETE(_req: Request, context: RouteContext) {
+  const auth = await requireAdmin(_req)
+  if (!auth.ok) return auth.response
+
   const { ruleId } = await context.params
 
   try {

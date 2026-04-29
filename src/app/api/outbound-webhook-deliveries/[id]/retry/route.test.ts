@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   retryOutboundWebhookDelivery: vi.fn(),
+  requireAdmin: vi.fn(),
 }))
 
 vi.mock('@/server/services/outbound-webhook.service', () => ({
   retryOutboundWebhookDelivery: mocks.retryOutboundWebhookDelivery,
+}))
+vi.mock('@/server/auth/require-auth', () => ({
+  requireAdmin: mocks.requireAdmin,
 }))
 
 import { POST } from './route'
@@ -13,6 +17,10 @@ import { POST } from './route'
 describe('POST /api/outbound-webhook-deliveries/[id]/retry', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'staff-1', email: 'staff@example.com', firstName: null, lastName: null, role: 'STAFF' },
+    })
   })
 
   it('retries a delivery by id', async () => {

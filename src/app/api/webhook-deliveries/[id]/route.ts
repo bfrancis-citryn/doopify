@@ -1,11 +1,15 @@
 import { err, ok } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getWebhookDeliveryDiagnostics } from '@/server/services/webhook-delivery.service'
 
 interface Params {
   params: Promise<{ id: string }>
 }
 
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { id } = await params
 
   try {

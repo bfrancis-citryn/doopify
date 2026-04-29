@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-import { err, getToken, ok, parseBody } from '@/lib/api'
-import { verifyToken } from '@/lib/auth'
+import { err, ok, parseBody } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { dollarsToCents } from '@/lib/money'
 import { closeReturnWithRefund, updateReturnStatus } from '@/server/services/return.service'
 
@@ -27,8 +27,8 @@ const updateReturnSchema = z.object({
 })
 
 export async function PATCH(req: Request, { params }: Params) {
-  const token = getToken(req)
-  if (!token || !(await verifyToken(token))) return err('Unauthorized', 401)
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
 
   const { returnId } = await params
 

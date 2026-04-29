@@ -1,6 +1,7 @@
 import type { WebhookDeliveryStatus } from '@prisma/client'
 
 import { err, ok } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getWebhookDeliveries } from '@/server/services/webhook-delivery.service'
 
 const WEBHOOK_STATUSES: WebhookDeliveryStatus[] = [
@@ -19,6 +20,9 @@ function parseStatus(value: string | null): WebhookDeliveryStatus | undefined {
 }
 
 export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(req.url)
     const deliveries = await getWebhookDeliveries({

@@ -1,4 +1,5 @@
 import { err, ok } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { resendEmailDelivery } from '@/server/services/email-delivery.service'
 
 export const runtime = 'nodejs'
@@ -7,7 +8,10 @@ interface Params {
   params: Promise<{ id: string }>
 }
 
-export async function POST(_req: Request, { params }: Params) {
+export async function POST(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { id } = await params
 
   try {

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { createTaxRule, listTaxRules } from '@/server/services/shipping-tax-config.service'
 
 const createTaxRuleSchema = z.object({
@@ -12,7 +13,10 @@ const createTaxRuleSchema = z.object({
   priority: z.number().int().min(0).max(10000).optional(),
 })
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const rules = await listTaxRules()
     return ok(rules)
@@ -23,6 +27,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const body = await parseBody(req)
   if (!body) {
     return err('Invalid request body')

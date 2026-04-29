@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getProduct, updateProduct, archiveProduct, upsertOptions } from '@/server/services/product.service'
 
 interface Params {
@@ -74,6 +75,9 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { id } = await params
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
@@ -121,6 +125,9 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const auth = await requireAdmin(_req)
+  if (!auth.ok) return auth.response
+
   const { id } = await params
   try {
     const existingProduct = await getProduct(id)

@@ -91,6 +91,8 @@ Do not expose:
 
 Use the typed event system for internal integration behavior.
 
+Any new background side effect such as emails, outbound webhooks, imports, exports, abandoned checkout recovery, smart collection refreshes, or scheduled publishing should use the job abstraction instead of ad hoc route/service execution.
+
 Do not introduce:
 
 - dynamic filesystem plugin loading
@@ -131,6 +133,7 @@ Rules:
 
 - Keep `src/proxy.ts` as the outer route gate.
 - Sensitive API routes must also authorize themselves with route-level helpers from `src/server/auth/require-auth.ts`.
+- Any API route that mutates products, orders, refunds, returns, settings, integrations, media, email delivery, webhook replay, or admin-only data must call `requireAdmin`, `requireOwner`, or `requireRole` inside the route handler.
 - Use `requireAdmin(req)` for admin mutations such as products, variants, orders, fulfillments, refunds, returns, settings, integrations, media uploads, webhook replay/retry, and email resend actions.
 - Use `requireOwner(req)` for owner-only settings, staff/account management, or dangerous operational actions.
 - Do not trust client-submitted roles or raw `x-user-role` headers as the only authorization source.

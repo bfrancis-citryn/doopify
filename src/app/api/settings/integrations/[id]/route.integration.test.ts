@@ -1,7 +1,15 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { prisma } from '@/lib/prisma'
 import { decrypt, encrypt } from '@/server/utils/crypto'
+
+vi.mock('@/server/auth/require-auth', () => ({
+  requireAdmin: vi.fn().mockResolvedValue({
+    ok: true,
+    user: { id: 'owner-1', email: 'owner@example.com', firstName: null, lastName: null, role: 'OWNER' },
+  }),
+}))
+
 import { PUT } from './route'
 
 const runIntegration =

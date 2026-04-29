@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { createShippingRate } from '@/server/services/shipping-tax-config.service'
 
 const createShippingRateSchema = z
@@ -37,6 +38,9 @@ type RouteContext = {
 }
 
 export async function POST(req: Request, context: RouteContext) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { zoneId } = await context.params
   const body = await parseBody(req)
   if (!body) {

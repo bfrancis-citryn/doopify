@@ -25,6 +25,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 
 - `src/proxy.ts` uses boundary-safe public-prefix matching
 - admin and private API protection is running through the active Next.js 16 proxy hook
+- Sensitive API routes use route-level authorization helpers in addition to `src/proxy.ts`. Proxy protection is the outer gate; route-level helpers are the route's own authorization guard.
 - route-level auth helpers in `src/server/auth/require-auth.ts` provide a second authorization layer for sensitive API handlers
 - product and variant creation routes now call `requireAdmin(req)` before mutation work
 - the old idea of adding `src/middleware.ts` was intentionally not kept because the repo should not maintain both proxy and middleware flows
@@ -218,6 +219,11 @@ These invariants should not be broken by future work:
 - exhausted deliveries must remain visible to the admin as a dead-letter state
 - manual retries must not erase the history needed to debug earlier failures
 - typed internal events remain the source of outbound delivery creation
+
+## Background Job Invariants
+
+- Background side effects are persisted as jobs and processed with claiming, retries, backoff, and exhaustion.
+- Core commerce truth such as payment success, order creation, inventory decrement, refunds, returns, and discount usage must not depend on background job success.
 
 ## Transactional Email Hardening Target
 

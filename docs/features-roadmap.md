@@ -46,6 +46,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Internal typed event dispatcher plus a static integration registry
 - First-party event consumers for logging and order confirmation email delivery
 - Durable server-side analytics event fan-out and `AnalyticsEvent` persistence for checkout/order/refund/return/email/webhook lifecycle events
+- Prisma-backed background job abstraction for side effects with claiming, retries/backoff, exhaustion, and cron-compatible runner API
 - Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
 - Public storefront settings endpoint for branding-safe store data
 - Collection service layer and storefront-safe collection DTOs
@@ -223,6 +224,13 @@ Status: active; refund/return, outbound webhook, transactional email observabili
 - typed lifecycle analytics events for checkout creation/failure, order creation/payment, refund issuance, return requested/closed, email sent/failed, and webhook delivered/failed
 - analytics consumer wired into the existing typed internal event registry
 - analytics persistence isolated from commerce durability through handler-failure containment
+
+#### Background Side-Effect Jobs
+
+- Prisma-backed `Job` model and `JobStatus` lifecycle for persisted side effects
+- job service with enqueue, claiming, running, retry scheduling, failure exhaustion, and safe admin-oriented payload redaction
+- secure cron-compatible runner route at `POST /api/jobs/run`
+- initial integration of order-confirmation email dispatch through the job abstraction so checkout/order/payment/inventory truth remains decoupled from email send success
 
 ### Next Phase 4 Slice: Transactional Email Observability
 

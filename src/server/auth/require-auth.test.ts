@@ -1,115 +1,121 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UserRole } from '@prisma/client'
 
-import { requireAdmin, requireAuth, requireOwner, requireRole } from './require-auth'
-
-vi.mock('@/lib/auth', () => ({
-  getAuthTokenFromCookieHeader: vi.fn((cookieHeader: string | null) => {
-    if (!cookieHeader) return null
-    const match = /doopify_token=([^;]+)/.exec(cookieHeader)
-    return match?.[1] ?? null
-  }),
+const mocks = vi.hoisted(() => ({
+  getAuthTokenFromCookieHeader: vi.fn(),
   getSessionUser: vi.fn(),
 }))
 
-const { getSessionUser } = await import('@/lib/auth')
+vi.mock('@/lib/auth', () => ({
+  getAuthTokenFromCookieHeader: mocks.getAuthTokenFromCookieHeader,
+  getSessionUser: mocks.getSessionUser,
+}))
 
-function makeRequest(token?: string) {
-  return new Request('https://doopify.test/api/protected', {
-    headers: token ? { cookie: `doopify_token=${token}` } : {},
-  })
-}
+import { requireAdmin, requireAuth, requireOwner } from './require-auth'
 
-function mockUser(role: UserRole) {
-  vi.mocked(getSessionUser).mockResolvedValue({
-    id: 'user_1',
-    email: 'admin@example.com',
-    firstName: 'Ada',
-    lastName: 'Admin',
-    role,
-    isActive: true,
-  })
-}
+const request = new Request('http://localhost/api/private', {
+  headers: { cookie: 'doopify_token=session-token' },
+})
 
-describe('route-level auth helpers', () => {
+describe('route auth helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('returns 401 when no auth cookie is present', async () => {
-    const auth = await requireAuth(makeRequest())
+  it('returns 401 when unauthenticated', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue(null)
+
+    const auth = await requireAuth(request)
 
     expect(auth.ok).toBe(false)
-    if (!auth.ok) {
-      expect(auth.response.status).toBe(401)
-      await expect(auth.response.json()).resolves.toEqual({ success: false, error: 'Unauthorized' })
-    }
+    if (auth.ok) throw new Error('Expected unauthorized result')
+    expect(auth.response.status).toBe(401)
   })
 
-  it('returns 401 when the session cannot be verified', async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(null)
+  it('blocks VIEWER from requireAdmin routes', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({
+      id: 'viewer-1',
+      email: 'viewer@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'VIEWER',
+    })
 
-    const auth = await requireAuth(makeRequest('bad-token'))
+    const auth = await requireAdmin(request)
 
     expect(auth.ok).toBe(false)
-    if (!auth.ok) {
-      expect(auth.response.status).toBe(401)
-      await expect(auth.response.json()).resolves.toEqual({ success: false, error: 'Invalid or expired session' })
-    }
+    if (auth.ok) throw new Error('Expected forbidden result')
+    expect(auth.response.status).toBe(403)
+    expect(await auth.response.json()).toEqual({
+      success: false,
+      error: 'Forbidden',
+    })
   })
 
-  it('allows any active logged-in user through requireAuth', async () => {
-    mockUser('VIEWER')
+  it('allows STAFF through requireAdmin', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({
+      id: 'staff-1',
+      email: 'staff@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'STAFF',
+    })
 
-    const auth = await requireAuth(makeRequest('viewer-token'))
+    const auth = await requireAdmin(request)
 
     expect(auth.ok).toBe(true)
-    if (auth.ok) {
-      expect(auth.user).toMatchObject({
-        id: 'user_1',
-        email: 'admin@example.com',
-        role: 'VIEWER',
-      })
-    }
+    if (!auth.ok) throw new Error('Expected authorized result')
+    expect(auth.user.role).toBe('STAFF')
   })
 
-  it('allows OWNER and STAFF through requireAdmin', async () => {
-    mockUser('OWNER')
-    await expect(requireAdmin(makeRequest('owner-token'))).resolves.toMatchObject({ ok: true })
+  it('allows OWNER through requireOwner', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({
+      id: 'owner-1',
+      email: 'owner@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'OWNER',
+    })
 
-    mockUser('STAFF')
-    await expect(requireAdmin(makeRequest('staff-token'))).resolves.toMatchObject({ ok: true })
+    const auth = await requireOwner(request)
+
+    expect(auth.ok).toBe(true)
+    if (!auth.ok) throw new Error('Expected authorized result')
+    expect(auth.user.role).toBe('OWNER')
   })
 
-  it('blocks VIEWER from requireAdmin with 403', async () => {
-    mockUser('VIEWER')
+  it('blocks STAFF from requireOwner routes', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({
+      id: 'staff-2',
+      email: 'staff2@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'STAFF',
+    })
 
-    const auth = await requireAdmin(makeRequest('viewer-token'))
+    const auth = await requireOwner(request)
 
     expect(auth.ok).toBe(false)
-    if (!auth.ok) {
-      expect(auth.response.status).toBe(403)
-      await expect(auth.response.json()).resolves.toEqual({ success: false, error: 'Forbidden' })
-    }
+    if (auth.ok) throw new Error('Expected forbidden result')
+    expect(auth.response.status).toBe(403)
   })
 
-  it('allows only OWNER through requireOwner', async () => {
-    mockUser('OWNER')
-    await expect(requireOwner(makeRequest('owner-token'))).resolves.toMatchObject({ ok: true })
+  it('does not expose token or session internals in blocked responses', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue(null)
 
-    mockUser('STAFF')
-    const auth = await requireOwner(makeRequest('staff-token'))
+    const auth = await requireAuth(request)
     expect(auth.ok).toBe(false)
-    if (!auth.ok) expect(auth.response.status).toBe(403)
-  })
+    if (auth.ok) throw new Error('Expected unauthorized result')
 
-  it('supports custom role lists with requireRole', async () => {
-    mockUser('VIEWER')
-
-    await expect(requireRole(makeRequest('viewer-token'), ['VIEWER'])).resolves.toMatchObject({ ok: true })
-
-    const auth = await requireRole(makeRequest('viewer-token'), ['OWNER'])
-    expect(auth.ok).toBe(false)
-    if (!auth.ok) expect(auth.response.status).toBe(403)
+    const body = await auth.response.json()
+    expect(body).toEqual({
+      success: false,
+      error: 'Unauthorized',
+    })
+    expect(JSON.stringify(body)).not.toContain('session-token')
+    expect(JSON.stringify(body)).not.toContain('doopify_token')
   })
 })

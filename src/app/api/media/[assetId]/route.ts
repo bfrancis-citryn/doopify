@@ -1,5 +1,6 @@
 import { err, ok, parseBody } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { NextResponse } from 'next/server'
 
 interface Params {
@@ -30,6 +31,9 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const body = await parseBody<{ altText?: string }>(req)
   if (!body) return err('Invalid request body')
 
@@ -86,6 +90,9 @@ export async function PATCH(req: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const auth = await requireAdmin(_req)
+  if (!auth.ok) return auth.response
+
   try {
     const { assetId } = await params
     await prisma.mediaAsset.delete({ where: { id: assetId } })

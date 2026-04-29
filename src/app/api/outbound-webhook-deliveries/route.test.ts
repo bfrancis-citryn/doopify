@@ -7,15 +7,23 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
     },
   },
+  requireAdmin: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
+vi.mock('@/server/auth/require-auth', () => ({
+  requireAdmin: mocks.requireAdmin,
+}))
 
 import { GET } from './route'
 
 describe('GET /api/outbound-webhook-deliveries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'staff-1', email: 'staff@example.com', firstName: null, lastName: null, role: 'STAFF' },
+    })
     mocks.prisma.outboundWebhookDelivery.count.mockResolvedValue(1)
     mocks.prisma.outboundWebhookDelivery.findMany.mockResolvedValue([
       {
