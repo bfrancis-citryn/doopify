@@ -275,6 +275,9 @@ Rules:
 - persist enough snapshot data to keep historical order truth accurate
 - persist shipping/tax resolution decisions with checkout snapshots
 - keep browser display logic separate from server pricing authority
+- keep the core checkout pricing API cents-only; dashboard and storefront dollar values must be converted at route/API boundaries before service logic runs
+- do not guess whether a number is dollars or cents based on size
+- `Discount.value` is a percentage for `PERCENTAGE` discounts and integer cents for `FIXED_AMOUNT` discounts until the discount model is split into explicit percentage/value fields
 
 ## Inventory Hardening Target
 
