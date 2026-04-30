@@ -77,6 +77,11 @@ enum ShippingLiveProvider {
   SHIPPO
 }
 
+enum TaxStrategy {
+  NONE
+  MANUAL
+}
+
 enum DiscountStatus {
   ACTIVE
   SCHEDULED
@@ -202,6 +207,14 @@ model Store {
   shippingFallbackEnabled Boolean @default(true)
   domesticTaxRate   Float   @default(0.07)
   internationalTaxRate Float @default(0.0)
+  taxEnabled        Boolean @default(false)
+  taxStrategy       TaxStrategy @default(NONE)
+  defaultTaxRateBps Int     @default(0)
+  taxShipping       Boolean @default(false)
+  pricesIncludeTax  Boolean @default(false)
+  taxOriginCountry  String?
+  taxOriginState    String?
+  taxOriginPostalCode String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   shippingZones     ShippingZone[]

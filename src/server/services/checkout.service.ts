@@ -321,7 +321,7 @@ export async function createCheckoutPaymentIntent(input: {
     selectedShippingQuoteId: input.selectedShippingQuoteId,
   })
 
-  const pricing = buildCheckoutPricingWithDecisionsCents(lineItems, store?.shippingThresholdCents, {
+  const pricingOptions = {
     discount: discount
       ? {
           ...discount,
@@ -362,6 +362,13 @@ export async function createCheckoutPaymentIntent(input: {
       isActive: rule.isActive,
       priority: rule.priority,
     })),
+    taxSettings: {
+      enabled: store?.taxEnabled,
+      strategy: store?.taxStrategy,
+      defaultTaxRateBps: store?.defaultTaxRateBps,
+      taxShipping: store?.taxShipping,
+      pricesIncludeTax: store?.pricesIncludeTax,
+    },
     ...(store?.country
       ? {
           taxRates: {
@@ -370,15 +377,29 @@ export async function createCheckoutPaymentIntent(input: {
           },
         }
       : {}),
-  })
+  }
+  const pricing = buildCheckoutPricingWithDecisionsCents(
+    lineItems,
+    store?.shippingThresholdCents,
+    pricingOptions
+  )
   const selectedShippingRate = mapShippingQuoteForSnapshot(shippingResolution.selectedQuote)
-  const shippingAmountCents = selectedShippingRate.amountCents
-  const discountAmountCents =
-    pricing.appliedDiscount?.method === 'FREE_SHIPPING' ? shippingAmountCents : pricing.discountAmountCents ?? 0
-  const totalCents = (pricing.subtotalCents ?? 0) + shippingAmountCents + (pricing.taxAmountCents ?? 0) - discountAmountCents
-  const appliedDiscount = pricing.appliedDiscount
+  const pricingWithSelectedShipping = buildCheckoutPricingWithDecisionsCents(
+    lineItems,
+    store?.shippingThresholdCents,
+    {
+      ...pricingOptions,
+      selectedShippingAmountCents: selectedShippingRate.amountCents,
+      selectedShippingRateId: selectedShippingRate.id,
+    }
+  )
+  const shippingAmountCents = pricingWithSelectedShipping.shippingAmountCents
+  const discountAmountCents = pricingWithSelectedShipping.discountAmountCents ?? 0
+  const taxAmountCents = pricingWithSelectedShipping.taxAmountCents ?? 0
+  const totalCents = pricingWithSelectedShipping.totalCents
+  const appliedDiscount = pricingWithSelectedShipping.appliedDiscount
     ? {
-        ...pricing.appliedDiscount,
+        ...pricingWithSelectedShipping.appliedDiscount,
         amountCents: discountAmountCents,
       }
     : null
@@ -406,13 +427,13 @@ export async function createCheckoutPaymentIntent(input: {
     pricingSnapshot: {
       computedAt: new Date().toISOString(),
       currency,
-      subtotalCents: pricing.subtotalCents ?? 0,
+      subtotalCents: pricingWithSelectedShipping.subtotalCents ?? 0,
       shippingAmountCents,
-      taxAmountCents: pricing.taxAmountCents ?? 0,
+      taxAmountCents,
       discountAmountCents,
       totalCents,
-      shippingDecision: pricing.shippingDecision,
-      taxDecision: pricing.taxDecision,
+      shippingDecision: pricingWithSelectedShipping.shippingDecision,
+      taxDecision: pricingWithSelectedShipping.taxDecision,
     },
     selectedShippingRate,
     ...(appliedDiscount ? { discountApplications: [appliedDiscount] } : {}),
@@ -424,8 +445,8 @@ export async function createCheckoutPaymentIntent(input: {
       customerId: customer?.id,
       email: normalizedEmail,
       currency,
-      subtotalCents: pricing.subtotalCents ?? 0,
-      taxAmountCents: pricing.taxAmountCents ?? 0,
+      subtotalCents: pricingWithSelectedShipping.subtotalCents ?? 0,
+      taxAmountCents,
       shippingAmountCents,
       discountAmountCents,
       totalCents,
@@ -446,7 +467,7 @@ export async function createCheckoutPaymentIntent(input: {
     paymentIntentId: paymentIntent.id,
     clientSecret: paymentIntent.client_secret,
     currency,
-    ...mapCheckoutPricingForPresentation(pricing),
+    ...mapCheckoutPricingForPresentation(pricingWithSelectedShipping),
     shippingAmountCents,
     discountAmountCents,
     totalCents,

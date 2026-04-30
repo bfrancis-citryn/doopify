@@ -14,6 +14,7 @@ import AdminSavedState from '../admin/ui/AdminSavedState';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTooltip from '../admin/ui/AdminTooltip';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
+import { buildCheckoutPricingWithDecisionsCents } from '@/server/checkout/pricing';
 
 const SETTINGS_SECTIONS = [
   { id: 'brand-kit', label: 'Brand kit' },
@@ -115,6 +116,24 @@ const EMPTY_TAX_FORM = {
   isActive: true,
 };
 
+const EMPTY_TAX_SETTINGS = {
+  enabled: false,
+  strategy: 'NONE',
+  defaultTaxRatePercent: '0',
+  taxShipping: false,
+  pricesIncludeTax: false,
+  originCountry: '',
+  originState: '',
+  originPostalCode: '',
+};
+
+const EMPTY_SHIPPING_TAX_PREVIEW = {
+  subtotal: '75',
+  country: 'US',
+  province: '',
+  selectedRateId: '',
+};
+
 function parseNumberOrUndefined(value) {
   if (value == null || value === '') return undefined;
   const parsed = Number(value);
@@ -204,6 +223,9 @@ export default function SettingsWorkspace() {
   const [shippingConfigLoaded, setShippingConfigLoaded] = useState(false);
   const [shippingZones, setShippingZones] = useState([]);
   const [taxRules, setTaxRules] = useState([]);
+  const [taxSettings, setTaxSettings] = useState(EMPTY_TAX_SETTINGS);
+  const [taxSettingsSaving, setTaxSettingsSaving] = useState(false);
+  const [shippingTaxPreview, setShippingTaxPreview] = useState(EMPTY_SHIPPING_TAX_PREVIEW);
   const [newZone, setNewZone] = useState(EMPTY_ZONE_FORM);
   const [newTaxRule, setNewTaxRule] = useState(EMPTY_TAX_FORM);
   const [newRateByZoneId, setNewRateByZoneId] = useState({});
@@ -284,14 +306,25 @@ export default function SettingsWorkspace() {
       setShippingConfigLoading(true);
       setShippingConfigError('');
       try {
-        const [zonesData, taxRulesData] = await Promise.all([
+        const [zonesData, taxRulesData, taxSettingsData] = await Promise.all([
           fetch('/api/settings/shipping-zones').then(parseApiJson),
           fetch('/api/settings/tax-rules').then(parseApiJson),
+          fetch('/api/settings/tax', { cache: 'no-store' }).then(parseApiJson),
         ]);
 
         if (cancelled) return;
         setShippingZones((zonesData || []).map(toZoneForm));
         setTaxRules((taxRulesData || []).map(toTaxForm));
+        setTaxSettings({
+          enabled: Boolean(taxSettingsData?.enabled),
+          strategy: taxSettingsData?.strategy || 'NONE',
+          defaultTaxRatePercent: String(Number(taxSettingsData?.defaultTaxRatePercent ?? 0)),
+          taxShipping: Boolean(taxSettingsData?.taxShipping),
+          pricesIncludeTax: Boolean(taxSettingsData?.pricesIncludeTax),
+          originCountry: taxSettingsData?.originCountry || '',
+          originState: taxSettingsData?.originState || '',
+          originPostalCode: taxSettingsData?.originPostalCode || '',
+        });
         setShippingConfigLoaded(true);
       } catch (loadError) {
         if (cancelled) return;
@@ -311,7 +344,7 @@ export default function SettingsWorkspace() {
   }, [activeSection, shippingConfigLoaded, shippingConfigLoading]);
 
   useEffect(() => {
-    if (activeSection !== 'setup' || setupLoading || setupLoaded) {
+    if (activeSection !== 'setup' || setupLoaded) {
       return;
     }
 
@@ -332,10 +365,8 @@ export default function SettingsWorkspace() {
           setSetupError(loadError instanceof Error ? loadError.message : 'Failed to load setup diagnostics');
         }
       } finally {
-        if (!cancelled) {
-          setSetupLoading(false);
-          setSetupLoaded(true);
-        }
+        setSetupLoading(false);
+        setSetupLoaded(true);
       }
     }
 
@@ -344,7 +375,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, setupLoaded, setupLoading]);
+  }, [activeSection, setupLoaded]);
 
   const setupChecks = useMemo(() => {
     if (!setupStatus) return [];
@@ -383,6 +414,11 @@ export default function SettingsWorkspace() {
   }, [setupCheckById]);
 
   const setupMissingEnvVars = useMemo(() => extractEnvVariableHints(setupChecks), [setupChecks]);
+  const hasSetupDiagnostics = Boolean(setupStatus && Array.isArray(setupStatus.requiredChecks));
+  const setupCompletionPercent = setupStatus?.completionPercent ?? 0;
+  const showSetupLoadingState = activeSection === 'setup' && setupLoading && !setupStatus && !setupError;
+  const showSetupErrorState = activeSection === 'setup' && Boolean(setupError);
+  const showSetupDiagnostics = activeSection === 'setup' && hasSetupDiagnostics;
 
   useEffect(() => {
     const timer = window.setInterval(() => setSaveClock(Date.now()), 1000);
@@ -508,13 +544,127 @@ export default function SettingsWorkspace() {
     setShippingConfigLoaded(false);
     setShippingConfigLoading(false);
     setShippingConfigError('');
-    const [zonesData, taxRulesData] = await Promise.all([
+    const [zonesData, taxRulesData, taxSettingsData] = await Promise.all([
       fetch('/api/settings/shipping-zones').then(parseApiJson),
       fetch('/api/settings/tax-rules').then(parseApiJson),
+      fetch('/api/settings/tax', { cache: 'no-store' }).then(parseApiJson),
     ]);
     setShippingZones((zonesData || []).map(toZoneForm));
     setTaxRules((taxRulesData || []).map(toTaxForm));
+    setTaxSettings({
+      enabled: Boolean(taxSettingsData?.enabled),
+      strategy: taxSettingsData?.strategy || 'NONE',
+      defaultTaxRatePercent: String(Number(taxSettingsData?.defaultTaxRatePercent ?? 0)),
+      taxShipping: Boolean(taxSettingsData?.taxShipping),
+      pricesIncludeTax: Boolean(taxSettingsData?.pricesIncludeTax),
+      originCountry: taxSettingsData?.originCountry || '',
+      originState: taxSettingsData?.originState || '',
+      originPostalCode: taxSettingsData?.originPostalCode || '',
+    });
     setShippingConfigLoaded(true);
+  }
+
+  const shippingTaxPreviewPricing = useMemo(() => {
+    const subtotalDollars = parseNumberOrUndefined(shippingTaxPreview.subtotal) ?? 0;
+    const subtotalCents = Math.max(0, Math.round(subtotalDollars * 100));
+    const shippingThresholdDollars = parseNumberOrUndefined(settings.freeShippingThreshold);
+    const shippingThresholdCents =
+      shippingThresholdDollars == null ? null : Math.max(0, Math.round(shippingThresholdDollars * 100));
+    const domesticCents = Math.max(0, Math.round((parseNumberOrUndefined(settings.domesticShippingRate) ?? 0) * 100));
+    const internationalCents = Math.max(
+      0,
+      Math.round((parseNumberOrUndefined(settings.internationalShippingRate) ?? 0) * 100)
+    );
+    const defaultTaxRateBps = Math.max(
+      0,
+      Math.round((parseNumberOrUndefined(taxSettings.defaultTaxRatePercent) ?? 0) * 100)
+    );
+
+    return buildCheckoutPricingWithDecisionsCents(
+      [{ priceCents: subtotalCents, quantity: 1 }],
+      shippingThresholdCents,
+      {
+        shippingAddress: {
+          country: shippingTaxPreview.country,
+          province: shippingTaxPreview.province,
+        },
+        storeCountry: taxSettings.originCountry || settings.taxOriginCountry || 'US',
+        shippingRates: {
+          domesticCents,
+          internationalCents,
+        },
+        shippingZones: shippingZones.map((zone) => ({
+          id: zone.id,
+          name: zone.name,
+          countryCode: zone.countryCode,
+          provinceCode: zone.provinceCode || null,
+          isActive: zone.isActive,
+          priority: parseNumberOrUndefined(zone.priority) ?? 100,
+          rates: zone.rates.map((rate) => ({
+            id: rate.id,
+            name: rate.name,
+            method: rate.method,
+            amountCents: Math.max(0, Math.round((parseNumberOrUndefined(rate.amount) ?? 0) * 100)),
+            minSubtotalCents:
+              rate.minSubtotal === '' ? null : Math.max(0, Math.round((parseNumberOrUndefined(rate.minSubtotal) ?? 0) * 100)),
+            maxSubtotalCents:
+              rate.maxSubtotal === '' ? null : Math.max(0, Math.round((parseNumberOrUndefined(rate.maxSubtotal) ?? 0) * 100)),
+            isActive: rate.isActive,
+            priority: parseNumberOrUndefined(rate.priority) ?? 100,
+          })),
+        })),
+        taxSettings: {
+          enabled: taxSettings.enabled,
+          strategy: taxSettings.strategy,
+          defaultTaxRateBps,
+          taxShipping: taxSettings.taxShipping,
+          pricesIncludeTax: taxSettings.pricesIncludeTax,
+        },
+        selectedShippingRateId: shippingTaxPreview.selectedRateId || undefined,
+      }
+    );
+  }, [settings, shippingTaxPreview, shippingZones, taxSettings]);
+
+  async function handleSaveTaxSettings() {
+    const ratePercent = parseNumberOrUndefined(taxSettings.defaultTaxRatePercent);
+    if (ratePercent == null || ratePercent < 0 || ratePercent > 100) {
+      setShippingConfigError('Manual tax rate must be between 0 and 100%.');
+      return;
+    }
+
+    try {
+      setShippingConfigError('');
+      setTaxSettingsSaving(true);
+      const updated = await fetch('/api/settings/tax', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: taxSettings.enabled,
+          strategy: taxSettings.strategy,
+          defaultTaxRatePercent: ratePercent,
+          taxShipping: taxSettings.taxShipping,
+          pricesIncludeTax: taxSettings.pricesIncludeTax,
+          originCountry: taxSettings.originCountry || null,
+          originState: taxSettings.originState || null,
+          originPostalCode: taxSettings.originPostalCode || null,
+        }),
+      }).then(parseApiJson);
+
+      setTaxSettings({
+        enabled: Boolean(updated?.enabled),
+        strategy: updated?.strategy || 'NONE',
+        defaultTaxRatePercent: String(Number(updated?.defaultTaxRatePercent ?? 0)),
+        taxShipping: Boolean(updated?.taxShipping),
+        pricesIncludeTax: Boolean(updated?.pricesIncludeTax),
+        originCountry: updated?.originCountry || '',
+        originState: updated?.originState || '',
+        originPostalCode: updated?.originPostalCode || '',
+      });
+    } catch (saveError) {
+      setShippingConfigError(saveError instanceof Error ? saveError.message : 'Failed to save tax settings');
+    } finally {
+      setTaxSettingsSaving(false);
+    }
   }
 
   async function refreshSetupStatus() {
@@ -1027,14 +1177,6 @@ export default function SettingsWorkspace() {
                     <span>International shipping rate</span>
                     <input className={styles.input} onChange={(event) => updateSettings({ internationalShippingRate: event.target.value })} value={settings.internationalShippingRate} />
                   </label>
-                  <label className={styles.field}>
-                    <span>Domestic tax rate (%)</span>
-                    <input className={styles.input} onChange={(event) => updateSettings({ domesticTaxRate: event.target.value })} value={settings.domesticTaxRate} />
-                  </label>
-                  <label className={styles.field}>
-                    <span>International tax rate (%)</span>
-                    <input className={styles.input} onChange={(event) => updateSettings({ internationalTaxRate: event.target.value })} value={settings.internationalTaxRate} />
-                  </label>
                 </div>
 
                 {shippingConfigLoading ? (
@@ -1290,6 +1432,104 @@ export default function SettingsWorkspace() {
 
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
+                    <h3>Tax settings (manual)</h3>
+                  </div>
+
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.checkboxField}>
+                      <input
+                        checked={taxSettings.enabled}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, enabled: event.target.checked }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>Enable tax collection</span>
+                    </label>
+                    <label className={styles.field}>
+                      <span>Strategy</span>
+                      <select
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, strategy: event.target.value }))
+                        }
+                        value={taxSettings.strategy}
+                      >
+                        <option value="NONE">No tax</option>
+                        <option value="MANUAL">Manual</option>
+                      </select>
+                    </label>
+                    <label className={styles.field}>
+                      <span>Manual tax rate (%)</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({
+                            ...current,
+                            defaultTaxRatePercent: event.target.value,
+                          }))
+                        }
+                        value={taxSettings.defaultTaxRatePercent}
+                      />
+                    </label>
+                    <label className={styles.checkboxField}>
+                      <input
+                        checked={taxSettings.taxShipping}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, taxShipping: event.target.checked }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>Tax shipping</span>
+                    </label>
+                    <label className={styles.checkboxField}>
+                      <input
+                        checked={taxSettings.pricesIncludeTax}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, pricesIncludeTax: event.target.checked }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>Prices include tax</span>
+                    </label>
+                    <label className={styles.field}>
+                      <span>Origin country</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, originCountry: event.target.value }))
+                        }
+                        value={taxSettings.originCountry}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Origin state</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, originState: event.target.value }))
+                        }
+                        value={taxSettings.originState}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Origin postal code</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, originPostalCode: event.target.value }))
+                        }
+                        value={taxSettings.originPostalCode}
+                      />
+                    </label>
+                    <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
+                      {taxSettingsSaving ? 'Saving tax settings...' : 'Save tax settings'}
+                    </AdminButton>
+                  </div>
+                </section>
+
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
                     <h3>Tax rules</h3>
                   </div>
 
@@ -1362,6 +1602,83 @@ export default function SettingsWorkspace() {
                     </div>
                   ))}
                 </section>
+
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Calculation preview</h3>
+                  </div>
+
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.field}>
+                      <span>Subtotal (USD)</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setShippingTaxPreview((current) => ({ ...current, subtotal: event.target.value }))
+                        }
+                        value={shippingTaxPreview.subtotal}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Destination country</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setShippingTaxPreview((current) => ({ ...current, country: event.target.value }))
+                        }
+                        value={shippingTaxPreview.country}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Destination state/province</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) =>
+                          setShippingTaxPreview((current) => ({ ...current, province: event.target.value }))
+                        }
+                        value={shippingTaxPreview.province}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Shipping rate</span>
+                      <select
+                        className={styles.input}
+                        onChange={(event) =>
+                          setShippingTaxPreview((current) => ({
+                            ...current,
+                            selectedRateId: event.target.value,
+                          }))
+                        }
+                        value={shippingTaxPreview.selectedRateId}
+                      >
+                        <option value="">Auto-select best rate</option>
+                        {(shippingTaxPreviewPricing.shippingDecision?.availableRates || []).map((rate) => (
+                          <option key={rate.id} value={rate.id}>
+                            {rate.label} (${(rate.amountCents / 100).toFixed(2)})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>
+                      Subtotal ${((shippingTaxPreviewPricing.subtotalCents || 0) / 100).toFixed(2)} • Shipping $
+                      {((shippingTaxPreviewPricing.shippingAmountCents || 0) / 100).toFixed(2)} • Tax $
+                      {((shippingTaxPreviewPricing.taxAmountCents || 0) / 100).toFixed(2)}
+                    </p>
+                    <p className={styles.statusText}>
+                      Total: ${((shippingTaxPreviewPricing.totalCents || 0) / 100).toFixed(2)}
+                    </p>
+                    <p className={styles.statusText}>
+                      Shipping source: {shippingTaxPreviewPricing.shippingDecision?.source || 'none'} | Tax source:{' '}
+                      {shippingTaxPreviewPricing.taxDecision?.source || 'none'}
+                    </p>
+                    {shippingTaxPreviewPricing.shippingDecision?.warning ? (
+                      <p className={styles.statusText}>{shippingTaxPreviewPricing.shippingDecision.warning}</p>
+                    ) : null}
+                  </div>
+                </section>
               </div>
             ) : null}
 
@@ -1399,18 +1716,20 @@ export default function SettingsWorkspace() {
 
             {!loading && !error && activeSection === 'setup' ? (
               <div className={styles.setupPanel}>
-                <AdminCard className={styles.setupSummaryCard} variant="card">
-                  <div>
-                    <p className={styles.eyebrow}>Setup health</p>
-                    <h3 className={styles.setupHeadline}>{setupStatus?.overallStatus?.replaceAll('_', ' ') || 'Loading diagnostics'}</h3>
-                    <p className={styles.statusText}>Completion: {setupStatus?.completionPercent ?? 0}%</p>
-                  </div>
-                  <div className={styles.setupMeterTrack} role="img" aria-label={`Setup completion ${setupStatus?.completionPercent ?? 0}%`}>
-                    <div className={styles.setupMeterFill} style={{ width: `${setupStatus?.completionPercent ?? 0}%` }} />
-                  </div>
-                </AdminCard>
+                {showSetupDiagnostics ? (
+                  <AdminCard className={styles.setupSummaryCard} variant="card">
+                    <div>
+                      <p className={styles.eyebrow}>Setup health</p>
+                      <h3 className={styles.setupHeadline}>{setupStatus?.overallStatus?.replaceAll('_', ' ') || 'unknown'}</h3>
+                      <p className={styles.statusText}>Completion: {setupCompletionPercent}%</p>
+                    </div>
+                    <div className={styles.setupMeterTrack} role="img" aria-label={`Setup completion ${setupCompletionPercent}%`}>
+                      <div className={styles.setupMeterFill} style={{ width: `${setupCompletionPercent}%` }} />
+                    </div>
+                  </AdminCard>
+                ) : null}
 
-                {setupLoading ? (
+                {showSetupLoadingState ? (
                   <div className={styles.statusBlock}>
                     <div className={styles.loadingLine} />
                     <div className={styles.loadingLine} />
@@ -1419,14 +1738,21 @@ export default function SettingsWorkspace() {
                   </div>
                 ) : null}
 
-                {setupError ? (
+                {showSetupErrorState ? (
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>Setup diagnostics error</p>
                     <p className={styles.statusText}>{setupError}</p>
                   </div>
                 ) : null}
 
-                {!setupLoading && !setupError ? (
+                {!showSetupLoadingState && !showSetupErrorState && !showSetupDiagnostics && setupLoaded ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Setup diagnostics unavailable</p>
+                    <p className={styles.statusText}>The diagnostics payload is missing expected checklist data.</p>
+                  </div>
+                ) : null}
+
+                {showSetupDiagnostics ? (
                   <>
                     <section className={styles.setupGrid}>
                       {setupCards.map((card) => (
@@ -1479,9 +1805,9 @@ export default function SettingsWorkspace() {
                     <section className={styles.setupColumns}>
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Safe next actions</h4>
-                        {setupStatus?.safeNextActions?.length ? (
+                        {(setupStatus?.safeNextActions?.length || setupStatus?.nextActions?.length) ? (
                           <ul className={styles.setupList}>
-                            {setupStatus.safeNextActions.map((action) => (
+                            {(setupStatus.safeNextActions || setupStatus.nextActions || []).map((action) => (
                               <li key={action}>{action}</li>
                             ))}
                           </ul>

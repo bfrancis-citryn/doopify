@@ -1,3 +1,15 @@
+import { calculateShipping, calculateTax } from '@/server/checkout/pricing';
+
+function toCents(value) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed * 100));
+}
+
+function toDollars(cents) {
+  return Number((Math.max(0, Number(cents || 0)) / 100).toFixed(2));
+}
+
 export function createDraftOrderSeed(products, customers, discounts) {
   const firstProduct = products[0];
   const firstVariant = firstProduct?.variants?.[0];
@@ -20,8 +32,8 @@ export function createDraftOrderSeed(products, customers, discounts) {
       : [],
     discountId: discounts[0]?.id || '',
     customDiscountAmount: 0,
-    shippingAmount: 12,
-    taxAmount: 0,
+    shippingAmount: '',
+    taxAmount: '',
     notes: '',
     paymentStatus: 'pending',
     status: 'draft',
@@ -42,38 +54,92 @@ export function createDraftLineItemFromProduct(product, variantId) {
   };
 }
 
-export function calculateDraftTotals(draftOrder, discounts = []) {
+export function calculateDraftTotals(draftOrder, discounts = [], settings = {}) {
   const subtotal = draftOrder.lineItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const selectedDiscount = discounts.find(discount => discount.id === draftOrder.discountId) || null;
-  const shipping = Number(draftOrder.shippingAmount || 0);
-  const tax = Number(draftOrder.taxAmount || 0);
-  const customDiscountAmount = Number(draftOrder.customDiscountAmount || 0);
-  let discountAmount = customDiscountAmount;
+  const subtotalCents = toCents(subtotal);
+  const customDiscountAmountCents = toCents(draftOrder.customDiscountAmount);
+  let discountAmountCents = customDiscountAmountCents;
 
   if (selectedDiscount) {
     if (selectedDiscount.method === 'free shipping') {
-      discountAmount += shipping;
+      // Free shipping is applied after rate selection below.
     } else if (selectedDiscount.valueType === 'fixed') {
-      discountAmount += Number(selectedDiscount.value || 0);
+      discountAmountCents += toCents(selectedDiscount.value);
     } else {
       const percentage = Number(selectedDiscount.value || 0);
-      discountAmount += subtotal * (percentage / 100);
+      discountAmountCents += Math.round(subtotalCents * (percentage / 100));
     }
   }
 
-  const total = Math.max(0, subtotal + shipping + tax - discountAmount);
+  const taxableSubtotalCents = Math.max(0, subtotalCents - discountAmountCents);
+  const shippingDecision = calculateShipping({
+    subtotalCents: taxableSubtotalCents,
+    shippingThresholdCents:
+      settings.freeShippingThreshold == null || settings.freeShippingThreshold === ''
+        ? null
+        : toCents(settings.freeShippingThreshold),
+    shippingAddress: {
+      country: settings.taxOriginCountry || 'US',
+      province: settings.taxOriginState || '',
+    },
+    storeCountry: settings.taxOriginCountry || 'US',
+    shippingRates: {
+      domesticCents: toCents(settings.domesticShippingRate),
+      internationalCents: toCents(settings.internationalShippingRate),
+    },
+  });
+
+  const computedShippingCents = shippingDecision.amountCents;
+  const shippingCents =
+    draftOrder.shippingAmount == null || draftOrder.shippingAmount === ''
+      ? computedShippingCents
+      : toCents(draftOrder.shippingAmount);
+  if (selectedDiscount?.method === 'free shipping') {
+    discountAmountCents += shippingCents;
+  }
+
+  const computedTax = calculateTax({
+    taxableSubtotalCents,
+    shippingAmountCents: selectedDiscount?.method === 'free shipping' ? 0 : shippingCents,
+    shippingAddress: {
+      country: settings.taxOriginCountry || 'US',
+      province: settings.taxOriginState || '',
+    },
+    storeCountry: settings.taxOriginCountry || 'US',
+    taxRates: {
+      domestic: Number(settings.domesticTaxRate || 0) / 100,
+      international: Number(settings.internationalTaxRate || 0) / 100,
+    },
+    taxSettings: {
+      enabled: Boolean(settings.taxEnabled),
+      strategy: settings.taxStrategy || 'NONE',
+      defaultTaxRateBps: Math.max(0, Math.round(Number(settings.defaultTaxRatePercent || 0) * 100)),
+      taxShipping: Boolean(settings.taxShipping),
+      pricesIncludeTax: Boolean(settings.pricesIncludeTax),
+    },
+  });
+
+  const taxCents =
+    draftOrder.taxAmount == null || draftOrder.taxAmount === ''
+      ? computedTax.amountCents
+      : toCents(draftOrder.taxAmount);
+  const pricesIncludeTax = Boolean(settings.taxEnabled && settings.pricesIncludeTax);
+  const totalCents = pricesIncludeTax
+    ? Math.max(0, subtotalCents + shippingCents - discountAmountCents)
+    : Math.max(0, subtotalCents + shippingCents + taxCents - discountAmountCents);
 
   return {
-    subtotal,
-    shipping,
-    tax,
-    discountAmount,
-    total,
+    subtotal: toDollars(subtotalCents),
+    shipping: toDollars(shippingCents),
+    tax: toDollars(taxCents),
+    discountAmount: toDollars(discountAmountCents),
+    total: toDollars(totalCents),
   };
 }
 
-export function convertDraftOrderToOrder(draftOrder, customer, discounts, existingOrderCount = 0) {
-  const totals = calculateDraftTotals(draftOrder, discounts);
+export function convertDraftOrderToOrder(draftOrder, customer, discounts, existingOrderCount = 0, settings = {}) {
+  const totals = calculateDraftTotals(draftOrder, discounts, settings);
   const selectedDiscount = discounts.find(discount => discount.id === draftOrder.discountId) || null;
   const orderNumber = `#${1000 + existingOrderCount + 1}`;
   const createdAt = new Date().toISOString();

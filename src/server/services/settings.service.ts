@@ -149,6 +149,14 @@ export async function updateStoreSettings(
     shippingInternationalRateCents: number
     domesticTaxRate: number
     internationalTaxRate: number
+    taxEnabled: boolean
+    taxStrategy: 'NONE' | 'MANUAL'
+    defaultTaxRateBps: number
+    taxShipping: boolean
+    pricesIncludeTax: boolean
+    taxOriginCountry: string | null
+    taxOriginState: string | null
+    taxOriginPostalCode: string | null
   }>
 ) {
   return prisma.store.update({
@@ -290,5 +298,13 @@ export async function getPublicStorefrontSettings() {
     shippingInternationalRate: centsToDollars(store.shippingInternationalRateCents),
     domesticTaxRate: store.domesticTaxRate,
     internationalTaxRate: store.internationalTaxRate,
+    taxEnabled: store.taxEnabled,
+    taxStrategy: store.taxStrategy,
+    defaultTaxRateBps: store.defaultTaxRateBps,
+    taxShipping: store.taxShipping,
+    pricesIncludeTax: store.pricesIncludeTax,
+    taxOriginCountry: store.taxOriginCountry,
+    taxOriginState: store.taxOriginState,
+    taxOriginPostalCode: store.taxOriginPostalCode,
   }
 }

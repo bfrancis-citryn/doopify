@@ -120,7 +120,7 @@ export default function AdminDropdown({
         ? createPortal(
             <div
               className={buildClassName(["admin-dropdown__menu", `is-${align}`])}
-              onClickCapture={(event) => {
+              onClick={(event) => {
                 const target = event.target;
                 if (!(target instanceof Element)) {
                   return;

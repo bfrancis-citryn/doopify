@@ -22,6 +22,14 @@ const DEFAULT_SETTINGS = {
   internationalShippingRate: '19.99',
   domesticTaxRate: '7',
   internationalTaxRate: '0',
+  taxEnabled: false,
+  taxStrategy: 'NONE',
+  defaultTaxRatePercent: '0',
+  taxShipping: false,
+  pricesIncludeTax: false,
+  taxOriginCountry: '',
+  taxOriginState: '',
+  taxOriginPostalCode: '',
   senderEmail: 'hello@doopify.com',
   lowInventoryAlert: '5',
 };
@@ -63,6 +71,17 @@ function transformStore(store) {
       store.internationalTaxRate != null
         ? String(Number(store.internationalTaxRate) * 100)
         : DEFAULT_SETTINGS.internationalTaxRate,
+    taxEnabled: Boolean(store.taxEnabled),
+    taxStrategy: store.taxStrategy || DEFAULT_SETTINGS.taxStrategy,
+    defaultTaxRatePercent:
+      store.defaultTaxRatePercent != null
+        ? String(Number(store.defaultTaxRatePercent))
+        : DEFAULT_SETTINGS.defaultTaxRatePercent,
+    taxShipping: Boolean(store.taxShipping),
+    pricesIncludeTax: Boolean(store.pricesIncludeTax),
+    taxOriginCountry: store.taxOriginCountry || '',
+    taxOriginState: store.taxOriginState || '',
+    taxOriginPostalCode: store.taxOriginPostalCode || '',
     senderEmail: store.email || DEFAULT_SETTINGS.senderEmail,
     lowInventoryAlert: '5',
     _storeId: store.id,
@@ -119,6 +138,26 @@ export function SettingsProvider({ children }) {
           internationalTaxRate:
             patch.internationalTaxRate != null && patch.internationalTaxRate !== ''
               ? Number(patch.internationalTaxRate) / 100
+              : undefined,
+          taxEnabled: patch.taxEnabled,
+          taxStrategy: patch.taxStrategy,
+          defaultTaxRatePercent:
+            patch.defaultTaxRatePercent != null && patch.defaultTaxRatePercent !== ''
+              ? Number(patch.defaultTaxRatePercent)
+              : undefined,
+          taxShipping: patch.taxShipping,
+          pricesIncludeTax: patch.pricesIncludeTax,
+          taxOriginCountry:
+            patch.taxOriginCountry !== undefined
+              ? patch.taxOriginCountry || null
+              : undefined,
+          taxOriginState:
+            patch.taxOriginState !== undefined
+              ? patch.taxOriginState || null
+              : undefined,
+          taxOriginPostalCode:
+            patch.taxOriginPostalCode !== undefined
+              ? patch.taxOriginPostalCode || null
               : undefined,
         }),
       });

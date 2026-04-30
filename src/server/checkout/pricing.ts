@@ -84,17 +84,35 @@ export type CheckoutPricingShippingDecision = {
   rateId?: string
   rateName?: string
   rateMethod?: CheckoutPricingZoneRate['method']
+  availableRates?: Array<{
+    id: string
+    label: string
+    amountCents: number
+    method: 'FLAT' | 'FREE' | 'PRICE_BASED'
+  }>
+  warning?: string
 }
 
 export type CheckoutPricingTaxDecision = {
   source: 'none' | 'rule' | 'fallback'
   rate: number
+  rateBps?: number
   amountCents: number
   amount?: number
   destinationCountry?: string
   destinationProvince?: string
   ruleId?: string
   ruleName?: string
+  taxableAmountCents?: number
+  label?: string
+}
+
+export type CheckoutPricingTaxSettings = {
+  enabled?: boolean
+  strategy?: 'NONE' | 'MANUAL'
+  defaultTaxRateBps?: number
+  taxShipping?: boolean
+  pricesIncludeTax?: boolean
 }
 
 export type CheckoutPricingResult = {
@@ -248,13 +266,21 @@ function calculateDiscountAmountCents(input: {
   return 0
 }
 
-function resolveShippingDecision(input: {
+function toShippingMethod(rate: CheckoutPricingZoneRate) {
+  if (rate.amountCents <= 0) {
+    return 'FREE' as const
+  }
+  return rate.method === 'SUBTOTAL_TIER' ? ('PRICE_BASED' as const) : ('FLAT' as const)
+}
+
+export function calculateShipping(input: {
   subtotalCents: number
   shippingThresholdCents?: number | null
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
   shippingRates: CheckoutPricingShippingRates
   shippingZones?: CheckoutPricingShippingZone[]
+  selectedRateId?: string
 }): CheckoutPricingShippingDecision {
   const destinationCountry = normalizeCountry(input.shippingAddress?.country)
   const destinationProvince = normalizeProvince(input.shippingAddress?.province)
@@ -265,6 +291,7 @@ function resolveShippingDecision(input: {
       amountCents: 0,
       destinationCountry,
       destinationProvince,
+      availableRates: [],
     }
   }
 
@@ -278,12 +305,23 @@ function resolveShippingDecision(input: {
       amountCents: 0,
       destinationCountry,
       destinationProvince,
+      availableRates: [
+        {
+          id: 'threshold-free-shipping',
+          label: 'Free shipping',
+          amountCents: 0,
+          method: 'FREE',
+        },
+      ],
     }
   }
 
   const zoneCandidates = (input.shippingZones ?? [])
     .filter((zone) => zone.isActive !== false)
-    .filter((zone) => getCountryCode(zone) === destinationCountry)
+    .filter((zone) => {
+      const zoneCountry = getCountryCode(zone)
+      return zoneCountry === destinationCountry || zoneCountry === 'ALL' || zoneCountry === '*'
+    })
     .filter((zone) => {
       const province = getProvinceCode(zone)
       return !province || province === destinationProvince
@@ -333,7 +371,15 @@ function resolveShippingDecision(input: {
         return rightTierSpecificity - leftTierSpecificity
       })
 
-    const selectedRate = eligibleRates[0]
+    const availableRates = eligibleRates.map((rate) => ({
+      id: String(rate.id || ''),
+      label: rate.name || 'Shipping',
+      amountCents: rate.amountCents,
+      method: toShippingMethod(rate),
+    }))
+    const selectedRate =
+      (input.selectedRateId ? eligibleRates.find((rate) => rate.id === input.selectedRateId) : null) ||
+      eligibleRates[0]
     if (selectedRate) {
       return {
         source: 'zone',
@@ -345,34 +391,111 @@ function resolveShippingDecision(input: {
         rateId: selectedRate.id,
         rateName: selectedRate.name,
         rateMethod: selectedRate.method,
+        availableRates,
       }
     }
   }
 
   const originCountry = normalizeCountry(input.storeCountry)
   const isInternational = destinationCountry && originCountry && destinationCountry !== originCountry
+  const fallbackAmountCents = isInternational ? input.shippingRates.internationalCents : input.shippingRates.domesticCents
   return {
     source: 'fallback',
-    amountCents: isInternational ? input.shippingRates.internationalCents : input.shippingRates.domesticCents,
+    amountCents: fallbackAmountCents,
     destinationCountry,
     destinationProvince,
+    availableRates: [
+      {
+        id: `fallback-${isInternational ? 'international' : 'domestic'}`,
+        label: isInternational ? 'International shipping' : 'Domestic shipping',
+        amountCents: fallbackAmountCents,
+        method: fallbackAmountCents <= 0 ? 'FREE' : 'FLAT',
+      },
+    ],
+    warning: 'No configured shipping rate matched the destination. Using fallback store rate.',
   }
 }
 
-function resolveTaxDecision(input: {
+export function calculateTax(input: {
   taxableSubtotalCents: number
+  shippingAmountCents?: number
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
   taxRates?: CheckoutPricingTaxRates
   taxRules?: CheckoutPricingTaxRule[]
+  taxSettings?: CheckoutPricingTaxSettings
 }): CheckoutPricingTaxDecision {
   const destinationCountry = normalizeCountry(input.shippingAddress?.country)
   const destinationProvince = normalizeProvince(input.shippingAddress?.province)
+  const taxableSubtotalCents = Math.max(0, Number(input.taxableSubtotalCents || 0))
+  const shippingAmountCents = Math.max(0, Number(input.shippingAmountCents || 0))
+  const hasTaxSettings =
+    input.taxSettings &&
+    (input.taxSettings.enabled !== undefined ||
+      input.taxSettings.strategy !== undefined ||
+      input.taxSettings.defaultTaxRateBps !== undefined ||
+      input.taxSettings.taxShipping !== undefined ||
+      input.taxSettings.pricesIncludeTax !== undefined)
+  const strategy = hasTaxSettings ? input.taxSettings?.strategy || 'NONE' : null
+  const taxEnabled = hasTaxSettings ? Boolean(input.taxSettings?.enabled) : true
+  const shouldTaxShipping = hasTaxSettings ? Boolean(input.taxSettings?.taxShipping) : false
+  const taxableAmountCents = taxableSubtotalCents + (shouldTaxShipping ? shippingAmountCents : 0)
+
+  if (taxableAmountCents <= 0) {
+    return {
+      source: 'none',
+      rate: 0,
+      rateBps: 0,
+      amountCents: 0,
+      taxableAmountCents,
+      label: 'Tax disabled',
+      destinationCountry,
+      destinationProvince,
+    }
+  }
+
+  if (hasTaxSettings && (!taxEnabled || strategy === 'NONE')) {
+    return {
+      source: 'none',
+      rate: 0,
+      rateBps: 0,
+      amountCents: 0,
+      taxableAmountCents,
+      label: 'Tax disabled',
+      destinationCountry,
+      destinationProvince,
+    }
+  }
+
+  if (hasTaxSettings && strategy === 'MANUAL') {
+    const rateBps = Math.max(0, Math.round(Number(input.taxSettings?.defaultTaxRateBps || 0)))
+    const rate = rateBps / 10_000
+    const pricesIncludeTax = Boolean(input.taxSettings?.pricesIncludeTax)
+    const amountCents =
+      rate <= 0
+        ? 0
+        : pricesIncludeTax
+          ? Math.round((taxableAmountCents * rate) / (1 + rate))
+          : Math.round(taxableAmountCents * rate)
+    return {
+      source: 'rule',
+      rate,
+      rateBps,
+      amountCents,
+      taxableAmountCents,
+      label: `Manual tax ${rateBps / 100}%`,
+      destinationCountry,
+      destinationProvince,
+    }
+  }
+
   if (!destinationCountry) {
     return {
       source: 'none',
       rate: 0,
       amountCents: 0,
+      taxableAmountCents,
+      label: 'No destination country',
     }
   }
 
@@ -403,11 +526,14 @@ function resolveTaxDecision(input: {
       return {
         source: 'rule',
         rate,
-        amountCents: Math.round(input.taxableSubtotalCents * rate),
+        rateBps: Math.round(rate * 10_000),
+        amountCents: Math.round(taxableAmountCents * rate),
         destinationCountry,
         destinationProvince,
         ruleId: selectedRule.id,
         ruleName: selectedRule.name,
+        taxableAmountCents,
+        label: selectedRule.name || 'Jurisdiction tax rule',
       }
     }
   }
@@ -419,9 +545,12 @@ function resolveTaxDecision(input: {
     return {
       source: 'fallback',
       rate,
-      amountCents: Math.round(input.taxableSubtotalCents * rate),
+      rateBps: Math.round(rate * 10_000),
+      amountCents: Math.round(taxableAmountCents * rate),
       destinationCountry,
       destinationProvince,
+      taxableAmountCents,
+      label: 'Fallback tax rate',
     }
   }
 
@@ -450,9 +579,12 @@ function resolveTaxDecision(input: {
     return {
       source: 'fallback',
       rate,
-      amountCents: Math.round(input.taxableSubtotalCents * rate),
+      rateBps: Math.round(rate * 10_000),
+      amountCents: Math.round(taxableAmountCents * rate),
       destinationCountry,
       destinationProvince,
+      taxableAmountCents,
+      label: 'Default tax table',
     }
   }
 
@@ -460,6 +592,8 @@ function resolveTaxDecision(input: {
     source: 'none',
     rate: 0,
     amountCents: 0,
+    taxableAmountCents,
+    label: 'No tax rule matched',
     destinationCountry,
     destinationProvince,
   }
@@ -476,6 +610,9 @@ export function buildCheckoutPricingWithDecisionsCents(
     shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
+    taxSettings?: CheckoutPricingTaxSettings
+    selectedShippingAmountCents?: number
+    selectedShippingRateId?: string
     now?: Date
     currency?: string
   } = {}
@@ -485,15 +622,19 @@ export function buildCheckoutPricingWithDecisionsCents(
     return sum + item.priceCents * Number(item.quantity)
   }, 0)
   const shippingRates = options.shippingRates ?? DEFAULT_SHIPPING_RATES
-  const shippingDecision = resolveShippingDecision({
+  const shippingDecision = calculateShipping({
     subtotalCents,
     shippingThresholdCents,
     shippingAddress: options.shippingAddress,
     storeCountry: options.storeCountry,
     shippingRates,
     shippingZones: options.shippingZones,
+    selectedRateId: options.selectedShippingRateId,
   })
-  const shippingAmountCents = shippingDecision.amountCents
+  const shippingAmountCents =
+    options.selectedShippingAmountCents != null
+      ? assertIntegerCents(options.selectedShippingAmountCents, 'Selected shipping amount')
+      : shippingDecision.amountCents
   const now = options.now ?? new Date()
   const currency = options.currency ?? 'USD'
   const appliedDiscount = options.discount
@@ -517,15 +658,24 @@ export function buildCheckoutPricingWithDecisionsCents(
     appliedDiscount && (appliedDiscount.method === 'PERCENTAGE' || appliedDiscount.method === 'FIXED_AMOUNT')
       ? Math.max(0, subtotalCents - discountAmountCents)
       : subtotalCents
-  const taxDecision = resolveTaxDecision({
+  const effectiveShippingForTax =
+    appliedDiscount?.method === 'FREE_SHIPPING'
+      ? Math.max(0, shippingAmountCents - discountAmountCents)
+      : shippingAmountCents
+  const taxDecision = calculateTax({
     taxableSubtotalCents,
+    shippingAmountCents: effectiveShippingForTax,
     shippingAddress: options.shippingAddress,
     storeCountry: options.storeCountry,
     taxRates: options.taxRates,
     taxRules: options.taxRules,
+    taxSettings: options.taxSettings,
   })
   const taxAmountCents = taxDecision.amountCents
-  const totalCents = subtotalCents + shippingAmountCents + taxAmountCents - discountAmountCents
+  const pricesIncludeTax = Boolean(options.taxSettings?.enabled && options.taxSettings?.pricesIncludeTax)
+  const totalCents = pricesIncludeTax
+    ? subtotalCents + shippingAmountCents - discountAmountCents
+    : subtotalCents + shippingAmountCents + taxAmountCents - discountAmountCents
 
   return {
     subtotalCents,
@@ -575,6 +725,9 @@ export function buildCheckoutPricingWithDecisions(
     shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
+    taxSettings?: CheckoutPricingTaxSettings
+    selectedShippingAmountCents?: number
+    selectedShippingRateId?: string
     now?: Date
     currency?: string
   } = {}
@@ -593,6 +746,9 @@ export function buildCheckoutPricing(
     shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
+    taxSettings?: CheckoutPricingTaxSettings
+    selectedShippingAmountCents?: number
+    selectedShippingRateId?: string
     now?: Date
     currency?: string
   } = {}

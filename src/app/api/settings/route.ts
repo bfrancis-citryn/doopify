@@ -17,6 +17,7 @@ export async function GET(req: Request) {
       shippingThreshold: store.shippingThresholdCents == null ? null : centsToDollars(store.shippingThresholdCents),
       shippingDomesticRate: centsToDollars(store.shippingDomesticRateCents),
       shippingInternationalRate: centsToDollars(store.shippingInternationalRateCents),
+      defaultTaxRatePercent: Number(store.defaultTaxRateBps || 0) / 100,
     })
   } catch (e) {
     console.error('[GET /api/settings]', e)
@@ -44,6 +45,14 @@ const updateSchema = z.object({
   shippingInternationalRate: z.number().min(0).optional(),
   domesticTaxRate: z.number().min(0).max(1).optional(),
   internationalTaxRate: z.number().min(0).max(1).optional(),
+  taxEnabled: z.boolean().optional(),
+  taxStrategy: z.enum(['NONE', 'MANUAL']).optional(),
+  defaultTaxRatePercent: z.number().min(0).max(100).optional(),
+  taxShipping: z.boolean().optional(),
+  pricesIncludeTax: z.boolean().optional(),
+  taxOriginCountry: z.string().max(3).nullable().optional(),
+  taxOriginState: z.string().max(64).nullable().optional(),
+  taxOriginPostalCode: z.string().max(32).nullable().optional(),
 })
 
 export async function PATCH(req: Request) {
@@ -72,6 +81,24 @@ export async function PATCH(req: Request) {
         parsed.data.shippingInternationalRate === undefined
           ? undefined
           : dollarsToCents(parsed.data.shippingInternationalRate),
+      ...(parsed.data.taxEnabled !== undefined ? { taxEnabled: parsed.data.taxEnabled } : {}),
+      ...(parsed.data.taxStrategy !== undefined ? { taxStrategy: parsed.data.taxStrategy } : {}),
+      ...(parsed.data.defaultTaxRatePercent !== undefined
+        ? { defaultTaxRateBps: Math.round(parsed.data.defaultTaxRatePercent * 100) }
+        : {}),
+      ...(parsed.data.taxShipping !== undefined ? { taxShipping: parsed.data.taxShipping } : {}),
+      ...(parsed.data.pricesIncludeTax !== undefined
+        ? { pricesIncludeTax: parsed.data.pricesIncludeTax }
+        : {}),
+      ...(parsed.data.taxOriginCountry !== undefined
+        ? { taxOriginCountry: parsed.data.taxOriginCountry || null }
+        : {}),
+      ...(parsed.data.taxOriginState !== undefined
+        ? { taxOriginState: parsed.data.taxOriginState || null }
+        : {}),
+      ...(parsed.data.taxOriginPostalCode !== undefined
+        ? { taxOriginPostalCode: parsed.data.taxOriginPostalCode || null }
+        : {}),
       logoUrl: parsed.data.logoUrl || undefined,
     })
 
@@ -80,6 +107,7 @@ export async function PATCH(req: Request) {
       shippingThreshold: updated.shippingThresholdCents == null ? null : centsToDollars(updated.shippingThresholdCents),
       shippingDomesticRate: centsToDollars(updated.shippingDomesticRateCents),
       shippingInternationalRate: centsToDollars(updated.shippingInternationalRateCents),
+      defaultTaxRatePercent: Number(updated.defaultTaxRateBps || 0) / 100,
     })
   } catch (e) {
     console.error('[PATCH /api/settings]', e)

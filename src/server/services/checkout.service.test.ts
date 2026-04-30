@@ -174,6 +174,71 @@ describe('checkout service', () => {
     })
   })
 
+  it('includes manual tax settings in stripe amount calculation', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThresholdCents: 0,
+      taxEnabled: true,
+      taxStrategy: 'MANUAL',
+      defaultTaxRateBps: 1000,
+      taxShipping: true,
+      pricesIncludeTax: false,
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValue([
+      {
+        id: 'manual:free',
+        source: 'MANUAL',
+        displayName: 'Free shipping',
+        amountCents: 0,
+        currency: 'USD',
+      },
+    ])
+    mocks.createStripePaymentIntent.mockResolvedValue({
+      id: 'pi_tax_manual',
+      client_secret: 'secret_tax_manual',
+      amount: 5500,
+      currency: 'usd',
+      status: 'requires_payment_method',
+    })
+    mocks.prisma.checkoutSession.create.mockResolvedValue({
+      id: 'checkout_tax_manual',
+    })
+
+    const checkout = await createCheckoutPaymentIntent({
+      email: 'ada@example.com',
+      items: [{ variantId: 'variant_1', quantity: 2 }],
+      shippingAddress: address,
+    })
+
+    expect(mocks.createStripePaymentIntent).toHaveBeenCalledWith({
+      amount: 5500,
+      currency: 'USD',
+      email: 'ada@example.com',
+      metadata: {
+        checkoutEmail: 'ada@example.com',
+      },
+    })
+    expect(checkout).toMatchObject({
+      shippingAmountCents: 0,
+      taxAmountCents: 500,
+      totalCents: 5500,
+    })
+  })
+
   it('uses destination shipping zone and tax rules for checkout totals', async () => {
     mocks.getStoreSettings.mockResolvedValue({
       currency: 'USD',

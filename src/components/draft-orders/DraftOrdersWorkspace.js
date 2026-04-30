@@ -38,7 +38,10 @@ export default function DraftOrdersWorkspace() {
   const [convertedOrders, setConvertedOrders] = useState([]);
   const [draftOrder, setDraftOrder] = useState(() => createDraftOrderSeed(createSeedProducts(), customers, discounts));
 
-  const totals = useMemo(() => calculateDraftTotals(draftOrder, discounts), [draftOrder, discounts]);
+  const totals = useMemo(
+    () => calculateDraftTotals(draftOrder, discounts, settings),
+    [draftOrder, discounts, settings]
+  );
   const selectedCustomer = customers.find((customer) => customer.id === draftOrder.customerId) || null;
   const selectedDiscount = discounts.find((discount) => discount.id === draftOrder.discountId) || null;
   const newParam = searchParams.get('new');
@@ -62,7 +65,7 @@ export default function DraftOrdersWorkspace() {
 
   const convertToOrder = () => {
     const convertedOrder = {
-      ...convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, orders.length),
+      ...convertDraftOrderToOrder(draftOrder, selectedCustomer, discounts, orders.length, settings),
       orderNumber: `#${settings.orderPrefix}${String(orders.length + 1).padStart(4, '0')}`,
       location: settings.defaultLocation,
       shippingAddress: selectedCustomer?.defaultAddress || settings.shippingOrigin,

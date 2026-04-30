@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildCheckoutPricing, buildCheckoutPricingWithDecisions, buildCheckoutPricingWithDecisionsCents } from './pricing'
+import {
+  buildCheckoutPricing,
+  buildCheckoutPricingWithDecisions,
+  buildCheckoutPricingWithDecisionsCents,
+  calculateShipping,
+  calculateTax,
+} from './pricing'
 
 describe('buildCheckoutPricingWithDecisionsCents', () => {
   it('calculates checkout totals with integer cents only', () => {
@@ -227,5 +233,134 @@ describe('checkout pricing display wrappers', () => {
         amount: 8.25,
       },
     })
+  })
+})
+
+describe('shipping and tax helpers', () => {
+  it('returns fallback warning when no active zone rate matches', () => {
+    const shipping = calculateShipping({
+      subtotalCents: 5000,
+      shippingAddress: { country: 'US', province: 'CA' },
+      storeCountry: 'US',
+      shippingRates: { domesticCents: 900, internationalCents: 2500 },
+      shippingZones: [
+        {
+          id: 'zone_1',
+          name: 'California',
+          countryCode: 'US',
+          provinceCode: 'CA',
+          rates: [
+            {
+              id: 'rate_1',
+              name: 'Inactive',
+              method: 'FLAT',
+              amountCents: 500,
+              isActive: false,
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(shipping).toMatchObject({
+      source: 'fallback',
+      amountCents: 900,
+    })
+    expect(shipping.warning).toContain('No configured shipping rate matched')
+  })
+
+  it('uses selected shipping rate id when multiple rates are available', () => {
+    const shipping = calculateShipping({
+      subtotalCents: 5000,
+      shippingAddress: { country: 'US', province: 'CA' },
+      storeCountry: 'US',
+      shippingRates: { domesticCents: 900, internationalCents: 2500 },
+      shippingZones: [
+        {
+          id: 'zone_1',
+          name: 'California',
+          countryCode: 'US',
+          provinceCode: 'CA',
+          rates: [
+            {
+              id: 'rate_standard',
+              name: 'Standard',
+              method: 'FLAT',
+              amountCents: 900,
+              isActive: true,
+            },
+            {
+              id: 'rate_express',
+              name: 'Express',
+              method: 'FLAT',
+              amountCents: 1900,
+              isActive: true,
+            },
+          ],
+        },
+      ],
+      selectedRateId: 'rate_express',
+    })
+
+    expect(shipping).toMatchObject({
+      source: 'zone',
+      rateId: 'rate_express',
+      amountCents: 1900,
+    })
+  })
+
+  it('returns zero tax when manual tax is disabled', () => {
+    const tax = calculateTax({
+      taxableSubtotalCents: 10000,
+      shippingAmountCents: 1000,
+      taxSettings: {
+        enabled: false,
+        strategy: 'MANUAL',
+        defaultTaxRateBps: 825,
+        taxShipping: true,
+      },
+    })
+
+    expect(tax).toMatchObject({
+      source: 'none',
+      amountCents: 0,
+    })
+  })
+
+  it('calculates manual tax and optionally taxes shipping', () => {
+    const tax = calculateTax({
+      taxableSubtotalCents: 10000,
+      shippingAmountCents: 1000,
+      taxSettings: {
+        enabled: true,
+        strategy: 'MANUAL',
+        defaultTaxRateBps: 1000,
+        taxShipping: true,
+      },
+    })
+
+    expect(tax).toMatchObject({
+      source: 'rule',
+      rateBps: 1000,
+      taxableAmountCents: 11000,
+      amountCents: 1100,
+    })
+  })
+
+  it('supports tax-inclusive manual pricing without adding tax twice', () => {
+    const pricing = buildCheckoutPricingWithDecisionsCents([{ priceCents: 11000, quantity: 1 }], null, {
+      shippingAddress: { country: 'US' },
+      shippingRates: { domesticCents: 0, internationalCents: 0 },
+      taxSettings: {
+        enabled: true,
+        strategy: 'MANUAL',
+        defaultTaxRateBps: 1000,
+        taxShipping: false,
+        pricesIncludeTax: true,
+      },
+    })
+
+    expect(pricing.taxAmountCents).toBe(1000)
+    expect(pricing.totalCents).toBe(11000)
   })
 })
