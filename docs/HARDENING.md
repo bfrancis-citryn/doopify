@@ -388,4 +388,5 @@ The next hardening milestone is complete when:
 - email failure/resend, outbound retry/idempotency, and integration secret-preservation behavior remain green in real-DB runs
 - analytics fan-out behavior remains covered with side-effect safety checks as lifecycle flows expand
 - setup diagnostics are implemented in a way that redacts secrets and reuses checks between CLI and admin Setup tab
+- provider onboarding UX is split by domain: Setup (foundation only), Payments (payment providers), Shipping (carrier/manual-live mode), Email (email providers), Webhooks (outbound merchant webhooks)
 - operational logging is good enough to debug a missing email, duplicate delivery, stuck retry, exhausted outbound webhook, or broken setup without inspecting the database manually

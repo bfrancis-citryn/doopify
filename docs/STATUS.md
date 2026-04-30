@@ -230,6 +230,7 @@ Planned sequence:
 - `doopify doctor` read-only local diagnostics — **shipped**
 - setup status service and `/api/setup/status` — **shipped**
 - Settings -> Setup checklist tab — **shipped foundation**
+- settings UX split: Setup focuses on foundation diagnostics, while Payments/Shipping/Email own provider onboarding and Webhooks stays outbound-delivery focused — **shipped foundation**
 - interactive `doopify setup` — **shipped foundation**
 - deployment automation commands (`doopify env push`, `doopify stripe webhook`, `doopify db check`, `doopify deploy`) — **shipped foundation**
 - later deepen one-click provisioning and non-interactive/dry-run coverage

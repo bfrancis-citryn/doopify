@@ -290,6 +290,7 @@ See `SETUP_AND_CLI_PLAN.md`.
 - add `doopify doctor` for read-only local setup diagnostics — shipped
 - add setup status service and `/api/setup/status` — shipped
 - add Settings -> Setup checklist tab — shipped foundation
+- keep Settings tab ownership clear: Setup=foundation, Payments/Shipping/Email=provider onboarding, Webhooks=outbound developer webhooks — shipped foundation
 - add interactive `doopify setup` — shipped foundation
 - add optional deployment automation commands: `doopify env push`, `doopify stripe webhook`, `doopify db check`, `doopify deploy` — shipped foundation
 - later harden non-interactive/dry-run and deeper provider provisioning flows

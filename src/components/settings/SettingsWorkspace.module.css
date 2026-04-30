@@ -95,6 +95,11 @@
   color: var(--on-surface-variant);
 }
 
+.cardSubtext {
+  color: var(--on-surface-variant);
+  font-size: 0.82rem;
+}
+
 .loadingLine {
   width: 100%;
   height: 0.95rem;
@@ -448,12 +453,6 @@
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.setupActionButtons {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
 }
 
 .setupList {

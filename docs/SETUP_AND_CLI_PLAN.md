@@ -44,11 +44,16 @@ It should:
 - show setup status
 - identify missing environment values
 - verify database connectivity
-- verify Stripe webhook configuration
-- verify email provider configuration
 - verify required secrets exist
 - provide copy/paste CLI commands for the next step
 - show completion status after the CLI has run
+
+Provider onboarding belongs in dedicated settings tabs:
+
+- `Settings -> Payments` for Stripe/PayPal/Apple Pay setup and verification
+- `Settings -> Shipping` for manual/live/hybrid shipping provider setup
+- `Settings -> Email` for Resend/SMTP/send-provider setup and webhook verification
+- `Settings -> Webhooks` for outbound merchant/developer webhook subscriptions and delivery observability
 
 The app should not ask for broad provider tokens unless the storage, encryption, scope, and lifecycle are explicitly designed.
 

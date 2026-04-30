@@ -32,16 +32,13 @@ const SETUP_STATUS_PRIORITY = {
 };
 
 const SETUP_CARD_DEFINITIONS = [
-  { id: 'database', label: 'Database reachable', checkIds: ['database-url', 'database-reachable', 'prisma-client-generated'] },
-  { id: 'store', label: 'Store seeded', checkIds: ['store-exists', 'store-settings'] },
-  { id: 'owner', label: 'Owner account exists', checkIds: ['owner-user-exists'] },
-  { id: 'stripe-core', label: 'Stripe env keys found', checkIds: ['stripe-keys'] },
-  { id: 'stripe-webhook', label: 'Stripe webhook secret found', checkIds: ['stripe-webhook-secret'] },
-  { id: 'email-provider', label: 'Email API key found', checkIds: ['resend-api-or-preview'] },
-  { id: 'email-webhook', label: 'Email webhook secret found', checkIds: ['resend-webhook-secret-enabled'] },
-  { id: 'webhook-retry', label: 'Webhook retry secret found', checkIds: ['webhook-retry-secret'] },
-  { id: 'public-url', label: 'Public store URL set', checkIds: ['next-public-store-url'] },
-  { id: 'deployment', label: 'Deployment env detected', checkIds: ['vercel-deployment'] },
+  { id: 'database', label: 'Database reachable', tooltip: 'Confirms DATABASE_URL exists and the app can run a database query.', checkIds: ['database-url', 'database-reachable', 'prisma-client-generated'] },
+  { id: 'store', label: 'Store seeded', tooltip: 'Store bootstrap creates the initial store record required for selling.', checkIds: ['store-exists', 'store-settings'] },
+  { id: 'owner', label: 'Owner account exists', tooltip: 'Owner account is required for privileged setup and recovery actions.', checkIds: ['owner-user-exists'] },
+  { id: 'core-auth', label: 'JWT secret health', tooltip: 'JWT_SECRET secures admin session signing and validation.', checkIds: ['jwt-secret'] },
+  { id: 'webhook-retry', label: 'Webhook retry secret found', tooltip: 'WEBHOOK_RETRY_SECRET protects cron/manual retry routes for webhook processing.', checkIds: ['webhook-retry-secret'] },
+  { id: 'public-url', label: 'Public store URL set', tooltip: 'NEXT_PUBLIC_STORE_URL is used in storefront links, email links, and recovery flows.', checkIds: ['next-public-store-url'] },
+  { id: 'deployment', label: 'Deployment env detected', tooltip: 'Checks deployment markers like VERCEL_URL and VERCEL_ENV.', checkIds: ['vercel-deployment'] },
 ];
 
 const SETUP_COMMANDS = [
@@ -77,11 +74,10 @@ const SETUP_COMMANDS = [
   },
 ];
 
-const PROVIDER_HINTS = [
-  'Stripe: set STRIPE_SECRET_KEY, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY, and STRIPE_WEBHOOK_SECRET.',
-  'Resend: set RESEND_API_KEY for live sends. Leave unset for preview mode.',
-  'Email webhooks: set RESEND_WEBHOOK_SECRET before enabling provider webhook delivery.',
-  'Deployment: set NEXT_PUBLIC_STORE_URL and configure VERCEL_URL/VERCEL_ENV for hosted environments.',
+const SETUP_FOUNDATION_HINTS = [
+  'Provider setup now lives in Payments, Shipping, and Email.',
+  'Setup checks app foundation only: database, bootstrap, env hygiene, and deployment readiness.',
+  'Use CLI commands for local writes and provider webhook automation.',
 ];
 
 const SETUP_ENV_TEMPLATE = [
@@ -96,12 +92,6 @@ const SETUP_ENV_TEMPLATE = [
   'RESEND_WEBHOOK_SECRET=',
   'NEXT_PUBLIC_STORE_URL=',
 ].join('\n');
-
-const SETUP_PROVIDER_VERIFICATION_PLACEHOLDERS = [
-  'Verify Stripe API connection — coming soon',
-  'Verify Resend API connection — coming soon',
-  'Verify webhook endpoint — coming soon',
-];
 
 const FONT_OPTIONS = BRAND_FONT_VALUES.map((value) => ({ value, label: value }));
 const BUTTON_RADIUS_OPTIONS = BUTTON_RADIUS_VALUES.map((value) => ({ value, label: value }));
@@ -218,6 +208,64 @@ function normalizeCheckStatus(check) {
   return check.status || 'WARN';
 }
 
+function describeStripeSetup(checkById) {
+  const keysCheck = checkById['stripe-keys'];
+  const webhookCheck = checkById['stripe-webhook-secret'];
+  const keysStatus = normalizeCheckStatus(keysCheck);
+  const webhookStatus = normalizeCheckStatus(webhookCheck);
+
+  if (!keysCheck || keysStatus === 'FAIL') {
+    return {
+      label: 'Not configured',
+      tone: 'danger',
+      detail: 'Stripe keys are missing. Add STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.',
+    };
+  }
+
+  if (keysStatus === 'PASS' && webhookStatus === 'FAIL') {
+    return {
+      label: 'Webhook missing',
+      tone: 'warning',
+      detail: 'Credentials found, API verification not yet run. Add STRIPE_WEBHOOK_SECRET for webhook signature checks.',
+    };
+  }
+
+  return {
+    label: 'Env keys found',
+    tone: 'warning',
+    detail: 'Credentials found, API verification not yet run.',
+  };
+}
+
+function describeResendSetup(checkById) {
+  const apiCheck = checkById['resend-api-or-preview'];
+  const webhookCheck = checkById['resend-webhook-secret-enabled'];
+  const apiStatus = normalizeCheckStatus(apiCheck);
+  const webhookStatus = normalizeCheckStatus(webhookCheck);
+
+  if (!apiCheck || apiStatus === 'WARN') {
+    return {
+      label: 'Preview mode',
+      tone: 'warning',
+      detail: 'RESEND_API_KEY is not active. Email sends run in preview mode.',
+    };
+  }
+
+  if (apiStatus === 'PASS' && webhookStatus === 'FAIL') {
+    return {
+      label: 'Webhook missing',
+      tone: 'warning',
+      detail: 'API key found. Live sends may work, but bounce/complaint webhook verification is not configured.',
+    };
+  }
+
+  return {
+    label: 'API key found',
+    tone: 'warning',
+    detail: 'Credentials found, API verification not yet run.',
+  };
+}
+
 function extractEnvVariableHints(checks) {
   const envNames = new Set();
   const envPattern = /\b[A-Z][A-Z0-9_]{2,}\b/g;
@@ -243,6 +291,9 @@ export default function SettingsWorkspace() {
   const [shippingZones, setShippingZones] = useState([]);
   const [taxRules, setTaxRules] = useState([]);
   const [taxSettings, setTaxSettings] = useState(EMPTY_TAX_SETTINGS);
+  const [shippingSettingsProfile, setShippingSettingsProfile] = useState(null);
+  const [shippingSetupStatus, setShippingSetupStatus] = useState(null);
+  const [shippingModeSaving, setShippingModeSaving] = useState(false);
   const [taxSettingsSaving, setTaxSettingsSaving] = useState(false);
   const [shippingTaxPreview, setShippingTaxPreview] = useState(EMPTY_SHIPPING_TAX_PREVIEW);
   const [newZone, setNewZone] = useState(EMPTY_ZONE_FORM);
@@ -325,10 +376,12 @@ export default function SettingsWorkspace() {
       setShippingConfigLoading(true);
       setShippingConfigError('');
       try {
-        const [zonesData, taxRulesData, taxSettingsData] = await Promise.all([
+        const [zonesData, taxRulesData, taxSettingsData, shippingSettingsData, shippingSetupData] = await Promise.all([
           fetch('/api/settings/shipping-zones').then(parseApiJson),
           fetch('/api/settings/tax-rules').then(parseApiJson),
           fetch('/api/settings/tax', { cache: 'no-store' }).then(parseApiJson),
+          fetch('/api/settings/shipping', { cache: 'no-store' }).then(parseApiJson),
+          fetch('/api/settings/shipping/setup-status', { cache: 'no-store' }).then(parseApiJson),
         ]);
 
         if (cancelled) return;
@@ -344,6 +397,8 @@ export default function SettingsWorkspace() {
           originState: taxSettingsData?.originState || '',
           originPostalCode: taxSettingsData?.originPostalCode || '',
         });
+        setShippingSettingsProfile(shippingSettingsData || null);
+        setShippingSetupStatus(shippingSetupData || null);
         setShippingConfigLoaded(true);
       } catch (loadError) {
         if (cancelled) return;
@@ -363,7 +418,8 @@ export default function SettingsWorkspace() {
   }, [activeSection, shippingConfigLoaded, shippingConfigLoading]);
 
   useEffect(() => {
-    if (activeSection !== 'setup' || setupLoaded) {
+    const shouldLoadSetupDiagnostics = ['setup', 'payments', 'shipping', 'email'].includes(activeSection);
+    if (!shouldLoadSetupDiagnostics || setupLoaded) {
       return;
     }
 
@@ -439,8 +495,35 @@ export default function SettingsWorkspace() {
   const showSetupErrorState = activeSection === 'setup' && Boolean(setupError);
   const showSetupDiagnostics = activeSection === 'setup' && hasSetupDiagnostics;
   const setupRequiredNextSteps = setupStatus?.requiredNextSteps || [];
-  const setupProviderSetupSteps = setupStatus?.providerSetupSteps || [];
   const setupOptionalProductionSteps = setupStatus?.optionalProductionSteps || [];
+  const setupOptionalFoundationSteps = useMemo(
+    () => setupOptionalProductionSteps.filter((step) => !/STRIPE|RESEND|SMTP|SENDLAYER|EASYPOST|SHIPPO/i.test(step)),
+    [setupOptionalProductionSteps]
+  );
+  const stripeSetupStatus = useMemo(() => describeStripeSetup(setupCheckById), [setupCheckById]);
+  const resendSetupStatus = useMemo(() => describeResendSetup(setupCheckById), [setupCheckById]);
+  const shippingMode = shippingSettingsProfile?.shippingMode || 'MANUAL';
+  const shippingProvider = shippingSettingsProfile?.shippingLiveProvider || null;
+
+  const shippoStatus = useMemo(() => {
+    if (shippingProvider !== 'SHIPPO') {
+      return { label: 'Not configured', tone: 'warning', detail: 'Shippo is not selected as the live provider.' };
+    }
+    if (shippingSetupStatus?.providerConnected) {
+      return { label: 'Verified', tone: 'success', detail: 'Shippo credentials are saved and the connection test passed.' };
+    }
+    return { label: 'Credentials saved', tone: 'warning', detail: 'Shippo is selected, but provider verification is still pending.' };
+  }, [shippingProvider, shippingSetupStatus]);
+
+  const easypostStatus = useMemo(() => {
+    if (shippingProvider !== 'EASYPOST') {
+      return { label: 'Not configured', tone: 'warning', detail: 'EasyPost is not selected as the live provider.' };
+    }
+    if (shippingSetupStatus?.providerConnected) {
+      return { label: 'Verified', tone: 'success', detail: 'EasyPost credentials are saved and the connection test passed.' };
+    }
+    return { label: 'Credentials saved', tone: 'warning', detail: 'EasyPost is selected, but provider verification is still pending.' };
+  }, [shippingProvider, shippingSetupStatus]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setSaveClock(Date.now()), 1000);
@@ -566,10 +649,12 @@ export default function SettingsWorkspace() {
     setShippingConfigLoaded(false);
     setShippingConfigLoading(false);
     setShippingConfigError('');
-    const [zonesData, taxRulesData, taxSettingsData] = await Promise.all([
+    const [zonesData, taxRulesData, taxSettingsData, shippingSettingsData, shippingSetupData] = await Promise.all([
       fetch('/api/settings/shipping-zones').then(parseApiJson),
       fetch('/api/settings/tax-rules').then(parseApiJson),
       fetch('/api/settings/tax', { cache: 'no-store' }).then(parseApiJson),
+      fetch('/api/settings/shipping', { cache: 'no-store' }).then(parseApiJson),
+      fetch('/api/settings/shipping/setup-status', { cache: 'no-store' }).then(parseApiJson),
     ]);
     setShippingZones((zonesData || []).map(toZoneForm));
     setTaxRules((taxRulesData || []).map(toTaxForm));
@@ -583,6 +668,8 @@ export default function SettingsWorkspace() {
       originState: taxSettingsData?.originState || '',
       originPostalCode: taxSettingsData?.originPostalCode || '',
     });
+    setShippingSettingsProfile(shippingSettingsData || null);
+    setShippingSetupStatus(shippingSetupData || null);
     setShippingConfigLoaded(true);
   }
 
@@ -701,6 +788,46 @@ export default function SettingsWorkspace() {
     } finally {
       setSetupLoading(false);
       setSetupLoaded(true);
+    }
+  }
+
+  async function handleUpdateShippingMode(nextMode) {
+    if (!nextMode || nextMode === shippingMode) return;
+    try {
+      setShippingModeSaving(true);
+      setShippingConfigError('');
+      const updated = await fetch('/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shippingMode: nextMode }),
+      }).then(parseApiJson);
+      setShippingSettingsProfile(updated);
+      await refreshShippingConfig();
+    } catch (updateError) {
+      setShippingConfigError(updateError instanceof Error ? updateError.message : 'Failed to update shipping mode');
+    } finally {
+      setShippingModeSaving(false);
+    }
+  }
+
+  async function handleSelectLiveProvider(provider) {
+    try {
+      setShippingModeSaving(true);
+      setShippingConfigError('');
+      const updated = await fetch('/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shippingLiveProvider: provider,
+          shippingMode: shippingMode === 'MANUAL' ? 'HYBRID' : shippingMode,
+        }),
+      }).then(parseApiJson);
+      setShippingSettingsProfile(updated);
+      await refreshShippingConfig();
+    } catch (updateError) {
+      setShippingConfigError(updateError instanceof Error ? updateError.message : 'Failed to select shipping provider');
+    } finally {
+      setShippingModeSaving(false);
     }
   }
 
@@ -1186,6 +1313,104 @@ export default function SettingsWorkspace() {
 
             {!loading && !error && activeSection === 'shipping' ? (
               <div className={styles.configStack}>
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Shipping provider setup</h3>
+                    <p className={styles.cardSubtext}>
+                      Manage manual rates and live carrier providers. Hybrid mode can fall back to manual rates when live quotes fail.
+                    </p>
+                  </div>
+                </section>
+
+                <section className={styles.setupGrid}>
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        Manual rates{' '}
+                        <AdminTooltip content="Manual rates are fixed shipping rules you control by zone, subtotal tiers, and fallback values." />
+                      </h4>
+                      <AdminStatusChip tone={shippingSetupStatus?.hasManualRates ? 'success' : 'warning'}>
+                        {shippingSetupStatus?.hasManualRates ? 'Configured' : 'Needs setup'}
+                      </AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>
+                      Manual-only mode uses your configured rates without provider API calls.
+                    </p>
+                    <div className={styles.actionRow}>
+                      <AdminButton onClick={() => handleUpdateShippingMode('MANUAL')} size="sm" variant="secondary" disabled={shippingModeSaving}>
+                        {shippingMode === 'MANUAL' ? 'Manual mode active' : 'Switch to manual only'}
+                      </AdminButton>
+                    </div>
+                  </AdminCard>
+
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        Shippo{' '}
+                        <AdminTooltip content="Live Shippo rates come from Shippo APIs. Credentials are stored encrypted and can be tested from shipping setup." />
+                      </h4>
+                      <AdminStatusChip tone={shippoStatus.tone}>{shippoStatus.label}</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>{shippoStatus.detail}</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton onClick={() => handleSelectLiveProvider('SHIPPO')} size="sm" variant="secondary" disabled={shippingModeSaving}>
+                        Use Shippo
+                      </AdminButton>
+                      <AdminButton disabled size="sm" variant="ghost">Connect Shippo</AdminButton>
+                    </div>
+                  </AdminCard>
+
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        EasyPost{' '}
+                        <AdminTooltip content="Live EasyPost rates come from EasyPost APIs. Hybrid mode can use manual fallback when live calls fail." />
+                      </h4>
+                      <AdminStatusChip tone={easypostStatus.tone}>{easypostStatus.label}</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>{easypostStatus.detail}</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton onClick={() => handleSelectLiveProvider('EASYPOST')} size="sm" variant="secondary" disabled={shippingModeSaving}>
+                        Use EasyPost
+                      </AdminButton>
+                      <AdminButton disabled size="sm" variant="ghost">Connect EasyPost</AdminButton>
+                    </div>
+                  </AdminCard>
+                </section>
+
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Live rates mode</h3>
+                  </div>
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.field}>
+                      <span>
+                        Shipping mode{' '}
+                        <AdminTooltip content="Manual only uses fixed rules. Live rates only uses provider API quotes. Hybrid tries live first and falls back to manual rates." />
+                      </span>
+                      <select className={styles.input} value={shippingMode} onChange={(event) => handleUpdateShippingMode(event.target.value)} disabled={shippingModeSaving}>
+                        <option value="MANUAL">Manual only</option>
+                        <option value="LIVE_RATES">Live rates only</option>
+                        <option value="HYBRID">Hybrid: live + manual fallback</option>
+                      </select>
+                    </label>
+                    <div className={styles.statusBlock}>
+                      <p className={styles.statusText}>
+                        Current provider: {shippingProvider || 'none selected'}
+                      </p>
+                      {shippingSetupStatus?.warnings?.length ? (
+                        <ul className={styles.setupList}>
+                          {shippingSetupStatus.warnings.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className={styles.statusText}>No shipping setup warnings right now.</p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
                 <div className={styles.formGrid}>
                   <label className={styles.field}>
                     <span>Free shipping threshold</span>
@@ -1705,14 +1930,149 @@ export default function SettingsWorkspace() {
             ) : null}
 
             {!loading && !error && activeSection === 'payments' ? (
-              <div className={styles.infoBlock}>Set payment providers, capture mode, manual payment methods, and refund rules here next.</div>
+              <div className={styles.configStack}>
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Payment provider setup</h3>
+                    <p className={styles.cardSubtext}>Connect and verify payment providers. This area replaces provider setup from the general Setup tab.</p>
+                  </div>
+                </section>
+                {setupError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider diagnostics notice</p>
+                    <p className={styles.statusText}>{setupError}</p>
+                  </div>
+                ) : null}
+
+                <section className={styles.setupGrid}>
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        Stripe{' '}
+                        <AdminTooltip content="Stripe powers checkout payments and refunds. Env keys can be detected here, but API verification must be run explicitly." />
+                      </h4>
+                      <AdminStatusChip tone={stripeSetupStatus.tone}>{stripeSetupStatus.label}</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
+                    <p className={styles.statusText}>
+                      <strong>Stripe keys</strong>{' '}
+                      <AdminTooltip content="Secret + publishable keys authorize Stripe API operations for checkout flows." /> and{' '}
+                      <strong>webhook secret</strong>{' '}
+                      <AdminTooltip content="Webhook secret validates Stripe event signatures for paid-order finalization." /> are tracked separately.
+                    </p>
+                    <p className={styles.statusText}>
+                      <strong>Mode:</strong> Detection from runtime secrets is not shown in this UI for safety.
+                    </p>
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled size="sm" variant="secondary">Connect Stripe</AdminButton>
+                      <AdminButton disabled size="sm" variant="secondary">Verify Stripe API connection</AdminButton>
+                      <AdminButton onClick={() => handleCopyCommand('stripe-webhook-cli', 'npm run doopify:stripe:webhook')} size="sm" variant="ghost">
+                        {setupCopiedCommandId === 'stripe-webhook-cli' ? 'Copied' : 'Copy webhook CLI command'}
+                      </AdminButton>
+                    </div>
+                    <p className={styles.setupFixText}>Credentials found does not mean connected. Verification is still pending until a server-side check is run.</p>
+                  </AdminCard>
+
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        PayPal{' '}
+                        <AdminTooltip content="PayPal provider onboarding is planned. Use Stripe for current payment flows." />
+                      </h4>
+                      <AdminStatusChip tone="neutral">Coming soon</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>PayPal onboarding is not active in runtime yet.</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled size="sm" variant="secondary">Set up PayPal</AdminButton>
+                    </div>
+                  </AdminCard>
+
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        Apple Pay{' '}
+                        <AdminTooltip content="Apple Pay is usually enabled through Stripe. It requires HTTPS and Stripe domain verification." />
+                      </h4>
+                      <AdminStatusChip tone="neutral">Stripe-dependent</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>Apple Pay setup depends on Stripe domain verification and HTTPS storefront hosting.</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled size="sm" variant="secondary">Apple Pay setup coming soon</AdminButton>
+                    </div>
+                  </AdminCard>
+                </section>
+              </div>
             ) : null}
 
             {!loading && !error && activeSection === 'email' ? (
-              <div className={styles.brandKitLayout}>
+              <div className={styles.configStack}>
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Email provider setup</h3>
+                    <p className={styles.cardSubtext}>Configure transactional email providers and webhook verification. Provider setup now lives here.</p>
+                  </div>
+                </section>
+                {setupError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider diagnostics notice</p>
+                    <p className={styles.statusText}>{setupError}</p>
+                  </div>
+                ) : null}
+
+                <section className={styles.setupGrid}>
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        SMTP{' '}
+                        <AdminTooltip content="SMTP uses host/port/auth credentials from your mail provider. Secrets should be encrypted at rest when saved." />
+                      </h4>
+                      <AdminStatusChip tone="neutral">Coming soon</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>SMTP credential save/verify UI is planned for a future pass.</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled size="sm" variant="secondary">Connect SMTP</AdminButton>
+                      <AdminButton disabled size="sm" variant="secondary">Send test email</AdminButton>
+                    </div>
+                  </AdminCard>
+
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        Resend{' '}
+                        <AdminTooltip content="Resend can send transactional email. Add webhook signing secret for bounce/complaint verification." />
+                      </h4>
+                      <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>{resendSetupStatus.detail}</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled size="sm" variant="secondary">Connect Resend</AdminButton>
+                      <AdminButton disabled size="sm" variant="secondary">Verify provider</AdminButton>
+                      <AdminButton disabled size="sm" variant="secondary">Configure provider webhook</AdminButton>
+                    </div>
+                    <p className={styles.setupFixText}>Do not treat this as live-ready unless runtime provider configuration and webhook verification are both complete.</p>
+                  </AdminCard>
+
+                  <AdminCard as="article" className={styles.setupCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>
+                        SendLayer{' '}
+                        <AdminTooltip content="SendLayer support can be added as another provider option once runtime adapter support is ready." />
+                      </h4>
+                      <AdminStatusChip tone="neutral">Coming soon</AdminStatusChip>
+                    </div>
+                    <p className={styles.statusText}>SendLayer onboarding is not active yet.</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled size="sm" variant="secondary">Set up SendLayer</AdminButton>
+                    </div>
+                  </AdminCard>
+                </section>
+
                 <AdminCard className={styles.brandRow} spotlight variant="inset">
                   <div className={styles.rowMeta}>
-                    <h4>Email delivery profile</h4>
+                    <h4>
+                      Sender profile{' '}
+                      <AdminTooltip content="This sender address is used by transactional templates. Keep it aligned with your domain authentication setup." />
+                    </h4>
                     <p>Keep sender identity aligned with store branding while observability handles retries and provider health.</p>
                   </div>
                   <div className={styles.rowInputs}>
@@ -1730,7 +2090,10 @@ export default function SettingsWorkspace() {
               <div className={styles.brandKitLayout}>
                 <div className={styles.brandKitHeading}>
                   <h3>Webhooks</h3>
-                  <p>Integration subscriptions, signing secrets, and retry visibility remain in the existing panel.</p>
+                  <p>
+                    These are outbound merchant/developer webhooks for sending Doopify events to other systems.{' '}
+                    <AdminTooltip content="Payment provider webhooks (Stripe) belong in Payments. Email provider webhooks belong in Email. Outbound merchant webhooks are configured here." />
+                  </p>
                 </div>
                 <IntegrationsPanel />
               </div>
@@ -1789,7 +2152,10 @@ export default function SettingsWorkspace() {
                       {setupCards.map((card) => (
                         <AdminCard as="article" className={styles.setupCard} key={card.id} variant="card">
                           <div className={styles.setupCardHeader}>
-                            <h4>{card.label}</h4>
+                            <h4>
+                              {card.label}
+                              {card.tooltip ? <AdminTooltip content={card.tooltip} /> : null}
+                            </h4>
                             <AdminStatusChip tone={card.status === 'PASS' ? 'success' : card.status === 'FAIL' ? 'danger' : 'warning'}>
                               {card.status}
                             </AdminStatusChip>
@@ -1801,6 +2167,18 @@ export default function SettingsWorkspace() {
                     </section>
 
                     <section className={styles.setupColumns}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
+                        <h4>Provider setup moved</h4>
+                        <p className={styles.statusText}>
+                          Provider setup now lives in Payments, Shipping, and Email. This page only checks the app foundation.
+                        </p>
+                        <ul className={styles.setupList}>
+                          {SETUP_FOUNDATION_HINTS.map((hint) => (
+                            <li key={hint}>{hint}</li>
+                          ))}
+                        </ul>
+                      </AdminCard>
+
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Missing env warnings</h4>
                         {setupMissingEnvVars.length ? (
@@ -1852,17 +2230,14 @@ export default function SettingsWorkspace() {
                       </AdminCard>
 
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
-                        <h4>Provider verification</h4>
-                        <p className={styles.statusText}>
-                          Provider API verification is not available from this screen yet.
-                        </p>
-                        <div className={styles.setupActionButtons}>
-                          {SETUP_PROVIDER_VERIFICATION_PLACEHOLDERS.map((label) => (
-                            <AdminButton disabled key={label} size="sm" variant="secondary">
-                              {label}
-                            </AdminButton>
-                          ))}
-                        </div>
+                        <h4>Setup docs checklist</h4>
+                        <ul className={styles.setupList}>
+                          <li>1. Set required env values in your local runtime.</li>
+                          <li>2. Run Prisma generate/push and seed bootstrap.</li>
+                          <li>3. Verify owner login and storefront URL.</li>
+                          <li>4. Configure providers from Payments, Shipping, and Email tabs.</li>
+                          <li>5. Review deployment env readiness before launch.</li>
+                        </ul>
                       </AdminCard>
                     </section>
 
@@ -1881,40 +2256,16 @@ export default function SettingsWorkspace() {
                       </AdminCard>
 
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
-                        <h4>Provider setup steps</h4>
-                        {setupProviderSetupSteps.length ? (
-                          <ul className={styles.setupList}>
-                            {setupProviderSetupSteps.map((action) => (
-                              <li key={action}>{action}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className={styles.statusText}>No provider setup steps right now.</p>
-                        )}
-                      </AdminCard>
-                    </section>
-
-                    <section className={styles.setupColumns}>
-                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Optional production steps</h4>
-                        {setupOptionalProductionSteps.length ? (
+                        {setupOptionalFoundationSteps.length ? (
                           <ul className={styles.setupList}>
-                            {setupOptionalProductionSteps.map((action) => (
+                            {setupOptionalFoundationSteps.map((action) => (
                               <li key={action}>{action}</li>
                             ))}
                           </ul>
                         ) : (
                           <p className={styles.statusText}>No optional production steps right now.</p>
                         )}
-                      </AdminCard>
-
-                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
-                        <h4>General setup hints</h4>
-                        <ul className={styles.setupList}>
-                          {PROVIDER_HINTS.map((hint) => (
-                            <li key={hint}>{hint}</li>
-                          ))}
-                        </ul>
                       </AdminCard>
                     </section>
                   </>
