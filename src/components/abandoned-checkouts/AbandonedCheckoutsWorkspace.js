@@ -10,6 +10,7 @@ import AdminPage from '@/components/admin/ui/AdminPage';
 import AdminPageHeader from '@/components/admin/ui/AdminPageHeader';
 import AdminStatusChip from '@/components/admin/ui/AdminStatusChip';
 import AdminTable from '@/components/admin/ui/AdminTable';
+import AdminToolbar from '@/components/admin/ui/AdminToolbar';
 import styles from './AbandonedCheckoutsWorkspace.module.css';
 
 function formatMoneyFromCents(cents, currency = 'USD') {
@@ -55,7 +56,8 @@ export default function AbandonedCheckoutsWorkspace() {
   const stats = useMemo(() => {
     const recovered = checkouts.filter((checkout) => !!checkout.recoveredAt).length;
     const due = checkouts.filter((checkout) => !checkout.recoveredAt).length;
-    return { recovered, due };
+    const emailsSent = checkouts.reduce((total, checkout) => total + (Number(checkout.recoveryEmailCount) || 0), 0);
+    return { recovered, due, emailsSent };
   }, [checkouts]);
 
   async function handleSendRecovery(id) {
@@ -111,22 +113,28 @@ export default function AbandonedCheckoutsWorkspace() {
   return (
     <AppShell searchPlaceholder="Search not yet enabled">
       <AdminPage>
-        <AdminCard className={styles.summaryCard} variant="panel">
-          <AdminPageHeader
-            actions={(
-              <>
-                <AdminButton disabled={runningDue} onClick={handleMarkDue} size="sm" variant="secondary">{runningDue ? 'Working...' : 'Mark due abandoned'}</AdminButton>
-                <AdminButton disabled={runningDue} onClick={handleSendDue} size="sm" variant="primary">{runningDue ? 'Working...' : 'Send due recovery emails'}</AdminButton>
-              </>
-            )}
-            description={`Due: ${stats.due} • Recovered: ${stats.recovered}`}
-            eyebrow="Recovery"
-            title="Abandoned checkouts"
-          />
-          {notice ? <p className={styles.notice}>{notice}</p> : null}
-        </AdminCard>
+        <AdminPageHeader
+          actions={(
+            <>
+              <AdminButton disabled={runningDue} onClick={handleMarkDue} size="sm" variant="secondary">{runningDue ? 'Working...' : 'Mark due abandoned'}</AdminButton>
+              <AdminButton disabled={runningDue} onClick={handleSendDue} size="sm" variant="primary">{runningDue ? 'Working...' : 'Send due recovery emails'}</AdminButton>
+            </>
+          )}
+          description={`Page ${pagination.page} of ${pagination.totalPages}`}
+          eyebrow="Recovery"
+          title="Abandoned checkouts"
+        />
+
+        <section className={styles.statsGrid}>
+          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Due</p><p className={styles.statValue}>{stats.due}</p></AdminCard>
+          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Recovered</p><p className={styles.statValue}>{stats.recovered}</p></AdminCard>
+          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Total abandoned</p><p className={styles.statValue}>{pagination.total}</p></AdminCard>
+          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Recovery emails sent</p><p className={styles.statValue}>{stats.emailsSent}</p></AdminCard>
+        </section>
 
         <AdminCard className={styles.tableCard} variant="panel">
+          <AdminToolbar><span className={styles.toolbarText}>Recovery queue</span></AdminToolbar>
+          {notice ? <p className={styles.notice}>{notice}</p> : null}
           {!loading && checkouts.length === 0 ? (
             <AdminEmptyState description="Recovery emails will appear here once abandoned sessions are detected." icon="mark_email_unread" title="No abandoned checkouts found" />
           ) : (
@@ -152,15 +160,14 @@ export default function AbandonedCheckoutsWorkspace() {
               rows={checkouts}
             />
           )}
+          <section className={styles.paginationRow}>
+            <p className={styles.paginationText}>Page {pagination.page} of {pagination.totalPages} • {pagination.total} total</p>
+            <div className={styles.paginationActions}>
+              <AdminButton disabled={page <= 1 || loading} onClick={() => loadCheckouts(page - 1)} size="sm" variant="secondary">Previous</AdminButton>
+              <AdminButton disabled={page >= pagination.totalPages || loading} onClick={() => loadCheckouts(page + 1)} size="sm" variant="secondary">Next</AdminButton>
+            </div>
+          </section>
         </AdminCard>
-
-        <section className={styles.paginationRow}>
-          <p className={styles.paginationText}>Page {pagination.page} of {pagination.totalPages} • {pagination.total} total</p>
-          <div className={styles.paginationActions}>
-            <AdminButton disabled={page <= 1 || loading} onClick={() => loadCheckouts(page - 1)} size="sm" variant="secondary">Previous</AdminButton>
-            <AdminButton disabled={page >= pagination.totalPages || loading} onClick={() => loadCheckouts(page + 1)} size="sm" variant="secondary">Next</AdminButton>
-          </div>
-        </section>
       </AdminPage>
     </AppShell>
   );

@@ -1,10 +1,10 @@
-import BrandKitWorkspace from '@/components/brand-kit/BrandKitWorkspace';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Doopify | Brand Kit',
-  description: 'Manage store branding for storefront, checkout, and email.',
+  description: 'Brand Kit now lives inside Settings.',
 };
 
 export default function BrandKitPage() {
-  return <BrandKitWorkspace />;
+  redirect('/settings?section=brand-kit');
 }

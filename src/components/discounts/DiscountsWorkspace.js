@@ -127,21 +127,26 @@ export default function DiscountsWorkspace() {
               selectedId={selectedDiscount?.id || null}
             />
           ) : (
-            <AdminEmptyState description="Create a code or automatic discount to start promotions." icon="sell" title="No discounts yet" />
+            <AdminEmptyState
+              actionLabel="Create discount code"
+              description="Create a code or automatic discount to start promotions."
+              icon="sell"
+              onAction={() => openBuilder('discount code')}
+              title="No discounts yet"
+            />
           )}
+          {selectedDiscount ? (
+            <AdminFormSection description="Current discount configuration and performance" eyebrow="Discount detail" title={selectedDiscount.title}>
+              <div className={styles.detailGrid}>
+                <div><strong>Method:</strong> {selectedDiscount.method}</div>
+                <div><strong>Status:</strong> {selectedDiscount.status}</div>
+                <div><strong>Customer eligibility:</strong> {selectedDiscount.customerEligibility}</div>
+                <div><strong>Sales channels:</strong> {selectedDiscount.salesChannel}</div>
+              </div>
+              <div className={styles.detailActions}><AdminButton onClick={() => openEditor(selectedDiscount)} size="sm" variant="secondary">Edit discount</AdminButton></div>
+            </AdminFormSection>
+          ) : null}
         </AdminCard>
-
-        {selectedDiscount ? (
-          <AdminFormSection description="Current discount configuration and performance" eyebrow="Discount detail" title={selectedDiscount.title}>
-            <div className={styles.detailGrid}>
-              <div><strong>Method:</strong> {selectedDiscount.method}</div>
-              <div><strong>Status:</strong> {selectedDiscount.status}</div>
-              <div><strong>Customer eligibility:</strong> {selectedDiscount.customerEligibility}</div>
-              <div><strong>Sales channels:</strong> {selectedDiscount.salesChannel}</div>
-            </div>
-            <div className={styles.detailActions}><AdminButton onClick={() => openEditor(selectedDiscount)} size="sm" variant="secondary">Edit discount</AdminButton></div>
-          </AdminFormSection>
-        ) : null}
 
         <AdminDrawer
           actions={(

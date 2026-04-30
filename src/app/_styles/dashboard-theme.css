@@ -401,107 +401,68 @@ body.dashboard-body {
   justify-content: center;
 }
 
-.admin-theme-toggle {
-  min-width: 82px;
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
+.admin-theme-toggle-dropdown {
   min-height: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03)),
     color-mix(in srgb, var(--surface-container-low) 84%, transparent);
+  color: var(--on-surface);
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.24rem;
-  color: var(--on-surface-variant);
-  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
-}
-
-.admin-theme-toggle:hover {
-  border-color: var(--glass-border-strong);
-}
-
-.admin-theme-toggle:active {
-  transform: scale(0.985);
-}
-
-.admin-theme-toggle__label {
-  font-size: 0.62rem;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.74rem;
   font-weight: 650;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  opacity: 0.8;
 }
 
-.admin-theme-toggle.is-dark .admin-theme-toggle__label:first-of-type,
-.admin-theme-toggle.is-light .admin-theme-toggle__label:last-of-type {
-  color: var(--on-surface);
-  opacity: 1;
-}
-
-.admin-theme-toggle__track {
-  width: 2.05rem;
-  height: 1.2rem;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: color-mix(in srgb, var(--surface-container) 88%, transparent);
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding: 0.08rem;
-}
-
-.admin-theme-toggle__thumb {
-  width: 0.96rem;
-  height: 0.96rem;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08)),
-    color-mix(in srgb, var(--surface-bright) 88%, transparent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.admin-theme-toggle-dropdown__label {
   color: var(--on-surface-variant);
-  transform: translateX(0);
-  transition: transform 180ms ease, color 180ms ease;
 }
 
-.admin-theme-toggle.is-light .admin-theme-toggle__thumb {
-  transform: translateX(0.82rem);
+.admin-theme-toggle-dropdown__chevron {
+  font-size: 1rem;
+  color: var(--on-surface-variant);
 }
 
-.admin-theme-toggle.is-dark .admin-theme-toggle__thumb {
-  color: var(--on-surface);
+.admin-theme-dropdown__option {
+  justify-content: space-between !important;
+  gap: 0.42rem;
 }
 
-.admin-theme-toggle__thumb .material-symbols-outlined {
-  font-size: 0.68rem;
+.admin-theme-dropdown__option.is-active {
+  background: rgba(var(--accent-rgb), 0.14) !important;
+}
+
+.admin-theme-dropdown__check {
+  font-size: 0.95rem;
+  color: var(--primary);
 }
 
 .admin-drawer-root {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 220;
 }
 
 .admin-drawer-overlay {
   position: absolute;
   inset: 0;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  background: rgba(5, 5, 8, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.56);
 }
 
 [data-dashboard-theme="light"] .admin-drawer-overlay {
-  background: rgba(12, 19, 31, 0.24);
+  background: rgba(20, 25, 40, 0.3);
 }
 
 .admin-drawer {
   position: absolute;
   top: 0;
   right: 0;
-  width: min(680px, 100vw);
+  width: min(640px, 100vw);
   height: 100%;
   border-left: 1px solid var(--glass-border-strong);
   background:
@@ -512,7 +473,7 @@ body.dashboard-body {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   display: flex;
   flex-direction: column;
-  animation: admin-drawer-in 180ms ease;
+  animation: admin-drawer-in 190ms ease;
 }
 
 .admin-drawer__header {
@@ -654,6 +615,120 @@ body.dashboard-body {
 .admin-dropdown__menu button:hover,
 .admin-dropdown__menu a:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-select {
+  position: relative;
+}
+
+.admin-select__trigger {
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 84%, transparent);
+  color: var(--on-surface);
+  border-radius: 0.72rem;
+  min-height: 2.2rem;
+  padding: 0.5rem 0.68rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-select__chevron {
+  color: var(--on-surface-variant);
+  font-size: 1.05rem;
+}
+
+.admin-select__menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 45;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.72rem;
+  padding: 0.3rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03)),
+    var(--surface-bright);
+  box-shadow: var(--glass-shadow-soft);
+}
+
+.admin-select__option {
+  width: 100%;
+  border: 0;
+  border-radius: 0.58rem;
+  background: transparent;
+  color: var(--on-surface);
+  min-height: 1.9rem;
+  padding: 0.34rem 0.5rem;
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.admin-select__option.is-active,
+.admin-select__option:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.admin-select__option.is-selected {
+  color: var(--primary);
+}
+
+.admin-select__check {
+  font-size: 0.9rem;
+}
+
+.admin-tooltip {
+  display: inline-flex;
+  position: relative;
+}
+
+.admin-tooltip__trigger {
+  width: 1rem;
+  height: 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--on-surface-variant);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-tooltip__trigger .material-symbols-outlined {
+  font-size: 0.9rem;
+}
+
+.admin-tooltip__bubble {
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 180px;
+  max-width: 260px;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.58rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    var(--surface-bright);
+  padding: 0.42rem 0.5rem;
+  font-size: 0.72rem;
+  color: var(--on-surface);
+  box-shadow: var(--glass-shadow-soft);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.admin-tooltip:hover .admin-tooltip__bubble,
+.admin-tooltip:focus-within .admin-tooltip__bubble {
+  opacity: 1;
 }
 
 .admin-status-chip {

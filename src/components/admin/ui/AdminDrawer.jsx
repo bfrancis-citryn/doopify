@@ -70,9 +70,15 @@ export default function AdminDrawer({
     return null;
   }
 
+  const handleOverlayClick = () => {
+    if (typeof onClose === "function") {
+      onClose();
+    }
+  };
+
   return (
     <div className="admin-drawer-root" role="presentation">
-      <div className="admin-drawer-overlay" onClick={onClose} />
+      <div aria-hidden="true" className="admin-drawer-overlay" onClick={handleOverlayClick} />
       <aside
         aria-label={title}
         aria-modal="true"

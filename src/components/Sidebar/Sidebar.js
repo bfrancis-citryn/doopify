@@ -44,7 +44,6 @@ const NAV_GROUPS = [
     label: 'System',
     items: [
       { href: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
-      { href: '/admin/brand-kit', label: 'Brand Kit', icon: 'palette' },
       { href: '/settings', label: 'Settings', icon: 'settings' },
     ],
   },

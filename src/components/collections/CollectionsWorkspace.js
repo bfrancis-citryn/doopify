@@ -10,7 +10,6 @@ import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import AdminFormSection from '../admin/ui/AdminFormSection';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
-import AdminSplitPane from '../admin/ui/AdminSplitPane';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminToolbar from '../admin/ui/AdminToolbar';
@@ -148,29 +147,32 @@ export default function CollectionsWorkspace() {
   return (
     <AppShell onCreateOrder={resetToNewCollection} onNotificationsClick={() => setNotice('Collections are ready for merchandising work.')} onQuickActionClick={() => setNotice('Use the product library to assign products and order them.')} onSearchChange={(event) => setSearchQuery(event.target.value)} searchValue={searchQuery}>
       <AdminPage>
-        <AdminSplitPane>
-          <AdminCard className={styles.listPanel} variant="panel">
-            <AdminPageHeader eyebrow="Collections" title="Merchandising" actions={<AdminButton onClick={resetToNewCollection} size="sm" variant="primary">New collection</AdminButton>} />
-            <AdminToolbar><span className={styles.resultText}>{filteredCollections.length} collections</span></AdminToolbar>
-            {loading ? (
-              <p className={styles.notice}>Loading collections...</p>
-            ) : filteredCollections.length ? (
-              <AdminTable
-                columns={[
-                  { key: 'title', header: 'Title', render: c => c.title },
-                  { key: 'handle', header: 'Handle', render: c => `/${c.handle}` },
-                  { key: 'count', header: 'Products', render: c => c.productCount },
-                  { key: 'status', header: 'Status', render: c => <AdminStatusChip tone={c.isPublished ? 'success' : 'warning'}>{c.isPublished ? 'Published' : 'Unpublished'}</AdminStatusChip> },
-                ]}
-                onRowClick={selectCollection}
-                rows={filteredCollections}
-                selectedId={selectedCollectionId === 'new' ? null : selectedCollectionId}
-              />
-            ) : (
-              <AdminEmptyState description="Create your first collection to start shaping storefront merchandising." icon="dashboard_customize" onAction={resetToNewCollection} title="No collections yet" actionLabel="Create collection" />
-            )}
-          </AdminCard>
-        </AdminSplitPane>
+        <AdminCard className={styles.listPanel} variant="panel">
+          <AdminPageHeader
+            actions={<AdminButton onClick={resetToNewCollection} size="sm" variant="primary">New collection</AdminButton>}
+            description={`${filteredCollections.length} collections`}
+            eyebrow="Collections"
+            title="Merchandising"
+          />
+          <AdminToolbar><span className={styles.resultText}>{filteredCollections.length} collections</span></AdminToolbar>
+          {loading ? (
+            <p className={styles.notice}>Loading collections...</p>
+          ) : filteredCollections.length ? (
+            <AdminTable
+              columns={[
+                { key: 'title', header: 'Title', render: c => c.title },
+                { key: 'handle', header: 'Handle', render: c => `/${c.handle}` },
+                { key: 'count', header: 'Products', render: c => c.productCount },
+                { key: 'status', header: 'Status', render: c => <AdminStatusChip tone={c.isPublished ? 'success' : 'warning'}>{c.isPublished ? 'Published' : 'Unpublished'}</AdminStatusChip> },
+              ]}
+              onRowClick={selectCollection}
+              rows={filteredCollections}
+              selectedId={selectedCollectionId === 'new' ? null : selectedCollectionId}
+            />
+          ) : (
+            <AdminEmptyState description="Create your first collection to start shaping storefront merchandising." icon="dashboard_customize" onAction={resetToNewCollection} title="No collections yet" actionLabel="Create collection" />
+          )}
+        </AdminCard>
 
         <AdminDrawer
           actions={(

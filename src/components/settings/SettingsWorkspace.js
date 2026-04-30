@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AppShell from '../AppShell';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './SettingsWorkspace.module.css';
 import IntegrationsPanel from './IntegrationsPanel';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
+import AdminFormSection from '../admin/ui/AdminFormSection';
 import AdminLiveStatus from '../admin/ui/AdminLiveStatus';
+import AdminSelect from '../admin/ui/AdminSelect';
 import AdminSavedState from '../admin/ui/AdminSavedState';
-import AdminThemeToggle from '../admin/ui/AdminThemeToggle';
-import { useAdminTheme } from '../admin/ui/AdminThemeProvider';
+import AdminTooltip from '../admin/ui/AdminTooltip';
+import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
 
 const SETTINGS_SECTIONS = [
   { id: 'brand-kit', label: 'Brand kit' },
@@ -79,6 +81,11 @@ const PROVIDER_HINTS = [
   'Email webhooks: set RESEND_WEBHOOK_SECRET before enabling provider webhook delivery.',
   'Deployment: set NEXT_PUBLIC_STORE_URL and configure VERCEL_URL/VERCEL_ENV for hosted environments.',
 ];
+
+const FONT_OPTIONS = BRAND_FONT_VALUES.map((value) => ({ value, label: value }));
+const BUTTON_RADIUS_OPTIONS = BUTTON_RADIUS_VALUES.map((value) => ({ value, label: value }));
+const BUTTON_STYLE_OPTIONS = BUTTON_STYLE_VALUES.map((value) => ({ value, label: value }));
+const BUTTON_TEXT_TRANSFORM_OPTIONS = BUTTON_TEXT_TRANSFORM_VALUES.map((value) => ({ value, label: value }));
 
 const EMPTY_ZONE_FORM = {
   name: '',
@@ -191,7 +198,6 @@ function extractEnvVariableHints(checks) {
 export default function SettingsWorkspace() {
   const [activeSection, setActiveSection] = useState('brand-kit');
   const { settings, updateSettings, loading, error } = useSettings();
-  const { theme } = useAdminTheme();
   const [shippingConfigLoading, setShippingConfigLoading] = useState(false);
   const [shippingConfigError, setShippingConfigError] = useState('');
   const [shippingConfigLoaded, setShippingConfigLoaded] = useState(false);
@@ -207,16 +213,63 @@ export default function SettingsWorkspace() {
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
   const [saveClock, setSaveClock] = useState(Date.now());
-  const [serviceFlags, setServiceFlags] = useState({
-    stripeTestMode: true,
-    emailObservability: true,
-    webhookRetryWorker: true,
-  });
+  const [brandKit, setBrandKit] = useState(null);
+  const [brandKitLoading, setBrandKitLoading] = useState(false);
+  const [brandKitError, setBrandKitError] = useState('');
+  const [brandKitNotice, setBrandKitNotice] = useState('');
+  const [showAdvancedUrls, setShowAdvancedUrls] = useState(false);
+  const [uploadingField, setUploadingField] = useState('');
+  const logoUploadRef = useRef(null);
+  const faviconUploadRef = useRef(null);
+  const emailLogoUploadRef = useRef(null);
+  const checkoutLogoUploadRef = useRef(null);
 
   const activeTitle = useMemo(
     () => SETTINGS_SECTIONS.find((section) => section.id === activeSection)?.label || 'Settings',
     [activeSection]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get('section');
+    if (section && SETTINGS_SECTIONS.some((entry) => entry.id === section)) {
+      setActiveSection(section);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeSection !== 'brand-kit' || brandKit || brandKitLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadBrandKit() {
+      setBrandKitLoading(true);
+      setBrandKitError('');
+      try {
+        const data = await fetch('/api/settings/brand-kit', { cache: 'no-store' }).then(parseApiJson);
+        if (!cancelled) {
+          setBrandKit(data);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setBrandKitError(loadError instanceof Error ? loadError.message : 'Failed to load brand kit');
+        }
+      } finally {
+        if (!cancelled) {
+          setBrandKitLoading(false);
+        }
+      }
+    }
+
+    loadBrandKit();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, brandKit, brandKitLoading]);
 
   useEffect(() => {
     if (activeSection !== 'shipping' || shippingConfigLoaded || shippingConfigLoading) {
@@ -352,6 +405,99 @@ export default function SettingsWorkspace() {
     } catch {
       setSavedState('error');
     }
+  }
+
+  function handleBrandKitPatch(patch) {
+    setBrandKit((current) => ({ ...(current || {}), ...patch }));
+    setSavedState('dirty');
+  }
+
+  async function handleBrandKitSave() {
+    if (!brandKit) return;
+    setSavedState('saving');
+    setBrandKitError('');
+    try {
+      const updated = await fetch('/api/settings/brand-kit', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(brandKit),
+      }).then(parseApiJson);
+      setBrandKit(updated);
+      setSavedState('saved');
+      setLastSavedAt(Date.now());
+    } catch (saveError) {
+      setSavedState('error');
+      setBrandKitError(saveError instanceof Error ? saveError.message : 'Failed to save brand kit');
+    }
+  }
+
+  async function handleBrandAssetUpload(field, file) {
+    if (!file) return;
+    setUploadingField(field);
+    setBrandKitError('');
+    setBrandKitNotice('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('altText', file.name);
+      const uploaded = await fetch('/api/media/upload', { method: 'POST', body: form }).then(parseApiJson);
+      const assetUrl = uploaded?.url || '';
+      if (!assetUrl) {
+        throw new Error('Upload succeeded but no asset URL was returned.');
+      }
+      handleBrandKitPatch({ [field]: assetUrl });
+      setBrandKitNotice('Asset uploaded. Save changes to persist it in Brand Kit.');
+    } catch (uploadError) {
+      setBrandKitError(uploadError instanceof Error ? uploadError.message : 'Brand asset upload failed.');
+    } finally {
+      setUploadingField('');
+    }
+  }
+
+  function renderAssetUploadField({ field, label, refObject }) {
+    const currentValue = brandKit?.[field] || '';
+    return (
+      <div className={styles.assetField}>
+        <div className={styles.assetFieldHeader}>
+          <span>{label}</span>
+          <div className={styles.assetActions}>
+            <input
+              accept="image/*"
+              className={styles.hiddenFileInput}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void handleBrandAssetUpload(field, file);
+                }
+                event.target.value = '';
+              }}
+              ref={refObject}
+              type="file"
+            />
+            <AdminButton
+              disabled={uploadingField === field}
+              onClick={() => refObject.current?.click()}
+              size="sm"
+              variant="secondary"
+            >
+              {uploadingField === field ? 'Uploading...' : currentValue ? 'Replace file' : 'Upload file'}
+            </AdminButton>
+            {currentValue ? (
+              <AdminButton onClick={() => handleBrandKitPatch({ [field]: '' })} size="sm" variant="ghost">
+                Clear
+              </AdminButton>
+            ) : null}
+          </div>
+        </div>
+        {currentValue ? (
+          <div className={styles.assetPreview}>
+            <img alt={`${label} preview`} src={currentValue} />
+          </div>
+        ) : (
+          <p className={styles.assetHint}>No file selected yet.</p>
+        )}
+      </div>
+    );
   }
 
   async function refreshShippingConfig() {
@@ -699,7 +845,12 @@ export default function SettingsWorkspace() {
               ) : (
                 <div className={styles.headerActions}>
                   <AdminSavedState savedAgoText={savedAgoText} state={savedState} />
-                  <AdminButton disabled={loading || Boolean(error)} size="sm" variant="primary">
+                  <AdminButton
+                    disabled={loading || Boolean(error) || (activeSection === 'brand-kit' && (brandKitLoading || !brandKit))}
+                    onClick={activeSection === 'brand-kit' ? handleBrandKitSave : undefined}
+                    size="sm"
+                    variant="primary"
+                  >
                     Save changes
                   </AdminButton>
                 </div>
@@ -725,112 +876,132 @@ export default function SettingsWorkspace() {
             {!loading && !error && activeSection === 'brand-kit' ? (
               <div className={styles.brandKitLayout}>
                 <div className={styles.brandKitHeading}>
-                  <h3>Brand kit</h3>
-                  <p>Locked inside Settings. Theme + accent tokens live here long term.</p>
+                  <h3>Brand Kit</h3>
+                  <p>Manage branding used by storefront, checkout, and customer emails.</p>
                 </div>
 
-                <AdminCard className={styles.brandRow} spotlight variant="inset">
-                  <div className={styles.rowMeta}>
-                    <h4>Store identity</h4>
-                    <p>Core naming and support details that power storefront and transactional surfaces.</p>
-                  </div>
-                  <div className={styles.rowInputs}>
+                <AdminFormSection
+                  description=""
+                  eyebrow="Identity"
+                  title={<span className={styles.sectionTitleWithHelp}>Brand identity<AdminTooltip content="Core brand values consumed by storefront pages, checkout, and emails." /></span>}
+                >
+                  <div className={styles.brandFieldGrid}>
                     <label className={styles.field}>
-                      <span>Store name</span>
-                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ storeName: event.target.value })} value={settings.storeName} />
+                      <span>Brand name</span>
+                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ name: event.target.value })} value={brandKit?.name || ''} />
                     </label>
                     <label className={styles.field}>
                       <span>Support email</span>
-                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ supportEmail: event.target.value })} value={settings.supportEmail} />
+                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
+                    </label>
+                  </div>
+                  <div className={styles.brandFieldGrid}>
+                    {renderAssetUploadField({ field: 'logoUrl', label: 'Store logo', refObject: logoUploadRef })}
+                    {renderAssetUploadField({ field: 'faviconUrl', label: 'Favicon', refObject: faviconUploadRef })}
+                  </div>
+                  <button className={styles.advancedToggle} onClick={() => setShowAdvancedUrls((current) => !current)} type="button">
+                    {showAdvancedUrls ? 'Hide URL fallback' : 'Use URL fallback instead'}
+                  </button>
+                  {showAdvancedUrls ? (
+                    <div className={styles.brandFieldGrid}>
+                      <label className={styles.field}>
+                        <span>Store logo URL</span>
+                        <input className={styles.input} onChange={(event) => handleBrandKitPatch({ logoUrl: event.target.value })} value={brandKit?.logoUrl || ''} />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Favicon URL</span>
+                        <input className={styles.input} onChange={(event) => handleBrandKitPatch({ faviconUrl: event.target.value })} value={brandKit?.faviconUrl || ''} />
+                      </label>
+                    </div>
+                  ) : null}
+                </AdminFormSection>
+
+                <AdminFormSection
+                  description=""
+                  eyebrow="Visual"
+                  title={<span className={styles.sectionTitleWithHelp}>Colors<AdminTooltip content="Storefront and checkout color tokens." /></span>}
+                >
+                  <div className={styles.brandFieldGrid}>
+                    <label className={styles.field}><span>Primary color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ primaryColor: event.target.value })} value={brandKit?.primaryColor || ''} /></label>
+                    <label className={styles.field}><span>Secondary color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ secondaryColor: event.target.value })} value={brandKit?.secondaryColor || ''} /></label>
+                    <label className={styles.field}><span>Accent color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ accentColor: event.target.value })} value={brandKit?.accentColor || ''} /></label>
+                    <label className={styles.field}><span>Text color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ textColor: event.target.value })} value={brandKit?.textColor || ''} /></label>
+                  </div>
+                </AdminFormSection>
+
+                <AdminFormSection
+                  description=""
+                  eyebrow="Typography"
+                  title={<span className={styles.sectionTitleWithHelp}>Typography and buttons<AdminTooltip content="Used in storefront and checkout where these tokens are supported." /></span>}
+                >
+                  <div className={styles.brandFieldGrid}>
+                    <label className={styles.field}>
+                      <span>Heading font</span>
+                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ headingFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.headingFont || 'system'} />
                     </label>
                     <label className={styles.field}>
-                      <span>Logo URL</span>
-                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ logoUrl: event.target.value })} value={settings.logoUrl} />
+                      <span>Body font</span>
+                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ bodyFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.bodyFont || 'system'} />
                     </label>
                     <label className={styles.field}>
-                      <span>Order prefix</span>
-                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ orderPrefix: event.target.value })} value={settings.orderPrefix} />
+                      <span>Button radius</span>
+                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonRadius: nextValue })} options={BUTTON_RADIUS_OPTIONS} value={brandKit?.buttonRadius || 'md'} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Button style</span>
+                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonStyle: nextValue })} options={BUTTON_STYLE_OPTIONS} value={brandKit?.buttonStyle || 'solid'} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Button text transform</span>
+                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonTextTransform: nextValue })} options={BUTTON_TEXT_TRANSFORM_OPTIONS} value={brandKit?.buttonTextTransform || 'normal'} />
                     </label>
                   </div>
-                </AdminCard>
+                </AdminFormSection>
 
-                <AdminCard className={styles.brandRow} spotlight variant="inset">
-                  <div className={styles.rowMeta}>
-                    <h4>Theme mode</h4>
-                    <p>Dark mode stays premium by default with an Apple-glass light mode fallback.</p>
+                <AdminFormSection
+                  description=""
+                  eyebrow="Email"
+                  title={<span className={styles.sectionTitleWithHelp}>Email branding<AdminTooltip content="Used in transactional email templates for logo, header tint, and footer copy." /></span>}
+                >
+                  <div className={styles.brandFieldGrid}>
+                    {renderAssetUploadField({ field: 'emailLogoUrl', label: 'Email logo', refObject: emailLogoUploadRef })}
+                    {renderAssetUploadField({ field: 'checkoutLogoUrl', label: 'Checkout logo', refObject: checkoutLogoUploadRef })}
+                    <label className={styles.field}>
+                      <span>Email header color</span>
+                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailHeaderColor: event.target.value })} value={brandKit?.emailHeaderColor || ''} />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Email footer text</span>
+                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailFooterText: event.target.value })} value={brandKit?.emailFooterText || ''} />
+                    </label>
                   </div>
-                  <div className={styles.rowPreview}>
-                    <div className={`${styles.previewCard} admin-spotlight`}>
-                      <div className={styles.previewTop}>
-                        <p>Current mode: {theme === 'dark' ? 'Dark' : 'Light'}</p>
-                        <AdminThemeToggle />
-                      </div>
-                      <div className={styles.previewActions}>
-                        <AdminButton size="sm" variant="secondary">Preview shell</AdminButton>
-                        <AdminButton size="sm" variant="ghost">Inspect contrast</AdminButton>
-                      </div>
-                    </div>
-                  </div>
-                </AdminCard>
+                </AdminFormSection>
 
-                <AdminCard className={styles.brandRow} spotlight variant="inset">
-                  <div className={styles.rowMeta}>
-                    <h4>Accent direction</h4>
-                    <p>Ocean accent remains the locked default for active states, glows, and focus surfaces.</p>
+                <AdminFormSection
+                  description=""
+                  eyebrow="Social"
+                  title={<span className={styles.sectionTitleWithHelp}>Social links<AdminTooltip content="Exposed by storefront settings for social destinations." /></span>}
+                >
+                  <div className={styles.brandFieldGrid}>
+                    <label className={styles.field}><span>Instagram URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ instagramUrl: event.target.value })} value={brandKit?.instagramUrl || ''} /></label>
+                    <label className={styles.field}><span>Facebook URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ facebookUrl: event.target.value })} value={brandKit?.facebookUrl || ''} /></label>
+                    <label className={styles.field}><span>TikTok URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ tiktokUrl: event.target.value })} value={brandKit?.tiktokUrl || ''} /></label>
+                    <label className={styles.field}><span>YouTube URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ youtubeUrl: event.target.value })} value={brandKit?.youtubeUrl || ''} /></label>
                   </div>
-                  <div className={styles.rowPreview}>
-                    <div className={`${styles.previewCard} admin-spotlight`}>
-                      <div className={styles.accentFields}>
-                        <label className={styles.field}>
-                          <span>Primary color</span>
-                          <input className={styles.input} onChange={(event) => handleSettingsPatch({ brandPrimary: event.target.value })} value={settings.brandPrimary} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Accent color</span>
-                          <input className={styles.input} onChange={(event) => handleSettingsPatch({ brandAccent: event.target.value })} value={settings.brandAccent} />
-                        </label>
-                      </div>
-                      <div className={styles.previewActions}>
-                        <AdminButton size="sm" variant="primary">Primary action</AdminButton>
-                        <AdminButton size="sm" variant="secondary">Secondary button</AdminButton>
-                      </div>
-                    </div>
-                  </div>
-                </AdminCard>
+                </AdminFormSection>
 
-                <AdminCard className={styles.brandRow} spotlight variant="inset">
-                  <div className={styles.rowMeta}>
-                    <h4>Connected services</h4>
-                    <p>Quick visibility for service modes that influence operations, observability, and retries.</p>
+                {brandKitNotice ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusText}>{brandKitNotice}</p>
                   </div>
-                  <div className={styles.serviceList}>
-                    <label className={styles.serviceRow}>
-                      <span>Stripe test mode</span>
-                      <input
-                        checked={serviceFlags.stripeTestMode}
-                        onChange={(event) => setServiceFlags((current) => ({ ...current, stripeTestMode: event.target.checked }))}
-                        type="checkbox"
-                      />
-                    </label>
-                    <label className={styles.serviceRow}>
-                      <span>Email observability</span>
-                      <input
-                        checked={serviceFlags.emailObservability}
-                        onChange={(event) => setServiceFlags((current) => ({ ...current, emailObservability: event.target.checked }))}
-                        type="checkbox"
-                      />
-                    </label>
-                    <label className={styles.serviceRow}>
-                      <span>Outbound webhook retry worker</span>
-                      <input
-                        checked={serviceFlags.webhookRetryWorker}
-                        onChange={(event) => setServiceFlags((current) => ({ ...current, webhookRetryWorker: event.target.checked }))}
-                        type="checkbox"
-                      />
-                    </label>
-                    <AdminLiveStatus label="Webhook worker live" />
+                ) : null}
+                {brandKitLoading ? <p className={styles.statusText}>Loading Brand Kit...</p> : null}
+                {brandKitError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Brand Kit error</p>
+                    <p className={styles.statusText}>{brandKitError}</p>
                   </div>
-                </AdminCard>
+                ) : null}
               </div>
             ) : null}
 

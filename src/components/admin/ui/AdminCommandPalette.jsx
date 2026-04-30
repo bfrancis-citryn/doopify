@@ -16,7 +16,7 @@ const STATIC_COMMANDS = [
   { id: "go-analytics", label: "Go to Analytics", path: "/analytics", keywords: ["reports"] },
   { id: "go-webhooks", label: "Open Webhooks", path: "/admin/webhooks", keywords: ["events"] },
   { id: "go-settings", label: "Go to Settings", path: "/settings", keywords: ["configuration"] },
-  { id: "go-brand-kit", label: "Open Brand Kit", path: "/admin/brand-kit", keywords: ["branding"] },
+  { id: "go-brand-kit", label: "Open Brand Kit", path: "/settings?section=brand-kit", keywords: ["branding"] },
 ];
 
 function matchCommand(command, query) {
