@@ -15,14 +15,39 @@ export const metadata = {
   description: 'Doopify Commerce OS',
 };
 
+const themeBootScript = `(() => {
+  const storageKey = 'doopify.dashboard.theme';
+  const valid = new Set(['light', 'dark', 'system']);
+  let preference = 'system';
+
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    if (valid.has(saved)) preference = saved;
+  } catch {}
+
+  const resolved = preference === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    : preference;
+
+  document.documentElement.setAttribute('data-dashboard-theme-preference', preference);
+  document.documentElement.setAttribute('data-dashboard-theme', resolved);
+  document.documentElement.style.colorScheme = resolved;
+})();`;
+
 export default function DashboardLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-dashboard-theme="dark"
+      data-dashboard-theme-preference="system"
+    >
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
           rel="stylesheet"
         />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body className={`${inter.variable} ${manrope.variable} dashboard-body`} suppressHydrationWarning>
         <AdminThemeProvider>

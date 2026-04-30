@@ -11,6 +11,7 @@ import AdminFormSection from '../admin/ui/AdminFormSection';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminSelectableTile from '../admin/ui/AdminSelectableTile';
 import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminSplitPane from '../admin/ui/AdminSplitPane';
 import AdminToolbar from '../admin/ui/AdminToolbar';
@@ -253,29 +254,26 @@ export default function MediaLibraryWorkspace() {
                 {assets.map((asset) => {
                   const isSelected = asset.id === selectedAssetId;
                   return (
-                    <button
-                      className={isSelected ? styles.assetCardActive : styles.assetCard}
+                    <AdminSelectableTile
+                      className={styles.assetTile}
+                      footer={(
+                        <>
+                          <span>{formatAssetDate(asset.createdAt)}</span>
+                          <span>{asset.linkedProducts ? `${asset.linkedProducts} linked` : 'Unlinked'}</span>
+                        </>
+                      )}
                       key={asset.id}
+                      media={(
+                        <div className={styles.assetImageWrap}>
+                          <Image alt={asset.altText || asset.filename || 'Media asset'} className={styles.assetImage} fill src={asset.url} unoptimized />
+                        </div>
+                      )}
                       onClick={() => setSelectedAssetId(asset.id)}
+                      selected={isSelected}
+                      subtitle={asset.altText || 'No alt text yet'}
+                      title={asset.filename}
                       type="button"
-                    >
-                      <div className={styles.assetImageWrap}>
-                        <Image alt={asset.altText || asset.filename || 'Media asset'} className={styles.assetImage} fill src={asset.url} unoptimized />
-                        {isSelected ? (
-                          <span className={styles.selectedIndicator}>
-                            <span className="material-symbols-outlined" aria-hidden="true">check</span>
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className={styles.assetMeta}>
-                        <p className={styles.assetName}>{asset.filename}</p>
-                        <p className={styles.assetAlt}>{asset.altText || 'No alt text yet'}</p>
-                      </div>
-                      <div className={styles.assetFooter}>
-                        <span>{formatAssetDate(asset.createdAt)}</span>
-                        <span>{asset.linkedProducts ? `${asset.linkedProducts} linked` : 'Unlinked'}</span>
-                      </div>
-                    </button>
+                    />
                   );
                 })}
               </div>

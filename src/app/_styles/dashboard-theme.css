@@ -427,6 +427,12 @@ body.dashboard-body {
   padding: 0.2rem 0.5rem;
   font-size: 0.74rem;
   font-weight: 650;
+  cursor: pointer;
+}
+
+.admin-theme-dropdown {
+  position: relative;
+  z-index: calc(var(--z-topbar) + 1);
 }
 
 .admin-theme-toggle-dropdown__label {
@@ -593,6 +599,11 @@ body.dashboard-body {
   z-index: 1;
 }
 
+.admin-dropdown__trigger {
+  display: inline-flex;
+  width: 100%;
+}
+
 .admin-dropdown__menu {
   position: fixed;
   top: var(--admin-menu-top, 0);
@@ -610,6 +621,9 @@ body.dashboard-body {
   -webkit-backdrop-filter: blur(calc(var(--glass-blur) - 8px));
   padding: 0.35rem;
   z-index: var(--z-dropdown);
+  pointer-events: auto;
+  max-height: min(70vh, 380px);
+  overflow: auto;
 }
 
 .admin-dropdown__menu.is-start {
@@ -789,6 +803,93 @@ body.dashboard-body {
   color: var(--primary);
   border-color: rgba(var(--accent-rgb), 0.42);
   background: rgba(var(--accent-rgb), 0.16);
+}
+
+.admin-selectable-tile {
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  text-align: left;
+  color: var(--on-surface);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.admin-selectable-tile.is-clickable {
+  cursor: pointer;
+}
+
+.admin-selectable-tile.is-clickable:hover {
+  border-color: rgba(var(--accent-rgb), 0.44);
+  transform: translateY(-1px);
+}
+
+.admin-selectable-tile.is-selected {
+  border-color: rgba(var(--accent-rgb), 0.58);
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.18),
+    0 0 0 2px rgba(var(--accent-rgb), 0.16);
+}
+
+.admin-selectable-tile__media {
+  position: relative;
+  border-radius: 0.72rem;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-container) 78%, transparent);
+}
+
+.admin-selectable-tile__check {
+  position: absolute;
+  top: 0.38rem;
+  right: 0.38rem;
+  width: 1.24rem;
+  height: 1.24rem;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-rgb), 0.62);
+  background: color-mix(in srgb, var(--surface-bright) 80%, rgba(var(--accent-rgb), 0.2));
+  color: rgb(var(--accent-rgb));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+}
+
+.admin-selectable-tile__check .material-symbols-outlined {
+  font-size: 0.86rem;
+}
+
+.admin-selectable-tile__copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.admin-selectable-tile__title {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.admin-selectable-tile__subtitle {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--on-surface-variant);
+}
+
+.admin-selectable-tile__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  color: var(--on-surface-variant);
+  font-size: 0.7rem;
+}
+
+.admin-selectable-tile__action {
+  margin-top: 0.2rem;
 }
 
 .admin-skeleton,

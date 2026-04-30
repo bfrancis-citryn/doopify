@@ -9,8 +9,10 @@ import { getComputedProductStateMeta, isFuturePublishDate } from "../../lib/prod
 import AdminButton from "../admin/ui/AdminButton";
 import AdminCard from "../admin/ui/AdminCard";
 import AdminDrawer from "../admin/ui/AdminDrawer";
+import AdminInput from "../admin/ui/AdminInput";
 import AdminSavedState from "../admin/ui/AdminSavedState";
 import AdminSchedulePopover from "../admin/ui/AdminSchedulePopover";
+import AdminTextarea from "../admin/ui/AdminTextarea";
 import styles from "./ProductEditorDrawer.module.css";
 
 function formatScheduleText(isoDate) {
@@ -109,7 +111,7 @@ export default function ProductEditorDrawer() {
             <div className={styles.gridTwo}>
               <label className={styles.field}>
                 <span>Title</span>
-                <input
+                <AdminInput
                   onChange={(event) => actions.setDraftField("title", event.target.value)}
                   type="text"
                   value={draftProduct.title}
@@ -117,7 +119,7 @@ export default function ProductEditorDrawer() {
               </label>
               <label className={styles.field}>
                 <span>Primary SKU</span>
-                <input
+                <AdminInput
                   onChange={(event) => actions.setDraftField("sku", event.target.value)}
                   type="text"
                   value={draftProduct.sku}
@@ -129,7 +131,7 @@ export default function ProductEditorDrawer() {
           <SectionCard eyebrow="Description" title="Product description">
             <label className={styles.field}>
               <span>Description</span>
-              <textarea
+              <AdminTextarea
                 onChange={(event) => actions.setDraftField("description", event.target.value)}
                 rows={5}
                 value={draftProduct.description}
@@ -141,7 +143,7 @@ export default function ProductEditorDrawer() {
             <div className={styles.gridTwo}>
               <label className={styles.field}>
                 <span>Price</span>
-                <input
+                <AdminInput
                   onChange={(event) => actions.setDraftField("basePrice", event.target.value)}
                   type="text"
                   value={draftProduct.basePrice}
@@ -149,7 +151,7 @@ export default function ProductEditorDrawer() {
               </label>
               <label className={styles.field}>
                 <span>Compare-at price</span>
-                <input
+                <AdminInput
                   onChange={(event) => actions.setDraftField("compareAtPrice", event.target.value)}
                   type="text"
                   value={draftProduct.compareAtPrice}
@@ -203,7 +205,7 @@ export default function ProductEditorDrawer() {
             <div className={styles.gridTwo}>
               <label className={styles.field}>
                 <span>Category</span>
-                <input
+                <AdminInput
                   onChange={(event) => actions.setDraftField("category", event.target.value)}
                   type="text"
                   value={draftProduct.category}
@@ -211,7 +213,7 @@ export default function ProductEditorDrawer() {
               </label>
               <label className={styles.field}>
                 <span>Tags</span>
-                <input
+                <AdminInput
                   onChange={(event) => actions.setDraftTagsFromText(event.target.value)}
                   type="text"
                   value={draftProduct.tags.join(", ")}

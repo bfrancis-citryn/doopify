@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AdminButton from '../admin/ui/AdminButton';
+import AdminSelectableTile from '../admin/ui/AdminSelectableTile';
 import AdminUploadDropzone from '../admin/ui/AdminUploadDropzone';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductMediaManager.module.css';
@@ -184,10 +185,21 @@ export default function ProductMediaManager() {
 
       <div className={styles.thumbnailGrid}>
         {draftProduct.images.map((image, index) => (
-          <div
+          <AdminSelectableTile
             key={image.id}
-            className={image.id === editor.previewImageId ? styles.thumbnailTileActive : styles.thumbnailTile}
+            className={styles.thumbnailTile}
             draggable
+            footer={(
+              <>
+                <span className={styles.tilePosition}>{index + 1}</span>
+                {image.id === draftProduct.featuredImageId ? <span className={styles.tileBadge}>Featured</span> : null}
+              </>
+            )}
+            media={(
+              <div className={styles.thumbnailTileImageWrap}>
+                <Image alt={image.alt} className={styles.thumbnailImage} fill src={image.src} unoptimized />
+              </div>
+            )}
             onClick={() => actions.selectPreviewImage(image.id)}
             onDragEnd={() => {
               draggedImageIdRef.current = null;
@@ -221,22 +233,9 @@ export default function ProductMediaManager() {
 
               draggedImageIdRef.current = null;
             }}
-            role="button"
-            tabIndex={0}
-          >
-            <div className={styles.thumbnailTileImageWrap}>
-              <Image alt={image.alt} className={styles.thumbnailImage} fill src={image.src} unoptimized />
-              {image.id === editor.previewImageId ? (
-                <span className={styles.selectedIndicator}>
-                  <span className="material-symbols-outlined" aria-hidden="true">check</span>
-                </span>
-              ) : null}
-            </div>
-            <div className={styles.tileFooter}>
-              <span className={styles.tilePosition}>{index + 1}</span>
-              {image.id === draftProduct.featuredImageId ? <span className={styles.tileBadge}>Featured</span> : null}
-            </div>
-          </div>
+            selected={image.id === editor.previewImageId}
+            type="button"
+          />
         ))}
 
         <button className={styles.addTile} onClick={() => uploadInputRef.current?.click()} type="button">
@@ -309,41 +308,44 @@ export default function ProductMediaManager() {
             const isInGallery = assetIdsInGallery.has(asset.id);
 
             return (
-              <div className={isInGallery ? `${styles.libraryCard} ${styles.libraryCardSelected}` : styles.libraryCard} key={asset.id}>
-                <div className={styles.libraryImageWrap}>
-                  <Image
-                    alt={asset.altText || asset.filename || 'Media library image'}
-                    className={styles.libraryImage}
-                    fill
-                    src={asset.url}
-                    unoptimized
-                  />
-                  {isInGallery ? (
-                    <span className={styles.selectedIndicator}>
-                      <span className="material-symbols-outlined" aria-hidden="true">check</span>
-                    </span>
-                  ) : null}
-                </div>
-                <div className={styles.libraryMeta}>
-                  <p className={styles.libraryName}>{asset.filename || 'Untitled asset'}</p>
-                  <div className={styles.libraryMetaRow}>
+              <AdminSelectableTile
+                action={(
+                  <AdminButton
+                    className={isInGallery ? styles.libraryButtonAdded : styles.libraryButton}
+                    disabled={isInGallery}
+                    onClick={() => {
+                      actions.addImagesFromLibrary(asset);
+                      setActiveTab('gallery');
+                    }}
+                    size="sm"
+                    variant={isInGallery ? 'secondary' : 'primary'}
+                  >
+                    {isInGallery ? 'In gallery' : 'Add to gallery'}
+                  </AdminButton>
+                )}
+                className={styles.libraryCard}
+                footer={(
+                  <>
                     <span>{formatAssetDate(asset.createdAt)}</span>
                     <span>{asset.linkedProducts ? `${asset.linkedProducts} linked` : 'Unlinked'}</span>
+                  </>
+                )}
+                key={asset.id}
+                media={(
+                  <div className={styles.libraryImageWrap}>
+                    <Image
+                      alt={asset.altText || asset.filename || 'Media library image'}
+                      className={styles.libraryImage}
+                      fill
+                      src={asset.url}
+                      unoptimized
+                    />
                   </div>
-                </div>
-                <AdminButton
-                  className={isInGallery ? styles.libraryButtonAdded : styles.libraryButton}
-                  disabled={isInGallery}
-                  onClick={() => {
-                    actions.addImagesFromLibrary(asset);
-                    setActiveTab('gallery');
-                  }}
-                  size="sm"
-                  variant={isInGallery ? 'secondary' : 'primary'}
-                >
-                  {isInGallery ? 'In gallery' : 'Add to gallery'}
-                </AdminButton>
-              </div>
+                )}
+                selected={isInGallery}
+                subtitle={asset.altText || 'No alt text yet'}
+                title={asset.filename || 'Untitled asset'}
+              />
             );
           })}
         </div>

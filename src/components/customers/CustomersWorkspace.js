@@ -12,6 +12,7 @@ import AdminPageHeader from '../admin/ui/AdminPageHeader';
 import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
+import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminToolbar from '../admin/ui/AdminToolbar';
 import { useCustomers } from '../../context/CustomersContext';
 import { formatCustomerMoney } from '../../lib/customersData';
@@ -151,8 +152,7 @@ export default function CustomersWorkspace() {
 
               <AdminCard className={styles.drawerSection} variant="card">
                 <h3>Notes</h3>
-                <textarea
-                  className={styles.notesInput}
+                <AdminTextarea
                   onChange={(event) =>
                     setCustomers((current) =>
                       current.map((customer) =>

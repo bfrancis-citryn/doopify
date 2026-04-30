@@ -2,8 +2,9 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-const STORAGE_KEY = "doopify.dashboard.theme";
+export const STORAGE_KEY = "doopify.dashboard.theme";
 const VALID_PREFERENCES = new Set(["dark", "light", "system"]);
+const THEME_ATTRIBUTE = "data-dashboard-theme";
 
 const AdminThemeContext = createContext({
   themePreference: "system",
@@ -16,8 +17,47 @@ function applyTheme(theme) {
     return;
   }
 
-  document.documentElement.setAttribute("data-dashboard-theme", theme);
+  document.documentElement.setAttribute(THEME_ATTRIBUTE, theme);
   document.documentElement.style.colorScheme = theme;
+}
+
+function resolveTheme(preference) {
+  if (preference === "system") {
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark";
+  }
+  return preference === "light" ? "light" : "dark";
+}
+
+function getInitialPreference() {
+  if (typeof document !== "undefined") {
+    const serverPreference = document.documentElement.getAttribute("data-dashboard-theme-preference");
+    if (VALID_PREFERENCES.has(serverPreference)) {
+      return serverPreference;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const savedPreference = window.localStorage.getItem(STORAGE_KEY);
+    if (VALID_PREFERENCES.has(savedPreference)) {
+      return savedPreference;
+    }
+  }
+
+  return "system";
+}
+
+function getInitialResolvedTheme(initialPreference) {
+  if (typeof document !== "undefined") {
+    const renderedTheme = document.documentElement.getAttribute(THEME_ATTRIBUTE);
+    if (renderedTheme === "light" || renderedTheme === "dark") {
+      return renderedTheme;
+    }
+  }
+
+  return resolveTheme(initialPreference);
 }
 
 export function useAdminTheme() {
@@ -25,32 +65,17 @@ export function useAdminTheme() {
 }
 
 export default function AdminThemeProvider({ children }) {
-  const [themePreference, setThemePreferenceState] = useState("system");
-  const [resolvedTheme, setResolvedTheme] = useState("dark");
-
-  function resolveTheme(preference) {
-    if (preference === "system") {
-      if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches) {
-        return "light";
-      }
-      return "dark";
-    }
-    return preference === "light" ? "light" : "dark";
-  }
-
-  useEffect(() => {
-    const savedPreference = window.localStorage.getItem(STORAGE_KEY);
-    const nextPreference = VALID_PREFERENCES.has(savedPreference) ? savedPreference : "system";
-    const nextResolvedTheme = resolveTheme(nextPreference);
-    setThemePreferenceState(nextPreference);
-    setResolvedTheme(nextResolvedTheme);
-    applyTheme(nextResolvedTheme);
-  }, []);
+  const [themePreference, setThemePreferenceState] = useState(() => getInitialPreference());
+  const [resolvedTheme, setResolvedTheme] = useState(() => getInitialResolvedTheme(getInitialPreference()));
 
   useEffect(() => {
     const nextResolvedTheme = resolveTheme(themePreference);
     setResolvedTheme(nextResolvedTheme);
     applyTheme(nextResolvedTheme);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, themePreference);
+    } catch {}
+    document.documentElement.setAttribute("data-dashboard-theme-preference", themePreference);
 
     if (themePreference !== "system") {
       return;
@@ -63,8 +88,13 @@ export default function AdminThemeProvider({ children }) {
       applyTheme(systemResolvedTheme);
     };
 
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
   }, [themePreference]);
 
   const setThemePreference = (nextPreference) => {
@@ -72,7 +102,6 @@ export default function AdminThemeProvider({ children }) {
     const nextResolvedTheme = resolveTheme(validPreference);
     setThemePreferenceState(validPreference);
     setResolvedTheme(nextResolvedTheme);
-    window.localStorage.setItem(STORAGE_KEY, validPreference);
     applyTheme(nextResolvedTheme);
   };
 

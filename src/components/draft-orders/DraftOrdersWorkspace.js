@@ -10,6 +10,7 @@ import AdminFormSection from '../admin/ui/AdminFormSection';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminSelect from '../admin/ui/AdminSelect';
 import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
 import AdminTextarea from '../admin/ui/AdminTextarea';
 import { useOrders } from '../../context/OrdersContext';
@@ -112,11 +113,11 @@ export default function DraftOrdersWorkspace() {
           <div className={styles.mainColumn}>
             <AdminFormSection eyebrow="Customer" title="Who is this for?">
               <AdminField label="Customer">
-                <select onChange={(event) => setDraftOrder((current) => ({ ...current, customerId: event.target.value }))} value={draftOrder.customerId}>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                  ))}
-                </select>
+                <AdminSelect
+                  onChange={(value) => setDraftOrder((current) => ({ ...current, customerId: value }))}
+                  options={customers.map((customer) => ({ value: customer.id, label: customer.name }))}
+                  value={draftOrder.customerId}
+                />
               </AdminField>
             </AdminFormSection>
 
@@ -129,9 +130,9 @@ export default function DraftOrdersWorkspace() {
                   return (
                     <AdminCard className={styles.lineItem} key={item.id} variant="inset">
                       <div className={styles.rowTwo}>
-                        <select
-                          onChange={(event) => {
-                            const product = products.find((entry) => entry.id === event.target.value);
+                        <AdminSelect
+                          onChange={(value) => {
+                            const product = products.find((entry) => entry.id === value);
                             if (!product) return;
                             const nextVariant = product.variants?.[0] || null;
                             setDraftOrder((current) => ({
@@ -150,16 +151,13 @@ export default function DraftOrdersWorkspace() {
                               ),
                             }));
                           }}
+                          options={products.map((product) => ({ value: product.id, label: product.title }))}
                           value={item.productId}
-                        >
-                          {products.map((product) => (
-                            <option key={product.id} value={product.id}>{product.title}</option>
-                          ))}
-                        </select>
+                        />
 
-                        <select
-                          onChange={(event) => {
-                            const variant = selectedProduct?.variants?.find((entry) => entry.id === event.target.value);
+                        <AdminSelect
+                          onChange={(value) => {
+                            const variant = selectedProduct?.variants?.find((entry) => entry.id === value);
                             setDraftOrder((current) => ({
                               ...current,
                               lineItems: current.lineItems.map((lineItem) =>
@@ -174,12 +172,12 @@ export default function DraftOrdersWorkspace() {
                               ),
                             }));
                           }}
+                          options={(selectedProduct?.variants || []).map((variant) => ({
+                            value: variant.id,
+                            label: variant.title,
+                          }))}
                           value={item.variantId || selectedVariant?.id || ''}
-                        >
-                          {(selectedProduct?.variants || []).map((variant) => (
-                            <option key={variant.id} value={variant.id}>{variant.title}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
 
                       <div className={styles.rowThree}>
@@ -236,12 +234,14 @@ export default function DraftOrdersWorkspace() {
             <AdminFormSection eyebrow="Pricing" title="Discounts, shipping, and tax">
               <div className={styles.gridTwo}>
                 <AdminField label="Discount">
-                  <select onChange={(event) => setDraftOrder((current) => ({ ...current, discountId: event.target.value }))} value={draftOrder.discountId}>
-                    <option value="">No discount</option>
-                    {discounts.map((discount) => (
-                      <option key={discount.id} value={discount.id}>{discount.title}</option>
-                    ))}
-                  </select>
+                  <AdminSelect
+                    onChange={(value) => setDraftOrder((current) => ({ ...current, discountId: value }))}
+                    options={[
+                      { value: '', label: 'No discount' },
+                      ...discounts.map((discount) => ({ value: discount.id, label: discount.title })),
+                    ]}
+                    value={draftOrder.discountId}
+                  />
                 </AdminField>
                 <AdminField label="Manual discount">
                   <AdminInput onChange={(event) => setDraftOrder((current) => ({ ...current, customDiscountAmount: Number(event.target.value || 0) }))} type="number" value={draftOrder.customDiscountAmount} />
@@ -257,10 +257,14 @@ export default function DraftOrdersWorkspace() {
 
             <AdminFormSection eyebrow="Payment" title="Finalize draft">
               <AdminField label="Payment status">
-                <select onChange={(event) => setDraftOrder((current) => ({ ...current, paymentStatus: event.target.value }))} value={draftOrder.paymentStatus}>
-                  <option value="pending">Payment due later</option>
-                  <option value="paid">Mark as paid</option>
-                </select>
+                <AdminSelect
+                  onChange={(value) => setDraftOrder((current) => ({ ...current, paymentStatus: value }))}
+                  options={[
+                    { value: 'pending', label: 'Payment due later' },
+                    { value: 'paid', label: 'Mark as paid' },
+                  ]}
+                  value={draftOrder.paymentStatus}
+                />
               </AdminField>
               <AdminField label="Internal notes">
                 <AdminTextarea

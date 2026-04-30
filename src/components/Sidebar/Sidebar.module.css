@@ -55,9 +55,9 @@
   justify-content: center;
   border: 1px solid var(--glass-border);
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02)),
-    rgba(22, 22, 29, 0.92);
-  color: var(--slate-50);
+    linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)),
+    color-mix(in srgb, var(--surface-container) 86%, transparent);
+  color: var(--on-surface);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.08em;

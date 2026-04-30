@@ -56,10 +56,6 @@
   font-size: 0.8rem;
 }
 
-.notesInput {
-  width: 100%;
-}
-
 @media (max-width: 900px) {
   .drawerStats {
     grid-template-columns: 1fr;

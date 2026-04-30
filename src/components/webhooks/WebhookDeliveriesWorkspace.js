@@ -6,6 +6,7 @@ import AppShell from '../AppShell';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
 import AdminSelect from '../admin/ui/AdminSelect';
@@ -557,7 +558,7 @@ export default function WebhookDeliveriesWorkspace() {
             {isInbound ? (
               <>
                 <AdminSelect onChange={setStatus} options={toSelectOptions(INBOUND_STATUS_OPTIONS, 'All statuses')} value={status} />
-                <input
+                <AdminInput
                   className={styles.searchInput}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search provider event id or error..."

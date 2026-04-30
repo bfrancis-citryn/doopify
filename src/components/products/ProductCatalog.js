@@ -15,6 +15,7 @@ import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminDropdown from '../admin/ui/AdminDropdown';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminInput from '../admin/ui/AdminInput';
 import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
@@ -144,17 +145,17 @@ export default function ProductCatalog() {
     <AdminCard className={`admin-spotlight ${styles.catalogShell}`} variant="panel">
       <div className={styles.catalogHeader}>
         <div className={styles.catalogHeaderTopRow}>
-          <div className={`admin-card admin-card--inset admin-spotlight ${styles.searchField}`}>
-            <span className="material-symbols-outlined">search</span>
-            <input
-              aria-label="Search products"
-              className={styles.searchInput}
-              onChange={event => actions.setSearchQuery(event.target.value)}
-              placeholder="Search products, SKUs, vendors, tags..."
-              type="text"
-              value={searchQuery}
-            />
-          </div>
+            <div className={`admin-card admin-card--inset admin-spotlight ${styles.searchField}`}>
+              <span className="material-symbols-outlined">search</span>
+              <AdminInput
+                aria-label="Search products"
+                className={styles.searchInput}
+                onChange={event => actions.setSearchQuery(event.target.value)}
+                placeholder="Search products, SKUs, vendors, tags..."
+                type="text"
+                value={searchQuery}
+              />
+            </div>
 
           <AdminButton leftIcon={<span className="material-symbols-outlined">add</span>} onClick={() => actions.requestCreateProduct()} size="sm" variant="primary">
             Add product
