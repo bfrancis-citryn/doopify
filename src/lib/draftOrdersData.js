@@ -1,4 +1,4 @@
-import { calculateShipping, calculateTax } from '@/server/checkout/pricing';
+import { calculateShipping, calculateTax } from '@/lib/checkout/pricing';
 
 function toCents(value) {
   const parsed = Number(value || 0);

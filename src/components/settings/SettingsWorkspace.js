@@ -14,7 +14,7 @@ import AdminSavedState from '../admin/ui/AdminSavedState';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTooltip from '../admin/ui/AdminTooltip';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
-import { buildCheckoutPricingWithDecisionsCents } from '@/server/checkout/pricing';
+import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
 
 const SETTINGS_SECTIONS = [
   { id: 'brand-kit', label: 'Brand kit' },
@@ -440,8 +440,10 @@ export default function SettingsWorkspace() {
           setSetupError(loadError instanceof Error ? loadError.message : 'Failed to load setup diagnostics');
         }
       } finally {
-        setSetupLoading(false);
-        setSetupLoaded(true);
+        if (!cancelled) {
+          setSetupLoading(false);
+          setSetupLoaded(true);
+        }
       }
     }
 
