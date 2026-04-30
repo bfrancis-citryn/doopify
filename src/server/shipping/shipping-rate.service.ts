@@ -282,16 +282,20 @@ async function resolveLiveQuotes(input: {
   provider: ShippingLiveProvider
   shippingAddress: ShippingRateAddress
 }): Promise<ShippingRateQuote[]> {
-  const connectionStatus = await getShippingProviderConnectionStatus(input.provider)
-  if (!connectionStatus.connected) {
+  const apiKey = await getShippingProviderApiKey(input.provider)
+  if (!apiKey) {
     throw new ShippingRateSetupError(
-      `Live rates require an active ${input.provider} provider connection. Connect credentials in shipping settings first.`
+      `Live rates require ${input.provider} credentials. Connect provider credentials in settings or configure ${input.provider}_API_KEY in env.`
     )
   }
 
-  const apiKey = await getShippingProviderApiKey(input.provider)
-  if (!apiKey) {
-    throw new ShippingRateSetupError('Provider credentials are missing. Reconnect provider credentials and try again.')
+  const connectionStatus = await getShippingProviderConnectionStatus(input.provider)
+  const isUsingEnvFallback = !connectionStatus.connected
+
+  if (isUsingEnvFallback && process.env.NODE_ENV === 'production') {
+    throw new ShippingRateSetupError(
+      `Live rates provider ${input.provider} is not connected in Settings. Configure and verify provider credentials before using production live rates.`
+    )
   }
 
   const rateRequest = buildRateRequestFromStore({

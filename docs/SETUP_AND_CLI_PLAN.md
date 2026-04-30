@@ -54,6 +54,7 @@ Provider onboarding belongs in dedicated settings tabs:
 - `Settings -> Shipping` for manual/live/hybrid shipping provider setup
 - `Settings -> Email` for Resend/SMTP/send-provider setup and webhook verification
 - `Settings -> Webhooks` for outbound merchant/developer webhook subscriptions and delivery observability
+- provider credential save/verify/disconnect flows should run through owner-only provider APIs and encrypted `IntegrationSecret` storage
 
 The app should not ask for broad provider tokens unless the storage, encryption, scope, and lifecycle are explicitly designed.
 

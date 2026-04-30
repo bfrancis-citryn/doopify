@@ -109,7 +109,14 @@ async function getProviderApiKey(provider: ShippingLiveProvider) {
 
 export async function getShippingProviderApiKey(provider: ShippingLiveProvider) {
   const credentials = await getProviderApiKey(provider)
-  return credentials?.apiKey ?? null
+  if (credentials?.apiKey) return credentials.apiKey
+
+  const envFallback =
+    provider === 'SHIPPO'
+      ? process.env.SHIPPO_API_KEY?.trim()
+      : process.env.EASYPOST_API_KEY?.trim()
+
+  return envFallback || null
 }
 
 export async function getShippingProviderConnectionStatus(provider: ShippingLiveProvider) {

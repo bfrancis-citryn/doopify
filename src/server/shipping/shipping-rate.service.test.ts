@@ -166,6 +166,7 @@ describe('shipping-rate service', () => {
     mocks.getShippingProviderConnectionStatus.mockResolvedValue({
       connected: false,
     })
+    mocks.getShippingProviderApiKey.mockResolvedValue(null)
 
     await expect(
       getShippingRatesForCheckout({

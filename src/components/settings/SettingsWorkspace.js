@@ -93,6 +93,27 @@ const SETUP_ENV_TEMPLATE = [
   'NEXT_PUBLIC_STORE_URL=',
 ].join('\n');
 
+const PROVIDER_STATE_TONE = {
+  VERIFIED: 'success',
+  CREDENTIALS_SAVED: 'warning',
+  ERROR: 'danger',
+  NOT_CONFIGURED: 'warning',
+};
+
+const PROVIDER_SOURCE_LABEL = {
+  db: 'DB credentials',
+  env: 'Env fallback',
+  none: 'Not active',
+};
+
+const EMPTY_PROVIDER_FORMS = {
+  STRIPE: { publishableKey: '', secretKey: '', webhookSecret: '', mode: 'test' },
+  RESEND: { apiKey: '', webhookSecret: '', fromEmail: '' },
+  SMTP: { host: '', port: '587', secure: false, username: '', password: '', fromEmail: '' },
+  SHIPPO: { apiKey: '' },
+  EASYPOST: { apiKey: '' },
+};
+
 const FONT_OPTIONS = BRAND_FONT_VALUES.map((value) => ({ value, label: value }));
 const BUTTON_RADIUS_OPTIONS = BUTTON_RADIUS_VALUES.map((value) => ({ value, label: value }));
 const BUTTON_STYLE_OPTIONS = BUTTON_STYLE_VALUES.map((value) => ({ value, label: value }));
@@ -266,6 +287,38 @@ function describeResendSetup(checkById) {
   };
 }
 
+function describeProviderGatewayStatus(providerStatus, fallbackStatus) {
+  if (!providerStatus) return fallbackStatus;
+
+  const stateLabelMap = {
+    VERIFIED: 'Verified',
+    CREDENTIALS_SAVED: 'Credentials saved',
+    ERROR: 'Error',
+    NOT_CONFIGURED: 'Not configured',
+  };
+
+  const label = stateLabelMap[providerStatus.state] || 'Not configured';
+  const tone = PROVIDER_STATE_TONE[providerStatus.state] || 'warning';
+  const sourceLabel = PROVIDER_SOURCE_LABEL[providerStatus.source] || 'Not active';
+
+  let detail = `Source: ${sourceLabel}.`;
+  if (providerStatus.state === 'VERIFIED') {
+    detail = `Verified connection. Source: ${sourceLabel}.`;
+  } else if (providerStatus.state === 'CREDENTIALS_SAVED') {
+    detail = `Credentials saved. API verification has not been completed from this screen.`;
+  } else if (providerStatus.state === 'ERROR') {
+    detail = providerStatus.lastError || 'Provider verification failed. Review credentials and retry.';
+  }
+
+  return {
+    label,
+    tone,
+    detail,
+    sourceLabel,
+    lastVerifiedAt: providerStatus.lastVerifiedAt || null,
+  };
+}
+
 function extractEnvVariableHints(checks) {
   const envNames = new Set();
   const envPattern = /\b[A-Z][A-Z0-9_]{2,}\b/g;
@@ -303,6 +356,13 @@ export default function SettingsWorkspace() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupLoaded, setSetupLoaded] = useState(false);
   const [setupError, setSetupError] = useState('');
+  const [providerStatusMap, setProviderStatusMap] = useState({});
+  const [providerStatusLoading, setProviderStatusLoading] = useState(false);
+  const [providerStatusLoaded, setProviderStatusLoaded] = useState(false);
+  const [providerStatusError, setProviderStatusError] = useState('');
+  const [providerNotice, setProviderNotice] = useState('');
+  const [providerActionById, setProviderActionById] = useState({});
+  const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
@@ -454,6 +514,43 @@ export default function SettingsWorkspace() {
     };
   }, [activeSection, setupLoaded]);
 
+  useEffect(() => {
+    const shouldLoadProviders = ['payments', 'shipping', 'email'].includes(activeSection);
+    if (!shouldLoadProviders || providerStatusLoaded || providerStatusLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProviderStatuses() {
+      setProviderStatusLoading(true);
+      setProviderStatusError('');
+      try {
+        const payload = await fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson);
+        if (cancelled) return;
+        const nextMap = {};
+        for (const entry of payload?.providers || []) {
+          nextMap[entry.provider] = entry;
+        }
+        setProviderStatusMap(nextMap);
+        setProviderStatusLoaded(true);
+      } catch (loadError) {
+        if (cancelled) return;
+        setProviderStatusError(loadError instanceof Error ? loadError.message : 'Failed to load provider statuses');
+      } finally {
+        if (!cancelled) {
+          setProviderStatusLoading(false);
+        }
+      }
+    }
+
+    loadProviderStatuses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, providerStatusLoaded, providerStatusLoading]);
+
   const setupChecks = useMemo(() => {
     if (!setupStatus) return [];
     return [...(setupStatus.requiredChecks || []), ...(setupStatus.recommendedChecks || [])];
@@ -502,30 +599,50 @@ export default function SettingsWorkspace() {
     () => setupOptionalProductionSteps.filter((step) => !/STRIPE|RESEND|SMTP|SENDLAYER|EASYPOST|SHIPPO/i.test(step)),
     [setupOptionalProductionSteps]
   );
-  const stripeSetupStatus = useMemo(() => describeStripeSetup(setupCheckById), [setupCheckById]);
-  const resendSetupStatus = useMemo(() => describeResendSetup(setupCheckById), [setupCheckById]);
+  const stripeProviderStatus = providerStatusMap.STRIPE || null;
+  const resendProviderStatus = providerStatusMap.RESEND || null;
+  const smtpProviderStatus = providerStatusMap.SMTP || null;
+  const shippoProviderStatus = providerStatusMap.SHIPPO || null;
+  const easypostProviderStatus = providerStatusMap.EASYPOST || null;
+  const stripeSetupStatus = useMemo(
+    () => describeProviderGatewayStatus(stripeProviderStatus, describeStripeSetup(setupCheckById)),
+    [stripeProviderStatus, setupCheckById]
+  );
+  const resendSetupStatus = useMemo(
+    () => describeProviderGatewayStatus(resendProviderStatus, describeResendSetup(setupCheckById)),
+    [resendProviderStatus, setupCheckById]
+  );
+  const smtpSetupStatus = useMemo(
+    () =>
+      describeProviderGatewayStatus(smtpProviderStatus, {
+        label: 'Not configured',
+        tone: 'warning',
+        detail: 'SMTP credentials are not configured yet.',
+      }),
+    [smtpProviderStatus]
+  );
   const shippingMode = shippingSettingsProfile?.shippingMode || 'MANUAL';
   const shippingProvider = shippingSettingsProfile?.shippingLiveProvider || null;
 
   const shippoStatus = useMemo(() => {
-    if (shippingProvider !== 'SHIPPO') {
-      return { label: 'Not configured', tone: 'warning', detail: 'Shippo is not selected as the live provider.' };
-    }
-    if (shippingSetupStatus?.providerConnected) {
-      return { label: 'Verified', tone: 'success', detail: 'Shippo credentials are saved and the connection test passed.' };
-    }
-    return { label: 'Credentials saved', tone: 'warning', detail: 'Shippo is selected, but provider verification is still pending.' };
-  }, [shippingProvider, shippingSetupStatus]);
+    const fallback =
+      shippingProvider === 'SHIPPO'
+        ? shippingSetupStatus?.providerConnected
+          ? { label: 'Verified', tone: 'success', detail: 'Shippo credentials are saved and the connection test passed.' }
+          : { label: 'Credentials saved', tone: 'warning', detail: 'Shippo is selected, but provider verification is still pending.' }
+        : { label: 'Not configured', tone: 'warning', detail: 'Shippo is not selected as the live provider.' };
+    return describeProviderGatewayStatus(shippoProviderStatus, fallback);
+  }, [shippingProvider, shippingSetupStatus, shippoProviderStatus]);
 
   const easypostStatus = useMemo(() => {
-    if (shippingProvider !== 'EASYPOST') {
-      return { label: 'Not configured', tone: 'warning', detail: 'EasyPost is not selected as the live provider.' };
-    }
-    if (shippingSetupStatus?.providerConnected) {
-      return { label: 'Verified', tone: 'success', detail: 'EasyPost credentials are saved and the connection test passed.' };
-    }
-    return { label: 'Credentials saved', tone: 'warning', detail: 'EasyPost is selected, but provider verification is still pending.' };
-  }, [shippingProvider, shippingSetupStatus]);
+    const fallback =
+      shippingProvider === 'EASYPOST'
+        ? shippingSetupStatus?.providerConnected
+          ? { label: 'Verified', tone: 'success', detail: 'EasyPost credentials are saved and the connection test passed.' }
+          : { label: 'Credentials saved', tone: 'warning', detail: 'EasyPost is selected, but provider verification is still pending.' }
+        : { label: 'Not configured', tone: 'warning', detail: 'EasyPost is not selected as the live provider.' };
+    return describeProviderGatewayStatus(easypostProviderStatus, fallback);
+  }, [shippingProvider, shippingSetupStatus, easypostProviderStatus]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setSaveClock(Date.now()), 1000);
@@ -855,6 +972,90 @@ export default function SettingsWorkspace() {
       }, 1400);
     } catch {
       setSetupCopiedCommandId('');
+    }
+  }
+
+  async function refreshProviderStatuses() {
+    setProviderStatusLoading(true);
+    setProviderStatusError('');
+    try {
+      const payload = await fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson);
+      const nextMap = {};
+      for (const entry of payload?.providers || []) {
+        nextMap[entry.provider] = entry;
+      }
+      setProviderStatusMap(nextMap);
+      setProviderStatusLoaded(true);
+    } catch (refreshError) {
+      setProviderStatusError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh provider statuses');
+    } finally {
+      setProviderStatusLoading(false);
+    }
+  }
+
+  function patchProviderForm(provider, patch) {
+    setProviderForms((current) => ({
+      ...current,
+      [provider]: {
+        ...(current[provider] || {}),
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleSaveProviderCredentials(provider, payload) {
+    setProviderActionById((current) => ({ ...current, [provider]: 'saving' }));
+    setProviderNotice('');
+    setProviderStatusError('');
+    try {
+      await fetch(`/api/settings/providers/${provider}/credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(parseApiJson);
+      setProviderNotice(`${provider} credentials saved. Run verification to confirm connectivity.`);
+      await refreshProviderStatuses();
+    } catch (saveError) {
+      setProviderStatusError(saveError instanceof Error ? saveError.message : 'Failed to save provider credentials');
+    } finally {
+      setProviderActionById((current) => ({ ...current, [provider]: '' }));
+    }
+  }
+
+  async function handleVerifyProvider(provider) {
+    setProviderActionById((current) => ({ ...current, [provider]: 'verifying' }));
+    setProviderNotice('');
+    setProviderStatusError('');
+    try {
+      await fetch(`/api/settings/providers/${provider}/verify`, {
+        method: 'POST',
+      }).then(parseApiJson);
+      setProviderNotice(`${provider} verification succeeded.`);
+      await refreshProviderStatuses();
+    } catch (verifyError) {
+      setProviderStatusError(verifyError instanceof Error ? verifyError.message : 'Provider verification failed');
+      await refreshProviderStatuses();
+    } finally {
+      setProviderActionById((current) => ({ ...current, [provider]: '' }));
+    }
+  }
+
+  async function handleDisconnectProvider(provider) {
+    setProviderActionById((current) => ({ ...current, [provider]: 'disconnecting' }));
+    setProviderNotice('');
+    setProviderStatusError('');
+    try {
+      await fetch(`/api/settings/providers/${provider}`, {
+        method: 'DELETE',
+      }).then(parseApiJson);
+      setProviderNotice(`${provider} credentials disconnected.`);
+      await refreshProviderStatuses();
+    } catch (disconnectError) {
+      setProviderStatusError(
+        disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect provider credentials'
+      );
+    } finally {
+      setProviderActionById((current) => ({ ...current, [provider]: '' }));
     }
   }
 
@@ -1323,6 +1524,18 @@ export default function SettingsWorkspace() {
                     </p>
                   </div>
                 </section>
+                {providerStatusError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider action error</p>
+                    <p className={styles.statusText}>{providerStatusError}</p>
+                  </div>
+                ) : null}
+                {providerNotice ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider update</p>
+                    <p className={styles.statusText}>{providerNotice}</p>
+                  </div>
+                ) : null}
 
                 <section className={styles.setupGrid}>
                   <AdminCard as="article" className={styles.setupCard} variant="card">
@@ -1354,11 +1567,44 @@ export default function SettingsWorkspace() {
                       <AdminStatusChip tone={shippoStatus.tone}>{shippoStatus.label}</AdminStatusChip>
                     </div>
                     <p className={styles.statusText}>{shippoStatus.detail}</p>
+                    <label className={styles.field}>
+                      <span>Shippo API key</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) => patchProviderForm('SHIPPO', { apiKey: event.target.value })}
+                        placeholder="shippo_test_..."
+                        type="password"
+                        value={providerForms.SHIPPO.apiKey}
+                      />
+                    </label>
                     <div className={styles.actionRow}>
                       <AdminButton onClick={() => handleSelectLiveProvider('SHIPPO')} size="sm" variant="secondary" disabled={shippingModeSaving}>
                         Use Shippo
                       </AdminButton>
-                      <AdminButton disabled size="sm" variant="ghost">Connect Shippo</AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.SHIPPO === 'saving' || !providerForms.SHIPPO.apiKey.trim()}
+                        onClick={() => handleSaveProviderCredentials('SHIPPO', { apiKey: providerForms.SHIPPO.apiKey })}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.SHIPPO === 'saving' ? 'Saving...' : 'Connect Shippo'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.SHIPPO === 'verifying'}
+                        onClick={() => handleVerifyProvider('SHIPPO')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.SHIPPO === 'verifying' ? 'Verifying...' : 'Verify'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.SHIPPO === 'disconnecting'}
+                        onClick={() => handleDisconnectProvider('SHIPPO')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.SHIPPO === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
+                      </AdminButton>
                     </div>
                   </AdminCard>
 
@@ -1371,11 +1617,44 @@ export default function SettingsWorkspace() {
                       <AdminStatusChip tone={easypostStatus.tone}>{easypostStatus.label}</AdminStatusChip>
                     </div>
                     <p className={styles.statusText}>{easypostStatus.detail}</p>
+                    <label className={styles.field}>
+                      <span>EasyPost API key</span>
+                      <input
+                        className={styles.input}
+                        onChange={(event) => patchProviderForm('EASYPOST', { apiKey: event.target.value })}
+                        placeholder="ep_test_..."
+                        type="password"
+                        value={providerForms.EASYPOST.apiKey}
+                      />
+                    </label>
                     <div className={styles.actionRow}>
                       <AdminButton onClick={() => handleSelectLiveProvider('EASYPOST')} size="sm" variant="secondary" disabled={shippingModeSaving}>
                         Use EasyPost
                       </AdminButton>
-                      <AdminButton disabled size="sm" variant="ghost">Connect EasyPost</AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.EASYPOST === 'saving' || !providerForms.EASYPOST.apiKey.trim()}
+                        onClick={() => handleSaveProviderCredentials('EASYPOST', { apiKey: providerForms.EASYPOST.apiKey })}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.EASYPOST === 'saving' ? 'Saving...' : 'Connect EasyPost'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.EASYPOST === 'verifying'}
+                        onClick={() => handleVerifyProvider('EASYPOST')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.EASYPOST === 'verifying' ? 'Verifying...' : 'Verify'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.EASYPOST === 'disconnecting'}
+                        onClick={() => handleDisconnectProvider('EASYPOST')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.EASYPOST === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
+                      </AdminButton>
                     </div>
                   </AdminCard>
                 </section>
@@ -1939,10 +2218,21 @@ export default function SettingsWorkspace() {
                     <p className={styles.cardSubtext}>Connect and verify payment providers. This area replaces provider setup from the general Setup tab.</p>
                   </div>
                 </section>
-                {setupError ? (
+                {providerStatusError ? (
                   <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Provider diagnostics notice</p>
-                    <p className={styles.statusText}>{setupError}</p>
+                    <p className={styles.statusTitle}>Provider action error</p>
+                    <p className={styles.statusText}>{providerStatusError}</p>
+                  </div>
+                ) : null}
+                {providerNotice ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider update</p>
+                    <p className={styles.statusText}>{providerNotice}</p>
+                  </div>
+                ) : null}
+                {providerStatusLoading ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusText}>Loading provider statuses...</p>
                   </div>
                 ) : null}
 
@@ -1957,6 +2247,10 @@ export default function SettingsWorkspace() {
                     </div>
                     <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
                     <p className={styles.statusText}>
+                      <strong>Active source:</strong> {stripeSetupStatus.sourceLabel || 'Not active'}
+                      {stripeSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
+                    </p>
+                    <p className={styles.statusText}>
                       <strong>Stripe keys</strong>{' '}
                       <AdminTooltip content="Secret + publishable keys authorize Stripe API operations for checkout flows." /> and{' '}
                       <strong>webhook secret</strong>{' '}
@@ -1965,13 +2259,92 @@ export default function SettingsWorkspace() {
                     <p className={styles.statusText}>
                       <strong>Mode:</strong> Detection from runtime secrets is not shown in this UI for safety.
                     </p>
+                    <div className={styles.inlineGrid}>
+                      <label className={styles.field}>
+                        <span>Publishable key</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
+                          placeholder="pk_test_..."
+                          type="password"
+                          value={providerForms.STRIPE.publishableKey}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Secret key</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('STRIPE', { secretKey: event.target.value })}
+                          placeholder="sk_test_..."
+                          type="password"
+                          value={providerForms.STRIPE.secretKey}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Webhook secret (optional)</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
+                          placeholder="whsec_..."
+                          type="password"
+                          value={providerForms.STRIPE.webhookSecret}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Mode</span>
+                        <select
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('STRIPE', { mode: event.target.value })}
+                          value={providerForms.STRIPE.mode}
+                        >
+                          <option value="test">test</option>
+                          <option value="live">live</option>
+                        </select>
+                      </label>
+                    </div>
                     <div className={styles.actionRow}>
-                      <AdminButton disabled size="sm" variant="secondary">Connect Stripe</AdminButton>
-                      <AdminButton disabled size="sm" variant="secondary">Verify Stripe API connection</AdminButton>
+                      <AdminButton
+                        disabled={
+                          providerActionById.STRIPE === 'saving' ||
+                          !providerForms.STRIPE.publishableKey.trim() ||
+                          !providerForms.STRIPE.secretKey.trim()
+                        }
+                        onClick={() =>
+                          handleSaveProviderCredentials('STRIPE', {
+                            publishableKey: providerForms.STRIPE.publishableKey,
+                            secretKey: providerForms.STRIPE.secretKey,
+                            webhookSecret: providerForms.STRIPE.webhookSecret || undefined,
+                            mode: providerForms.STRIPE.mode,
+                          })
+                        }
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Connect Stripe'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.STRIPE === 'verifying'}
+                        onClick={() => handleVerifyProvider('STRIPE')}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.STRIPE === 'verifying' ? 'Verifying...' : 'Verify Stripe API connection'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.STRIPE === 'disconnecting'}
+                        onClick={() => handleDisconnectProvider('STRIPE')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.STRIPE === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
+                      </AdminButton>
                       <AdminButton onClick={() => handleCopyCommand('stripe-webhook-cli', 'npm run doopify:stripe:webhook')} size="sm" variant="ghost">
                         {setupCopiedCommandId === 'stripe-webhook-cli' ? 'Copied' : 'Copy webhook CLI command'}
                       </AdminButton>
                     </div>
+                    <p className={styles.setupFixText}>
+                      Verified credentials can be stored here now. Stripe checkout runtime still reads env keys until the payment runtime DB switch is completed.
+                    </p>
                     <p className={styles.setupFixText}>Credentials found does not mean connected. Verification is still pending until a server-side check is run.</p>
                   </AdminCard>
 
@@ -2014,10 +2387,16 @@ export default function SettingsWorkspace() {
                     <p className={styles.cardSubtext}>Configure transactional email providers and webhook verification. Provider setup now lives here.</p>
                   </div>
                 </section>
-                {setupError ? (
+                {providerStatusError ? (
                   <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Provider diagnostics notice</p>
-                    <p className={styles.statusText}>{setupError}</p>
+                    <p className={styles.statusTitle}>Provider action error</p>
+                    <p className={styles.statusText}>{providerStatusError}</p>
+                  </div>
+                ) : null}
+                {providerNotice ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider update</p>
+                    <p className={styles.statusText}>{providerNotice}</p>
                   </div>
                 ) : null}
 
@@ -2028,12 +2407,83 @@ export default function SettingsWorkspace() {
                         SMTP{' '}
                         <AdminTooltip content="SMTP uses host/port/auth credentials from your mail provider. Secrets should be encrypted at rest when saved." />
                       </h4>
-                      <AdminStatusChip tone="neutral">Coming soon</AdminStatusChip>
+                      <AdminStatusChip tone={smtpSetupStatus.tone}>{smtpSetupStatus.label}</AdminStatusChip>
                     </div>
-                    <p className={styles.statusText}>SMTP credential save/verify UI is planned for a future pass.</p>
+                    <p className={styles.statusText}>{smtpSetupStatus.detail}</p>
+                    <p className={styles.statusText}>
+                      <strong>Active source:</strong> {smtpSetupStatus.sourceLabel || 'Not active'}
+                      {smtpSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(smtpSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
+                    </p>
+                    <div className={styles.inlineGrid}>
+                      <label className={styles.field}>
+                        <span>Host</span>
+                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { host: event.target.value })} value={providerForms.SMTP.host} />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Port</span>
+                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { port: event.target.value })} value={providerForms.SMTP.port} />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Username</span>
+                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { username: event.target.value })} value={providerForms.SMTP.username} />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Password</span>
+                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { password: event.target.value })} type="password" value={providerForms.SMTP.password} />
+                      </label>
+                      <label className={styles.checkboxField}>
+                        <input
+                          checked={Boolean(providerForms.SMTP.secure)}
+                          onChange={(event) => patchProviderForm('SMTP', { secure: event.target.checked })}
+                          type="checkbox"
+                        />
+                        <span>Secure/TLS connection</span>
+                      </label>
+                      <label className={styles.field}>
+                        <span>From email (optional)</span>
+                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { fromEmail: event.target.value })} value={providerForms.SMTP.fromEmail} />
+                      </label>
+                    </div>
                     <div className={styles.actionRow}>
-                      <AdminButton disabled size="sm" variant="secondary">Connect SMTP</AdminButton>
-                      <AdminButton disabled size="sm" variant="secondary">Send test email</AdminButton>
+                      <AdminButton
+                        disabled={
+                          providerActionById.SMTP === 'saving' ||
+                          !providerForms.SMTP.host.trim() ||
+                          !providerForms.SMTP.port.trim() ||
+                          !providerForms.SMTP.username.trim() ||
+                          !providerForms.SMTP.password.trim()
+                        }
+                        onClick={() =>
+                          handleSaveProviderCredentials('SMTP', {
+                            host: providerForms.SMTP.host,
+                            port: Number(providerForms.SMTP.port),
+                            secure: Boolean(providerForms.SMTP.secure),
+                            username: providerForms.SMTP.username,
+                            password: providerForms.SMTP.password,
+                            fromEmail: providerForms.SMTP.fromEmail || undefined,
+                          })
+                        }
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.SMTP === 'saving' ? 'Saving...' : 'Connect SMTP'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.SMTP === 'verifying'}
+                        onClick={() => handleVerifyProvider('SMTP')}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.SMTP === 'verifying' ? 'Verifying...' : 'Verify provider'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.SMTP === 'disconnecting'}
+                        onClick={() => handleDisconnectProvider('SMTP')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.SMTP === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
+                      </AdminButton>
                     </div>
                   </AdminCard>
 
@@ -2046,10 +2496,72 @@ export default function SettingsWorkspace() {
                       <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
                     </div>
                     <p className={styles.statusText}>{resendSetupStatus.detail}</p>
+                    <p className={styles.statusText}>
+                      <strong>Active source:</strong> {resendSetupStatus.sourceLabel || 'Not active'}
+                      {resendSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(resendSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
+                    </p>
+                    <div className={styles.inlineGrid}>
+                      <label className={styles.field}>
+                        <span>Resend API key</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('RESEND', { apiKey: event.target.value })}
+                          placeholder="re_..."
+                          type="password"
+                          value={providerForms.RESEND.apiKey}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Webhook secret (optional)</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('RESEND', { webhookSecret: event.target.value })}
+                          placeholder="whsec_..."
+                          type="password"
+                          value={providerForms.RESEND.webhookSecret}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>From email (optional)</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => patchProviderForm('RESEND', { fromEmail: event.target.value })}
+                          placeholder="store@example.com"
+                          value={providerForms.RESEND.fromEmail}
+                        />
+                      </label>
+                    </div>
                     <div className={styles.actionRow}>
-                      <AdminButton disabled size="sm" variant="secondary">Connect Resend</AdminButton>
-                      <AdminButton disabled size="sm" variant="secondary">Verify provider</AdminButton>
-                      <AdminButton disabled size="sm" variant="secondary">Configure provider webhook</AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.RESEND === 'saving' || !providerForms.RESEND.apiKey.trim()}
+                        onClick={() =>
+                          handleSaveProviderCredentials('RESEND', {
+                            apiKey: providerForms.RESEND.apiKey,
+                            webhookSecret: providerForms.RESEND.webhookSecret || undefined,
+                            fromEmail: providerForms.RESEND.fromEmail || undefined,
+                          })
+                        }
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.RESEND === 'saving' ? 'Saving...' : 'Connect Resend'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.RESEND === 'verifying'}
+                        onClick={() => handleVerifyProvider('RESEND')}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {providerActionById.RESEND === 'verifying' ? 'Verifying...' : 'Verify provider'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={providerActionById.RESEND === 'disconnecting'}
+                        onClick={() => handleDisconnectProvider('RESEND')}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        {providerActionById.RESEND === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
+                      </AdminButton>
                     </div>
                     <p className={styles.setupFixText}>Do not treat this as live-ready unless runtime provider configuration and webhook verification are both complete.</p>
                   </AdminCard>

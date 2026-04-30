@@ -1,4 +1,4 @@
-import { env } from '@/lib/env'
+import { getRuntimeProviderConnection } from '@/server/services/provider-connection.service'
 
 export type SendEmailInput = {
   from: string
@@ -13,7 +13,10 @@ export type SendEmailResult = {
 }
 
 export async function sendTransactionalEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  if (!env.RESEND_API_KEY) {
+  const resendConnection = await getRuntimeProviderConnection('RESEND')
+  const resendApiKey = resendConnection.credentials?.API_KEY
+
+  if (!resendApiKey) {
     console.info('[email.preview] Transactional email', {
       to: input.to,
       subject: input.subject,
@@ -24,7 +27,7 @@ export async function sendTransactionalEmail(input: SendEmailInput): Promise<Sen
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      Authorization: `Bearer ${resendApiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
