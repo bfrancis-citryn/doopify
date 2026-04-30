@@ -3,12 +3,12 @@ import { z } from 'zod'
 import { err, ok, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
 import { prisma } from '@/lib/prisma'
-import { createReturn, getOrderReturns } from '@/server/services/return.service'
+import { createReturnRecord, getOrderAdjustmentSummary } from '@/server/services/order-adjustments.service'
 
 interface Params { params: Promise<{ orderNumber: string }> }
 
 const createReturnSchema = z.object({
-  reason: z.string().optional(),
+  reason: z.string().min(1, 'Return reason is required'),
   note: z.string().optional(),
   items: z
     .array(
@@ -37,8 +37,8 @@ export async function GET(req: Request, { params }: Params) {
     })
     if (!order) return err('Order not found', 404)
 
-    const returns = await getOrderReturns(order.id)
-    return ok(returns)
+    const summary = await getOrderAdjustmentSummary(order.id)
+    return ok(summary.returns)
   } catch (e) {
     console.error('[GET /api/orders/[orderNumber]/returns]', e)
     return err('Failed to fetch returns', 500)
@@ -66,11 +66,11 @@ export async function POST(req: Request, { params }: Params) {
     })
     if (!order) return err('Order not found', 404)
 
-    const returnRecord = await createReturn({ orderId: order.id, ...parsed.data })
+    const returnRecord = await createReturnRecord(order.id, parsed.data)
     return ok(returnRecord, 201)
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to create return'
     console.error('[POST /api/orders/[orderNumber]/returns]', e)
-    return err(message, 500)
+    return err(message, 400)
   }
 }

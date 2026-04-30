@@ -2,8 +2,8 @@ import { z } from 'zod'
 
 import { err, ok, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
-import { dollarsToCents } from '@/lib/money'
-import { closeReturnWithRefund, updateReturnStatus } from '@/server/services/return.service'
+import { prisma } from '@/lib/prisma'
+import { createPaymentRefundRecord, updateReturnRecord } from '@/server/services/order-adjustments.service'
 
 interface Params { params: Promise<{ orderNumber: string; returnId: string }> }
 
@@ -11,26 +11,35 @@ const refundItemSchema = z.object({
   orderItemId: z.string().min(1),
   variantId: z.string().optional(),
   quantity: z.number().int().min(1),
-  amount: z.number().positive(),
+  amountCents: z.number().int().positive(),
 })
 
 const updateReturnSchema = z.object({
-  status: z.enum(['APPROVED', 'DECLINED', 'IN_TRANSIT', 'RECEIVED', 'CLOSED']),
+  status: z.enum(['APPROVED', 'DECLINED', 'IN_TRANSIT', 'RECEIVED', 'CLOSED']).optional(),
+  reason: z.string().min(1).optional(),
   note: z.string().optional(),
   refund: z.object({
-    paymentId: z.string().min(1),
-    amount: z.number().positive(),
-    reason: z.enum(['duplicate', 'fraudulent', 'requested_by_customer']).optional(),
+    paymentId: z.string().min(1).optional(),
+    amountCents: z.number().int().positive(),
+    reason: z.enum(['duplicate', 'fraudulent', 'requested_by_customer']),
     restockItems: z.boolean().optional(),
-    items: z.array(refundItemSchema).min(1),
+    returnId: z.string().min(1).optional(),
+    items: z.array(refundItemSchema),
   }).optional(),
-})
+}).refine(
+  (value) => Boolean(value.status || value.reason != null || value.note != null || value.refund),
+  { message: 'No return updates were provided' }
+)
 
 export async function PATCH(req: Request, { params }: Params) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
 
-  const { returnId } = await params
+  const { returnId, orderNumber } = await params
+  const parsedOrderNumber = parseInt(orderNumber, 10)
+  if (Number.isNaN(parsedOrderNumber)) {
+    return err('Invalid order number', 400)
+  }
 
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
@@ -39,26 +48,41 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
-    if (parsed.data.status === 'CLOSED' && parsed.data.refund) {
-      const result = await closeReturnWithRefund({
-        returnId,
+    if (parsed.data.refund) {
+      const order = await prisma.order.findUnique({
+        where: { orderNumber: parsedOrderNumber },
+        select: { id: true },
+      })
+
+      if (!order) {
+        return err('Order not found', 404)
+      }
+
+      const refund = await createPaymentRefundRecord(order.id, {
         paymentId: parsed.data.refund.paymentId,
-        amountCents: dollarsToCents(parsed.data.refund.amount),
+        amountCents: parsed.data.refund.amountCents,
         reason: parsed.data.refund.reason,
         note: parsed.data.note,
         restockItems: parsed.data.refund.restockItems,
-        items: parsed.data.refund.items.map((item) => ({
-          orderItemId: item.orderItemId,
-          variantId: item.variantId,
-          quantity: item.quantity,
-          amountCents: dollarsToCents(item.amount),
-        })),
+        returnId: parsed.data.refund.returnId ?? returnId,
+        items: parsed.data.refund.items,
       })
-      return ok(result)
+
+      if (parsed.data.status) {
+        const updated = await updateReturnRecord(returnId, {
+          status: parsed.data.status,
+          reason: parsed.data.reason,
+          note: parsed.data.note,
+        })
+        return ok({ updated, refund })
+      }
+
+      return ok({ refund })
     }
 
-    const updated = await updateReturnStatus(returnId, {
+    const updated = await updateReturnRecord(returnId, {
       status: parsed.data.status,
+      reason: parsed.data.reason,
       note: parsed.data.note,
     })
     return ok(updated)
