@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 
 import { ok, err } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import {
   buildSetupDoctorReport,
   deriveSafeNextActions,
@@ -168,7 +169,10 @@ function buildCategorySummaries(checks: SetupCheck[]): SetupCategorySummary[] {
   })
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const cwd = process.cwd()
     const databaseUrl = process.env.DATABASE_URL
@@ -231,6 +235,12 @@ export async function GET() {
         : 'HEALTHY'
 
     return ok({
+      checks: report.checks,
+      passCount: report.passCount,
+      warnCount: report.warnCount,
+      failCount: report.failCount,
+      requiredFailCount: report.requiredFailCount,
+      ok: report.ok,
       overallStatus,
       completionPercent,
       checkedAt: new Date().toISOString(),
@@ -239,6 +249,7 @@ export async function GET() {
       recommendedChecks,
       warnings,
       safeNextActions,
+      nextActions: safeNextActions,
       summary: {
         passCount: report.passCount,
         warnCount: report.warnCount,
@@ -247,7 +258,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error('[GET /api/setup/status]', error)
+    console.error(`[GET /api/setup/status] ${sanitizeErrorMessage(error)}`)
     return err('Failed to collect setup diagnostics', 500)
   }
 }

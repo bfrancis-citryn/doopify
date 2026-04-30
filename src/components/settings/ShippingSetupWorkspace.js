@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AppShell from '../AppShell';
+import AdminButton from '../admin/ui/AdminButton';
 import styles from './SettingsWorkspace.module.css';
 
 const STEPS = [
@@ -297,9 +298,9 @@ export default function ShippingSetupWorkspace() {
             <h2>Shipping Setup Wizard</h2>
             <p>Save each step and resume anytime from persisted shipping setup state.</p>
           </div>
-          <button className={styles.primaryButton} onClick={loadSetup} type="button">
+          <AdminButton onClick={loadSetup} size="sm" variant="primary">
             Refresh status
-          </button>
+          </AdminButton>
         </div>
 
         <div className={styles.statusBlock}>
@@ -356,8 +357,7 @@ export default function ShippingSetupWorkspace() {
                   </label>
                 </div>
                 <div className={styles.actionRow}>
-                  <button
-                    className={styles.secondaryButton}
+                  <AdminButton
                     disabled={saving}
                     onClick={() =>
                       savePatch({
@@ -365,10 +365,11 @@ export default function ShippingSetupWorkspace() {
                         shippingFallbackEnabled: setup.shippingFallbackEnabled,
                       })
                     }
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Save step'}
-                  </button>
+                  </AdminButton>
                 </div>
               </section>
             ) : null}
@@ -457,8 +458,7 @@ export default function ShippingSetupWorkspace() {
                   </label>
                 </div>
                 <div className={styles.actionRow}>
-                  <button
-                    className={styles.secondaryButton}
+                  <AdminButton
                     disabled={saving}
                     onClick={() =>
                       savePatch({
@@ -472,10 +472,11 @@ export default function ShippingSetupWorkspace() {
                         shippingOriginCountry: setup.shippingOriginCountry || null,
                       })
                     }
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Save step'}
-                  </button>
+                  </AdminButton>
                 </div>
               </section>
             ) : null}
@@ -551,8 +552,7 @@ export default function ShippingSetupWorkspace() {
                   </label>
                 </div>
                 <div className={styles.actionRow}>
-                  <button
-                    className={styles.secondaryButton}
+                  <AdminButton
                     disabled={saving}
                     onClick={() =>
                       savePatch({
@@ -564,10 +564,11 @@ export default function ShippingSetupWorkspace() {
                         defaultLabelSize: setup.defaultLabelSize || null,
                       })
                     }
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Save step'}
-                  </button>
+                  </AdminButton>
                 </div>
               </section>
             ) : null}
@@ -610,8 +611,7 @@ export default function ShippingSetupWorkspace() {
                   </label>
                 </div>
                 <div className={styles.actionRow}>
-                  <button
-                    className={styles.secondaryButton}
+                  <AdminButton
                     disabled={saving}
                     onClick={() =>
                       savePatch({
@@ -620,10 +620,11 @@ export default function ShippingSetupWorkspace() {
                         shippingThreshold: normalizeNumber(setup.shippingThreshold),
                       })
                     }
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Save step'}
-                  </button>
+                  </AdminButton>
                 </div>
               </section>
             ) : null}
@@ -661,8 +662,7 @@ export default function ShippingSetupWorkspace() {
                 </div>
                 <p className={styles.statusText}>Connected: {status?.providerConnected ? 'Yes' : 'No'}</p>
                 <div className={styles.actionRow}>
-                  <button
-                    className={styles.secondaryButton}
+                  <AdminButton
                     disabled={saving}
                     onClick={() =>
                       savePatch({
@@ -670,34 +670,35 @@ export default function ShippingSetupWorkspace() {
                         shippingMode: setup.shippingMode,
                       })
                     }
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Save step'}
-                  </button>
-                  <button
-                    className={styles.secondaryButton}
+                  </AdminButton>
+                  <AdminButton
                     disabled={saving || !setup.shippingLiveProvider}
                     onClick={handleConnectProvider}
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Connect provider'}
-                  </button>
-                  <button
-                    className={styles.secondaryButton}
+                  </AdminButton>
+                  <AdminButton
                     disabled={providerTesting || !setup.shippingLiveProvider}
                     onClick={handleTestProvider}
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {providerTesting ? 'Testing...' : 'Test provider'}
-                  </button>
-                  <button
-                    className={styles.secondaryButton}
+                  </AdminButton>
+                  <AdminButton
                     disabled={saving || !setup.shippingLiveProvider}
                     onClick={handleDisconnectProvider}
-                    type="button"
+                    size="sm"
+                    variant="secondary"
                   >
                     {saving ? 'Saving...' : 'Disconnect provider'}
-                  </button>
+                  </AdminButton>
                 </div>
                 {providerResult ? (
                   <div className={styles.statusBlock}>
@@ -748,9 +749,9 @@ export default function ShippingSetupWorkspace() {
                   </label>
                 </div>
                 <div className={styles.actionRow}>
-                  <button className={styles.secondaryButton} disabled={testing} onClick={handleTestRates} type="button">
+                  <AdminButton disabled={testing} onClick={handleTestRates} size="sm" variant="secondary">
                     {testing ? 'Testing...' : 'Run test'}
-                  </button>
+                  </AdminButton>
                 </div>
                 {testQuotes.length ? (
                   <div className={styles.statusBlock}>
@@ -803,17 +804,17 @@ export default function ShippingSetupWorkspace() {
             ) : null}
 
             <div className={styles.actionRow}>
-              <button className={styles.secondaryButton} disabled={step === 0} onClick={prevStep} type="button">
+              <AdminButton disabled={step === 0} onClick={prevStep} size="sm" variant="secondary">
                 Previous
-              </button>
-              <button
-                className={styles.secondaryButton}
+              </AdminButton>
+              <AdminButton
                 disabled={step === STEPS.length - 1}
                 onClick={nextStep}
-                type="button"
+                size="sm"
+                variant="secondary"
               >
                 Next
-              </button>
+              </AdminButton>
             </div>
           </div>
         ) : null}

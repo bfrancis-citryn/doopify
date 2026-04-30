@@ -107,23 +107,6 @@
   color: var(--on-surface-variant);
 }
 
-.emptyState {
-  margin: 2.2rem auto;
-  max-width: 28rem;
-  padding: 1rem;
-  text-align: center;
-}
-
-.emptyTitle {
-  font-size: 1rem;
-  margin: 0;
-}
-
-.emptyText {
-  margin: 0.45rem 0 0.75rem;
-  color: var(--on-surface-variant);
-}
-
 .catalogFooter {
   padding: 0.7rem 1rem;
   border-top: 1px solid var(--glass-border);
@@ -140,21 +123,4 @@
 .actionsCell {
   width: 2.5rem;
   text-align: right;
-}
-
-.rowActionButton {
-  width: 1.95rem;
-  height: 1.95rem;
-  border-radius: 0.58rem;
-  border: 1px solid var(--glass-border);
-  background: color-mix(in srgb, var(--surface-container) 80%, transparent);
-  color: var(--on-surface-variant);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.rowActionButton:hover {
-  border-color: var(--glass-border-strong);
-  color: var(--on-surface);
 }

@@ -10,6 +10,7 @@ import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
 import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminToolbar from '../admin/ui/AdminToolbar';
 import { useCustomers } from '../../context/CustomersContext';
@@ -134,7 +135,7 @@ export default function CustomersWorkspace() {
                 <h3>Tags</h3>
                 <div className={styles.tagRow}>
                   {(selectedCustomer.tags || []).map((tag) => (
-                    <span className={styles.tagChip} key={`${selectedCustomer.id}-${tag}`}>{tag}</span>
+                    <AdminStatusChip key={`${selectedCustomer.id}-${tag}`} tone="neutral">{tag}</AdminStatusChip>
                   ))}
                 </div>
               </AdminCard>

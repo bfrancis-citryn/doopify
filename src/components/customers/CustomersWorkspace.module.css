@@ -48,17 +48,6 @@
   gap: 0.4rem;
 }
 
-.tagChip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: color-mix(in srgb, var(--surface-container) 78%, transparent);
-  padding: 0.18rem 0.46rem;
-  font-size: 0.72rem;
-  color: var(--on-surface-variant);
-}
-
 .orderRow {
   display: flex;
   flex-direction: column;

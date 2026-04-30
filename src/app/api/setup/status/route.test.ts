@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  requireAdmin: vi.fn(),
   queryRaw: vi.fn(),
   storeCount: vi.fn(),
   userCount: vi.fn(),
@@ -35,11 +36,19 @@ vi.mock('node:fs', () => ({
   },
 }))
 
+vi.mock('@/server/auth/require-auth', () => ({
+  requireAdmin: mocks.requireAdmin,
+}))
+
 import { GET } from './route'
 
 describe('GET /api/setup/status', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'staff_1', email: 'staff@example.com', role: 'STAFF' },
+    })
 
     mocks.queryRaw.mockResolvedValue([{ '?column?': 1 }])
     mocks.storeCount.mockResolvedValue(1)
@@ -64,20 +73,63 @@ describe('GET /api/setup/status', () => {
     process.env.VERCEL_URL = 'example.vercel.app'
   })
 
+  it('returns JSON auth errors for unauthenticated users', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: false,
+      response: new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    })
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(payload).toEqual({ success: false, error: 'Unauthorized' })
+    expect(mocks.queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('returns JSON auth errors for forbidden users', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: false,
+      response: new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }),
+    })
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(payload).toEqual({ success: false, error: 'Forbidden' })
+    expect(mocks.queryRaw).not.toHaveBeenCalled()
+  })
+
   it('returns safe setup diagnostics with no raw secrets', async () => {
-    const response = await GET()
+    const response = await GET(new Request('http://localhost/api/setup/status'))
     const payload = await response.json()
 
     expect(response.status).toBe(200)
     expect(payload.success).toBe(true)
     expect(payload.data).toEqual(
       expect.objectContaining({
+        checks: expect.any(Array),
+        passCount: expect.any(Number),
+        warnCount: expect.any(Number),
+        failCount: expect.any(Number),
+        requiredFailCount: expect.any(Number),
+        ok: expect.any(Boolean),
         overallStatus: expect.any(String),
         completionPercent: expect.any(Number),
         requiredChecks: expect.any(Array),
         recommendedChecks: expect.any(Array),
         warnings: expect.any(Array),
         safeNextActions: expect.any(Array),
+        nextActions: expect.any(Array),
         categories: expect.any(Array),
       })
     )
@@ -90,5 +142,42 @@ describe('GET /api/setup/status', () => {
     expect(serialized).not.toContain('re_api_secret_should_not_leak')
     expect(serialized).not.toContain('re_whsec_secret_should_not_leak')
     expect(serialized).not.toContain('super-secret-password')
+  })
+
+  it('returns success with failing checks when DATABASE_URL is missing', async () => {
+    delete process.env.DATABASE_URL
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+    expect(payload.data.requiredChecks).toEqual(expect.any(Array))
+    expect(payload.data.recommendedChecks).toEqual(expect.any(Array))
+
+    const databaseUrlCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'database-url')
+    const databaseReachableCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'database-reachable')
+    expect(databaseUrlCheck?.status).toBe('FAIL')
+    expect(databaseReachableCheck?.status).toBe('WARN')
+  })
+
+  it('sanitizes database connectivity failures and still returns useful diagnostics', async () => {
+    mocks.queryRaw.mockRejectedValueOnce(
+      new Error('connect ECONNREFUSED postgresql://db_user:raw-password@localhost:5432/doopify')
+    )
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+    const serialized = JSON.stringify(payload)
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+
+    const databaseReachableCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'database-reachable')
+    expect(databaseReachableCheck?.status).toBe('FAIL')
+    expect(databaseReachableCheck?.fix).toContain('Verify database server accessibility and credentials')
+
+    expect(serialized).toContain('db_user:***@')
+    expect(serialized).not.toContain('raw-password')
   })
 })

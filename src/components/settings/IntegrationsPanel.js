@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import AdminButton from '../admin/ui/AdminButton';
 import styles from './SettingsWorkspace.module.css';
 
 const AVAILABLE_EVENTS = [
@@ -83,10 +84,10 @@ function SecretRows({ secrets, onChange }) {
         <div key={`${secret.key}-${index}`} style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <input className={styles.input} value={secret.key} onChange={(event) => updateSecret(index, { key: event.target.value })} placeholder="HEADER_X-API-Key" />
           <input className={styles.input} type="password" value={secret.value} onChange={(event) => updateSecret(index, { value: event.target.value })} placeholder="Leave blank to keep existing" />
-          <button className={styles.dangerButton} onClick={() => onChange(secrets.filter((_, entryIndex) => entryIndex !== index))} type="button">Remove</button>
+          <AdminButton onClick={() => onChange(secrets.filter((_, entryIndex) => entryIndex !== index))} size="sm" variant="danger">Remove</AdminButton>
         </div>
       ))}
-      <button className={styles.textActionButton} onClick={() => onChange([...secrets, { key: '', value: '' }])} style={{ marginTop: 8 }} type="button">+ Add secret/header</button>
+      <AdminButton onClick={() => onChange([...secrets, { key: '', value: '' }])} size="sm" style={{ marginTop: 8 }} variant="ghost">+ Add secret/header</AdminButton>
     </div>
   );
 }
@@ -161,8 +162,8 @@ function IntegrationEditor({ integration, onSaved, onCancel }) {
         <SecretRows secrets={draft.secrets} onChange={(secrets) => setDraft((current) => ({ ...current, secrets }))} />
       </div>
       <div className={styles.actionRow}>
-        <button className={styles.secondaryButton} disabled={saving} onClick={handleSave} type="button">{saving ? 'Saving...' : 'Save integration'}</button>
-        <button className={styles.textActionButton} disabled={saving} onClick={onCancel} type="button">Cancel</button>
+        <AdminButton disabled={saving} onClick={handleSave} size="sm" variant="secondary">{saving ? 'Saving...' : 'Save integration'}</AdminButton>
+        <AdminButton disabled={saving} onClick={onCancel} size="sm" variant="ghost">Cancel</AdminButton>
       </div>
     </div>
   );
@@ -274,9 +275,9 @@ export default function IntegrationsPanel() {
             <EventCheckboxes selectedEvents={draft.events} onChange={(events) => setDraft((current) => ({ ...current, events }))} />
           </div>
           <SecretRows secrets={draft.secrets} onChange={(secrets) => setDraft((current) => ({ ...current, secrets }))} />
-          <button className={styles.secondaryButton} onClick={handleCreate} style={{ gridColumn: '1 / -1', marginTop: 16 }} type="button">
+          <AdminButton onClick={handleCreate} size="sm" style={{ gridColumn: '1 / -1', marginTop: 16, justifySelf: 'start' }} variant="secondary">
             Add integration
-          </button>
+          </AdminButton>
         </div>
       </section>
 
@@ -314,8 +315,8 @@ export default function IntegrationsPanel() {
                 <p style={{ fontSize: '0.85rem', color: '#666' }}>Stored secrets/headers: {(integration.secrets || []).map((secret) => secret.key).join(', ') || 'None'}</p>
               </div>
               <div className={styles.actionRow}>
-                <button className={styles.secondaryButton} onClick={() => setEditingId(integration.id)} type="button">Edit</button>
-                <button className={styles.dangerButton} onClick={() => handleDelete(integration.id)} type="button">Delete</button>
+                <AdminButton onClick={() => setEditingId(integration.id)} size="sm" variant="secondary">Edit</AdminButton>
+                <AdminButton onClick={() => handleDelete(integration.id)} size="sm" variant="danger">Delete</AdminButton>
               </div>
             </div>
           )

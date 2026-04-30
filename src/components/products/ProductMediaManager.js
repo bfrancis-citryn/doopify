@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AdminButton from '../admin/ui/AdminButton';
 import AdminUploadDropzone from '../admin/ui/AdminUploadDropzone';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductMediaManager.module.css';
@@ -155,32 +156,30 @@ export default function ProductMediaManager() {
       />
 
       <div className={styles.actionRow}>
-        <button className={styles.actionButtonPrimary} onClick={() => uploadInputRef.current?.click()} type="button">
-          <span className="material-symbols-outlined">upload</span>
+        <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => uploadInputRef.current?.click()} size="sm" variant="primary">
           Upload to library
-        </button>
-        <button className={styles.actionButton} onClick={() => setActiveTab('library')} type="button">
-          <span className="material-symbols-outlined">photo_library</span>
+        </AdminButton>
+        <AdminButton leftIcon={<span className="material-symbols-outlined">photo_library</span>} onClick={() => setActiveTab('library')} size="sm" variant="secondary">
           Open library
-        </button>
-        <button
-          className={styles.actionButton}
+        </AdminButton>
+        <AdminButton
           disabled={!previewImage || previewImage.id === draftProduct.featuredImageId}
+          leftIcon={<span className="material-symbols-outlined">star</span>}
           onClick={() => previewImage && actions.setFeaturedImage(previewImage.id)}
-          type="button"
+          size="sm"
+          variant="secondary"
         >
-          <span className="material-symbols-outlined">star</span>
           Set featured
-        </button>
-        <button
-          className={styles.actionButtonDanger}
+        </AdminButton>
+        <AdminButton
           disabled={!previewImage}
+          leftIcon={<span className="material-symbols-outlined">delete</span>}
           onClick={() => previewImage && actions.removeImage(previewImage.id)}
-          type="button"
+          size="sm"
+          variant="danger"
         >
-          <span className="material-symbols-outlined">delete</span>
           Remove
-        </button>
+        </AdminButton>
       </div>
 
       <div className={styles.thumbnailGrid}>
@@ -255,12 +254,11 @@ export default function ProductMediaManager() {
           <p className={styles.libraryText}>Uploads live in Prisma-backed storage so you can reuse them across products or manage everything on the dedicated Media page.</p>
         </div>
         <div className={styles.actionRow}>
-          <button className={styles.actionButtonPrimary} onClick={() => uploadInputRef.current?.click()} type="button">
-            <span className="material-symbols-outlined">upload</span>
+          <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => uploadInputRef.current?.click()} size="sm" variant="primary">
             Upload image
-          </button>
-          <button
-            className={styles.actionButton}
+          </AdminButton>
+          <AdminButton
+            leftIcon={<span className="material-symbols-outlined">refresh</span>}
             onClick={() => {
               setIsLibraryLoading(true);
               setLibraryError('');
@@ -282,12 +280,12 @@ export default function ProductMediaManager() {
                   setIsLibraryLoading(false);
                 });
             }}
-            type="button"
+            size="sm"
+            variant="secondary"
           >
-            <span className="material-symbols-outlined">refresh</span>
             Refresh
-          </button>
-          <Link className={styles.actionButtonLink} href="/media">
+          </AdminButton>
+          <Link className={`admin-btn admin-btn--secondary admin-btn--sm ${styles.actionButtonLink}`} href="/media">
             <span className="material-symbols-outlined">open_in_new</span>
             Open media page
           </Link>
@@ -333,17 +331,18 @@ export default function ProductMediaManager() {
                     <span>{asset.linkedProducts ? `${asset.linkedProducts} linked` : 'Unlinked'}</span>
                   </div>
                 </div>
-                <button
+                <AdminButton
                   className={isInGallery ? styles.libraryButtonAdded : styles.libraryButton}
                   disabled={isInGallery}
                   onClick={() => {
                     actions.addImagesFromLibrary(asset);
                     setActiveTab('gallery');
                   }}
-                  type="button"
+                  size="sm"
+                  variant={isInGallery ? 'secondary' : 'primary'}
                 >
                   {isInGallery ? 'In gallery' : 'Add to gallery'}
-                </button>
+                </AdminButton>
               </div>
             );
           })}
@@ -357,20 +356,22 @@ export default function ProductMediaManager() {
   return (
     <div className={styles.mediaShell}>
       <div className={styles.tabRow}>
-        <button
-          className={activeTab === 'gallery' ? styles.tabButtonActive : styles.tabButton}
+        <AdminButton
+          className={styles.tabButton}
           onClick={() => setActiveTab('gallery')}
-          type="button"
+          size="sm"
+          variant={activeTab === 'gallery' ? 'primary' : 'secondary'}
         >
           Gallery
-        </button>
-        <button
-          className={activeTab === 'library' ? styles.tabButtonActive : styles.tabButton}
+        </AdminButton>
+        <AdminButton
+          className={styles.tabButton}
           onClick={() => setActiveTab('library')}
-          type="button"
+          size="sm"
+          variant={activeTab === 'library' ? 'primary' : 'secondary'}
         >
           Media Library
-        </button>
+        </AdminButton>
       </div>
 
       <input

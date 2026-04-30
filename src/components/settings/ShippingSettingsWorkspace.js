@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import AppShell from '../AppShell';
+import AdminButton from '../admin/ui/AdminButton';
 import styles from './SettingsWorkspace.module.css';
 
 const EMPTY_ZONE = {
@@ -385,12 +386,12 @@ export default function ShippingSettingsWorkspace() {
             {storeId ? <p className={styles.statusText}>Store: {storeId}</p> : null}
           </div>
           <div className={styles.actionRow}>
-            <Link className={styles.secondaryButton} href="/admin/settings/shipping/setup">
+            <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/admin/settings/shipping/setup">
               Open setup wizard
             </Link>
-            <button className={styles.primaryButton} disabled={saving} onClick={saveShippingSettings} type="button">
+            <AdminButton disabled={saving} onClick={saveShippingSettings} size="sm" variant="primary">
               {saving ? 'Saving...' : 'Save shipping settings'}
-            </button>
+            </AdminButton>
           </div>
         </div>
 
@@ -487,9 +488,9 @@ export default function ShippingSettingsWorkspace() {
                   <input checked={newZone.isActive} onChange={(event) => setNewZone((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
                   <span>Active</span>
                 </label>
-                <button className={styles.secondaryButton} onClick={createZone} type="button">
+                <AdminButton onClick={createZone} size="sm" variant="secondary">
                   Add zone
-                </button>
+                </AdminButton>
               </div>
 
               {shippingZones.map((zone) => (
@@ -566,12 +567,12 @@ export default function ShippingSettingsWorkspace() {
                   </div>
 
                   <div className={styles.actionRow}>
-                    <button className={styles.secondaryButton} onClick={() => saveZone(zone)} type="button">
+                    <AdminButton onClick={() => saveZone(zone)} size="sm" variant="secondary">
                       Save zone
-                    </button>
-                    <button className={styles.dangerButton} onClick={() => deleteZone(zone.id)} type="button">
+                    </AdminButton>
+                    <AdminButton onClick={() => deleteZone(zone.id)} size="sm" variant="danger">
                       Delete zone
-                    </button>
+                    </AdminButton>
                   </div>
 
                   <div className={styles.rateList}>
@@ -744,12 +745,12 @@ export default function ShippingSettingsWorkspace() {
                           </label>
                         </div>
                         <div className={styles.actionRow}>
-                          <button className={styles.secondaryButton} onClick={() => saveRate(zone.id, rate)} type="button">
+                          <AdminButton onClick={() => saveRate(zone.id, rate)} size="sm" variant="secondary">
                             Save rate
-                          </button>
-                          <button className={styles.dangerButton} onClick={() => deleteRate(zone.id, rate.id)} type="button">
+                          </AdminButton>
+                          <AdminButton onClick={() => deleteRate(zone.id, rate.id)} size="sm" variant="danger">
                             Delete rate
-                          </button>
+                          </AdminButton>
                         </div>
                       </div>
                     ))}
@@ -871,9 +872,9 @@ export default function ShippingSettingsWorkspace() {
                       />
                       <span>Active</span>
                     </label>
-                    <button className={styles.secondaryButton} onClick={() => createRate(zone.id)} type="button">
+                    <AdminButton onClick={() => createRate(zone.id)} size="sm" variant="secondary">
                       Add rate
-                    </button>
+                    </AdminButton>
                   </div>
                 </div>
               ))}

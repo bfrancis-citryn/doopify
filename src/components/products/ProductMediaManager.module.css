@@ -12,35 +12,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  width: fit-content;
-  padding: 0.3rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-}
-
-.tabButton,
-.tabButtonActive {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.7rem 1rem;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
 .tabButton {
-  background: transparent;
-  color: var(--slate-400);
-}
-
-.tabButtonActive {
-  background: rgba(255, 255, 255, 0.94);
-  color: #101010;
-  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
 }
 
 .previewPanel {
@@ -92,56 +67,8 @@
   gap: 0.55rem;
 }
 
-.actionButtonPrimary,
-.actionButton,
-.actionButtonDanger,
-.actionButtonLink,
-.libraryButton,
-.libraryButtonAdded {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-height: 2.35rem;
-  padding: 0.55rem 0.82rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 800;
-  border: 1px solid transparent;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
-}
-
-.actionButtonPrimary {
-  background: rgba(255, 255, 255, 0.96);
-  color: #111111;
-}
-
-.actionButton {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--slate-200);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-.actionButtonDanger {
-  background: rgba(255, 122, 122, 0.1);
-  color: #ffd1d1;
-  border-color: rgba(255, 122, 122, 0.24);
-}
-
 .actionButtonLink {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--slate-200);
-  border-color: rgba(255, 255, 255, 0.1);
   text-decoration: none;
-}
-
-.actionButton:disabled,
-.actionButtonDanger:disabled,
-.actionButtonLink:disabled,
-.libraryButton:disabled,
-.libraryButtonAdded:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .thumbnailGrid {
@@ -350,18 +277,13 @@
   color: var(--slate-500);
 }
 
-.libraryButton {
+.libraryButton,
+.libraryButtonAdded {
   width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: var(--slate-100);
 }
 
 .libraryButtonAdded {
-  width: 100%;
-  background: rgba(114, 245, 202, 0.12);
-  border-color: rgba(114, 245, 202, 0.24);
-  color: #cffff0;
+  opacity: 0.82;
 }
 
 @media (max-width: 720px) {

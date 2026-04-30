@@ -18,17 +18,7 @@
 }
 
 .addVariantButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.045);
-  color: var(--slate-100);
-  font-size: 0.82rem;
-  font-weight: 800;
-  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  min-width: 8.5rem;
 }
 
 .addVariantButton:hover,
@@ -38,7 +28,6 @@
 .matrixToolButton:hover,
 .groupIdentityCell:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .addVariantButton:active,
@@ -93,12 +82,8 @@
 .priceInput,
 .inventoryInput {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.75rem;
   padding: 0.7rem 0.8rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--slate-50);
-  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  transition: box-shadow 140ms ease;
 }
 
 .optionNameInput:focus,
@@ -106,8 +91,7 @@
 .skuInput:focus,
 .priceInput:focus,
 .inventoryInput:focus {
-  border-color: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.18);
 }
 
 .optionNameInputError {
@@ -215,50 +199,17 @@
 .addOptionLink,
 .matrixToolButton,
 .groupIdentityCell {
-  transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  transition: transform 140ms ease;
 }
 
 .deleteOptionButton,
 .deleteVariantButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.45rem 0.7rem;
-  border-radius: 0.7rem;
-  border: 1px solid rgba(255, 154, 154, 0.35);
-  background: rgba(255, 154, 154, 0.1);
-  color: var(--error);
-  font-size: 0.8rem;
-  font-weight: 700;
+  min-width: 4.6rem;
 }
 
 .addOptionLink {
   width: 100%;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.9rem 1rem;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--slate-100);
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.emptyOptionState {
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.emptyOptionTitle {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: var(--slate-50);
-}
-
-.emptyOptionText {
-  margin-top: 0.35rem;
-  line-height: 1.55;
-  color: var(--slate-500);
+  justify-content: flex-start;
 }
 
 .matrixTools {
@@ -281,14 +232,8 @@
 
 .matrixToolButton {
   width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 0.7rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--slate-300);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 2.2rem;
+  padding: 0;
 }
 
 .matrixHeader,

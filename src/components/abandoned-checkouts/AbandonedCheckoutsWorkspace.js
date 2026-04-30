@@ -8,6 +8,7 @@ import AdminCard from '@/components/admin/ui/AdminCard';
 import AdminEmptyState from '@/components/admin/ui/AdminEmptyState';
 import AdminPage from '@/components/admin/ui/AdminPage';
 import AdminPageHeader from '@/components/admin/ui/AdminPageHeader';
+import AdminStatCard, { AdminStatsGrid } from '@/components/admin/ui/AdminStatCard';
 import AdminStatusChip from '@/components/admin/ui/AdminStatusChip';
 import AdminTable from '@/components/admin/ui/AdminTable';
 import AdminToolbar from '@/components/admin/ui/AdminToolbar';
@@ -125,12 +126,12 @@ export default function AbandonedCheckoutsWorkspace() {
           title="Abandoned checkouts"
         />
 
-        <section className={styles.statsGrid}>
-          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Due</p><p className={styles.statValue}>{stats.due}</p></AdminCard>
-          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Recovered</p><p className={styles.statValue}>{stats.recovered}</p></AdminCard>
-          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Total abandoned</p><p className={styles.statValue}>{pagination.total}</p></AdminCard>
-          <AdminCard className={styles.statCard} variant="card"><p className={styles.statLabel}>Recovery emails sent</p><p className={styles.statValue}>{stats.emailsSent}</p></AdminCard>
-        </section>
+        <AdminStatsGrid>
+          <AdminStatCard label="Due" value={String(stats.due)} />
+          <AdminStatCard label="Recovered" value={String(stats.recovered)} />
+          <AdminStatCard label="Total abandoned" value={String(pagination.total)} />
+          <AdminStatCard label="Recovery emails sent" value={String(stats.emailsSent)} />
+        </AdminStatsGrid>
 
         <AdminCard className={styles.tableCard} variant="panel">
           <AdminToolbar><span className={styles.toolbarText}>Recovery queue</span></AdminToolbar>

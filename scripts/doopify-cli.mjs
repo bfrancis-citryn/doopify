@@ -394,6 +394,15 @@ function buildSetupDoctorReportFallback(facts) {
 }
 
 function checkNpmAvailability() {
+  const userAgent = process.env.npm_config_user_agent || ''
+  const npmVersionFromUserAgent = /(?:^|\s)npm\/([0-9][0-9A-Za-z.+-]*)/.exec(userAgent)?.[1]
+  if (npmVersionFromUserAgent) {
+    return {
+      available: true,
+      version: npmVersionFromUserAgent,
+    }
+  }
+
   const npmExecPath = process.env.npm_execpath
   const result = npmExecPath
     ? spawnSync(process.execPath, [npmExecPath, '--version'], {
@@ -438,6 +447,8 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
       databaseError: databaseUrlPresent ? 'Install dependencies before running DB checks.' : 'DATABASE_URL is missing.',
       storeCount: null,
       ownerCount: null,
+      storeConfigured: null,
+      storeContactConfigured: null,
     }
   }
 
@@ -456,15 +467,25 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
 
     await prisma.$queryRawUnsafe('SELECT 1')
 
-    const [storeCount, ownerCount] = await Promise.all([
+    const [storeCount, ownerCount, firstStore] = await Promise.all([
       prisma.store.count(),
       prisma.user.count({ where: { role: 'OWNER', isActive: true } }),
+      prisma.store.findFirst({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
     ])
 
     return {
       databaseReachable: true,
       storeCount,
       ownerCount,
+      storeConfigured: Boolean(firstStore?.name?.trim()),
+      storeContactConfigured: Boolean(firstStore?.email?.trim()),
     }
   } catch (error) {
     return {
@@ -472,6 +493,8 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
       databaseError: sanitizeErrorMessage(error),
       storeCount: null,
       ownerCount: null,
+      storeConfigured: null,
+      storeContactConfigured: null,
     }
   } finally {
     if (prisma) {
@@ -514,14 +537,8 @@ async function createDoctorReport() {
     prismaClientGenerated,
     storeCount: databaseFacts.storeCount,
     ownerCount: databaseFacts.ownerCount,
-    storeConfigured:
-      typeof databaseFacts.storeCount === 'number'
-        ? databaseFacts.storeCount > 0
-        : null,
-    storeContactConfigured:
-      typeof databaseFacts.storeCount === 'number'
-        ? databaseFacts.storeCount > 0
-        : null,
+    storeConfigured: databaseFacts.storeConfigured,
+    storeContactConfigured: databaseFacts.storeContactConfigured,
     jwtSecret: process.env.JWT_SECRET,
     stripeSecretKeyPresent: Boolean(process.env.STRIPE_SECRET_KEY),
     stripePublishableKeyPresent: Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY),

@@ -51,35 +51,3 @@
   justify-content: flex-end;
   gap: 0.7rem;
 }
-
-.ghostButton,
-.secondaryButton,
-.primaryButton,
-.dangerButton {
-  padding: 0.8rem 1rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 800;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.ghostButton {
-  background: rgba(255, 255, 255, 0.045);
-  color: var(--slate-100);
-}
-
-.secondaryButton {
-  background: rgba(255, 198, 115, 0.12);
-  color: var(--amber-600);
-}
-
-.primaryButton {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: transparent;
-}
-
-.dangerButton {
-  background: rgba(255, 154, 154, 0.12);
-  color: var(--error);
-}

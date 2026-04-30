@@ -14,6 +14,7 @@ import { useProductStore } from '../../context/ProductContext';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminDropdown from '../admin/ui/AdminDropdown';
+import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
@@ -115,14 +116,14 @@ export default function ProductCatalog() {
           <AdminDropdown
             align="end"
             trigger={(
-              <button
+              <AdminButton
                 aria-label="Product actions"
-                className={styles.rowActionButton}
                 onClick={event => event.stopPropagation()}
-                type="button"
+                size="sm"
+                variant="icon"
               >
                 <span className="material-symbols-outlined" aria-hidden="true">more_horiz</span>
-              </button>
+              </AdminButton>
             )}
           >
             <button onClick={() => actions.requestSelectProduct(product.id)} type="button">
@@ -180,23 +181,23 @@ export default function ProductCatalog() {
         {isLoading ? <AdminSkeleton rows={6} variant="table" /> : null}
 
         {!isLoading && !products.length ? (
-          <div className={styles.emptyState}>
-            <p className={`font-headline ${styles.emptyTitle}`}>No products yet</p>
-            <p className={styles.emptyText}>Create your first product to start managing inventory in the slide-in editor.</p>
-            <AdminButton onClick={() => actions.requestCreateProduct()} variant="primary">
-              Create product
-            </AdminButton>
-          </div>
+          <AdminEmptyState
+            actionLabel="Create product"
+            description="Create your first product to start managing inventory in the slide-in editor."
+            icon="inventory_2"
+            onAction={() => actions.requestCreateProduct()}
+            title="No products yet"
+          />
         ) : null}
 
         {!isLoading && products.length > 0 && !visibleProducts.length ? (
-          <div className={styles.emptyState}>
-            <p className={`font-headline ${styles.emptyTitle}`}>No matching products</p>
-            <p className={styles.emptyText}>Try a broader search or switch filters to explore the rest of the catalog.</p>
-            <AdminButton onClick={() => actions.setActiveFilter('all')} variant="secondary">
-              Clear filters
-            </AdminButton>
-          </div>
+          <AdminEmptyState
+            actionLabel="Clear filters"
+            description="Try a broader search or switch filters to explore the rest of the catalog."
+            icon="filter_alt_off"
+            onAction={() => actions.setActiveFilter('all')}
+            title="No matching products"
+          />
         ) : null}
 
         {!isLoading && visibleProducts.length > 0 ? (

@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import AdminButton from '../admin/ui/AdminButton';
+import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductVariantEditor.module.css';
 
@@ -99,9 +101,9 @@ function OptionEditor({ option, actions, errorMessage }) {
           ) : null}
 
           <div className={styles.optionFooter}>
-            <button className={styles.deleteOptionButton} onClick={() => actions.removeOptionGroup(option.id)} type="button">
+            <AdminButton className={styles.deleteOptionButton} onClick={() => actions.removeOptionGroup(option.id)} size="sm" variant="danger">
               Delete
-            </button>
+            </AdminButton>
           </div>
         </div>
       </div>
@@ -181,9 +183,9 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
                         <div className={styles.variantName}>{variant.optionValues?.[secondaryOption.name] || variant.title}</div>
                         {rowErrors.optionValues ? <p className={styles.fieldErrorText}>{rowErrors.optionValues}</p> : null}
                       </div>
-                      <button className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} type="button">
+                      <AdminButton className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} size="sm" variant="danger">
                         Delete
-                      </button>
+                      </AdminButton>
                     </div>
                     <div className={styles.variantSkuCell}>
                       <input
@@ -287,10 +289,9 @@ export default function ProductVariantEditor() {
     <div className={styles.variantShell}>
       <div className={styles.variantHeaderRow}>
         <h4 className={styles.variantSectionTitle}>Variants</h4>
-        <button className={styles.addVariantButton} onClick={() => actions.addVariant()} type="button">
-          <span className="material-symbols-outlined">add</span>
+        <AdminButton className={styles.addVariantButton} leftIcon={<span className="material-symbols-outlined">add</span>} onClick={() => actions.addVariant()} size="sm" variant="primary">
           Add variant
-        </button>
+        </AdminButton>
       </div>
 
       <div className={styles.optionPanel}>
@@ -304,16 +305,16 @@ export default function ProductVariantEditor() {
             />
           ))
         ) : (
-          <div className={styles.emptyOptionState}>
-            <p className={styles.emptyOptionTitle}>Single default variant</p>
-            <p className={styles.emptyOptionText}>Add an option like Size, Color, or Material to generate Shopify-style variants.</p>
-          </div>
+          <AdminEmptyState
+            description="Add an option like Size, Color, or Material to generate Shopify-style variants."
+            icon="category"
+            title="Single default variant"
+          />
         )}
 
-        <button className={styles.addOptionLink} onClick={() => actions.addOptionGroup()} type="button">
-          <span className="material-symbols-outlined">add_circle</span>
+        <AdminButton className={styles.addOptionLink} leftIcon={<span className="material-symbols-outlined">add_circle</span>} onClick={() => actions.addOptionGroup()} size="sm" variant="secondary">
           Add another option
-        </button>
+        </AdminButton>
       </div>
 
       {editor.validationErrors.options && !draftProduct.options.some(option => editor.validationErrors.options?.includes(option.name)) ? (
@@ -327,12 +328,12 @@ export default function ProductVariantEditor() {
         <>
           <div className={styles.matrixTools}>
             {canGroupVariants ? <div className={styles.groupByChip}>Group by {draftProduct.options[0].name}</div> : null}
-            <button className={styles.matrixToolButton} type="button">
+            <AdminButton className={styles.matrixToolButton} size="sm" variant="secondary">
               <span className="material-symbols-outlined">search</span>
-            </button>
-            <button className={styles.matrixToolButton} type="button">
+            </AdminButton>
+            <AdminButton className={styles.matrixToolButton} size="sm" variant="secondary">
               <span className="material-symbols-outlined">filter_list</span>
-            </button>
+            </AdminButton>
           </div>
 
           <div className={styles.matrixWrap}>
@@ -366,9 +367,9 @@ export default function ProductVariantEditor() {
                         <div className={styles.variantName}>{variant.title}</div>
                         {rowErrors.optionValues ? <p className={styles.fieldErrorText}>{rowErrors.optionValues}</p> : null}
                       </div>
-                      <button className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} type="button">
+                      <AdminButton className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} size="sm" variant="danger">
                         Delete
-                      </button>
+                      </AdminButton>
                     </div>
                     <div className={styles.variantSkuCell}>
                       <input

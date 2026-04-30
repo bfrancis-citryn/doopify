@@ -1,6 +1,7 @@
 "use client";
 
 import { useProductStore } from '../../context/ProductContext';
+import AdminButton from '../admin/ui/AdminButton';
 import styles from './ConfirmDialog.module.css';
 
 export default function ConfirmDialog() {
@@ -19,24 +20,24 @@ export default function ConfirmDialog() {
 
         {confirmDialog.kind === 'unsaved-changes' ? (
           <div className={styles.actions}>
-            <button className={styles.ghostButton} onClick={() => actions.confirmDialogAction('keep-editing')} type="button">
+            <AdminButton onClick={() => actions.confirmDialogAction('keep-editing')} variant="ghost">
               Keep editing
-            </button>
-            <button className={styles.secondaryButton} onClick={() => actions.confirmDialogAction('discard')} type="button">
+            </AdminButton>
+            <AdminButton onClick={() => actions.confirmDialogAction('discard')} variant="secondary">
               Discard changes
-            </button>
-            <button className={styles.primaryButton} onClick={() => actions.confirmDialogAction('save')} type="button">
+            </AdminButton>
+            <AdminButton onClick={() => actions.confirmDialogAction('save')} variant="primary">
               Save and continue
-            </button>
+            </AdminButton>
           </div>
         ) : (
           <div className={styles.actions}>
-            <button className={styles.ghostButton} onClick={() => actions.dismissConfirmDialog()} type="button">
+            <AdminButton onClick={() => actions.dismissConfirmDialog()} variant="ghost">
               Cancel
-            </button>
-            <button className={styles.dangerButton} onClick={() => actions.confirmDialogAction('confirm')} type="button">
+            </AdminButton>
+            <AdminButton onClick={() => actions.confirmDialogAction('confirm')} variant="danger">
               {confirmDialog.kind === 'delete-product' ? 'Delete product' : 'Delete variant'}
-            </button>
+            </AdminButton>
           </div>
         )}
       </div>

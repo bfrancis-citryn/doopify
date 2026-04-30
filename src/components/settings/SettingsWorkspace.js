@@ -11,6 +11,7 @@ import AdminFormSection from '../admin/ui/AdminFormSection';
 import AdminLiveStatus from '../admin/ui/AdminLiveStatus';
 import AdminSelect from '../admin/ui/AdminSelect';
 import AdminSavedState from '../admin/ui/AdminSavedState';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTooltip from '../admin/ui/AdminTooltip';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
 
@@ -208,6 +209,7 @@ export default function SettingsWorkspace() {
   const [newRateByZoneId, setNewRateByZoneId] = useState({});
   const [setupStatus, setSetupStatus] = useState(null);
   const [setupLoading, setSetupLoading] = useState(false);
+  const [setupLoaded, setSetupLoaded] = useState(false);
   const [setupError, setSetupError] = useState('');
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
   const [savedState, setSavedState] = useState('saved');
@@ -309,7 +311,7 @@ export default function SettingsWorkspace() {
   }, [activeSection, shippingConfigLoaded, shippingConfigLoading]);
 
   useEffect(() => {
-    if (activeSection !== 'setup' || setupLoading || setupStatus) {
+    if (activeSection !== 'setup' || setupLoading || setupLoaded) {
       return;
     }
 
@@ -320,17 +322,19 @@ export default function SettingsWorkspace() {
       setSetupError('');
 
       try {
-        const diagnostics = await fetch('/api/setup/status').then(parseApiJson);
+        const diagnostics = await fetch('/api/setup/status', { cache: 'no-store' }).then(parseApiJson);
         if (!cancelled) {
           setSetupStatus(diagnostics);
         }
       } catch (loadError) {
         if (!cancelled) {
+          setSetupStatus(null);
           setSetupError(loadError instanceof Error ? loadError.message : 'Failed to load setup diagnostics');
         }
       } finally {
         if (!cancelled) {
           setSetupLoading(false);
+          setSetupLoaded(true);
         }
       }
     }
@@ -340,7 +344,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, setupStatus, setupLoading]);
+  }, [activeSection, setupLoaded, setupLoading]);
 
   const setupChecks = useMemo(() => {
     if (!setupStatus) return [];
@@ -517,12 +521,14 @@ export default function SettingsWorkspace() {
     try {
       setSetupLoading(true);
       setSetupError('');
-      const diagnostics = await fetch('/api/setup/status').then(parseApiJson);
+      const diagnostics = await fetch('/api/setup/status', { cache: 'no-store' }).then(parseApiJson);
       setSetupStatus(diagnostics);
     } catch (refreshError) {
+      setSetupStatus(null);
       setSetupError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh setup diagnostics');
     } finally {
       setSetupLoading(false);
+      setSetupLoaded(true);
     }
   }
 
@@ -818,15 +824,16 @@ export default function SettingsWorkspace() {
           </div>
           <div className={styles.sectionList}>
             {SETTINGS_SECTIONS.map((section) => (
-              <button
+              <AdminButton
                 key={section.id}
                 className={activeSection === section.id ? styles.sectionButtonActive : styles.sectionButton}
                 disabled={loading}
                 onClick={() => setActiveSection(section.id)}
-                type="button"
+                size="sm"
+                variant={activeSection === section.id ? 'primary' : 'secondary'}
               >
                 {section.label}
-              </button>
+              </AdminButton>
             ))}
           </div>
         </div>
@@ -899,9 +906,9 @@ export default function SettingsWorkspace() {
                     {renderAssetUploadField({ field: 'logoUrl', label: 'Store logo', refObject: logoUploadRef })}
                     {renderAssetUploadField({ field: 'faviconUrl', label: 'Favicon', refObject: faviconUploadRef })}
                   </div>
-                  <button className={styles.advancedToggle} onClick={() => setShowAdvancedUrls((current) => !current)} type="button">
+                  <AdminButton className={styles.advancedToggle} onClick={() => setShowAdvancedUrls((current) => !current)} size="sm" variant="secondary">
                     {showAdvancedUrls ? 'Hide URL fallback' : 'Use URL fallback instead'}
-                  </button>
+                  </AdminButton>
                   {showAdvancedUrls ? (
                     <div className={styles.brandFieldGrid}>
                       <label className={styles.field}>
@@ -1038,9 +1045,9 @@ export default function SettingsWorkspace() {
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>Shipping configuration error</p>
                     <p className={styles.statusText}>{shippingConfigError}</p>
-                    <button className={styles.secondaryButton} onClick={() => refreshShippingConfig()} type="button">
+                    <AdminButton onClick={() => refreshShippingConfig()} size="sm" variant="secondary">
                       Retry
-                    </button>
+                    </AdminButton>
                   </div>
                 ) : null}
 
@@ -1070,9 +1077,9 @@ export default function SettingsWorkspace() {
                       <input checked={newZone.isActive} onChange={(event) => setNewZone((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
                       <span>Active</span>
                     </label>
-                    <button className={styles.secondaryButton} onClick={handleCreateZone} type="button">
+                    <AdminButton onClick={handleCreateZone} size="sm" variant="secondary">
                       Add zone
-                    </button>
+                    </AdminButton>
                   </div>
 
                   {shippingZones.map((zone) => (
@@ -1101,12 +1108,12 @@ export default function SettingsWorkspace() {
                       </div>
 
                       <div className={styles.actionRow}>
-                        <button className={styles.secondaryButton} onClick={() => handleSaveZone(zone)} type="button">
+                        <AdminButton onClick={() => handleSaveZone(zone)} size="sm" variant="secondary">
                           Save zone
-                        </button>
-                        <button className={styles.dangerButton} onClick={() => handleDeleteZone(zone.id)} type="button">
+                        </AdminButton>
+                        <AdminButton onClick={() => handleDeleteZone(zone.id)} size="sm" variant="danger">
                           Delete zone
-                        </button>
+                        </AdminButton>
                       </div>
 
                       <div className={styles.rateList}>
@@ -1146,12 +1153,12 @@ export default function SettingsWorkspace() {
                               </label>
                             </div>
                             <div className={styles.actionRow}>
-                              <button className={styles.secondaryButton} onClick={() => handleSaveRate(zone.id, rate)} type="button">
+                              <AdminButton onClick={() => handleSaveRate(zone.id, rate)} size="sm" variant="secondary">
                                 Save rate
-                              </button>
-                              <button className={styles.dangerButton} onClick={() => handleDeleteRate(zone.id, rate.id)} type="button">
+                              </AdminButton>
+                              <AdminButton onClick={() => handleDeleteRate(zone.id, rate.id)} size="sm" variant="danger">
                                 Delete rate
-                              </button>
+                              </AdminButton>
                             </div>
                           </div>
                         ))}
@@ -1273,9 +1280,9 @@ export default function SettingsWorkspace() {
                           />
                           <span>Active</span>
                         </label>
-                        <button className={styles.secondaryButton} onClick={() => handleCreateRate(zone.id)} type="button">
+                        <AdminButton onClick={() => handleCreateRate(zone.id)} size="sm" variant="secondary">
                           Add rate
-                        </button>
+                        </AdminButton>
                       </div>
                     </div>
                   ))}
@@ -1311,9 +1318,9 @@ export default function SettingsWorkspace() {
                       <input checked={newTaxRule.isActive} onChange={(event) => setNewTaxRule((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
                       <span>Active</span>
                     </label>
-                    <button className={styles.secondaryButton} onClick={handleCreateTaxRule} type="button">
+                    <AdminButton onClick={handleCreateTaxRule} size="sm" variant="secondary">
                       Add tax rule
-                    </button>
+                    </AdminButton>
                   </div>
 
                   {taxRules.map((rule) => (
@@ -1345,12 +1352,12 @@ export default function SettingsWorkspace() {
                         </label>
                       </div>
                       <div className={styles.actionRow}>
-                        <button className={styles.secondaryButton} onClick={() => handleSaveTaxRule(rule)} type="button">
+                        <AdminButton onClick={() => handleSaveTaxRule(rule)} size="sm" variant="secondary">
                           Save tax rule
-                        </button>
-                        <button className={styles.dangerButton} onClick={() => handleDeleteTaxRule(rule.id)} type="button">
+                        </AdminButton>
+                        <AdminButton onClick={() => handleDeleteTaxRule(rule.id)} size="sm" variant="danger">
                           Delete tax rule
-                        </button>
+                        </AdminButton>
                       </div>
                     </div>
                   ))}
@@ -1392,7 +1399,7 @@ export default function SettingsWorkspace() {
 
             {!loading && !error && activeSection === 'setup' ? (
               <div className={styles.setupPanel}>
-                <section className={styles.setupSummaryCard}>
+                <AdminCard className={styles.setupSummaryCard} variant="card">
                   <div>
                     <p className={styles.eyebrow}>Setup health</p>
                     <h3 className={styles.setupHeadline}>{setupStatus?.overallStatus?.replaceAll('_', ' ') || 'Loading diagnostics'}</h3>
@@ -1401,7 +1408,7 @@ export default function SettingsWorkspace() {
                   <div className={styles.setupMeterTrack} role="img" aria-label={`Setup completion ${setupStatus?.completionPercent ?? 0}%`}>
                     <div className={styles.setupMeterFill} style={{ width: `${setupStatus?.completionPercent ?? 0}%` }} />
                   </div>
-                </section>
+                </AdminCard>
 
                 {setupLoading ? (
                   <div className={styles.statusBlock}>
@@ -1423,64 +1430,54 @@ export default function SettingsWorkspace() {
                   <>
                     <section className={styles.setupGrid}>
                       {setupCards.map((card) => (
-                        <article className={styles.setupCard} key={card.id}>
+                        <AdminCard as="article" className={styles.setupCard} key={card.id} variant="card">
                           <div className={styles.setupCardHeader}>
                             <h4>{card.label}</h4>
-                            <span
-                              className={
-                                card.status === 'PASS'
-                                  ? styles.setupBadgePass
-                                  : card.status === 'FAIL'
-                                    ? styles.setupBadgeFail
-                                    : styles.setupBadgeWarn
-                              }
-                            >
+                            <AdminStatusChip tone={card.status === 'PASS' ? 'success' : card.status === 'FAIL' ? 'danger' : 'warning'}>
                               {card.status}
-                            </span>
+                            </AdminStatusChip>
                           </div>
                           <p className={styles.statusText}>{card.summary}</p>
                           {card.fix ? <p className={styles.setupFixText}>Fix: {card.fix}</p> : null}
-                        </article>
+                        </AdminCard>
                       ))}
                     </section>
 
                     <section className={styles.setupColumns}>
-                      <article className={styles.setupColumnCard}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Missing env warnings</h4>
                         {setupMissingEnvVars.length ? (
                           <div className={styles.warningTagList}>
                             {setupMissingEnvVars.map((envName) => (
-                              <span className={styles.warningTag} key={envName}>
-                                {envName}
-                              </span>
+                              <AdminStatusChip key={envName} tone="warning">{envName}</AdminStatusChip>
                             ))}
                           </div>
                         ) : (
                           <p className={styles.statusText}>No env variable gaps detected in current diagnostics.</p>
                         )}
-                      </article>
+                      </AdminCard>
 
-                      <article className={styles.setupColumnCard}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Copy/paste CLI commands</h4>
                         <div className={styles.commandList}>
                           {SETUP_COMMANDS.map((entry) => (
                             <div className={styles.commandRow} key={entry.id}>
                               <code className={styles.commandCode}>{entry.command}</code>
-                              <button
-                                className={styles.secondaryButton}
+                              <AdminButton
                                 onClick={() => handleCopyCommand(entry.id, entry.command)}
-                                type="button"
+                                size="sm"
+                                variant="secondary"
                               >
                                 {setupCopiedCommandId === entry.id ? 'Copied' : 'Copy'}
-                              </button>
+                              </AdminButton>
                             </div>
                           ))}
                         </div>
-                      </article>
+                      </AdminCard>
                     </section>
 
                     <section className={styles.setupColumns}>
-                      <article className={styles.setupColumnCard}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Safe next actions</h4>
                         {setupStatus?.safeNextActions?.length ? (
                           <ul className={styles.setupList}>
@@ -1491,16 +1488,16 @@ export default function SettingsWorkspace() {
                         ) : (
                           <p className={styles.statusText}>No required fixes right now.</p>
                         )}
-                      </article>
+                      </AdminCard>
 
-                      <article className={styles.setupColumnCard}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Provider connection hints</h4>
                         <ul className={styles.setupList}>
                           {PROVIDER_HINTS.map((hint) => (
                             <li key={hint}>{hint}</li>
                           ))}
                         </ul>
-                      </article>
+                      </AdminCard>
                     </section>
                   </>
                 ) : null}
