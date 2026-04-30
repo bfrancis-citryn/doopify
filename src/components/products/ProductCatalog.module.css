@@ -132,3 +132,29 @@
   font-size: 0.74rem;
   color: var(--on-surface-variant);
 }
+
+.actionsHeader {
+  width: 2.5rem;
+}
+
+.actionsCell {
+  width: 2.5rem;
+  text-align: right;
+}
+
+.rowActionButton {
+  width: 1.95rem;
+  height: 1.95rem;
+  border-radius: 0.58rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container) 80%, transparent);
+  color: var(--on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rowActionButton:hover {
+  border-color: var(--glass-border-strong);
+  color: var(--on-surface);
+}

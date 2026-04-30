@@ -2,6 +2,16 @@
 
 import { useMemo, useState } from 'react';
 import AppShell from '../AppShell';
+import AdminButton from '../admin/ui/AdminButton';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminDrawer from '../admin/ui/AdminDrawer';
+import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminInput from '../admin/ui/AdminInput';
+import AdminPage from '../admin/ui/AdminPage';
+import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
+import AdminTable from '../admin/ui/AdminTable';
+import AdminToolbar from '../admin/ui/AdminToolbar';
 import { useCustomers } from '../../context/CustomersContext';
 import { formatCustomerMoney } from '../../lib/customersData';
 import styles from './CustomersWorkspace.module.css';
@@ -9,90 +19,154 @@ import styles from './CustomersWorkspace.module.css';
 export default function CustomersWorkspace() {
   const { customers, setCustomers } = useCustomers();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id || null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
 
   const visibleCustomers = useMemo(
     () =>
-      customers.filter(customer =>
-        [customer.name, customer.email, ...(customer.tags || [])].join(' ').toLowerCase().includes(searchQuery.trim().toLowerCase())
+      customers.filter((customer) =>
+        [customer.name, customer.email, ...(customer.tags || [])]
+          .join(' ')
+          .toLowerCase()
+          .includes(searchQuery.trim().toLowerCase())
       ),
     [customers, searchQuery]
   );
 
-  const selectedCustomer = visibleCustomers.find(customer => customer.id === selectedCustomerId) || customers.find(customer => customer.id === selectedCustomerId) || null;
+  const selectedCustomer =
+    visibleCustomers.find((customer) => customer.id === selectedCustomerId) ||
+    customers.find((customer) => customer.id === selectedCustomerId) ||
+    null;
+
+  const totalRevenue = useMemo(
+    () => visibleCustomers.reduce((sum, customer) => sum + Number(customer.totalSpent || 0), 0),
+    [visibleCustomers]
+  );
+
+  const columns = [
+    { key: 'name', header: 'Customer', render: (customer) => <strong>{customer.name}</strong> },
+    { key: 'email', header: 'Email', render: (customer) => customer.email },
+    { key: 'orders', header: 'Orders', render: (customer) => customer.orderCount },
+    { key: 'spent', header: 'Total spent', render: (customer) => formatCustomerMoney(customer.totalSpent) },
+    {
+      key: 'tags',
+      header: 'Tags',
+      render: (customer) => (
+        <span className={styles.tagsInline}>{(customer.tags || []).slice(0, 2).join(', ') || 'None'}</span>
+      ),
+    },
+  ];
 
   return (
-    <AppShell onCreateOrder={() => {}} onNotificationsClick={() => {}} onQuickActionClick={() => {}} onSearchChange={event => setSearchQuery(event.target.value)} searchValue={searchQuery}>
-      <div className={styles.page}>
-        <div className={styles.listPanel}>
-          <div className={styles.listHeader}>
-            <h2>Customers</h2>
-            <button className={styles.primaryButton} type="button">Create customer</button>
-          </div>
+    <AppShell>
+      <AdminPage>
+        <AdminPageHeader
+          actions={<AdminButton size="sm" variant="secondary">Create customer</AdminButton>}
+          description="Customer profiles, spend, and lifecycle context."
+          eyebrow="Customers"
+          title="Customer desk"
+        />
 
-          <div className={styles.customerList}>
-            {visibleCustomers.map(customer => (
-              <button key={customer.id} className={selectedCustomer?.id === customer.id ? styles.customerRowActive : styles.customerRow} onClick={() => setSelectedCustomerId(customer.id)} type="button">
-                <div>
-                  <strong>{customer.name}</strong>
-                  <small>{customer.email}</small>
-                </div>
-                <span>{formatCustomerMoney(customer.totalSpent)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <AdminStatsGrid>
+          <AdminStatCard label="Profiles" value={String(visibleCustomers.length)} />
+          <AdminStatCard label="Total revenue" value={formatCustomerMoney(totalRevenue)} />
+          <AdminStatCard label="Avg spend" value={visibleCustomers.length ? formatCustomerMoney(totalRevenue / visibleCustomers.length) : '$0.00'} />
+          <AdminStatCard label="Returning" value={String(visibleCustomers.filter((customer) => Number(customer.orderCount || 0) > 1).length)} />
+        </AdminStatsGrid>
 
-        <div className={styles.detailPanel}>
+        <AdminCard className={styles.tablePanel} variant="panel">
+          <AdminToolbar>
+            <AdminInput
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search name, email, or tags..."
+              type="search"
+              value={searchQuery}
+            />
+            <span className={styles.meta}>{visibleCustomers.length} customers</span>
+          </AdminToolbar>
+
+          {visibleCustomers.length ? (
+            <AdminTable
+              columns={columns}
+              onRowClick={(customer) => setSelectedCustomerId(customer.id)}
+              rows={visibleCustomers}
+              selectedId={selectedCustomerId}
+            />
+          ) : (
+            <AdminEmptyState
+              description="No customers match your current filters."
+              icon="groups"
+              onAction={() => setSearchQuery('')}
+              actionLabel="Clear search"
+              title="No customers"
+            />
+          )}
+        </AdminCard>
+
+        <AdminDrawer
+          onClose={() => setSelectedCustomerId(null)}
+          open={Boolean(selectedCustomer)}
+          title={selectedCustomer?.name || 'Customer'}
+          subtitle={selectedCustomer ? selectedCustomer.email : ''}
+          contextItems={[
+            { label: 'Customers' },
+            { label: selectedCustomer?.name || 'Profile', current: true },
+          ]}
+        >
           {selectedCustomer ? (
-            <div className={styles.detailCard}>
-              <div className={styles.detailHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Customer profile</p>
-                  <h2>{selectedCustomer.name}</h2>
-                </div>
-              </div>
+            <div className={styles.drawerBody}>
+              <AdminStatsGrid className={styles.drawerStats}>
+                <AdminStatCard label="Total spent" value={formatCustomerMoney(selectedCustomer.totalSpent)} />
+                <AdminStatCard label="Orders" value={String(selectedCustomer.orderCount)} />
+              </AdminStatsGrid>
 
-              <div className={styles.metricsGrid}>
-                <div className={styles.metricCard}><span>Total spent</span><strong>{formatCustomerMoney(selectedCustomer.totalSpent)}</strong></div>
-                <div className={styles.metricCard}><span>Orders</span><strong>{selectedCustomer.orderCount}</strong></div>
-              </div>
-
-              <div className={styles.infoCard}>
+              <AdminCard className={styles.drawerSection} variant="card">
                 <h3>Contact</h3>
                 <p>{selectedCustomer.email}</p>
-                <p>{selectedCustomer.phone}</p>
-              </div>
+                <p>{selectedCustomer.phone || 'No phone on file'}</p>
+              </AdminCard>
 
-              <div className={styles.infoCard}>
+              <AdminCard className={styles.drawerSection} variant="card">
                 <h3>Default address</h3>
-                <p>{selectedCustomer.defaultAddress}</p>
-              </div>
+                <p>{selectedCustomer.defaultAddress || 'No default address set'}</p>
+              </AdminCard>
 
-              <div className={styles.infoCard}>
+              <AdminCard className={styles.drawerSection} variant="card">
                 <h3>Tags</h3>
                 <div className={styles.tagRow}>
-                  {selectedCustomer.tags.map(tag => (
-                    <span key={`${selectedCustomer.id}-${tag}`} className={styles.tagChip}>{tag}</span>
+                  {(selectedCustomer.tags || []).map((tag) => (
+                    <span className={styles.tagChip} key={`${selectedCustomer.id}-${tag}`}>{tag}</span>
                   ))}
                 </div>
-              </div>
+              </AdminCard>
 
-              <div className={styles.infoCard}>
+              <AdminCard className={styles.drawerSection} variant="card">
                 <h3>Recent orders</h3>
-                <div className={styles.recentOrders}>
-                  {selectedCustomer.recentOrders.map(order => <span key={`${selectedCustomer.id}-${order}`}>{order}</span>)}
+                <div className={styles.orderRow}>
+                  {(selectedCustomer.recentOrders || []).length
+                    ? selectedCustomer.recentOrders.map((order) => <span key={`${selectedCustomer.id}-${order}`}>{order}</span>)
+                    : <span>No recent orders.</span>}
                 </div>
-              </div>
+              </AdminCard>
 
-              <div className={styles.infoCard}>
+              <AdminCard className={styles.drawerSection} variant="card">
                 <h3>Notes</h3>
-                <textarea className={styles.notesInput} onChange={event => setCustomers(current => current.map(customer => customer.id === selectedCustomer.id ? { ...customer, notes: event.target.value } : customer))} rows={5} value={selectedCustomer.notes} />
-              </div>
+                <textarea
+                  className={styles.notesInput}
+                  onChange={(event) =>
+                    setCustomers((current) =>
+                      current.map((customer) =>
+                        customer.id === selectedCustomer.id ? { ...customer, notes: event.target.value } : customer
+                      )
+                    )
+                  }
+                  rows={6}
+                  value={selectedCustomer.notes}
+                />
+              </AdminCard>
             </div>
           ) : null}
-        </div>
-      </div>
+        </AdminDrawer>
+      </AdminPage>
     </AppShell>
   );
 }

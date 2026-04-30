@@ -12,6 +12,7 @@ import {
   ensureMediaState,
   formatMoney,
   generateVariantsFromOptions,
+  getComputedProductStateMeta,
   getMissingVariantCombos,
   getNextSampleImage,
   prepareProductForSave,
@@ -38,6 +39,7 @@ const initialState = {
     previewImageId: null,
     autosaveEnabled: false,
     isSaving: false,
+    mediaUploadsInFlight: 0,
     validationErrors: {},
   },
   confirmDialog: null,
@@ -97,6 +99,7 @@ function transformApiProduct(product) {
     title: product.title,
     handle: product.handle,
     status: (product.status || 'DRAFT').toLowerCase(),
+    publishedAt: product.publishedAt || null,
     description: product.description || '',
     vendor: product.vendor || '',
     productType: product.productType || '',
@@ -227,11 +230,6 @@ function collectSkuValidationErrors(draftProduct, products) {
       });
     });
 
-  const primarySku = normalizeSkuValue(draftProduct.sku);
-  if (primarySku && externalSkus.has(primarySku)) {
-    errors.sku = 'Primary SKU must be unique across the catalog.';
-  }
-
   const seenVariantSkus = new Map();
   const variantRows = {};
 
@@ -249,10 +247,6 @@ function collectSkuValidationErrors(draftProduct, products) {
       rowErrors.sku = 'Variant SKUs must be unique within this product.';
     } else {
       seenVariantSkus.set(variantSku, variant.id);
-    }
-
-    if (primarySku && variantSku === primarySku && !(draftProduct.variants.length === 1 && variant.isDefault)) {
-      rowErrors.sku = rowErrors.sku || 'This SKU matches the primary product SKU.';
     }
 
     if (Object.keys(rowErrors).length) {
@@ -278,6 +272,7 @@ function getComparableProduct(product) {
     title: product.title,
     description: product.description,
     status: product.status,
+    publishedAt: product.publishedAt,
     category: product.category,
     tags: product.tags,
     vendor: product.vendor,
@@ -323,6 +318,7 @@ function makeEditorState(product, mode = 'existing') {
     previewImageId: resolvedProduct?.featuredImageId || resolvedProduct?.images?.[0]?.id || null,
     autosaveEnabled: false,
     isSaving: false,
+    mediaUploadsInFlight: 0,
     validationErrors: {},
   };
 }
@@ -330,14 +326,11 @@ function makeEditorState(product, mode = 'existing') {
 function productReducer(state, action) {
   switch (action.type) {
     case 'LOAD_PRODUCTS': {
-      const first = action.products[0] || null;
+      const hasSelectedProduct = action.products.some(product => product.id === state.selectedProductId);
       return {
         ...state,
         products: action.products,
-        selectedProductId: first?.id || null,
-        editor: first
-          ? { ...makeEditorState(first, 'existing'), autosaveEnabled: state.editor.autosaveEnabled }
-          : state.editor,
+        selectedProductId: hasSelectedProduct ? state.selectedProductId : null,
       };
     }
     case 'SET_SEARCH_QUERY':
@@ -404,6 +397,14 @@ function productReducer(state, action) {
           isSaving: action.value,
         },
       };
+    case 'ADJUST_MEDIA_UPLOADS':
+      return {
+        ...state,
+        editor: {
+          ...state.editor,
+          mediaUploadsInFlight: Math.max(0, (state.editor.mediaUploadsInFlight || 0) + action.delta),
+        },
+      };
     case 'SET_VALIDATION_ERRORS':
       return {
         ...state,
@@ -450,6 +451,7 @@ function productReducer(state, action) {
               previewImageId: null,
               validationErrors: {},
               isSaving: false,
+              mediaUploadsInFlight: 0,
             },
       };
     }
@@ -464,6 +466,7 @@ function productReducer(state, action) {
           previewImageId: null,
           validationErrors: {},
           isSaving: false,
+          mediaUploadsInFlight: 0,
         },
       };
     case 'SET_CONFIRM_DIALOG':
@@ -536,11 +539,7 @@ export function ProductProvider({ children }) {
           }
         }
 
-        if (products[0]) {
-          syncEditorLocation({ productId: products[0].id }, 'replace');
-        } else {
-          syncEditorLocation({}, 'replace');
-        }
+        syncEditorLocation({}, 'replace');
       })
       .catch(err => console.error('[ProductContext] fetch failed', err));
 
@@ -703,6 +702,12 @@ export function ProductProvider({ children }) {
     if (!state.editor.draftProduct || state.editor.isSaving) {
       return false;
     }
+    if ((state.editor.mediaUploadsInFlight || 0) > 0) {
+      if (!silent) {
+        pushToast('Please wait for media uploads to finish before saving.', 'info');
+      }
+      return false;
+    }
 
     const preparedProduct = prepareProductForSave(state.editor.draftProduct);
     const preparedValidation = validateProduct(preparedProduct);
@@ -732,6 +737,7 @@ export function ProductProvider({ children }) {
         title: preparedProduct.title,
         handle: preparedProduct.handle,
         status: preparedProduct.status?.toUpperCase() || 'DRAFT',
+        publishedAt: preparedProduct.publishedAt || null,
         description: preparedProduct.description,
         vendor: preparedProduct.vendor,
         productType: preparedProduct.category || preparedProduct.productType,
@@ -804,6 +810,36 @@ export function ProductProvider({ children }) {
   const requestCreateProduct = () => {
     openNewProduct();
     syncEditorLocation({ isNew: true }, 'push');
+  };
+
+  const requestDuplicateProduct = async (productId = null) => {
+    const sourceId = productId || state.editor.draftProduct?.id || state.selectedProductId;
+    if (!sourceId) {
+      pushToast('Select a product before duplicating.', 'info');
+      return null;
+    }
+
+    try {
+      const response = await fetch(`/api/products/${sourceId}/duplicate`, {
+        method: 'POST',
+      });
+      const json = await response.json();
+
+      if (!json.success) {
+        pushToast(json.error || 'Duplicate failed', 'error');
+        return null;
+      }
+
+      const duplicatedProduct = transformApiProduct(json.data);
+      dispatch({ type: 'COMMIT_PRODUCT', product: duplicatedProduct });
+      syncEditorLocation({ productId: duplicatedProduct.id }, 'push');
+      pushToast('Product duplicated as a new draft.', 'success');
+      return duplicatedProduct;
+    } catch (error) {
+      console.error('[ProductContext] duplicate failed', error);
+      pushToast('Duplicate failed', 'error');
+      return null;
+    }
   };
 
   const requestCloseEditor = () => {
@@ -905,6 +941,7 @@ export function ProductProvider({ children }) {
   const addImagesFromFiles = async fileList => {
     const files = Array.from(fileList || []);
     if (!files.length) return [];
+    dispatch({ type: 'ADJUST_MEDIA_UPLOADS', delta: files.length });
 
     const optimisticImages = [];
 
@@ -995,6 +1032,8 @@ export function ProductProvider({ children }) {
           };
         });
         pushToast('Upload failed — check Cloudinary credentials', 'error');
+      } finally {
+        dispatch({ type: 'ADJUST_MEDIA_UPLOADS', delta: -1 });
       }
     }
 
@@ -1300,7 +1339,23 @@ export function ProductProvider({ children }) {
     }
 
     if (!draftProduct.options.length) {
-      pushToast('Add an option group like Size or Color to create more variants.', 'info');
+      updateDraftProduct(nextDraft => {
+        const bootstrapOption = {
+          id: createEntityId('option'),
+          name: 'Option',
+          values: ['Default', 'Variant 2'],
+        };
+        const nextOptions = [bootstrapOption];
+        const cleanOptions = sanitizeOptions(nextOptions);
+        const nextVariants = generateVariantsFromOptions(nextDraft, cleanOptions, nextDraft.variants);
+
+        return {
+          ...nextDraft,
+          options: nextOptions,
+          variants: nextVariants,
+        };
+      });
+      pushToast('Variant option set created. Update option names and values as needed.', 'info');
       return;
     }
 
@@ -1477,8 +1532,10 @@ export function ProductProvider({ children }) {
       draftInventorySummary,
       draftFeaturedImage,
       hasUnsavedChanges,
+      isUploadingMedia: (state.editor.mediaUploadsInFlight || 0) > 0,
       isDraftValid: draftValidation.isValid,
       validationErrors: draftValidation.errors,
+      computedState: getComputedProductStateMeta(state.editor.draftProduct || {}),
     },
     confirmDialog: state.confirmDialog,
     toasts: state.toasts,
@@ -1488,6 +1545,7 @@ export function ProductProvider({ children }) {
       setActiveFilter,
       requestSelectProduct,
       requestCreateProduct,
+      requestDuplicateProduct,
       requestCloseEditor,
       cancelDraftChanges,
       saveDraft,

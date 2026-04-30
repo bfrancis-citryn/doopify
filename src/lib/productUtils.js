@@ -8,6 +8,12 @@ const SAMPLE_IMAGE_LIBRARY = [
 
 const VALID_STATUSES = ['active', 'draft', 'archived'];
 export const LOW_STOCK_THRESHOLD = 5;
+const PRODUCT_STATE_META = {
+  active: { label: 'Active', tone: 'success' },
+  draft: { label: 'Draft', tone: 'warning' },
+  scheduled: { label: 'Scheduled', tone: 'info' },
+  archived: { label: 'Archived', tone: 'danger' },
+};
 
 function createId(prefix = 'id') {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -27,6 +33,51 @@ function cloneValue(value) {
 
 function trimString(value) {
   return String(value ?? '').trim();
+}
+
+function parseIsoDate(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function isFuturePublishDate(value, now = new Date()) {
+  const publishDate = parseIsoDate(value);
+  if (!publishDate) {
+    return false;
+  }
+
+  return publishDate.getTime() > now.getTime();
+}
+
+export function getComputedProductState(product, now = new Date()) {
+  const status = VALID_STATUSES.includes(product?.status) ? product.status : 'draft';
+
+  if (status === 'archived') {
+    return 'archived';
+  }
+
+  if (isFuturePublishDate(product?.publishedAt, now)) {
+    return 'scheduled';
+  }
+
+  if (status === 'active') {
+    return 'active';
+  }
+
+  return 'draft';
+}
+
+export function getComputedProductStateMeta(product, now = new Date()) {
+  const state = getComputedProductState(product, now);
+  return {
+    state,
+    label: PRODUCT_STATE_META[state].label,
+    tone: PRODUCT_STATE_META[state].tone,
+  };
 }
 
 function parseMoney(value) {
@@ -471,6 +522,7 @@ export function deriveProduct(product) {
   }));
   const inventorySummary = deriveInventorySummary(variants);
   const status = VALID_STATUSES.includes(product.status) ? product.status : 'draft';
+  const publishedAt = parseIsoDate(product.publishedAt)?.toISOString() || null;
 
   return {
     ...product,
@@ -479,6 +531,7 @@ export function deriveProduct(product) {
     vendor: trimString(product.vendor),
     category: trimString(product.category),
     status,
+    publishedAt,
     tags: normalizeTagList(product.tags),
     sku: trimString(product.sku),
     basePrice: normalizeMoney(product.basePrice),
@@ -647,6 +700,7 @@ export function createEmptyProductDraft() {
     title: 'Untitled Product',
     description: '',
     status: 'draft',
+    publishedAt: null,
     category: '',
     tags: [],
     vendor: '',
@@ -814,6 +868,16 @@ export function validateProduct(product) {
     const variantPriceInput = parseNumericInput(variant.price);
     const variantCompareAtInput = parseNumericInput(variant.compareAtPrice);
     const inventoryInput = parseIntegerInput(variant.inventoryQty);
+    const titleParts = String(variant.title || '')
+      .split('/')
+      .map(part => trimString(part))
+      .filter(Boolean);
+    const resolvedOptionValues = optionNames.reduce((values, optionName, index) => {
+      const explicitValue = trimString(variant.optionValues?.[optionName]);
+      const fallbackValue = trimString(titleParts[index]);
+      values[optionName] = explicitValue || fallbackValue;
+      return values;
+    }, {});
 
     if (!variantPriceInput.isNumeric) {
       rowErrors.price = 'Enter a numeric price.';
@@ -839,9 +903,16 @@ export function validateProduct(product) {
       rowErrors.inventoryQty = 'Inventory cannot be negative.';
     }
 
-    const variantKey = getVariantKey(variant.optionValues, optionNames);
+    if (optionNames.length) {
+      const missingOptionName = optionNames.find((name) => !trimString(resolvedOptionValues[name]));
+      if (missingOptionName) {
+        rowErrors.optionValues = `Variant is missing a ${missingOptionName} value.`;
+      }
+    }
+
+    const variantKey = getVariantKey(resolvedOptionValues, optionNames);
     if (variantKeys.has(variantKey)) {
-      errors.variants = 'Duplicate variant combinations are not allowed.';
+      rowErrors.optionValues = rowErrors.optionValues || 'Duplicate variant option combination.';
     }
     variantKeys.add(variantKey);
 
@@ -908,6 +979,7 @@ export function prepareProductForSave(product) {
     title: trimString(baseProduct.title) || 'Untitled product',
     description: String(baseProduct.description ?? ''),
     status: VALID_STATUSES.includes(baseProduct.status) ? baseProduct.status : 'draft',
+    publishedAt: parseIsoDate(baseProduct.publishedAt)?.toISOString() || null,
     category: trimString(baseProduct.category),
     tags: normalizeTagList(baseProduct.tags),
     vendor: trimString(baseProduct.vendor),

@@ -315,6 +315,7 @@ model Product {
   title       String
   handle      String        @unique
   status      ProductStatus @default(DRAFT)
+  publishedAt DateTime?
   description String?       @db.Text
   vendor      String?
   productType String?

@@ -3,6 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from '../AppShell';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminPage from '../admin/ui/AdminPage';
+import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminSkeleton from '../admin/ui/AdminSkeleton';
+import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import { useCustomers } from '../../context/CustomersContext';
 import { useOrders } from '../../context/OrdersContext';
 import { useProducts } from '../../context/ProductsContext';
@@ -10,10 +16,7 @@ import { useSettings } from '../../context/SettingsContext';
 import styles from './AdminDashboardWorkspace.module.css';
 
 function formatCompactNumber(value) {
-  return new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value);
+  return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
 function formatCurrency(value) {
@@ -29,17 +32,10 @@ function formatRelativeTime(dateValue) {
   const diffMinutes = Math.round((timestamp - Date.now()) / 60000);
   const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
-  if (Math.abs(diffMinutes) < 60) {
-    return formatter.format(diffMinutes, 'minute');
-  }
-
+  if (Math.abs(diffMinutes) < 60) return formatter.format(diffMinutes, 'minute');
   const diffHours = Math.round(diffMinutes / 60);
-  if (Math.abs(diffHours) < 24) {
-    return formatter.format(diffHours, 'hour');
-  }
-
-  const diffDays = Math.round(diffHours / 24);
-  return formatter.format(diffDays, 'day');
+  if (Math.abs(diffHours) < 24) return formatter.format(diffHours, 'hour');
+  return formatter.format(Math.round(diffHours / 24), 'day');
 }
 
 const FALLBACK_ACTIVITY = [
@@ -62,7 +58,7 @@ const FALLBACK_ACTIVITY = [
   {
     id: 'fallback-customers',
     title: 'Customer profiles are synced.',
-    detail: 'Jump into the CRM workspace to inspect activity and lifetime value.',
+    detail: 'Jump into CRM to inspect activity and lifetime value.',
     href: '/customers',
     time: 'Ready',
     icon: 'groups',
@@ -102,27 +98,21 @@ export default function AdminDashboardWorkspace() {
   const overview = useMemo(() => {
     const grossSales = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
     const averageOrderValue = orders.length ? grossSales / orders.length : 0;
-    const activeProducts = products.filter(product => product.status === 'active').length;
+    const activeProducts = products.filter((product) => product.status === 'active').length;
     const inventoryUnits = products.reduce(
       (sum, product) =>
         sum +
-        product.variants.reduce(
-          (variantSum, variant) => variantSum + Number(variant.inventoryQty || 0),
-          0
-        ),
+        product.variants.reduce((variantSum, variant) => variantSum + Number(variant.inventoryQty || 0), 0),
       0
     );
-    const lowStockCount = products.filter(product => {
-      const inventory = product.variants.reduce(
-        (sum, variant) => sum + Number(variant.inventoryQty || 0),
-        0
-      );
+    const lowStockCount = products.filter((product) => {
+      const inventory = product.variants.reduce((sum, variant) => sum + Number(variant.inventoryQty || 0), 0);
       return inventory <= lowInventoryThreshold;
     }).length;
 
     const activity = orders
-      .flatMap(order =>
-        (order.timeline || []).map(entry => ({
+      .flatMap((order) =>
+        (order.timeline || []).map((entry) => ({
           id: `${order.id}-${entry.id}`,
           title: entry.event,
           detail: entry.detail || `${order.orderNumber} for ${order.customer.name}`,
@@ -138,7 +128,7 @@ export default function AdminDashboardWorkspace() {
         }))
       )
       .sort((left, right) => right.timestamp - left.timestamp)
-      .slice(0, 5);
+      .slice(0, 6);
 
     return {
       grossSales,
@@ -152,134 +142,84 @@ export default function AdminDashboardWorkspace() {
 
   const recentActivity = overview.activity.length ? overview.activity : FALLBACK_ACTIVITY;
   const loading = ordersLoading || productsLoading || customersLoading;
+
   const userName =
     [sessionUser?.firstName, sessionUser?.lastName].filter(Boolean).join(' ') ||
     sessionUser?.email ||
     'Admin team';
-  const readiness = products.length
-    ? Math.max(24, Math.min(96, Math.round((overview.activeProducts / products.length) * 100)))
-    : 68;
 
   return (
     <AppShell>
-      <main className={`${styles.dashboardPage} admin-spotlight`}>
-        <section className={styles.hero}>
-          <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>Admin command center</p>
-            <h1 className={`font-headline ${styles.title}`}>Dashboard</h1>
-            <p className={styles.subtitle}>
-              {loading
-                ? 'Syncing the latest commerce signals from orders, products, and customer activity.'
-                : `${settings.storeName} is live. Welcome back, ${userName}.`}
-            </p>
-          </div>
+      <AdminPage>
+        <AdminPageHeader
+          description={
+            loading
+              ? 'Syncing the latest commerce signals from orders, products, and customer activity.'
+              : `${settings.storeName} is live. Welcome back, ${userName}.`
+          }
+          eyebrow="Dashboard"
+          title="Admin command center"
+          actions={<AdminStatusChip tone="success">Live</AdminStatusChip>}
+        />
 
-          <div className={styles.liveBadge}>
-            <span className={styles.liveDot} />
-            <span>Live</span>
-          </div>
-        </section>
+        <AdminStatsGrid>
+          <AdminStatCard label="Orders" meta="Active system queue" value={loading ? '--' : formatCompactNumber(orders.length)} />
+          <AdminStatCard label="Gross sales" meta="Across all recorded orders" value={loading ? '--' : formatCurrency(overview.grossSales)} />
+          <AdminStatCard label="Active catalog" meta="Products currently sellable" value={loading ? '--' : formatCompactNumber(overview.activeProducts)} />
+          <AdminStatCard label="Customers" meta="Profiles available to support" value={loading ? '--' : formatCompactNumber(customers.length)} />
+        </AdminStatsGrid>
 
-        <section className={styles.dashboardGrid}>
-          <div className={styles.metricRail}>
-            <article className={styles.metricCard}>
-              <div className={styles.metricIcon}>
-                <span className="material-symbols-outlined">shopping_bag</span>
-              </div>
-              <span className={styles.metricLabel}>Orders in system</span>
-              <strong className={`font-headline ${styles.metricValue}`}>
-                {loading ? '--' : formatCompactNumber(orders.length)}
-              </strong>
-              <small className={styles.metricMeta}>Live queue across the private order desk</small>
-            </article>
-
-            <article className={styles.metricCard}>
-              <div className={styles.metricIcon}>
-                <span className="material-symbols-outlined">inventory_2</span>
-              </div>
-              <span className={styles.metricLabel}>Active catalog</span>
-              <strong className={`font-headline ${styles.metricValue}`}>
-                {loading ? '--' : formatCompactNumber(overview.activeProducts)}
-              </strong>
-              <small className={styles.metricMeta}>Products currently ready to sell</small>
-            </article>
-
-            <article className={styles.metricCard}>
-              <div className={styles.metricIcon}>
-                <span className="material-symbols-outlined">groups</span>
-              </div>
-              <span className={styles.metricLabel}>Customer profiles</span>
-              <strong className={`font-headline ${styles.metricValue}`}>
-                {loading ? '--' : formatCompactNumber(customers.length)}
-              </strong>
-              <small className={styles.metricMeta}>Audience records available to support the team</small>
-            </article>
-          </div>
-
-          <section className={styles.activityCard}>
+        <div className={styles.grid}>
+          <AdminCard className={styles.primaryCard} variant="panel">
             <div className={styles.cardHeader}>
-              <div>
-                <p className={styles.cardEyebrow}>Recent activity</p>
-                <h2 className={`font-headline ${styles.cardTitle}`}>Operations feed</h2>
+              <h2 className="font-headline">Recent activity</h2>
+              <span className={styles.cardTag}>Operations feed</span>
+            </div>
+
+            {loading ? (
+              <div className={styles.loadingWrap}>
+                <AdminSkeleton variant="table" rows={5} columns={1} />
               </div>
-              <span className={styles.cardTag}>Filtered view</span>
-            </div>
+            ) : (
+              <div className={styles.activityList}>
+                {recentActivity.map((item) => (
+                  <Link className={styles.activityRow} href={item.href} key={item.id}>
+                    <span className={`material-symbols-outlined ${styles.activityIcon}`} aria-hidden="true">{item.icon}</span>
+                    <div className={styles.activityCopy}>
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
+                    </div>
+                    <span className={styles.activityTime}>{item.time}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </AdminCard>
 
-            <div className={styles.activityList}>
-              {recentActivity.map(item => (
-                <Link key={item.id} href={item.href} className={styles.activityRow}>
-                  <div className={styles.activityIcon}>
-                    <span className="material-symbols-outlined">{item.icon}</span>
-                  </div>
-
-                  <div className={styles.activityCopy}>
-                    <strong>{item.title}</strong>
-                    <p>{item.detail}</p>
-                  </div>
-
-                  <small className={styles.activityTime}>{item.time}</small>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <section className={styles.statusCard}>
+          <AdminCard className={styles.sideCard} variant="card">
             <div className={styles.cardHeader}>
-              <div>
-                <p className={styles.cardEyebrow}>System integrity</p>
-                <h2 className={`font-headline ${styles.cardTitle}`}>Commerce status is stable.</h2>
-              </div>
+              <h2 className="font-headline">Commerce health</h2>
             </div>
-
-            <p className={styles.statusText}>
-              Catalog, orders, and customer data are available. The admin workspace is ready for daily operations.
-            </p>
-
-            <div className={styles.statusBarTrack}>
-              <div className={styles.statusBarFill} style={{ width: `${readiness}%` }} />
+            <div className={styles.metricList}>
+              <div><span>AOV</span><strong>{loading ? '--' : formatCurrency(overview.averageOrderValue)}</strong></div>
+              <div><span>Inventory units</span><strong>{loading ? '--' : formatCompactNumber(overview.inventoryUnits)}</strong></div>
+              <div><span>Low stock products</span><strong>{loading ? '--' : formatCompactNumber(overview.lowStockCount)}</strong></div>
             </div>
+          </AdminCard>
 
-            <div className={styles.statusMetrics}>
-              <div>
-                <span>Gross sales</span>
-                <strong>{loading ? '--' : formatCurrency(overview.grossSales)}</strong>
-              </div>
-              <div>
-                <span>AOV</span>
-                <strong>{loading ? '--' : formatCurrency(overview.averageOrderValue)}</strong>
-              </div>
-              <div>
-                <span>Inventory</span>
-                <strong>{loading ? '--' : formatCompactNumber(overview.inventoryUnits)}</strong>
-              </div>
-              <div>
-                <span>Low stock</span>
-                <strong>{loading ? '--' : formatCompactNumber(overview.lowStockCount)}</strong>
-              </div>
+          <AdminCard className={styles.sideCard} variant="card">
+            <div className={styles.cardHeader}>
+              <h2 className="font-headline">Quick links</h2>
             </div>
-          </section>
-        </section>
-      </main>
+            <div className={styles.linkList}>
+              <Link href="/orders">Review order queue</Link>
+              <Link href="/products">Update catalog and inventory</Link>
+              <Link href="/admin/webhooks">Open observability workspace</Link>
+              <Link href="/draft-orders?new=1">Create draft order</Link>
+            </div>
+          </AdminCard>
+        </div>
+      </AdminPage>
     </AppShell>
   );
 }

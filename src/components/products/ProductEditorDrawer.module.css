@@ -61,11 +61,24 @@
   color: var(--on-surface-variant);
 }
 
-.statusRow {
-  margin-top: 0.7rem;
-  display: flex;
-  flex-wrap: wrap;
+.headerActionsWrap {
+  display: inline-flex;
+  align-items: center;
   gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.footerState {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.uploadingNotice {
+  color: var(--on-surface-variant);
+  font-size: 0.75rem;
 }
 
 @media (max-width: 900px) {

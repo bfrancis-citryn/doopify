@@ -1,210 +1,106 @@
-.page {
-  flex: 1;
-  min-height: 0;
-}
-
 .panel {
-  height: 100%;
-  border-radius: 1.5rem;
-  border: 1px solid var(--glass-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
-    rgba(15, 15, 15, 0.88);
-  box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.2rem;
+  display: grid;
+  gap: 0.72rem;
+  padding: 0.82rem;
 }
 
-.header,
-.controls,
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+.searchInput {
+  width: min(20rem, 100%);
 }
 
-.eyebrow {
-  margin: 0 0 0.3rem;
-  color: var(--slate-400);
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.title {
+.notice {
   margin: 0;
-  color: var(--slate-50);
-  font-size: 1.8rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.74rem;
+  padding: 0.55rem 0.68rem;
+  color: var(--on-surface);
+  font-size: 0.78rem;
+  background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
 }
 
-.stats {
-  display: flex;
-  gap: 0.7rem;
-  color: var(--slate-300);
-  font-size: 0.85rem;
+.cellStack {
+  display: grid;
+  gap: 0.12rem;
 }
 
-.control {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+.cellStack strong {
+  color: var(--on-surface);
+  font-size: 0.8rem;
 }
 
-.control span {
-  color: var(--slate-300);
-  font-size: 0.82rem;
-}
-
-.control select,
-.refreshButton,
-.pagination button,
-.actionCell button {
-  min-height: 2.3rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--slate-50);
-  padding: 0.55rem 0.9rem;
-}
-
-.actionCell button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.tableWrap {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1180px;
-}
-
-.table th,
-.table td {
-  text-align: left;
-  padding: 0.75rem 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  vertical-align: top;
-}
-
-.table th {
-  color: var(--slate-300);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.table td {
-  color: var(--slate-100);
-  font-size: 0.86rem;
-}
-
-.hashCell,
-.subtle {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  color: var(--slate-300);
-}
-
-.hashCell {
-  max-width: 240px;
-  word-break: break-all;
-}
-
-.subtle {
-  display: block;
-  max-width: 220px;
-  margin-top: 0.35rem;
-  overflow: hidden;
+.cellStack small {
+  color: var(--on-surface-variant);
   font-size: 0.72rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.actionCell {
-  white-space: nowrap;
-}
-
-.actionCell button + button {
-  margin-left: 0.5rem;
-}
-
-.notice,
-.loading,
-.empty {
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--slate-100);
-  padding: 0.85rem 1rem;
-}
-
-.pagination span {
-  color: var(--slate-300);
-  font-size: 0.85rem;
+.actionGroup {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
 }
 
 .diagnostics {
+  padding: 0.72rem;
   display: grid;
-  gap: 1rem;
-  border-radius: 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 32rem),
-    rgba(255, 255, 255, 0.035);
-  padding: 1rem;
+  gap: 0.5rem;
 }
 
-.diagnostics h2 {
+.diagnostics h3 {
   margin: 0;
-  color: var(--slate-50);
-  font-size: 1rem;
+  color: var(--on-surface);
+  font-size: 0.88rem;
+}
+
+.diagnostics p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
 }
 
 .diagnosticGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .diagnosticGrid div {
-  border-radius: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.18);
-  padding: 0.8rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.66rem;
+  padding: 0.46rem 0.52rem;
+  background: color-mix(in srgb, var(--surface-container-low) 76%, transparent);
 }
 
 .diagnosticGrid span {
   display: block;
-  margin-bottom: 0.35rem;
-  color: var(--slate-400);
-  font-size: 0.72rem;
+  margin-bottom: 0.2rem;
+  color: var(--on-surface-variant);
+  font-size: 0.7rem;
 }
 
 .diagnosticGrid strong {
-  color: var(--slate-50);
-  font-size: 0.9rem;
+  color: var(--on-surface);
+  font-size: 0.78rem;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.pagination span {
+  color: var(--on-surface-variant);
+  font-size: 0.77rem;
 }
 
 @media (max-width: 900px) {
-  .header,
-  .controls,
+  .searchInput {
+    width: 100%;
+  }
+
   .pagination {
-    flex-direction: column;
-    align-items: stretch;
+    justify-content: space-between;
   }
 
   .diagnosticGrid {

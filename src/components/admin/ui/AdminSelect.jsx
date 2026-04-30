@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 function buildClassName(parts) {
   return parts.filter(Boolean).join(" ");
@@ -14,9 +15,12 @@ export default function AdminSelect({
   value = "",
 }) {
   const rootRef = useRef(null);
+  const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [menuStyle, setMenuStyle] = useState({});
+  const [mounted, setMounted] = useState(false);
 
   const selectedOption = useMemo(
     () => options.find((option) => option.value === value) || null,
@@ -35,9 +39,53 @@ export default function AdminSelect({
   }, [open]);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) {
+      return;
+    }
+
+    const updatePosition = () => {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      const menuRect = menuRef.current?.getBoundingClientRect();
+      if (!triggerRect) {
+        return;
+      }
+
+      const viewportWidth = window.innerWidth;
+      const width = Math.max(triggerRect.width, 220);
+      let left = triggerRect.left;
+      if (menuRect?.width && menuRect.width > viewportWidth - 16) {
+        left = 8;
+      } else {
+        left = Math.max(8, Math.min(left, viewportWidth - width - 8));
+      }
+
+      setMenuStyle({
+        "--admin-select-top": `${triggerRect.bottom + 6}px`,
+        "--admin-select-left": `${left}px`,
+        "--admin-select-width": `${width}px`,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event) => {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
+      const target = event.target;
+      const insideRoot = rootRef.current && rootRef.current.contains(target);
+      const insideMenu = menuRef.current && menuRef.current.contains(target);
+      if (!insideRoot && !insideMenu) {
         setOpen(false);
       }
     };
@@ -97,34 +145,45 @@ export default function AdminSelect({
         className="admin-select__trigger"
         onClick={() => setOpen((current) => !current)}
         onKeyDown={handleTriggerKeyDown}
+        ref={triggerRef}
         type="button"
       >
         <span className="admin-select__value">{selectedOption?.label || placeholder}</span>
         <span className="material-symbols-outlined admin-select__chevron" aria-hidden="true">keyboard_arrow_down</span>
       </button>
 
-      {open ? (
-        <div className="admin-select__menu" onKeyDown={handleListKeyDown} ref={menuRef} role="listbox" tabIndex={-1}>
-          {options.map((option, index) => (
-            <button
-              aria-selected={option.value === value}
-              className={buildClassName([
-                "admin-select__option",
-                option.value === value ? "is-selected" : "",
-                index === activeIndex ? "is-active" : "",
-              ])}
-              key={option.value}
-              onClick={() => commitOption(option)}
-              type="button"
+      {mounted && open
+        ? createPortal(
+            <div
+              className="admin-select__menu"
+              onKeyDown={handleListKeyDown}
+              ref={menuRef}
+              role="listbox"
+              style={menuStyle}
+              tabIndex={-1}
             >
-              <span>{option.label}</span>
-              {option.value === value ? (
-                <span className="material-symbols-outlined admin-select__check" aria-hidden="true">check</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
+              {options.map((option, index) => (
+                <button
+                  aria-selected={option.value === value}
+                  className={buildClassName([
+                    "admin-select__option",
+                    option.value === value ? "is-selected" : "",
+                    index === activeIndex ? "is-active" : "",
+                  ])}
+                  key={option.value}
+                  onClick={() => commitOption(option)}
+                  type="button"
+                >
+                  <span>{option.label}</span>
+                  {option.value === value ? (
+                    <span className="material-symbols-outlined admin-select__check" aria-hidden="true">check</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

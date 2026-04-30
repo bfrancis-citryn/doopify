@@ -4,7 +4,10 @@ import { useEffect } from "react";
 
 export default function AdminSpotlightRuntime() {
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(hover: none), (pointer: coarse)").matches
+    ) {
       return;
     }
 
@@ -52,7 +55,15 @@ export default function AdminSpotlightRuntime() {
       clearActive();
     };
 
+    const handlePointerDown = (event) => {
+      const spotlightHost = event.target instanceof Element ? event.target.closest(".admin-spotlight") : null;
+      if (!spotlightHost) {
+        clearActive();
+      }
+    };
+
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerdown", handlePointerDown, { passive: true });
     window.addEventListener("blur", handlePointerLeave);
 
     return () => {
@@ -62,6 +73,7 @@ export default function AdminSpotlightRuntime() {
 
       clearActive();
       window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("blur", handlePointerLeave);
     };
   }, []);

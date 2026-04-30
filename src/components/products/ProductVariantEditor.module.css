@@ -89,6 +89,7 @@
 
 .optionNameInput,
 .valueInput,
+.skuInput,
 .priceInput,
 .inventoryInput {
   width: 100%;
@@ -102,6 +103,7 @@
 
 .optionNameInput:focus,
 .valueInput:focus,
+.skuInput:focus,
 .priceInput:focus,
 .inventoryInput:focus {
   border-color: rgba(255, 255, 255, 0.18);
@@ -111,6 +113,17 @@
 .optionNameInputError {
   border-color: rgba(255, 154, 154, 0.8);
   background: rgba(255, 154, 154, 0.08);
+}
+
+.inputError {
+  border-color: rgba(255, 154, 154, 0.8);
+  background: rgba(255, 154, 154, 0.08);
+}
+
+.fieldErrorText {
+  margin: 0.28rem 0 0;
+  font-size: 0.72rem;
+  color: var(--error);
 }
 
 .optionError,
@@ -283,7 +296,7 @@
 .groupRow,
 .subVariantRow {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1.7fr) minmax(160px, 0.9fr) minmax(110px, 0.55fr);
+  grid-template-columns: 2rem minmax(0, 1.6fr) minmax(160px, 1fr) minmax(160px, 0.85fr) minmax(110px, 0.55fr);
   gap: 0.75rem;
   align-items: center;
 }
@@ -379,6 +392,19 @@
 
 .currencyInputWrap {
   position: relative;
+}
+
+.variantSkuCell {
+  min-width: 0;
+}
+
+.skuInput {
+  width: 100%;
+}
+
+.mutedText {
+  color: var(--slate-500);
+  font-size: 0.76rem;
 }
 
 .currencyPrefix {

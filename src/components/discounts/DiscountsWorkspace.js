@@ -9,8 +9,10 @@ import AdminCard from '../admin/ui/AdminCard';
 import AdminDrawer from '../admin/ui/AdminDrawer';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import AdminFormSection from '../admin/ui/AdminFormSection';
+import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminSelect from '../admin/ui/AdminSelect';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminToolbar from '../admin/ui/AdminToolbar';
@@ -59,6 +61,18 @@ export default function DiscountsWorkspace() {
   }), [discounts, searchQuery, statusFilter, typeFilter, methodFilter]);
 
   const selectedDiscount = visibleDiscounts.find(discount => discount.id === selectedDiscountId) || discounts.find(discount => discount.id === selectedDiscountId) || null;
+  const typeOptions = [{ value: 'all', label: 'All types' }, ...DISCOUNT_TYPES.map((type) => ({ value: type, label: type }))];
+  const statusOptions = [{ value: 'all', label: 'All status' }, ...DISCOUNT_STATUSES.map((status) => ({ value: status, label: status }))];
+  const methodOptions = [{ value: 'all', label: 'All methods' }, ...DISCOUNT_METHODS.map((method) => ({ value: method, label: method }))];
+  const valueTypeOptions = [
+    { value: 'percentage', label: 'Percentage' },
+    { value: 'fixed', label: 'Fixed amount' },
+  ];
+  const requirementTypeOptions = [
+    { value: 'none', label: 'None' },
+    { value: 'subtotal', label: 'Minimum purchase amount' },
+    { value: 'quantity', label: 'Minimum quantity of items' },
+  ];
 
   const openBuilder = type => {
     setBuilderMode(type);
@@ -93,24 +107,23 @@ export default function DiscountsWorkspace() {
   return (
     <AppShell onSearchChange={event => setSearchQuery(event.target.value)} searchValue={searchQuery}>
       <AdminPage>
-        <AdminCard className={styles.panel} variant="panel">
-          <AdminPageHeader
-            actions={(
-              <>
-                <AdminButton onClick={() => openBuilder('automatic')} size="sm" variant="secondary">Create automatic discount</AdminButton>
-                <AdminButton onClick={() => openBuilder('discount code')} size="sm" variant="primary">Create discount code</AdminButton>
-              </>
-            )}
-            eyebrow="Discounts"
-            title="Manage discount codes and automatic discounts"
-          />
+        <AdminPageHeader
+          actions={(
+            <>
+              <AdminButton onClick={() => openBuilder('automatic')} size="sm" variant="secondary">Create automatic discount</AdminButton>
+              <AdminButton onClick={() => openBuilder('discount code')} size="sm" variant="primary">Create discount code</AdminButton>
+            </>
+          )}
+          description="Create and manage discount codes and automatic promotions."
+          eyebrow="Discounts"
+          title="Promotions"
+        />
 
-          <AdminToolbar
-            actions={null}
-          >
-            <select className={styles.field} onChange={event => setTypeFilter(event.target.value)} value={typeFilter}><option value="all">All types</option>{DISCOUNT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
-            <select className={styles.field} onChange={event => setStatusFilter(event.target.value)} value={statusFilter}><option value="all">All status</option>{DISCOUNT_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}</select>
-            <select className={styles.field} onChange={event => setMethodFilter(event.target.value)} value={methodFilter}><option value="all">All methods</option>{DISCOUNT_METHODS.map(method => <option key={method} value={method}>{method}</option>)}</select>
+        <AdminCard className={styles.panel} variant="panel">
+          <AdminToolbar>
+            <AdminSelect onChange={setTypeFilter} options={typeOptions} value={typeFilter} />
+            <AdminSelect onChange={setStatusFilter} options={statusOptions} value={statusFilter} />
+            <AdminSelect onChange={setMethodFilter} options={methodOptions} value={methodFilter} />
           </AdminToolbar>
 
           {visibleDiscounts.length ? (
@@ -170,18 +183,18 @@ export default function DiscountsWorkspace() {
                 <div className={styles.drawerBody}>
                   <AdminFormSection eyebrow="Identity" title="Basic settings">
                     <div className={styles.formGrid}>
-                      <input onChange={event => setDraftDiscount(current => ({ ...current, title: event.target.value, code: event.target.value }))} placeholder={builderMode === 'discount code' ? 'SUMMER20' : 'Summer auto discount'} type="text" value={draftDiscount.title} />
-                      <select onChange={event => setDraftDiscount(current => ({ ...current, method: event.target.value }))} value={draftDiscount.method}>{DISCOUNT_METHODS.map(method => <option key={method} value={method}>{method}</option>)}</select>
-                      <select onChange={event => setDraftDiscount(current => ({ ...current, valueType: event.target.value }))} value={draftDiscount.valueType}><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></select>
-                      <input onChange={event => setDraftDiscount(current => ({ ...current, value: event.target.value }))} placeholder="10" type="text" value={draftDiscount.value} />
+                      <AdminInput onChange={event => setDraftDiscount(current => ({ ...current, title: event.target.value, code: event.target.value }))} placeholder={builderMode === 'discount code' ? 'SUMMER20' : 'Summer auto discount'} type="text" value={draftDiscount.title} />
+                      <AdminSelect onChange={value => setDraftDiscount(current => ({ ...current, method: value }))} options={DISCOUNT_METHODS.map((method) => ({ value: method, label: method }))} value={draftDiscount.method} />
+                      <AdminSelect onChange={value => setDraftDiscount(current => ({ ...current, valueType: value }))} options={valueTypeOptions} value={draftDiscount.valueType} />
+                      <AdminInput onChange={event => setDraftDiscount(current => ({ ...current, value: event.target.value }))} placeholder="10" type="text" value={draftDiscount.value} />
                     </div>
                   </AdminFormSection>
                   <AdminFormSection eyebrow="Rules" title="Requirements">
                     <div className={styles.formGrid}>
-                      <select onChange={event => setDraftDiscount(current => ({ ...current, minimumRequirementType: event.target.value }))} value={draftDiscount.minimumRequirementType}><option value="none">None</option><option value="subtotal">Minimum purchase amount</option><option value="quantity">Minimum quantity of items</option></select>
-                      <input onChange={event => setDraftDiscount(current => ({ ...current, minimumRequirementValue: event.target.value }))} placeholder="50" type="text" value={draftDiscount.minimumRequirementValue} />
-                      <input onChange={event => setDraftDiscount(current => ({ ...current, startsAt: event.target.value }))} type="datetime-local" value={draftDiscount.startsAt} />
-                      <input onChange={event => setDraftDiscount(current => ({ ...current, endsAt: event.target.value }))} type="datetime-local" value={draftDiscount.endsAt} />
+                      <AdminSelect onChange={value => setDraftDiscount(current => ({ ...current, minimumRequirementType: value }))} options={requirementTypeOptions} value={draftDiscount.minimumRequirementType} />
+                      <AdminInput onChange={event => setDraftDiscount(current => ({ ...current, minimumRequirementValue: event.target.value }))} placeholder="50" type="text" value={draftDiscount.minimumRequirementValue} />
+                      <AdminInput onChange={event => setDraftDiscount(current => ({ ...current, startsAt: event.target.value }))} type="datetime-local" value={draftDiscount.startsAt} />
+                      <AdminInput onChange={event => setDraftDiscount(current => ({ ...current, endsAt: event.target.value }))} type="datetime-local" value={draftDiscount.endsAt} />
                     </div>
                   </AdminFormSection>
                 </div>

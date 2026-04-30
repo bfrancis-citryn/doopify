@@ -1,16 +1,17 @@
 "use client";
 
+import { createPortal } from 'react-dom';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ToastViewport.module.css';
 
 export default function ToastViewport() {
   const { toasts, actions } = useProductStore();
 
-  if (!toasts.length) {
+  if (!toasts.length || typeof document === 'undefined') {
     return null;
   }
 
-  return (
+  const toastUi = (
     <div className={styles.viewport}>
       {toasts.map(toast => (
         <div key={toast.id} className={`${styles.toast} ${styles[`toast_${toast.tone}`] || ''}`}>
@@ -25,4 +26,6 @@ export default function ToastViewport() {
       ))}
     </div>
   );
+
+  return createPortal(toastUi, document.body);
 }

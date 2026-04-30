@@ -42,6 +42,7 @@ const updateSchema = z.object({
   title: z.string().min(1).optional(),
   handle: z.string().optional(),
   status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
+  publishedAt: z.string().datetime().nullable().optional(),
   description: z.string().optional(),
   vendor: z.string().optional(),
   productType: z.string().optional(),
@@ -89,6 +90,12 @@ export async function PATCH(req: Request, { params }: Params) {
     const { options, variants, media, ...productFields } = parsed.data
     let product = await updateProduct(id, {
       ...productFields,
+      publishedAt:
+        productFields.publishedAt === undefined
+          ? undefined
+          : productFields.publishedAt
+            ? new Date(productFields.publishedAt)
+            : null,
       variants: variants?.map((variant) => ({
         id: variant.id,
         title: variant.title,

@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AdminUploadDropzone from '../admin/ui/AdminUploadDropzone';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductMediaManager.module.css';
 
@@ -126,25 +127,32 @@ export default function ProductMediaManager() {
     event.target.value = '';
   };
 
+  const handleDropzoneUpload = async files => {
+    const uploadedAssets = await actions.addImagesFromFiles(files);
+
+    if (uploadedAssets?.length) {
+      setLibraryAssets(currentAssets =>
+        mergeLibraryAssets(
+          currentAssets,
+          uploadedAssets.map(asset => ({
+            ...asset,
+            createdAt: asset.createdAt || new Date().toISOString(),
+            linkedProducts: asset.linkedProducts || 0,
+          }))
+        )
+      );
+      setActiveTab('gallery');
+    }
+  };
+
   const renderGalleryTab = () => (
     <>
-      <div className={styles.previewPanel}>
-        {previewImage ? (
-          <Image
-            alt={previewImage.alt}
-            className={styles.previewImage}
-            fill
-            src={previewImage.src}
-            unoptimized
-          />
-        ) : (
-          <div className={styles.previewEmpty}>
-            <span className="material-symbols-outlined">image</span>
-            <p className={`font-headline ${styles.previewEmptyTitle}`}>No media yet</p>
-            <p className={styles.previewEmptyText}>Upload files or pull from your media library to build the gallery.</p>
-          </div>
-        )}
-      </div>
+      <AdminUploadDropzone
+        className={styles.uploadZone}
+        description="Drop files to upload and attach directly to this product gallery."
+        onFilesSelected={handleDropzoneUpload}
+        title="Drag and drop product media"
+      />
 
       <div className={styles.actionRow}>
         <button className={styles.actionButtonPrimary} onClick={() => uploadInputRef.current?.click()} type="button">
@@ -219,6 +227,11 @@ export default function ProductMediaManager() {
           >
             <div className={styles.thumbnailTileImageWrap}>
               <Image alt={image.alt} className={styles.thumbnailImage} fill src={image.src} unoptimized />
+              {image.id === editor.previewImageId ? (
+                <span className={styles.selectedIndicator}>
+                  <span className="material-symbols-outlined" aria-hidden="true">check</span>
+                </span>
+              ) : null}
             </div>
             <div className={styles.tileFooter}>
               <span className={styles.tilePosition}>{index + 1}</span>
@@ -281,6 +294,13 @@ export default function ProductMediaManager() {
         </div>
       </div>
 
+      <AdminUploadDropzone
+        className={styles.uploadZone}
+        description="Drop files here to upload, then add them into this product's gallery."
+        onFilesSelected={handleDropzoneUpload}
+        title="Drag and drop to media library"
+      />
+
       {libraryError ? <p className={styles.libraryError}>{libraryError}</p> : null}
 
       {isLibraryLoading ? (
@@ -291,7 +311,7 @@ export default function ProductMediaManager() {
             const isInGallery = assetIdsInGallery.has(asset.id);
 
             return (
-              <div className={styles.libraryCard} key={asset.id}>
+              <div className={isInGallery ? `${styles.libraryCard} ${styles.libraryCardSelected}` : styles.libraryCard} key={asset.id}>
                 <div className={styles.libraryImageWrap}>
                   <Image
                     alt={asset.altText || asset.filename || 'Media library image'}
@@ -300,6 +320,11 @@ export default function ProductMediaManager() {
                     src={asset.url}
                     unoptimized
                   />
+                  {isInGallery ? (
+                    <span className={styles.selectedIndicator}>
+                      <span className="material-symbols-outlined" aria-hidden="true">check</span>
+                    </span>
+                  ) : null}
                 </div>
                 <div className={styles.libraryMeta}>
                   <p className={styles.libraryName}>{asset.filename || 'Untitled asset'}</p>

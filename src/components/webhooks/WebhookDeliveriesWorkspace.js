@@ -3,6 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AppShell from '../AppShell';
+import AdminButton from '../admin/ui/AdminButton';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminPage from '../admin/ui/AdminPage';
+import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminSelect from '../admin/ui/AdminSelect';
+import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
+import AdminTable from '../admin/ui/AdminTable';
+import AdminToolbar from '../admin/ui/AdminToolbar';
 import styles from './WebhookDeliveriesWorkspace.module.css';
 
 const INBOUND_STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
@@ -33,23 +43,13 @@ function getReplayDisabledReason(delivery) {
 
 function getEmailResendDisabledReason(delivery) {
   if (!delivery) return 'Email delivery is unavailable.';
-  if (!EMAIL_RESEND_ELIGIBLE_STATUSES.includes(delivery.status)) {
-    return 'Only failed, bounced, or complained deliveries can be resent.';
-  }
-  if (delivery.template !== 'order_confirmation') {
-    return 'Only order confirmation deliveries support safe resend.';
-  }
-  if (!delivery.orderId) {
-    return 'Safe resend requires a linked order.';
-  }
+  if (!EMAIL_RESEND_ELIGIBLE_STATUSES.includes(delivery.status)) return 'Only failed, bounced, or complained deliveries can be resent.';
+  if (delivery.template !== 'order_confirmation') return 'Only order confirmation deliveries support safe resend.';
+  if (!delivery.orderId) return 'Safe resend requires a linked order.';
   return '';
 }
 
-function getModeLabel(mode) {
-  if (mode === 'outbound') return 'Outbound merchant webhooks';
-  if (mode === 'email') return 'Transactional email deliveries';
-  return 'Inbound provider webhooks';
-}
+const toSelectOptions = (values, allLabel) => [{ value: 'ALL', label: allLabel }, ...values.map((value) => ({ value, label: value }))];
 
 export default function WebhookDeliveriesWorkspace() {
   const [mode, setMode] = useState('inbound');
@@ -90,12 +90,8 @@ export default function WebhookDeliveriesWorkspace() {
         page: String(nextPage),
         pageSize: String(pagination.pageSize || 20),
       });
-      if (search.trim()) {
-        params.set('search', search.trim());
-      }
-      if (status !== 'ALL') {
-        params.set('status', status);
-      }
+      if (search.trim()) params.set('search', search.trim());
+      if (status !== 'ALL') params.set('status', status);
 
       const response = await fetch(`/api/webhook-deliveries?${params.toString()}`);
       const json = await response.json();
@@ -125,9 +121,7 @@ export default function WebhookDeliveriesWorkspace() {
         page: String(nextPage),
         pageSize: String(outboundPagination.pageSize || 20),
       });
-      if (outboundStatus !== 'ALL') {
-        params.set('status', outboundStatus);
-      }
+      if (outboundStatus !== 'ALL') params.set('status', outboundStatus);
 
       const response = await fetch(`/api/outbound-webhook-deliveries?${params.toString()}`);
       const json = await response.json();
@@ -157,16 +151,10 @@ export default function WebhookDeliveriesWorkspace() {
         page: String(nextPage),
         pageSize: String(emailPagination.pageSize || 20),
       });
-      if (emailStatus !== 'ALL') {
-        params.set('status', emailStatus);
-      }
-      if (emailTemplate !== 'ALL') {
-        params.set('template', emailTemplate);
-      }
+      if (emailStatus !== 'ALL') params.set('status', emailStatus);
+      if (emailTemplate !== 'ALL') params.set('template', emailTemplate);
 
-      const response = await fetch(`/api/email-deliveries?${params.toString()}`, {
-        cache: 'no-store',
-      });
+      const response = await fetch(`/api/email-deliveries?${params.toString()}`, { cache: 'no-store' });
       const json = await response.json();
       if (!json.success) {
         setNotice(json.error || 'Email deliveries could not be loaded.');
@@ -187,24 +175,15 @@ export default function WebhookDeliveriesWorkspace() {
   }, [emailPagination.pageSize, emailStatus, emailTemplate]);
 
   useEffect(() => {
-    if (mode === 'inbound') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadDeliveries(1);
-    }
+    if (mode === 'inbound') loadDeliveries(1);
   }, [mode, loadDeliveries]);
 
   useEffect(() => {
-    if (mode === 'outbound') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadOutboundDeliveries(1);
-    }
+    if (mode === 'outbound') loadOutboundDeliveries(1);
   }, [mode, loadOutboundDeliveries]);
 
   useEffect(() => {
-    if (mode === 'email') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadEmailDeliveries(1);
-    }
+    if (mode === 'email') loadEmailDeliveries(1);
   }, [mode, loadEmailDeliveries]);
 
   const retryCount = useMemo(
@@ -236,25 +215,9 @@ export default function WebhookDeliveriesWorkspace() {
     () => emailDeliveries.filter((delivery) => delivery.status === 'SENT').length,
     [emailDeliveries]
   );
-  const fulfillmentQueuedCount = useMemo(
-    () =>
-      emailDeliveries.filter(
-        (delivery) => delivery.template === 'fulfillment_tracking' && ['PENDING', 'RETRYING'].includes(delivery.status)
-      ).length,
-    [emailDeliveries]
-  );
-  const fulfillmentSentCount = useMemo(
-    () =>
-      emailDeliveries.filter(
-        (delivery) => delivery.template === 'fulfillment_tracking' && delivery.status === 'SENT'
-      ).length,
-    [emailDeliveries]
-  );
 
   async function handleReplay(delivery) {
-    if (!delivery?.id) {
-      return;
-    }
+    if (!delivery?.id) return;
 
     const disabledReason = getReplayDisabledReason(delivery);
     if (disabledReason) {
@@ -266,9 +229,7 @@ export default function WebhookDeliveriesWorkspace() {
     setNotice('');
 
     try {
-      const response = await fetch(`/api/webhook-deliveries/${delivery.id}/replay`, {
-        method: 'POST',
-      });
+      const response = await fetch(`/api/webhook-deliveries/${delivery.id}/replay`, { method: 'POST' });
       const json = await response.json();
 
       if (!json.success) {
@@ -293,9 +254,7 @@ export default function WebhookDeliveriesWorkspace() {
     setNotice('');
 
     try {
-      const response = await fetch(`/api/outbound-webhook-deliveries/${delivery.id}/retry`, {
-        method: 'POST',
-      });
+      const response = await fetch(`/api/outbound-webhook-deliveries/${delivery.id}/retry`, { method: 'POST' });
       const json = await response.json();
       if (!json.success) {
         setNotice(json.error || 'Outbound webhook retry failed.');
@@ -318,9 +277,7 @@ export default function WebhookDeliveriesWorkspace() {
     setNotice('');
 
     try {
-      const response = await fetch(`/api/email-deliveries/${delivery.id}/resend`, {
-        method: 'POST',
-      });
+      const response = await fetch(`/api/email-deliveries/${delivery.id}/resend`, { method: 'POST' });
       const json = await response.json();
       if (!json.success) {
         setNotice(json.error || 'Email resend failed.');
@@ -348,9 +305,7 @@ export default function WebhookDeliveriesWorkspace() {
     }
 
     try {
-      const response = await fetch(`/api/webhook-deliveries/${deliveryId}`, {
-        cache: 'no-store',
-      });
+      const response = await fetch(`/api/webhook-deliveries/${deliveryId}`, { cache: 'no-store' });
       const json = await response.json();
       if (!json.success) {
         setNotice(json.error || 'Webhook diagnostics could not be loaded.');
@@ -363,9 +318,7 @@ export default function WebhookDeliveriesWorkspace() {
       console.error('[WebhookDeliveriesWorkspace] diagnostics failed', error);
       setNotice('Webhook diagnostics could not be loaded.');
     } finally {
-      if (showLoading) {
-        setInspectingId(null);
-      }
+      if (showLoading) setInspectingId(null);
     }
   }
 
@@ -378,9 +331,7 @@ export default function WebhookDeliveriesWorkspace() {
     }
 
     try {
-      const response = await fetch(`/api/email-deliveries/${deliveryId}`, {
-        cache: 'no-store',
-      });
+      const response = await fetch(`/api/email-deliveries/${deliveryId}`, { cache: 'no-store' });
       const json = await response.json();
       if (!json.success) {
         setNotice(json.error || 'Email delivery details could not be loaded.');
@@ -393,477 +344,286 @@ export default function WebhookDeliveriesWorkspace() {
       console.error('[WebhookDeliveriesWorkspace] email diagnostics failed', error);
       setNotice('Email delivery details could not be loaded.');
     } finally {
-      if (showLoading) {
-        setEmailInspectingId(null);
-      }
+      if (showLoading) setEmailInspectingId(null);
     }
   }
 
-  return (
-    <AppShell
-      onCreateOrder={() => {
-        if (mode === 'outbound') return loadOutboundDeliveries(1);
-        if (mode === 'email') return loadEmailDeliveries(1);
-        return loadDeliveries(1);
-      }}
-      onNotificationsClick={() => setNotice(`${getModeLabel(mode)} feed is live.`)}
-      onQuickActionClick={() => {
-        if (mode === 'email') {
-          setNotice('Use status filters and inspect delivery details before resending.');
-          return;
-        }
+  const isInbound = mode === 'inbound';
+  const isOutbound = mode === 'outbound';
+  const isEmail = mode === 'email';
 
-        setNotice('Use filters to narrow webhook deliveries before replay or retry.');
-      }}
-      onSearchChange={(event) => {
-        if (mode === 'inbound') {
-          setSearch(event.target.value);
-        }
-      }}
-      primaryActionLabel="Refresh deliveries"
-      searchPlaceholder={mode === 'inbound' ? 'Search event id or error...' : 'Search is available for inbound webhooks'}
-      searchValue={mode === 'inbound' ? search : ''}
-    >
-      <div className={styles.page}>
-        <section className={styles.panel}>
-          <div className={styles.header}>
-            <div>
-              <p className={styles.eyebrow}>Observability</p>
-              <h1 className={styles.title}>Webhook and Email Deliveries</h1>
+  const activeRows = isInbound ? deliveries : isOutbound ? outboundDeliveries : emailDeliveries;
+  const activeLoading = isInbound ? loading : isOutbound ? outboundLoading : emailLoading;
+
+  const columns = useMemo(() => {
+    if (isOutbound) {
+      return [
+        {
+          key: 'integration',
+          header: 'Integration',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{delivery.integration?.name || 'Integration'}</strong>
+              <small>{delivery.integration?.webhookUrl || 'No URL'}</small>
             </div>
-            <div className={styles.stats}>
-              {mode === 'inbound' ? (
-                <>
-                  <span>{pagination.total} inbound</span>
-                  <span>{processedCount} processed</span>
-                  <span>{retryCount} retry watch</span>
-                </>
-              ) : mode === 'outbound' ? (
-                <>
-                  <span>{outboundPagination.total} outbound</span>
-                  <span>{outboundSuccessCount} successful</span>
-                  <span>{outboundRetryCount} retry/dead-letter</span>
-                </>
-              ) : (
-                <>
-                  <span>{emailPagination.total} emails</span>
-                  <span>{emailSentCount} sent</span>
-                  <span>{emailRetryWatchCount} attention needed</span>
-                  <span>{fulfillmentQueuedCount} fulfillment queued</span>
-                  <span>{fulfillmentSentCount} fulfillment sent</span>
-                </>
-              )}
+          ),
+        },
+        { key: 'event', header: 'Event', render: (delivery) => formatEventType(delivery.event) },
+        { key: 'status', header: 'Status', render: (delivery) => <AdminStatusChip tone={delivery.status === 'SUCCESS' ? 'success' : delivery.status === 'EXHAUSTED' ? 'danger' : 'warning'}>{delivery.status}</AdminStatusChip> },
+        {
+          key: 'attempts',
+          header: 'Attempts',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{delivery.attempts}</strong>
+              <small>Last retry: {formatTimestamp(delivery.lastRetriedAt, 'Never')}</small>
             </div>
+          ),
+        },
+        { key: 'response', header: 'Response', render: (delivery) => delivery.statusCode || '-' },
+        {
+          key: 'actions',
+          header: '',
+          render: (delivery) => (
+            <AdminButton disabled={retryingOutboundId === delivery.id} onClick={() => handleRetryOutbound(delivery)} size="sm" variant="secondary">
+              {retryingOutboundId === delivery.id ? 'Retrying...' : 'Retry now'}
+            </AdminButton>
+          ),
+        },
+      ];
+    }
+
+    if (isEmail) {
+      return [
+        {
+          key: 'recipient',
+          header: 'Recipient',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{delivery.recipientEmail}</strong>
+              <small>{delivery.subject}</small>
+            </div>
+          ),
+        },
+        { key: 'template', header: 'Template', render: (delivery) => formatEventType(delivery.template) },
+        { key: 'status', header: 'Status', render: (delivery) => <AdminStatusChip tone={delivery.status === 'SENT' ? 'success' : EMAIL_RESEND_ELIGIBLE_STATUSES.includes(delivery.status) ? 'danger' : 'warning'}>{delivery.status}</AdminStatusChip> },
+        { key: 'attempts', header: 'Attempts', render: (delivery) => delivery.attempts },
+        { key: 'provider', header: 'Provider', render: (delivery) => delivery.provider },
+        {
+          key: 'actions',
+          header: '',
+          render: (delivery) => {
+            const resendDisabledReason = getEmailResendDisabledReason(delivery);
+            return (
+              <div className={styles.actionGroup}>
+                <AdminButton disabled={emailInspectingId === delivery.id} onClick={() => loadEmailDiagnostics(delivery.id)} size="sm" variant="secondary">
+                  {emailInspectingId === delivery.id ? 'Loading...' : 'View'}
+                </AdminButton>
+                <AdminButton
+                  disabled={resendingEmailId === delivery.id || Boolean(resendDisabledReason)}
+                  onClick={() => handleResendEmail(delivery)}
+                  size="sm"
+                  title={resendDisabledReason || 'Safely resend this transactional email'}
+                  variant="secondary"
+                >
+                  {resendingEmailId === delivery.id ? 'Resending...' : 'Resend'}
+                </AdminButton>
+              </div>
+            );
+          },
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'event',
+        header: 'Provider event',
+        render: (delivery) => (
+          <div className={styles.cellStack}>
+            <strong>{delivery.providerEventId}</strong>
+            <small>{delivery.payloadHash}</small>
           </div>
+        ),
+      },
+      { key: 'type', header: 'Type', render: (delivery) => formatEventType(delivery.eventType) },
+      { key: 'status', header: 'Status', render: (delivery) => <AdminStatusChip tone={delivery.status === 'PROCESSED' ? 'success' : delivery.status === 'FAILED' ? 'danger' : 'warning'}>{delivery.status}</AdminStatusChip> },
+      {
+        key: 'attempts',
+        header: 'Attempts',
+        render: (delivery) => (
+          <div className={styles.cellStack}>
+            <strong>{delivery.attempts}</strong>
+            <small>Last retry: {formatTimestamp(delivery.lastRetriedAt, 'Never')}</small>
+          </div>
+        ),
+      },
+      { key: 'payload', header: 'Payload', render: (delivery) => delivery.hasVerifiedPayload ? 'Verified local payload' : 'Hash only' },
+      {
+        key: 'actions',
+        header: '',
+        render: (delivery) => {
+          const disabledReason = getReplayDisabledReason(delivery);
+          return (
+            <div className={styles.actionGroup}>
+              <AdminButton
+                disabled={replayingId === delivery.id || Boolean(disabledReason)}
+                onClick={() => handleReplay(delivery)}
+                size="sm"
+                title={disabledReason || 'Replay stored payload'}
+                variant="secondary"
+              >
+                {replayingId === delivery.id ? 'Replaying...' : 'Replay'}
+              </AdminButton>
+              <AdminButton disabled={inspectingId === delivery.id} onClick={() => loadDiagnostics(delivery.id)} size="sm" variant="secondary">
+                {inspectingId === delivery.id ? 'Inspecting...' : 'Inspect'}
+              </AdminButton>
+            </div>
+          );
+        },
+      },
+    ];
+  }, [
+    emailInspectingId,
+    inspectingId,
+    isEmail,
+    isOutbound,
+    replayingId,
+    resendingEmailId,
+    retryingOutboundId,
+  ]);
 
-          <div className={styles.controls}>
-            <label className={styles.control}>
-              <span>Surface</span>
-              <select
-                value={mode}
-                onChange={(event) => {
-                  setMode(event.target.value);
+  const currentPage = isInbound ? pagination.page : isOutbound ? outboundPagination.page : emailPagination.page;
+  const totalPages = isInbound ? (pagination.totalPages || 1) : isOutbound ? (outboundPagination.totalPages || 1) : (emailPagination.totalPages || 1);
+
+  const changePage = (nextPage) => {
+    if (isInbound) return loadDeliveries(nextPage);
+    if (isOutbound) return loadOutboundDeliveries(nextPage);
+    return loadEmailDeliveries(nextPage);
+  };
+
+  return (
+    <AppShell>
+      <AdminPage>
+        <AdminPageHeader
+          description="Inbound provider webhooks, outbound merchant webhooks, and transactional email delivery visibility."
+          eyebrow="Observability"
+          title="Webhook and email deliveries"
+          actions={<AdminButton onClick={() => changePage(currentPage)} size="sm" variant="secondary">Refresh</AdminButton>}
+        />
+
+        <AdminStatsGrid>
+          {isInbound ? (
+            <>
+              <AdminStatCard label="Inbound" value={String(pagination.total)} />
+              <AdminStatCard label="Processed" value={String(processedCount)} />
+              <AdminStatCard label="Retry watch" value={String(retryCount)} />
+              <AdminStatCard label="Page" value={`${pagination.page}/${pagination.totalPages || 1}`} />
+            </>
+          ) : isOutbound ? (
+            <>
+              <AdminStatCard label="Outbound" value={String(outboundPagination.total)} />
+              <AdminStatCard label="Successful" value={String(outboundSuccessCount)} />
+              <AdminStatCard label="Retry/dead-letter" value={String(outboundRetryCount)} />
+              <AdminStatCard label="Page" value={`${outboundPagination.page}/${outboundPagination.totalPages || 1}`} />
+            </>
+          ) : (
+            <>
+              <AdminStatCard label="Emails" value={String(emailPagination.total)} />
+              <AdminStatCard label="Sent" value={String(emailSentCount)} />
+              <AdminStatCard label="Needs attention" value={String(emailRetryWatchCount)} />
+              <AdminStatCard label="Page" value={`${emailPagination.page}/${emailPagination.totalPages || 1}`} />
+            </>
+          )}
+        </AdminStatsGrid>
+
+        <AdminCard className={styles.panel} variant="panel">
+          <AdminToolbar
+            actions={
+              <AdminSelect
+                onChange={(value) => {
+                  setMode(value);
                   setNotice('');
                 }}
-              >
-                <option value="inbound">Inbound provider webhooks</option>
-                <option value="outbound">Outbound merchant webhooks</option>
-                <option value="email">Transactional email deliveries</option>
-              </select>
-            </label>
-            {mode === 'inbound' ? (
-              <label className={styles.control}>
-                <span>Status</span>
-                <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                  {INBOUND_STATUS_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'ALL' ? 'All statuses' : option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : mode === 'outbound' ? (
-              <label className={styles.control}>
-                <span>Status</span>
-                <select value={outboundStatus} onChange={(event) => setOutboundStatus(event.target.value)}>
-                  {OUTBOUND_STATUS_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'ALL' ? 'All statuses' : option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
+                options={[
+                  { value: 'inbound', label: 'Inbound provider webhooks' },
+                  { value: 'outbound', label: 'Outbound merchant webhooks' },
+                  { value: 'email', label: 'Transactional email deliveries' },
+                ]}
+                value={mode}
+              />
+            }
+          >
+            {isInbound ? (
               <>
-                <label className={styles.control}>
-                  <span>Status</span>
-                  <select value={emailStatus} onChange={(event) => setEmailStatus(event.target.value)}>
-                    {EMAIL_STATUS_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option === 'ALL' ? 'All statuses' : option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.control}>
-                  <span>Template</span>
-                  <select value={emailTemplate} onChange={(event) => setEmailTemplate(event.target.value)}>
-                    {EMAIL_TEMPLATE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <AdminSelect onChange={setStatus} options={toSelectOptions(INBOUND_STATUS_OPTIONS, 'All statuses')} value={status} />
+                <input
+                  className={styles.searchInput}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search provider event id or error..."
+                  type="search"
+                  value={search}
+                />
               </>
-            )}
-            <button
-              className={styles.refreshButton}
-              type="button"
-              onClick={() => {
-                if (mode === 'outbound') return loadOutboundDeliveries(outboundPagination.page);
-                if (mode === 'email') return loadEmailDeliveries(emailPagination.page);
-                return loadDeliveries(pagination.page);
-              }}
-            >
-              Refresh
-            </button>
-          </div>
+            ) : null}
+
+            {isOutbound ? (
+              <AdminSelect onChange={setOutboundStatus} options={toSelectOptions(OUTBOUND_STATUS_OPTIONS, 'All statuses')} value={outboundStatus} />
+            ) : null}
+
+            {isEmail ? (
+              <>
+                <AdminSelect onChange={setEmailStatus} options={toSelectOptions(EMAIL_STATUS_OPTIONS, 'All statuses')} value={emailStatus} />
+                <AdminSelect onChange={setEmailTemplate} options={EMAIL_TEMPLATE_OPTIONS} value={emailTemplate} />
+              </>
+            ) : null}
+          </AdminToolbar>
 
           {notice ? <p className={styles.notice}>{notice}</p> : null}
 
-          {mode === 'outbound' ? (
-            outboundLoading ? (
-              <div className={styles.loading}>Loading outbound webhook deliveries...</div>
-            ) : outboundDeliveries.length ? (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Integration</th>
-                      <th>Event</th>
-                      <th>Status</th>
-                      <th>Attempts</th>
-                      <th>Response</th>
-                      <th>Next retry</th>
-                      <th>Error</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {outboundDeliveries.map((delivery) => (
-                      <tr key={delivery.id}>
-                        <td>
-                          <strong>{delivery.integration?.name || 'Integration'}</strong>
-                          <span className={styles.subtle}>{delivery.integration?.webhookUrl || 'No URL'}</span>
-                        </td>
-                        <td>{formatEventType(delivery.event)}</td>
-                        <td>{delivery.status}</td>
-                        <td>
-                          {delivery.attempts}
-                          <span className={styles.subtle}>Last retry: {formatTimestamp(delivery.lastRetriedAt, 'Never')}</span>
-                        </td>
-                        <td>
-                          {delivery.statusCode || '-' }
-                          <span className={styles.subtle}>{delivery.responseBody || 'No response body'}</span>
-                        </td>
-                        <td>{formatTimestamp(delivery.nextRetryAt)}</td>
-                        <td>{delivery.lastError || 'None'}</td>
-                        <td className={styles.actionCell}>
-                          <button
-                            type="button"
-                            disabled={retryingOutboundId === delivery.id}
-                            onClick={() => handleRetryOutbound(delivery)}
-                          >
-                            {retryingOutboundId === delivery.id ? 'Retrying...' : 'Retry now'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className={styles.empty}>No outbound webhook deliveries match this filter.</div>
-            )
-          ) : mode === 'email' ? (
-            emailLoading ? (
-              <div className={styles.loading}>Loading email deliveries...</div>
-            ) : emailDeliveries.length ? (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Recipient</th>
-                      <th>Template</th>
-                      <th>Status</th>
-                      <th>Attempts</th>
-                      <th>Provider</th>
-                      <th>Sent</th>
-                      <th>Error</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {emailDeliveries.map((delivery) => (
-                      <tr key={delivery.id}>
-                        <td>
-                          <strong>{delivery.recipientEmail}</strong>
-                          <span className={styles.subtle}>{delivery.subject}</span>
-                        </td>
-                        <td>
-                          {formatEventType(delivery.template)}
-                          <span className={styles.subtle}>{formatEventType(delivery.event)}</span>
-                        </td>
-                        <td>{delivery.status}</td>
-                        <td>{delivery.attempts}</td>
-                        <td>
-                          {delivery.provider}
-                          <span className={styles.subtle}>{delivery.providerMessageId || 'No provider message id'}</span>
-                        </td>
-                        <td>{formatTimestamp(delivery.sentAt, 'Not sent')}</td>
-                        <td>{delivery.lastError || 'None'}</td>
-                        <td className={styles.actionCell}>
-                          {(() => {
-                            const resendDisabledReason = getEmailResendDisabledReason(delivery);
-
-                            return (
-                              <>
-                          <button
-                            type="button"
-                            disabled={emailInspectingId === delivery.id}
-                            onClick={() => loadEmailDiagnostics(delivery.id)}
-                          >
-                            {emailInspectingId === delivery.id ? 'Loading...' : 'View'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={resendingEmailId === delivery.id || Boolean(resendDisabledReason)}
-                            title={resendDisabledReason || 'Safely resend this transactional email'}
-                            onClick={() => handleResendEmail(delivery)}
-                          >
-                            {resendingEmailId === delivery.id ? 'Resending...' : 'Resend'}
-                          </button>
-                              </>
-                            );
-                          })()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className={styles.empty}>No email deliveries match this filter.</div>
-            )
-          ) : loading ? (
-            <div className={styles.loading}>Loading webhook deliveries...</div>
-          ) : deliveries.length ? (
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Provider event</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>Attempts</th>
-                    <th>Next retry</th>
-                    <th>Payload</th>
-                    <th>Error</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveries.map((delivery) => {
-                    const disabledReason = getReplayDisabledReason(delivery);
-
-                    return (
-                      <tr key={delivery.id}>
-                        <td>
-                          <strong>{delivery.providerEventId}</strong>
-                          <span className={styles.subtle}>{delivery.payloadHash}</span>
-                        </td>
-                        <td>{formatEventType(delivery.eventType)}</td>
-                        <td>{delivery.status}</td>
-                        <td>
-                          {delivery.attempts}
-                          <span className={styles.subtle}>Last retry: {formatTimestamp(delivery.lastRetriedAt, 'Never')}</span>
-                        </td>
-                        <td>{formatTimestamp(delivery.nextRetryAt)}</td>
-                        <td>{delivery.hasVerifiedPayload ? 'Verified local payload' : 'Hash only'}</td>
-                        <td>{delivery.lastError || 'None'}</td>
-                        <td className={styles.actionCell}>
-                          <button
-                            type="button"
-                            disabled={replayingId === delivery.id || Boolean(disabledReason)}
-                            title={disabledReason || 'Replay stored payload'}
-                            onClick={() => handleReplay(delivery)}
-                          >
-                            {replayingId === delivery.id ? 'Replaying...' : 'Replay'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={inspectingId === delivery.id}
-                            onClick={() => loadDiagnostics(delivery.id)}
-                          >
-                            {inspectingId === delivery.id ? 'Inspecting...' : 'Inspect'}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {activeRows.length || activeLoading ? (
+            <AdminTable columns={columns} isLoading={activeLoading} rows={activeRows} />
           ) : (
-            <div className={styles.empty}>No webhook deliveries match this filter.</div>
+            <AdminEmptyState
+              description={isInbound ? 'No webhook deliveries match this filter.' : isOutbound ? 'No outbound deliveries match this filter.' : 'No email deliveries match this filter.'}
+              icon="sync_problem"
+              title="No deliveries"
+            />
           )}
 
-          {mode === 'inbound' && diagnostics ? (
-            <aside className={styles.diagnostics}>
-              <div>
-                <p className={styles.eyebrow}>Support diagnostics</p>
-                <h2>{diagnostics.delivery.providerEventId}</h2>
-              </div>
+          {isInbound && diagnostics ? (
+            <AdminCard className={styles.diagnostics} variant="card">
+              <h3>Support diagnostics</h3>
+              <p>{diagnostics.delivery.providerEventId}</p>
               <div className={styles.diagnosticGrid}>
-                <div>
-                  <span>Status</span>
-                  <strong>{diagnostics.delivery.status}</strong>
-                </div>
-                <div>
-                  <span>Verified payload</span>
-                  <strong>{diagnostics.delivery.hasVerifiedPayload ? `${diagnostics.delivery.rawPayloadBytes} bytes` : 'No'}</strong>
-                </div>
-                <div>
-                  <span>Can retry</span>
-                  <strong>{diagnostics.retryPolicy.canRetry ? 'Yes' : 'No'}</strong>
-                </div>
-                <div>
-                  <span>Payment intent</span>
-                  <strong>{diagnostics.related.paymentIntentId || 'Unknown'}</strong>
-                </div>
-                <div>
-                  <span>Checkout</span>
-                  <strong>{diagnostics.related.checkoutSession?.status || 'Missing'}</strong>
-                </div>
-                <div>
-                  <span>Order</span>
-                  <strong>{diagnostics.related.order?.orderNumber ? `#${diagnostics.related.order.orderNumber}` : 'Missing'}</strong>
-                </div>
+                <div><span>Status</span><strong>{diagnostics.delivery.status}</strong></div>
+                <div><span>Verified payload</span><strong>{diagnostics.delivery.hasVerifiedPayload ? `${diagnostics.delivery.rawPayloadBytes} bytes` : 'No'}</strong></div>
+                <div><span>Can retry</span><strong>{diagnostics.retryPolicy.canRetry ? 'Yes' : 'No'}</strong></div>
+                <div><span>Payment intent</span><strong>{diagnostics.related.paymentIntentId || 'Unknown'}</strong></div>
               </div>
-              {diagnostics.retryPolicy.retryBlockers.length ? (
-                <p className={styles.notice}>Retry blockers: {diagnostics.retryPolicy.retryBlockers.join(' ')}</p>
-              ) : (
-                <p className={styles.notice}>This delivery is eligible for automated retry when due.</p>
-              )}
-            </aside>
+            </AdminCard>
           ) : null}
 
-          {mode === 'email' && emailDiagnostics ? (
-            <aside className={styles.diagnostics}>
-              <div>
-                <p className={styles.eyebrow}>Email details</p>
-                <h2>{emailDiagnostics.delivery.recipientEmail}</h2>
-              </div>
+          {isEmail && emailDiagnostics ? (
+            <AdminCard className={styles.diagnostics} variant="card">
+              <h3>Email details</h3>
+              <p>{emailDiagnostics.delivery.recipientEmail}</p>
               <div className={styles.diagnosticGrid}>
-                <div>
-                  <span>Status</span>
-                  <strong>{emailDiagnostics.delivery.status}</strong>
-                </div>
-                <div>
-                  <span>Template</span>
-                  <strong>{formatEventType(emailDiagnostics.delivery.template)}</strong>
-                </div>
-                <div>
-                  <span>Can resend</span>
-                  <strong>{emailDiagnostics.resendPolicy.canResend ? 'Yes' : 'No'}</strong>
-                </div>
-                <div>
-                  <span>Provider</span>
-                  <strong>{emailDiagnostics.delivery.provider}</strong>
-                </div>
-                <div>
-                  <span>Provider message id</span>
-                  <strong>{emailDiagnostics.delivery.providerMessageId || 'Unavailable'}</strong>
-                </div>
-                <div>
-                  <span>Order</span>
-                  <strong>{emailDiagnostics.related.order?.orderNumber ? `#${emailDiagnostics.related.order.orderNumber}` : 'Missing'}</strong>
-                </div>
+                <div><span>Status</span><strong>{emailDiagnostics.delivery.status}</strong></div>
+                <div><span>Template</span><strong>{formatEventType(emailDiagnostics.delivery.template)}</strong></div>
+                <div><span>Can resend</span><strong>{emailDiagnostics.resendPolicy.canResend ? 'Yes' : 'No'}</strong></div>
+                <div><span>Provider</span><strong>{emailDiagnostics.delivery.provider}</strong></div>
               </div>
-              {emailDiagnostics.resendPolicy.blockers.length ? (
-                <p className={styles.notice}>Resend blockers: {emailDiagnostics.resendPolicy.blockers.join(' ')}</p>
-              ) : (
-                <p className={styles.notice}>This email delivery is eligible for safe resend.</p>
-              )}
-            </aside>
+            </AdminCard>
           ) : null}
 
           <div className={styles.pagination}>
-            {mode === 'inbound' ? (
-              <>
-                <button
-                  type="button"
-                  disabled={loading || pagination.page <= 1}
-                  onClick={() => loadDeliveries(pagination.page - 1)}
-                >
-                  Previous
-                </button>
-                <span>
-                  Page {pagination.page} of {pagination.totalPages || 1}
-                </span>
-                <button
-                  type="button"
-                  disabled={loading || pagination.page >= (pagination.totalPages || 1)}
-                  onClick={() => loadDeliveries(pagination.page + 1)}
-                >
-                  Next
-                </button>
-              </>
-            ) : mode === 'outbound' ? (
-              <>
-                <button
-                  type="button"
-                  disabled={outboundLoading || outboundPagination.page <= 1}
-                  onClick={() => loadOutboundDeliveries(outboundPagination.page - 1)}
-                >
-                  Previous
-                </button>
-                <span>
-                  Page {outboundPagination.page} of {outboundPagination.totalPages || 1}
-                </span>
-                <button
-                  type="button"
-                  disabled={outboundLoading || outboundPagination.page >= (outboundPagination.totalPages || 1)}
-                  onClick={() => loadOutboundDeliveries(outboundPagination.page + 1)}
-                >
-                  Next
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  disabled={emailLoading || emailPagination.page <= 1}
-                  onClick={() => loadEmailDeliveries(emailPagination.page - 1)}
-                >
-                  Previous
-                </button>
-                <span>
-                  Page {emailPagination.page} of {emailPagination.totalPages || 1}
-                </span>
-                <button
-                  type="button"
-                  disabled={emailLoading || emailPagination.page >= (emailPagination.totalPages || 1)}
-                  onClick={() => loadEmailDeliveries(emailPagination.page + 1)}
-                >
-                  Next
-                </button>
-              </>
-            )}
+            <AdminButton disabled={activeLoading || currentPage <= 1} onClick={() => changePage(currentPage - 1)} size="sm" variant="secondary">Previous</AdminButton>
+            <span>Page {currentPage} of {totalPages}</span>
+            <AdminButton disabled={activeLoading || currentPage >= totalPages} onClick={() => changePage(currentPage + 1)} size="sm" variant="secondary">Next</AdminButton>
           </div>
-        </section>
-      </div>
+        </AdminCard>
+      </AdminPage>
     </AppShell>
   );
 }

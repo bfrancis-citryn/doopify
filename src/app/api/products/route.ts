@@ -39,6 +39,7 @@ const createSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   handle: z.string().optional(),
   status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
+  publishedAt: z.string().datetime().nullable().optional(),
   description: z.string().optional(),
   vendor: z.string().optional(),
   productType: z.string().optional(),
@@ -91,6 +92,7 @@ export async function POST(req: Request) {
     const { options, variants, media, ...productFields } = parsed.data
     let product = await createProduct({
       ...productFields,
+      publishedAt: productFields.publishedAt ? new Date(productFields.publishedAt) : null,
       variants: variants?.map((variant) => ({
         title: variant.title,
         sku: variant.sku,

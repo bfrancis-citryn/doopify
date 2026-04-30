@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useDeferredValue, useMemo } from 'react';
 import {
+  getComputedProductStateMeta,
   getProductFeaturedImage,
   getProductStockLabel,
   getProductVariantCount,
@@ -12,6 +13,7 @@ import {
 import { useProductStore } from '../../context/ProductContext';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
+import AdminDropdown from '../admin/ui/AdminDropdown';
 import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
@@ -25,12 +27,6 @@ const FILTERS = [
   { id: 'draft', label: 'Draft' },
   { id: 'active', label: 'Active' },
 ];
-
-const STATUS_LABELS = {
-  active: 'Active',
-  draft: 'Draft',
-  archived: 'Archived',
-};
 
 export default function ProductCatalog() {
   const { products, selectedProductId, searchQuery, activeFilter, editor, formatMoney, actions } = useProductStore();
@@ -76,11 +72,14 @@ export default function ProductCatalog() {
     {
       key: 'status',
       header: 'Status',
-      render: product => (
-        <AdminStatusChip tone={product.status === 'active' ? 'success' : product.status === 'draft' ? 'warning' : 'neutral'}>
-          {STATUS_LABELS[product.status] || 'Draft'}
-        </AdminStatusChip>
-      ),
+      render: product => {
+        const state = getComputedProductStateMeta(product);
+        return (
+          <AdminStatusChip tone={state.tone}>
+            {state.label}
+          </AdminStatusChip>
+        );
+      },
     },
     {
       key: 'inventory',
@@ -107,6 +106,36 @@ export default function ProductCatalog() {
       key: 'price',
       header: 'Price',
       render: product => formatMoney(product.basePrice),
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: product => (
+        <div onClick={event => event.stopPropagation()}>
+          <AdminDropdown
+            align="end"
+            trigger={(
+              <button
+                aria-label="Product actions"
+                className={styles.rowActionButton}
+                onClick={event => event.stopPropagation()}
+                type="button"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">more_horiz</span>
+              </button>
+            )}
+          >
+            <button onClick={() => actions.requestSelectProduct(product.id)} type="button">
+              Open product
+            </button>
+            <button onClick={() => actions.requestDuplicateProduct(product.id)} type="button">
+              Duplicate product
+            </button>
+          </AdminDropdown>
+        </div>
+      ),
+      cellClassName: styles.actionsCell,
+      headerClassName: styles.actionsHeader,
     },
   ];
 

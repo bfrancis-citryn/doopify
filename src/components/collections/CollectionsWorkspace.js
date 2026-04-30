@@ -8,10 +8,13 @@ import AdminCard from '../admin/ui/AdminCard';
 import AdminDrawer from '../admin/ui/AdminDrawer';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import AdminFormSection from '../admin/ui/AdminFormSection';
+import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
+import AdminSelect from '../admin/ui/AdminSelect';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
+import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminToolbar from '../admin/ui/AdminToolbar';
 import styles from './CollectionsWorkspace.module.css';
 
@@ -24,6 +27,7 @@ const SORT_OPTIONS = [
   { value: 'PRICE_ASC', label: 'Price low to high' },
   { value: 'PRICE_DESC', label: 'Price high to low' },
 ];
+const SORT_SELECT_OPTIONS = SORT_OPTIONS.map((option) => ({ value: option.value, label: option.label }));
 
 function slugify(text) { return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
 function toDraft(collection) { return { id: collection.id, title: collection.title || '', handle: collection.handle || '', description: collection.description || '', imageUrl: collection.imageUrl || '', sortOrder: collection.sortOrder || 'MANUAL', isPublished: collection.isPublished !== false, productIds: collection.productIds || [] }; }
@@ -145,16 +149,25 @@ export default function CollectionsWorkspace() {
   }
 
   return (
-    <AppShell onCreateOrder={resetToNewCollection} onNotificationsClick={() => setNotice('Collections are ready for merchandising work.')} onQuickActionClick={() => setNotice('Use the product library to assign products and order them.')} onSearchChange={(event) => setSearchQuery(event.target.value)} searchValue={searchQuery}>
-      <AdminPage>
+    <AppShell onNotificationsClick={() => setNotice('Collections are ready for merchandising work.')} onQuickActionClick={() => setNotice('Use the product library to assign products and order them.')}>
+      <AdminPage className={styles.page}>
+        <AdminPageHeader
+          actions={<AdminButton onClick={resetToNewCollection} size="sm" variant="primary">New collection</AdminButton>}
+          description="Curate storefront merchandising with publish controls."
+          eyebrow="Collections"
+          title="Merchandising"
+        />
+
         <AdminCard className={styles.listPanel} variant="panel">
-          <AdminPageHeader
-            actions={<AdminButton onClick={resetToNewCollection} size="sm" variant="primary">New collection</AdminButton>}
-            description={`${filteredCollections.length} collections`}
-            eyebrow="Collections"
-            title="Merchandising"
-          />
-          <AdminToolbar><span className={styles.resultText}>{filteredCollections.length} collections</span></AdminToolbar>
+          <AdminToolbar>
+            <AdminInput
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search collections..."
+              type="search"
+              value={searchQuery}
+            />
+            <span className={styles.resultText}>{filteredCollections.length} collections</span>
+          </AdminToolbar>
           {loading ? (
             <p className={styles.notice}>Loading collections...</p>
           ) : filteredCollections.length ? (
@@ -170,13 +183,20 @@ export default function CollectionsWorkspace() {
               selectedId={selectedCollectionId === 'new' ? null : selectedCollectionId}
             />
           ) : (
-            <AdminEmptyState description="Create your first collection to start shaping storefront merchandising." icon="dashboard_customize" onAction={resetToNewCollection} title="No collections yet" actionLabel="Create collection" />
+            <AdminEmptyState
+              actionLabel="Create collection"
+              description="Create your first collection to start shaping storefront merchandising."
+              icon="dashboard_customize"
+              onAction={resetToNewCollection}
+              title="No collections yet"
+            />
           )}
         </AdminCard>
 
         <AdminDrawer
           actions={(
             <>
+              <AdminButton disabled={saving || loadingCollection} onClick={() => setIsDrawerOpen(false)} size="sm" variant="ghost">Close</AdminButton>
               {!isNewCollection ? <AdminButton disabled={saving || loadingCollection} onClick={handleDelete} size="sm" variant="danger">Delete</AdminButton> : null}
               <AdminButton disabled={saving || loadingCollection} onClick={handleSave} size="sm" variant="primary">{saving ? 'Saving...' : isNewCollection ? 'Create collection' : 'Save changes'}</AdminButton>
             </>
@@ -192,13 +212,13 @@ export default function CollectionsWorkspace() {
                   {loadingCollection ? <p className={styles.notice}>Loading collection details...</p> : null}
                   <AdminFormSection eyebrow="Identity" title="Collection details" description={`Storefront path: /collections/${handlePreview || 'collection-handle'}`}>
                     <div className={styles.formGrid}>
-                      <input onChange={(event) => updateDraft('title', event.target.value)} placeholder="Summer Essentials" value={draft.title} />
-                      <input onChange={(event) => updateDraft('handle', event.target.value)} placeholder={slugify(draft.title) || 'summer-essentials'} value={draft.handle} />
-                      <input onChange={(event) => updateDraft('imageUrl', event.target.value)} placeholder="https://..." value={draft.imageUrl} />
-                      <select onChange={(event) => updateDraft('sortOrder', event.target.value)} value={draft.sortOrder}>{SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                      <AdminInput onChange={(event) => updateDraft('title', event.target.value)} placeholder="Summer Essentials" value={draft.title} />
+                      <AdminInput onChange={(event) => updateDraft('handle', event.target.value)} placeholder={slugify(draft.title) || 'summer-essentials'} value={draft.handle} />
+                      <AdminInput onChange={(event) => updateDraft('imageUrl', event.target.value)} placeholder="https://..." value={draft.imageUrl} />
+                      <AdminSelect onChange={(value) => updateDraft('sortOrder', value)} options={SORT_SELECT_OPTIONS} value={draft.sortOrder} />
                     </div>
                     <label className={styles.publishRow}><input checked={draft.isPublished} onChange={(event) => updateDraft('isPublished', event.target.checked)} type="checkbox" />Published</label>
-                    <textarea onChange={(event) => updateDraft('description', event.target.value)} placeholder="Explain what this collection is for and how it should feel on the storefront." rows={4} value={draft.description} />
+                    <AdminTextarea onChange={(event) => updateDraft('description', event.target.value)} placeholder="Explain what this collection is for and how it should feel on the storefront." rows={4} value={draft.description} />
                   </AdminFormSection>
                 </div>
               ),
@@ -217,7 +237,7 @@ export default function CollectionsWorkspace() {
                     </div>
                   </AdminFormSection>
                   <AdminFormSection eyebrow="Library" title="Assign products">
-                    <input onChange={(event) => setProductSearch(event.target.value)} placeholder="Search products..." value={productSearch} />
+                    <AdminInput onChange={(event) => setProductSearch(event.target.value)} placeholder="Search products..." value={productSearch} />
                     <div className={styles.productGrid}>
                       {filteredProducts.map((product) => {
                         const isAssigned = draft.productIds.includes(product.id);

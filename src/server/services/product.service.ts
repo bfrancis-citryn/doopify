@@ -73,6 +73,7 @@ export function toStorefrontProduct(product: any) {
     description: product.description,
     vendor: product.vendor,
     productType: product.productType,
+    publishedAt: product.publishedAt,
     media: (product.media || []).map((media: any) => ({
       id: media.id,
       position: media.position,
@@ -154,6 +155,12 @@ async function ensureUniqueHandle(baseHandle: string, excludeProductId?: string)
 
     candidate = `${sanitizedBase}-${suffix}`
     suffix += 1
+  }
+}
+
+function getStorefrontPublishWindowWhere(now = new Date()): Prisma.ProductWhereInput {
+  return {
+    OR: [{ publishedAt: null }, { publishedAt: { lte: now } }],
   }
 }
 
@@ -309,8 +316,13 @@ export async function getProduct(id: string) {
 }
 
 export async function getStorefrontProductByHandle(handle: string) {
+  const now = new Date()
   const product = await prisma.product.findFirst({
-    where: { handle, status: 'ACTIVE' },
+    where: {
+      handle,
+      status: 'ACTIVE',
+      ...getStorefrontPublishWindowWhere(now),
+    },
     include: productInclude,
   })
 
@@ -321,6 +333,7 @@ export async function createProduct(data: {
   title: string
   handle?: string
   status?: ProductStatus
+  publishedAt?: Date | null
   description?: string
   vendor?: string
   productType?: string
@@ -346,6 +359,7 @@ export async function createProduct(data: {
         title: data.title,
         handle,
         status: data.status ?? 'DRAFT',
+        publishedAt: data.publishedAt ?? null,
         description: data.description,
         vendor: data.vendor,
         productType: data.productType,
@@ -396,6 +410,7 @@ export async function updateProduct(
     title: string
     handle: string
     status: ProductStatus
+    publishedAt: Date | null
     description: string
     vendor: string
     productType: string
@@ -435,6 +450,93 @@ export async function updateProduct(
 
   if (hydratedProduct) {
     await emitInternalEvent('product.updated', {
+      productId: hydratedProduct.id,
+      handle: hydratedProduct.handle,
+      title: hydratedProduct.title,
+      status: hydratedProduct.status,
+    })
+  }
+
+  return hydratedProduct
+}
+
+export async function duplicateProduct(id: string) {
+  const source = await prisma.product.findUnique({
+    where: { id },
+    include: productInclude,
+  })
+
+  if (!source) {
+    return null
+  }
+
+  const duplicatedTitle = `${source.title} copy`
+  const duplicatedHandle = await ensureUniqueHandle(slugify(`${source.handle}-copy`))
+  const sourceVariants = source.variants?.length
+    ? source.variants
+    : [createFallbackVariant()]
+
+  const product = await prisma.$transaction(async (tx) => {
+    const createdProduct = await tx.product.create({
+      data: {
+        title: duplicatedTitle,
+        handle: duplicatedHandle,
+        status: 'DRAFT',
+        publishedAt: null,
+        description: source.description,
+        vendor: source.vendor,
+        productType: source.productType,
+        tags: source.tags,
+        variants: {
+          create: sourceVariants.map((variant, index) => ({
+            title: variant.title,
+            sku: null,
+            priceCents: variant.priceCents,
+            compareAtPriceCents: variant.compareAtPriceCents,
+            inventory: variant.inventory,
+            weight: variant.weight,
+            weightUnit: variant.weightUnit,
+            position: variant.position ?? index,
+          })),
+        },
+        options: {
+          create: (source.options || []).map((option, optionIndex) => ({
+            name: option.name,
+            position: option.position ?? optionIndex,
+            values: {
+              create: (option.values || []).map((value, valueIndex) => ({
+                value: value.value,
+                position: value.position ?? valueIndex,
+              })),
+            },
+          })),
+        },
+      },
+      select: { id: true },
+    })
+
+    if (source.media?.length) {
+      await syncProductMedia(
+        tx,
+        createdProduct.id,
+        source.media.map((mediaItem) => ({
+          assetId: mediaItem.assetId,
+          position: mediaItem.position,
+          isFeatured: mediaItem.isFeatured,
+        }))
+      )
+    }
+
+    return tx.product.findUnique({
+      where: { id: createdProduct.id },
+      include: productInclude,
+    })
+  })
+
+  const hydratedProduct = product ? attachMediaUrls(product) : null
+
+  if (hydratedProduct) {
+    await emitInternalEvent('product.created', {
       productId: hydratedProduct.id,
       handle: hydratedProduct.handle,
       title: hydratedProduct.title,
@@ -574,9 +676,19 @@ export async function getStorefrontProducts(params: {
   pageSize?: number
 }) {
   const { collectionHandle, search, page = 1, pageSize = 24 } = params
+  const now = new Date()
+  const searchFilter = search
+    ? {
+        OR: [
+          { title: { contains: search, mode: 'insensitive' as const } },
+          { description: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }
+    : null
 
   const where: Prisma.ProductWhereInput = {
     status: 'ACTIVE',
+    AND: [getStorefrontPublishWindowWhere(now), ...(searchFilter ? [searchFilter] : [])],
     variants: { some: { inventory: { gt: 0 } } },
     ...(collectionHandle && {
       collections: {
@@ -586,12 +698,6 @@ export async function getStorefrontProducts(params: {
           },
         },
       },
-    }),
-    ...(search && {
-      OR: [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ],
     }),
   }
 

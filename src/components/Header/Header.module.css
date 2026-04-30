@@ -1,6 +1,6 @@
 .header {
   position: relative;
-  z-index: 2;
+  z-index: var(--z-topbar);
   min-height: 3.35rem;
   display: flex;
   align-items: center;

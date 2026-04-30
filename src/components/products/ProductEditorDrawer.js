@@ -1,19 +1,36 @@
 "use client";
 
-import ProductMediaManager from './ProductMediaManager';
-import ProductVariantEditor from './ProductVariantEditor';
-import { useProductStore } from '../../context/ProductContext';
-import AdminButton from '../admin/ui/AdminButton';
-import AdminCard from '../admin/ui/AdminCard';
-import AdminDrawer from '../admin/ui/AdminDrawer';
-import AdminSavedState from '../admin/ui/AdminSavedState';
-import styles from './ProductEditorDrawer.module.css';
+import { useEffect, useState } from "react";
+import ProductMediaManager from "./ProductMediaManager";
+import ProductStatusControl from "./ProductStatusControl";
+import ProductVariantEditor from "./ProductVariantEditor";
+import { useProductStore } from "../../context/ProductContext";
+import { getComputedProductStateMeta, isFuturePublishDate } from "../../lib/productUtils";
+import AdminButton from "../admin/ui/AdminButton";
+import AdminCard from "../admin/ui/AdminCard";
+import AdminDrawer from "../admin/ui/AdminDrawer";
+import AdminSavedState from "../admin/ui/AdminSavedState";
+import AdminSchedulePopover from "../admin/ui/AdminSchedulePopover";
+import styles from "./ProductEditorDrawer.module.css";
 
-const STATUS_OPTIONS = [
-  { id: 'active', label: 'Active' },
-  { id: 'draft', label: 'Draft' },
-  { id: 'archived', label: 'Archived' },
-];
+function formatScheduleText(isoDate) {
+  if (!isoDate) {
+    return "Not scheduled";
+  }
+
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return "Not scheduled";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
 
 function SectionCard({ eyebrow, title, children }) {
   return (
@@ -27,31 +44,84 @@ function SectionCard({ eyebrow, title, children }) {
 
 export default function ProductEditorDrawer() {
   const { editor, formatMoney, actions } = useProductStore();
+  const [activeTabId, setActiveTabId] = useState("basic");
   const draftProduct = editor.draftProduct;
+
+  useEffect(() => {
+    if (!editor.isOpen) {
+      setActiveTabId("basic");
+    }
+  }, [editor.isOpen]);
 
   if (!draftProduct || !editor.isOpen) {
     return null;
   }
 
-  const isSaveDisabled = editor.isSaving || (editor.mode === 'existing' && !editor.hasUnsavedChanges);
-  const title = draftProduct.title || 'Untitled Product';
-  const saveState = editor.isSaving ? 'saving' : editor.hasUnsavedChanges ? 'dirty' : 'saved';
+  const isSaveDisabled =
+    editor.isSaving ||
+    editor.isUploadingMedia ||
+    (editor.mode === "existing" && !editor.hasUnsavedChanges);
+  const title = draftProduct.title || "Untitled Product";
+  const saveState = editor.isSaving ? "saving" : editor.hasUnsavedChanges ? "dirty" : "saved";
+  const computedState = getComputedProductStateMeta(draftProduct);
+  const hasFutureSchedule = isFuturePublishDate(draftProduct.publishedAt);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local timezone";
+  const scheduleLabel = hasFutureSchedule
+    ? `Scheduled for ${formatScheduleText(draftProduct.publishedAt)}`
+    : "";
+  const scheduleSummary = hasFutureSchedule
+    ? scheduleLabel
+    : draftProduct.publishedAt
+      ? `Published ${formatScheduleText(draftProduct.publishedAt)}`
+      : "Not scheduled";
+
+  const handleStatusChange = (nextStatus) => {
+    if (nextStatus === "archived" && draftProduct.status !== "archived") {
+      const shouldArchive = window.confirm(
+        "Archive this product? Archived products are hidden from storefront."
+      );
+      if (!shouldArchive) {
+        return;
+      }
+    }
+
+    if (nextStatus === "draft" && hasFutureSchedule) {
+      const clearSchedule = window.confirm(
+        "Switching to Draft clears the scheduled publish date by default. Press OK to clear it, or Cancel to keep the schedule."
+      );
+      actions.setDraftField("status", "draft");
+      if (clearSchedule) {
+        actions.setDraftField("publishedAt", null);
+      }
+      return;
+    }
+
+    actions.setDraftField("status", nextStatus);
+  };
 
   const tabs = [
     {
-      id: 'basic',
-      label: 'Basic',
+      id: "basic",
+      label: "Basic",
       content: (
         <div className={styles.drawerBody}>
           <SectionCard eyebrow="Basic" title="Product identity">
             <div className={styles.gridTwo}>
               <label className={styles.field}>
                 <span>Title</span>
-                <input onChange={event => actions.setDraftField('title', event.target.value)} type="text" value={draftProduct.title} />
+                <input
+                  onChange={(event) => actions.setDraftField("title", event.target.value)}
+                  type="text"
+                  value={draftProduct.title}
+                />
               </label>
               <label className={styles.field}>
                 <span>Primary SKU</span>
-                <input onChange={event => actions.setDraftField('sku', event.target.value)} type="text" value={draftProduct.sku} />
+                <input
+                  onChange={(event) => actions.setDraftField("sku", event.target.value)}
+                  type="text"
+                  value={draftProduct.sku}
+                />
               </label>
             </div>
           </SectionCard>
@@ -59,7 +129,11 @@ export default function ProductEditorDrawer() {
           <SectionCard eyebrow="Description" title="Product description">
             <label className={styles.field}>
               <span>Description</span>
-              <textarea onChange={event => actions.setDraftField('description', event.target.value)} rows={5} value={draftProduct.description} />
+              <textarea
+                onChange={(event) => actions.setDraftField("description", event.target.value)}
+                rows={5}
+                value={draftProduct.description}
+              />
             </label>
           </SectionCard>
 
@@ -67,11 +141,19 @@ export default function ProductEditorDrawer() {
             <div className={styles.gridTwo}>
               <label className={styles.field}>
                 <span>Price</span>
-                <input onChange={event => actions.setDraftField('basePrice', event.target.value)} type="text" value={draftProduct.basePrice} />
+                <input
+                  onChange={(event) => actions.setDraftField("basePrice", event.target.value)}
+                  type="text"
+                  value={draftProduct.basePrice}
+                />
               </label>
               <label className={styles.field}>
                 <span>Compare-at price</span>
-                <input onChange={event => actions.setDraftField('compareAtPrice', event.target.value)} type="text" value={draftProduct.compareAtPrice} />
+                <input
+                  onChange={(event) => actions.setDraftField("compareAtPrice", event.target.value)}
+                  type="text"
+                  value={draftProduct.compareAtPrice}
+                />
               </label>
             </div>
             <div className={styles.pricePreview}>
@@ -81,7 +163,9 @@ export default function ProductEditorDrawer() {
               </div>
               <div>
                 <p className={styles.metricLabel}>Compare-at</p>
-                <p className={styles.metricSecondary}>{formatMoney(draftProduct.compareAtPrice)}</p>
+                <p className={styles.metricSecondary}>
+                  {formatMoney(draftProduct.compareAtPrice)}
+                </p>
               </div>
             </div>
           </SectionCard>
@@ -89,8 +173,8 @@ export default function ProductEditorDrawer() {
       ),
     },
     {
-      id: 'media',
-      label: 'Media',
+      id: "media",
+      label: "Media",
       content: (
         <div className={styles.drawerBody}>
           <SectionCard eyebrow="Media" title="Product gallery">
@@ -100,8 +184,8 @@ export default function ProductEditorDrawer() {
       ),
     },
     {
-      id: 'variants',
-      label: 'Variants',
+      id: "variants",
+      label: "Variants",
       content: (
         <div className={styles.drawerBody}>
           <SectionCard eyebrow="Variants" title="Options and combinations">
@@ -111,27 +195,28 @@ export default function ProductEditorDrawer() {
       ),
     },
     {
-      id: 'seo',
-      label: 'SEO',
+      id: "seo",
+      label: "SEO",
       content: (
         <div className={styles.drawerBody}>
           <SectionCard eyebrow="Organization" title="Category and tags">
             <div className={styles.gridTwo}>
               <label className={styles.field}>
                 <span>Category</span>
-                <input onChange={event => actions.setDraftField('category', event.target.value)} type="text" value={draftProduct.category} />
+                <input
+                  onChange={(event) => actions.setDraftField("category", event.target.value)}
+                  type="text"
+                  value={draftProduct.category}
+                />
               </label>
               <label className={styles.field}>
                 <span>Tags</span>
-                <input onChange={event => actions.setDraftTagsFromText(event.target.value)} type="text" value={draftProduct.tags.join(', ')} />
+                <input
+                  onChange={(event) => actions.setDraftTagsFromText(event.target.value)}
+                  type="text"
+                  value={draftProduct.tags.join(", ")}
+                />
               </label>
-            </div>
-            <div className={styles.statusRow}>
-              {STATUS_OPTIONS.map(option => (
-                <AdminButton key={option.id} onClick={() => actions.setDraftField('status', option.id)} size="sm" variant={draftProduct.status === option.id ? 'primary' : 'secondary'}>
-                  {option.label}
-                </AdminButton>
-              ))}
             </div>
           </SectionCard>
         </div>
@@ -141,22 +226,69 @@ export default function ProductEditorDrawer() {
 
   return (
     <AdminDrawer
-      actions={(
+      activeTabId={activeTabId}
+      actions={
         <>
-          <AdminButton onClick={() => actions.cancelDraftChanges()} size="sm" variant="ghost">Cancel</AdminButton>
-          <AdminButton disabled={isSaveDisabled} loading={editor.isSaving} onClick={() => actions.saveDraft()} size="sm" variant="primary">Save</AdminButton>
+          <AdminButton onClick={() => actions.cancelDraftChanges()} size="sm" variant="ghost">
+            Cancel
+          </AdminButton>
+          <AdminButton
+            disabled={isSaveDisabled}
+            loading={editor.isSaving}
+            onClick={() => actions.saveDraft()}
+            size="sm"
+            variant="primary"
+          >
+            Save
+          </AdminButton>
         </>
-      )}
+      }
       className={`admin-spotlight ${styles.drawer}`}
       contextItems={[
-        { label: 'Products' },
+        { label: "Products" },
         { label: title, current: true },
-        { label: editor.mode === 'new' ? 'New draft' : draftProduct.status === 'active' ? 'Active' : 'Draft' },
+        { label: computedState.label },
       ]}
-      footer={<AdminSavedState savedAgoText="just now" state={saveState} />}
+      footer={
+        <div className={styles.footerState}>
+          <AdminSavedState savedAgoText="just now" state={saveState} />
+          {editor.isUploadingMedia ? (
+            <span className={styles.uploadingNotice}>Uploading media assets...</span>
+          ) : null}
+        </div>
+      }
+      headerActions={
+        <div className={styles.headerActionsWrap}>
+          <ProductStatusControl
+            computedState={computedState}
+            onChange={handleStatusChange}
+            scheduleLabel={scheduleLabel}
+            value={draftProduct.status}
+          />
+          <AdminSchedulePopover
+            onChange={(nextIso) => {
+              actions.setDraftField("publishedAt", nextIso);
+              if (nextIso) {
+                actions.setDraftField("status", "active");
+              }
+            }}
+            timezoneLabel={timezone}
+            triggerLabel="Schedule"
+            value={draftProduct.publishedAt}
+          />
+          <AdminButton
+            onClick={() => actions.requestDuplicateProduct()}
+            size="sm"
+            variant="secondary"
+          >
+            Duplicate
+          </AdminButton>
+        </div>
+      }
+      onActiveTabChange={setActiveTabId}
       onClose={() => actions.requestCloseEditor()}
       open={editor.isOpen}
-      subtitle=""
+      subtitle={`Status: ${computedState.label} | Publish: ${scheduleSummary}`}
       tabs={tabs}
       title={title}
     />

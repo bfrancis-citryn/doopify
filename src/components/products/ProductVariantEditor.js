@@ -109,7 +109,7 @@ function OptionEditor({ option, actions, errorMessage }) {
   );
 }
 
-function GroupedVariantRows({ draftProduct, actions, formatMoney }) {
+function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErrors }) {
   const [expandedGroupKey, setExpandedGroupKey] = useState(null);
   const primaryOption = draftProduct.options[0];
   const secondaryOption = draftProduct.options[1];
@@ -149,6 +149,9 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney }) {
                   </div>
                 </div>
               </button>
+              <div className={styles.variantSkuCell}>
+                <span className={styles.mutedText}>Multiple SKUs</span>
+              </div>
               <div className={styles.variantPriceCell}>
                 <div className={styles.currencyInputWrap}>
                   <span className={styles.currencyPrefix}>$</span>
@@ -165,6 +168,10 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney }) {
               <div className={styles.subRowList}>
                 {group.variants.map(variant => (
                   <div key={variant.id} className={styles.subVariantRow}>
+                    {(() => {
+                      const rowErrors = variantRowErrors?.[variant.id] || {};
+                      return (
+                        <>
                     <div className={styles.checkboxColumn}>
                       <input type="checkbox" />
                     </div>
@@ -172,31 +179,48 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney }) {
                       <div className={styles.subVariantSpacer} />
                       <div className={styles.variantIdentityText}>
                         <div className={styles.variantName}>{variant.optionValues?.[secondaryOption.name] || variant.title}</div>
+                        {rowErrors.optionValues ? <p className={styles.fieldErrorText}>{rowErrors.optionValues}</p> : null}
                       </div>
                       <button className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} type="button">
                         Delete
                       </button>
                     </div>
+                    <div className={styles.variantSkuCell}>
+                      <input
+                        className={rowErrors.sku ? `${styles.skuInput} ${styles.inputError}` : styles.skuInput}
+                        onChange={event => actions.updateVariantField(variant.id, 'sku', event.target.value)}
+                        placeholder="SKU"
+                        type="text"
+                        value={variant.sku}
+                      />
+                      {rowErrors.sku ? <p className={styles.fieldErrorText}>{rowErrors.sku}</p> : null}
+                    </div>
                     <div className={styles.variantPriceCell}>
                       <div className={styles.currencyInputWrap}>
                         <span className={styles.currencyPrefix}>$</span>
                         <input
-                          className={styles.priceInput}
+                          className={rowErrors.price || rowErrors.compareAtPrice ? `${styles.priceInput} ${styles.inputError}` : styles.priceInput}
                           onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
                           type="text"
                           value={variant.price}
                         />
                       </div>
+                      {rowErrors.price ? <p className={styles.fieldErrorText}>{rowErrors.price}</p> : null}
+                      {rowErrors.compareAtPrice ? <p className={styles.fieldErrorText}>{rowErrors.compareAtPrice}</p> : null}
                     </div>
                     <div className={styles.variantInventoryCell}>
                       <input
-                        className={styles.inventoryInput}
+                        className={rowErrors.inventoryQty ? `${styles.inventoryInput} ${styles.inputError}` : styles.inventoryInput}
                         min="0"
                         onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
                         type="number"
                         value={variant.inventoryQty}
                       />
+                      {rowErrors.inventoryQty ? <p className={styles.fieldErrorText}>{rowErrors.inventoryQty}</p> : null}
                     </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -245,6 +269,8 @@ function BasicInventoryCard({ draftProduct, actions }) {
 export default function ProductVariantEditor() {
   const { editor, actions, formatMoney } = useProductStore();
   const draftProduct = editor.draftProduct;
+  const variantRowErrors = editor.validationErrors.variantRows || {};
+  const optionErrorMessage = editor.validationErrors.options || '';
   const totalInventory = useMemo(
     () => draftProduct?.variants?.reduce((sum, variant) => sum + (Number.parseInt(variant.inventoryQty, 10) || 0), 0) || 0,
     [draftProduct]
@@ -274,7 +300,7 @@ export default function ProductVariantEditor() {
               key={option.id}
               option={option}
               actions={actions}
-              errorMessage={editor.validationErrors.options?.includes(option.name) ? editor.validationErrors.options : ''}
+              errorMessage={optionErrorMessage}
             />
           ))
         ) : (
@@ -293,7 +319,9 @@ export default function ProductVariantEditor() {
       {editor.validationErrors.options && !draftProduct.options.some(option => editor.validationErrors.options?.includes(option.name)) ? (
         <p className={styles.errorText}>{editor.validationErrors.options}</p>
       ) : null}
-      {editor.validationErrors.variants ? <p className={styles.errorText}>{editor.validationErrors.variants}</p> : null}
+      {editor.validationErrors.variants && !Object.keys(variantRowErrors).length ? (
+        <p className={styles.errorText}>{editor.validationErrors.variants}</p>
+      ) : null}
 
       {hasRealVariants ? (
         <>
@@ -311,16 +339,21 @@ export default function ProductVariantEditor() {
             <div className={styles.matrixHeader}>
               <div className={styles.checkboxColumn}><input type="checkbox" /></div>
               <div className={styles.variantColumn}>Variant</div>
+              <div className={styles.skuColumn}>SKU</div>
               <div className={styles.priceColumn}>Price</div>
               <div className={styles.inventoryColumn}>Available</div>
             </div>
 
             <div className={styles.matrixBody}>
               {canGroupVariants ? (
-                <GroupedVariantRows draftProduct={draftProduct} actions={actions} formatMoney={formatMoney} />
+                <GroupedVariantRows draftProduct={draftProduct} actions={actions} formatMoney={formatMoney} variantRowErrors={variantRowErrors} />
               ) : (
                 draftProduct.variants.map(variant => (
                   <div key={variant.id} className={styles.variantRow}>
+                    {(() => {
+                      const rowErrors = variantRowErrors?.[variant.id] || {};
+                      return (
+                        <>
                     <div className={styles.checkboxColumn}>
                       <input type="checkbox" />
                     </div>
@@ -331,34 +364,51 @@ export default function ProductVariantEditor() {
                       </div>
                       <div className={styles.variantIdentityText}>
                         <div className={styles.variantName}>{variant.title}</div>
+                        {rowErrors.optionValues ? <p className={styles.fieldErrorText}>{rowErrors.optionValues}</p> : null}
                       </div>
                       <button className={styles.deleteVariantButton} onClick={() => actions.requestDeleteVariant(variant.id)} type="button">
                         Delete
                       </button>
+                    </div>
+                    <div className={styles.variantSkuCell}>
+                      <input
+                        className={rowErrors.sku ? `${styles.skuInput} ${styles.inputError}` : styles.skuInput}
+                        onChange={event => actions.updateVariantField(variant.id, 'sku', event.target.value)}
+                        placeholder="SKU"
+                        type="text"
+                        value={variant.sku}
+                      />
+                      {rowErrors.sku ? <p className={styles.fieldErrorText}>{rowErrors.sku}</p> : null}
                     </div>
 
                     <div className={styles.variantPriceCell}>
                       <div className={styles.currencyInputWrap}>
                         <span className={styles.currencyPrefix}>$</span>
                         <input
-                          className={styles.priceInput}
+                          className={rowErrors.price || rowErrors.compareAtPrice ? `${styles.priceInput} ${styles.inputError}` : styles.priceInput}
                           onChange={event => actions.updateVariantField(variant.id, 'price', event.target.value)}
                           type="text"
                           value={variant.price}
                         />
                       </div>
+                      {rowErrors.price ? <p className={styles.fieldErrorText}>{rowErrors.price}</p> : null}
+                      {rowErrors.compareAtPrice ? <p className={styles.fieldErrorText}>{rowErrors.compareAtPrice}</p> : null}
                       <small className={styles.secondaryLine}>{formatMoney(variant.price)}</small>
                     </div>
 
                     <div className={styles.variantInventoryCell}>
                       <input
-                        className={styles.inventoryInput}
+                        className={rowErrors.inventoryQty ? `${styles.inventoryInput} ${styles.inputError}` : styles.inventoryInput}
                         min="0"
                         onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
                         type="number"
                         value={variant.inventoryQty}
                       />
+                      {rowErrors.inventoryQty ? <p className={styles.fieldErrorText}>{rowErrors.inventoryQty}</p> : null}
                     </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))
               )}

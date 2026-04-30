@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Header from './Header/Header';
 import Sidebar from './Sidebar/Sidebar';
 import styles from './layout/AppShell.module.css';
@@ -14,12 +15,17 @@ export default function AppShell({
   primaryActionLabel,
   searchPlaceholder,
 }) {
+  const router = useRouter();
+  const defaultCreateOrder = () => router.push("/draft-orders?new=1");
+  const usesDefaultOrderLabel = !primaryActionLabel || primaryActionLabel === "New order";
+  const handleCreateOrder = usesDefaultOrderLabel ? defaultCreateOrder : onCreateOrder || defaultCreateOrder;
+
   return (
     <div className={styles.appContainer}>
       <Sidebar />
       <div className={styles.mainCanvas}>
         <Header
-          onCreateOrder={onCreateOrder}
+          onCreateOrder={handleCreateOrder}
           onNotificationsClick={onNotificationsClick}
           onQuickActionClick={onQuickActionClick}
           onSearchChange={onSearchChange}
