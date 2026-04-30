@@ -261,7 +261,7 @@ See `SETUP_AND_CLI_PLAN.md` for the planned implementation sequence.
 The first setup hardening milestone is complete when:
 
 - `doopify doctor` can run read-only setup diagnostics locally
-- setup status is available through a safe server service and `/api/setup/status`
+- setup status is available through a safe server service and owner-only `/api/setup/status` access
 - Settings -> Setup shows setup health and next actions without running shell commands from the browser
 - `doopify setup` can write env files, run Prisma setup, and bootstrap owner/store from a local trusted environment
 - secrets are redacted from logs and never exposed through setup-status APIs

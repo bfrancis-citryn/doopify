@@ -5,7 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 
 import { ok, err } from '@/lib/api'
-import { requireAdmin } from '@/server/auth/require-auth'
+import { requireOwner } from '@/server/auth/require-auth'
 import {
   buildSetupDoctorReport,
   deriveSafeNextActions,
@@ -228,7 +228,7 @@ function buildGroupedNextActions(checks: SetupCheck[], facts: SetupDoctorFacts) 
 }
 
 export async function GET(req: Request) {
-  const auth = await requireAdmin(req)
+  const auth = await requireOwner(req)
   if (!auth.ok) return auth.response
 
   try {

@@ -83,7 +83,7 @@ Acceptance:
 
 ## Phase B - Setup Status API And Admin Setup Tab
 
-Status: shipped foundation (`/api/setup/status` + Settings -> Setup checklist tab)
+Status: shipped foundation (`/api/setup/status` + Settings -> Setup checklist tab, owner-only API access)
 
 Add:
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  requireAdmin: vi.fn(),
+  requireOwner: vi.fn(),
   queryRaw: vi.fn(),
   storeCount: vi.fn(),
   userCount: vi.fn(),
@@ -37,7 +37,7 @@ vi.mock('node:fs', () => ({
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
-  requireAdmin: mocks.requireAdmin,
+  requireOwner: mocks.requireOwner,
 }))
 
 import { GET } from './route'
@@ -45,9 +45,9 @@ import { GET } from './route'
 describe('GET /api/setup/status', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.requireAdmin.mockResolvedValue({
+    mocks.requireOwner.mockResolvedValue({
       ok: true,
-      user: { id: 'staff_1', email: 'staff@example.com', role: 'STAFF' },
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
     })
 
     mocks.queryRaw.mockResolvedValue([{ '?column?': 1 }])
@@ -74,7 +74,7 @@ describe('GET /api/setup/status', () => {
   })
 
   it('returns JSON auth errors for unauthenticated users', async () => {
-    mocks.requireAdmin.mockResolvedValue({
+    mocks.requireOwner.mockResolvedValue({
       ok: false,
       response: new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
         status: 401,
@@ -91,8 +91,8 @@ describe('GET /api/setup/status', () => {
     expect(mocks.queryRaw).not.toHaveBeenCalled()
   })
 
-  it('returns JSON auth errors for forbidden users', async () => {
-    mocks.requireAdmin.mockResolvedValue({
+  it('returns JSON auth errors for STAFF users (owner-only route)', async () => {
+    mocks.requireOwner.mockResolvedValue({
       ok: false,
       response: new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
         status: 403,
@@ -107,6 +107,21 @@ describe('GET /api/setup/status', () => {
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(payload).toEqual({ success: false, error: 'Forbidden' })
     expect(mocks.queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('allows OWNER users to access setup diagnostics', async () => {
+    mocks.requireOwner.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_2', email: 'owner2@example.com', role: 'OWNER' },
+    })
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(payload.success).toBe(true)
+    expect(payload.data).toEqual(expect.objectContaining({ checks: expect.any(Array) }))
   })
 
   it('returns safe setup diagnostics with no raw secrets', async () => {

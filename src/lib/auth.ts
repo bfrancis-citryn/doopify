@@ -33,27 +33,48 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
   const payload = decodeToken(token)
   if (!payload) return null
 
-  const session = await prisma.session.findUnique({
-    where: { token },
-    select: {
-      id: true,
-      expiresAt: true,
-      user: {
-        select: {
-          id: true,
-          email: true,
-          isActive: true,
+  let session:
+    | {
+        id: string
+        token: string
+        expiresAt: Date
+        user: {
+          id: string
+          email: string
+          isActive: boolean
+        }
+      }
+    | null = null
+
+  try {
+    session = await prisma.session.findUnique({
+      where: { id: payload.sessionId },
+      select: {
+        id: true,
+        token: true,
+        expiresAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            isActive: true,
+          },
         },
       },
-    },
-  })
+    })
+  } catch (error) {
+    console.error('[auth.verifyToken] Failed to query session', error)
+    return null
+  }
 
-  if (!session) {
+  if (!session || session.token !== token) {
     return null
   }
 
   if (session.expiresAt.getTime() <= Date.now()) {
-    await prisma.session.delete({ where: { token } })
+    await prisma.session.deleteMany({ where: { id: session.id } }).catch((error) => {
+      console.error('[auth.verifyToken] Failed to cleanup expired session', error)
+    })
     return null
   }
 
