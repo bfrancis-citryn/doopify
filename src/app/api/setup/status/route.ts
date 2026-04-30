@@ -169,6 +169,64 @@ function buildCategorySummaries(checks: SetupCheck[]): SetupCategorySummary[] {
   })
 }
 
+function checkNeedsAction(check: SetupCheck | undefined) {
+  if (!check) return false
+  return check.status === 'FAIL' || check.status === 'WARN'
+}
+
+function dedupe(items: string[]) {
+  return [...new Set(items)]
+}
+
+function buildGroupedNextActions(checks: SetupCheck[], facts: SetupDoctorFacts) {
+  const byId = new Map(checks.map((check) => [check.id, check]))
+  const requiredNextSteps: string[] = []
+  const providerSetupSteps: string[] = []
+  const optionalProductionSteps: string[] = []
+
+  const pushFix = (bucket: string[], checkId: string) => {
+    const check = byId.get(checkId)
+    if (!checkNeedsAction(check)) return
+    if (check?.fix) bucket.push(check.fix)
+  }
+
+  pushFix(requiredNextSteps, 'database-url')
+  pushFix(requiredNextSteps, 'database-reachable')
+  pushFix(requiredNextSteps, 'prisma-client-generated')
+  pushFix(requiredNextSteps, 'owner-user-exists')
+  pushFix(requiredNextSteps, 'jwt-secret')
+  pushFix(requiredNextSteps, 'webhook-retry-secret')
+  pushFix(requiredNextSteps, 'next-public-store-url')
+
+  if (checkNeedsAction(byId.get('store-exists'))) {
+    requiredNextSteps.push('Run npm run db:seed:bootstrap to create the initial store and owner records.')
+  }
+
+  pushFix(providerSetupSteps, 'stripe-keys')
+  pushFix(providerSetupSteps, 'stripe-webhook-secret')
+  pushFix(providerSetupSteps, 'resend-api-or-preview')
+  pushFix(providerSetupSteps, 'resend-webhook-secret-enabled')
+
+  if (facts.resendApiKeyPresent && !facts.resendWebhookSecretPresent) {
+    providerSetupSteps.push(
+      'Add RESEND_WEBHOOK_SECRET. Live email sending may work, but bounce/complaint webhook verification is not configured.'
+    )
+  }
+
+  pushFix(optionalProductionSteps, 'store-settings')
+  pushFix(optionalProductionSteps, 'vercel-deployment')
+
+  if (!facts.resendApiKeyPresent) {
+    optionalProductionSteps.push('Set RESEND_API_KEY before enabling live transactional email sending in production.')
+  }
+
+  return {
+    requiredNextSteps: dedupe(requiredNextSteps),
+    providerSetupSteps: dedupe(providerSetupSteps),
+    optionalProductionSteps: dedupe(optionalProductionSteps),
+  }
+}
+
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
@@ -227,6 +285,7 @@ export async function GET(req: Request) {
     const categories = buildCategorySummaries(report.checks)
     const completionPercent = computeCompletionPercent(report.checks)
     const safeNextActions = deriveSafeNextActions(report.checks)
+    const groupedNextActions = buildGroupedNextActions(report.checks, facts)
 
     const overallStatus = report.requiredFailCount > 0
       ? 'ACTION_REQUIRED'
@@ -250,6 +309,9 @@ export async function GET(req: Request) {
       warnings,
       safeNextActions,
       nextActions: safeNextActions,
+      requiredNextSteps: groupedNextActions.requiredNextSteps,
+      providerSetupSteps: groupedNextActions.providerSetupSteps,
+      optionalProductionSteps: groupedNextActions.optionalProductionSteps,
       summary: {
         passCount: report.passCount,
         warnCount: report.warnCount,

@@ -131,6 +131,9 @@ describe('GET /api/setup/status', () => {
         safeNextActions: expect.any(Array),
         nextActions: expect.any(Array),
         categories: expect.any(Array),
+        requiredNextSteps: expect.any(Array),
+        providerSetupSteps: expect.any(Array),
+        optionalProductionSteps: expect.any(Array),
       })
     )
 
@@ -159,6 +162,59 @@ describe('GET /api/setup/status', () => {
     const databaseReachableCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'database-reachable')
     expect(databaseUrlCheck?.status).toBe('FAIL')
     expect(databaseReachableCheck?.status).toBe('WARN')
+  })
+
+  it('does not claim provider verification when Stripe keys only exist in env', async () => {
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    const stripeKeysCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'stripe-keys')
+    expect(stripeKeysCheck?.status).toBe('PASS')
+    expect(stripeKeysCheck?.summary).toContain('Provider API verification has not been run from this screen')
+  })
+
+  it('includes bootstrap as a required next step when store is missing', async () => {
+    mocks.storeCount.mockResolvedValueOnce(0)
+    mocks.findStore.mockResolvedValueOnce(null)
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+    expect(payload.data.requiredNextSteps).toContain(
+      'Run npm run db:seed:bootstrap to create the initial store and owner records.'
+    )
+  })
+
+  it('includes webhook retry secret guidance as a required next step when missing', async () => {
+    delete process.env.WEBHOOK_RETRY_SECRET
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+    expect(payload.data.requiredNextSteps.some((step: string) => step.includes('WEBHOOK_RETRY_SECRET'))).toBe(true)
+  })
+
+  it('flags missing resend webhook secret when resend api key is present', async () => {
+    delete process.env.RESEND_WEBHOOK_SECRET
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+
+    const resendApiCheck = payload.data.recommendedChecks.find((check: { id: string }) => check.id === 'resend-api-or-preview')
+    const resendWebhookCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'resend-webhook-secret-enabled')
+
+    expect(resendApiCheck?.status).toBe('PASS')
+    expect(resendWebhookCheck?.status).toBe('FAIL')
+    expect(resendWebhookCheck?.summary).toContain(
+      'Live email sending may work, but bounce/complaint webhook verification is not configured.'
+    )
   })
 
   it('sanitizes database connectivity failures and still returns useful diagnostics', async () => {

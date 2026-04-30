@@ -437,6 +437,25 @@
   color: var(--on-surface);
 }
 
+.setupTemplateCode {
+  margin: 0;
+  border-radius: 0.6rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-lowest) 68%, transparent);
+  padding: 0.65rem;
+  color: var(--on-surface);
+  font-size: 0.77rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.setupActionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .setupList {
   display: flex;
   flex-direction: column;

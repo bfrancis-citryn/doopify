@@ -6,7 +6,7 @@ import { useOrders } from '../../context/OrdersContext';
 import OrderDetailView from './OrderDetailView';
 
 export default function OrderDetailClientPage({ orderNumber }) {
-  const { orders } = useOrders();
+  const { orders, updateOrder } = useOrders();
   const normalizedOrderNumber = `#${String(orderNumber).replace(/^#/, '')}`;
   // Fallback to context order if fetch hasn't completed
   const summaryOrder = orders.find(entry => entry.orderNumber === normalizedOrderNumber);
@@ -56,8 +56,7 @@ export default function OrderDetailClientPage({ orderNumber }) {
     >
       <OrderDetailView 
         onUpdateOrder={handleUpdateOrder} 
-        order={combinedOrder} 
-        onRefetch={fetchDetailedOrder}
+        order={combinedOrder}
       />
     </AppShell>
   );

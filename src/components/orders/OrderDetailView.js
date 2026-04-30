@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { formatOrderMoney } from '../../lib/ordersData';
+import OrderAdjustmentsCard from './OrderAdjustmentsCard';
 import styles from './OrdersWorkspace.module.css';
 
 function StatusPill({ children, tone }) {
@@ -934,7 +935,6 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
 
   const paymentTone = statusTone(currentOrder.paymentStatus);
   const fulfillmentTone = statusTone(currentOrder.fulfillmentStatus);
-  const canRefundOrReturn = ['PAID', 'PARTIALLY_REFUNDED'].includes(normalizePaymentStatus(currentOrder.paymentStatus));
   const canManualFulfill =
     ['PAID', 'PARTIALLY_REFUNDED'].includes(normalizePaymentStatus(currentOrder.paymentStatus)) &&
     normalizePaymentStatus(currentOrder.fulfillmentStatus) !== 'FULFILLED';
@@ -960,16 +960,12 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
         </div>
         <div className={styles.shopifyHeaderActionsClean}>
           <button className={styles.secondaryAction} disabled={refreshing} onClick={refreshOrder} type="button">{refreshing ? 'Refreshing...' : 'Refresh'}</button>
-          <button className={styles.secondaryAction} disabled={!canRefundOrReturn} onClick={() => setActivePanel(activePanel === 'refund' ? null : 'refund')} type="button">Refund</button>
-          <button className={styles.secondaryAction} disabled={!canRefundOrReturn} onClick={() => setActivePanel(activePanel === 'return' ? null : 'return')} type="button">Return</button>
           <button className={styles.secondaryAction} disabled={!canManualFulfill} onClick={() => setActivePanel(activePanel === 'manual-fulfillment' ? null : 'manual-fulfillment')} type="button">Mark Fulfilled Manually</button>
           <button className={styles.secondaryAction} disabled={!canBuyShippingLabel} onClick={() => setActivePanel(activePanel === 'label-purchase' ? null : 'label-purchase')} type="button">Buy Shipping Label</button>
           <button className={styles.secondaryAction} type="button">Print</button>
         </div>
       </div>
 
-      {activePanel === 'refund' && <RefundPanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
-      {activePanel === 'return' && <ReturnPanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
       {activePanel === 'manual-fulfillment' && <ManualFulfillmentPanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
       {activePanel === 'label-purchase' && <LabelPurchasePanel order={currentOrder} onClose={() => setActivePanel(null)} onSuccess={handlePanelSuccess} />}
 
@@ -996,7 +992,11 @@ export default function OrderDetailView({ order, onUpdateOrder }) {
             </div>
           </div>
 
-          <ReturnWorkflowPanel order={currentOrder} onRefresh={refreshOrder} onTimeline={appendTimeline} />
+          <OrderAdjustmentsCard
+            onOrderRefresh={refreshOrder}
+            orderNumber={currentOrder.orderNumber}
+            paymentStatus={currentOrder.paymentStatus}
+          />
 
           <div className={styles.shopifyPanelClean}>
             <div className={styles.shopifyPanelHeaderClean}>

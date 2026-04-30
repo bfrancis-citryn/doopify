@@ -65,7 +65,7 @@ describe('buildSetupDoctorReport', () => {
     expect(report.checks.find((check) => check.id === 'jwt-secret')?.status).toBe('FAIL')
   })
 
-  it('treats missing resend api key as preview mode pass', () => {
+  it('treats missing resend api key as preview mode warning', () => {
     const facts = baseFacts()
     facts.resendApiKeyPresent = false
     facts.emailProviderWebhooksEnabled = false
@@ -73,8 +73,31 @@ describe('buildSetupDoctorReport', () => {
 
     const report = buildSetupDoctorReport(facts, { profile: 'app' })
 
-    expect(report.checks.find((check) => check.id === 'resend-api-or-preview')?.status).toBe('PASS')
+    expect(report.checks.find((check) => check.id === 'resend-api-or-preview')?.status).toBe('WARN')
     expect(report.checks.find((check) => check.id === 'resend-webhook-secret-enabled')?.status).toBe('WARN')
+  })
+
+  it('does not claim Stripe API verification from env-only checks', () => {
+    const report = buildSetupDoctorReport(baseFacts(), { profile: 'app' })
+    const stripeCheck = report.checks.find((check) => check.id === 'stripe-keys')
+
+    expect(stripeCheck?.status).toBe('PASS')
+    expect(stripeCheck?.summary).toContain('Provider API verification has not been run from this screen')
+  })
+
+  it('explains resend webhook verification when api key exists but webhook secret is missing', () => {
+    const facts = baseFacts()
+    facts.resendApiKeyPresent = true
+    facts.resendWebhookSecretPresent = false
+    facts.emailProviderWebhooksEnabled = true
+
+    const report = buildSetupDoctorReport(facts, { profile: 'app' })
+    const resendWebhookCheck = report.checks.find((check) => check.id === 'resend-webhook-secret-enabled')
+
+    expect(resendWebhookCheck?.status).toBe('FAIL')
+    expect(resendWebhookCheck?.summary).toContain(
+      'Live email sending may work, but bounce/complaint webhook verification is not configured.'
+    )
   })
 
   it('derives safe next actions from failing/warn checks', () => {

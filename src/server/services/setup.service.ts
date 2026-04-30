@@ -242,7 +242,7 @@ export function buildSetupDoctorReport(
     category: 'database',
     required: true,
     status: facts.databaseUrlPresent ? 'PASS' : 'FAIL',
-    summary: facts.databaseUrlPresent ? 'DATABASE_URL is set.' : 'DATABASE_URL is missing.',
+    summary: facts.databaseUrlPresent ? 'DATABASE_URL is present in env.' : 'DATABASE_URL is missing.',
     fix: facts.databaseUrlPresent
       ? undefined
       : 'Set DATABASE_URL in .env.local or your runtime environment.',
@@ -257,7 +257,7 @@ export function buildSetupDoctorReport(
     summary: !facts.databaseUrlPresent
       ? 'Skipped because DATABASE_URL is missing.'
       : facts.databaseReachable
-        ? 'Database connection succeeded.'
+        ? 'DATABASE_URL is present and the app can query the database.'
         : 'Database connection failed.',
     fix: !facts.databaseUrlPresent
       ? 'Configure DATABASE_URL first, then re-run doctor.'
@@ -282,7 +282,7 @@ export function buildSetupDoctorReport(
 
   checks.push({
     id: 'store-exists',
-    title: 'Store exists',
+    title: 'Store seeded',
     category: 'store_settings',
     required: true,
     status:
@@ -295,19 +295,19 @@ export function buildSetupDoctorReport(
       facts.databaseReachable && facts.storeCount !== null
         ? facts.storeCount > 0
           ? `${facts.storeCount} store record(s) found.`
-          : 'No store records found.'
+          : 'No store record found. Run bootstrap or setup before selling.'
         : 'Skipped because database check did not complete.',
     fix:
       facts.databaseReachable && facts.storeCount !== null
         ? facts.storeCount > 0
           ? undefined
-          : 'Run npm run db:seed:bootstrap or create a store via setup flow.'
+          : 'Run npm run db:seed:bootstrap or create a store via setup flow before selling.'
         : 'Resolve database connectivity first.',
   })
 
   checks.push({
     id: 'owner-user-exists',
-    title: 'Owner/admin user exists',
+    title: 'Owner account exists',
     category: 'admin_owner',
     required: true,
     status:
@@ -371,12 +371,12 @@ export function buildSetupDoctorReport(
 
   checks.push({
     id: 'stripe-keys',
-    title: 'Stripe keys present',
+    title: 'Stripe env keys found',
     category: 'stripe',
     required: true,
     status: facts.stripeSecretKeyPresent && facts.stripePublishableKeyPresent ? 'PASS' : 'FAIL',
     summary: facts.stripeSecretKeyPresent && facts.stripePublishableKeyPresent
-      ? 'Stripe secret and publishable keys are present.'
+      ? 'Stripe keys are present in env. Provider API verification has not been run from this screen.'
       : 'Missing Stripe secret key and/or publishable key.',
     fix: facts.stripeSecretKeyPresent && facts.stripePublishableKeyPresent
       ? undefined
@@ -385,12 +385,12 @@ export function buildSetupDoctorReport(
 
   checks.push({
     id: 'stripe-webhook-secret',
-    title: 'Stripe webhook secret present',
+    title: 'Stripe webhook secret found',
     category: 'stripe',
     required: true,
     status: facts.stripeWebhookSecretPresent ? 'PASS' : 'FAIL',
     summary: facts.stripeWebhookSecretPresent
-      ? 'STRIPE_WEBHOOK_SECRET is present.'
+      ? 'STRIPE_WEBHOOK_SECRET is present in env. Webhook endpoint verification has not been run from this screen.'
       : 'STRIPE_WEBHOOK_SECRET is missing.',
     fix: facts.stripeWebhookSecretPresent
       ? undefined
@@ -410,13 +410,13 @@ export function buildSetupDoctorReport(
 
   checks.push({
     id: 'resend-api-or-preview',
-    title: 'RESEND_API_KEY or preview mode',
+    title: 'Email API key found',
     category: 'resend_email',
-    required: true,
-    status: 'PASS',
+    required: false,
+    status: facts.resendApiKeyPresent ? 'PASS' : 'WARN',
     summary: facts.resendApiKeyPresent
-      ? 'RESEND_API_KEY is present.'
-      : 'RESEND_API_KEY is not set; preview mode is active.',
+      ? 'RESEND_API_KEY is present. Send/API verification has not been run from this screen.'
+      : 'RESEND_API_KEY is not set; preview mode is active and live provider sends are disabled.',
     fix: facts.resendApiKeyPresent
       ? undefined
       : 'Set RESEND_API_KEY to enable live provider sends (optional in local preview mode).',
@@ -425,13 +425,13 @@ export function buildSetupDoctorReport(
   if (facts.emailProviderWebhooksEnabled) {
     checks.push({
       id: 'resend-webhook-secret-enabled',
-      title: 'RESEND_WEBHOOK_SECRET for email-provider webhooks',
+      title: 'Email webhook secret found',
       category: 'resend_email',
       required: true,
       status: facts.resendWebhookSecretPresent ? 'PASS' : 'FAIL',
       summary: facts.resendWebhookSecretPresent
         ? 'RESEND_WEBHOOK_SECRET is present for email-provider webhook verification.'
-        : 'Email-provider webhooks appear enabled but RESEND_WEBHOOK_SECRET is missing.',
+        : 'Live email sending may work, but bounce/complaint webhook verification is not configured.',
       fix: facts.resendWebhookSecretPresent
         ? undefined
         : 'Set RESEND_WEBHOOK_SECRET to verify webhook signatures on /api/webhooks/email-provider.',
@@ -439,13 +439,13 @@ export function buildSetupDoctorReport(
   } else {
     checks.push({
       id: 'resend-webhook-secret-enabled',
-      title: 'RESEND_WEBHOOK_SECRET for email-provider webhooks',
+      title: 'Email webhook secret found',
       category: 'resend_email',
       required: false,
       status: facts.resendWebhookSecretPresent ? 'PASS' : 'WARN',
       summary: facts.resendWebhookSecretPresent
         ? 'RESEND_WEBHOOK_SECRET is configured.'
-        : 'Email-provider webhook verification is not enabled; RESEND_WEBHOOK_SECRET is optional right now.',
+        : 'Email-provider webhook verification is not enabled; RESEND_WEBHOOK_SECRET is optional until webhook events are enabled.',
       fix: facts.resendWebhookSecretPresent
         ? undefined
         : 'If you enable provider webhooks, set RESEND_WEBHOOK_SECRET first.',
@@ -465,7 +465,7 @@ export function buildSetupDoctorReport(
 
   checks.push({
     id: 'vercel-deployment',
-    title: 'Vercel/deployment hints',
+    title: 'Deployment env detected',
     category: 'deployment',
     required: false,
     status: facts.vercelEnvironmentDetected || facts.vercelUrlPresent ? 'PASS' : 'WARN',

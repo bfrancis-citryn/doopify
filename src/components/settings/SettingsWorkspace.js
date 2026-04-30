@@ -32,16 +32,16 @@ const SETUP_STATUS_PRIORITY = {
 };
 
 const SETUP_CARD_DEFINITIONS = [
-  { id: 'database', label: 'Database connected', checkIds: ['database-url', 'database-reachable', 'prisma-client-generated'] },
-  { id: 'admin', label: 'Admin account created', checkIds: ['owner-user-exists'] },
-  { id: 'store', label: 'Store profile complete', checkIds: ['store-exists', 'store-settings'] },
-  { id: 'stripe-core', label: 'Stripe configured', checkIds: ['stripe-keys'] },
-  { id: 'stripe-webhook', label: 'Stripe webhook configured', checkIds: ['stripe-webhook-secret'] },
-  { id: 'email-provider', label: 'Email provider configured', checkIds: ['resend-api-or-preview'] },
-  { id: 'email-webhook', label: 'Email webhook configured', checkIds: ['resend-webhook-secret-enabled'] },
-  { id: 'webhook-retry', label: 'Webhook retry secret configured', checkIds: ['webhook-retry-secret'] },
-  { id: 'public-url', label: 'Public app URL configured', checkIds: ['next-public-store-url'] },
-  { id: 'deployment', label: 'Deployment ready', checkIds: ['vercel-deployment'] },
+  { id: 'database', label: 'Database reachable', checkIds: ['database-url', 'database-reachable', 'prisma-client-generated'] },
+  { id: 'store', label: 'Store seeded', checkIds: ['store-exists', 'store-settings'] },
+  { id: 'owner', label: 'Owner account exists', checkIds: ['owner-user-exists'] },
+  { id: 'stripe-core', label: 'Stripe env keys found', checkIds: ['stripe-keys'] },
+  { id: 'stripe-webhook', label: 'Stripe webhook secret found', checkIds: ['stripe-webhook-secret'] },
+  { id: 'email-provider', label: 'Email API key found', checkIds: ['resend-api-or-preview'] },
+  { id: 'email-webhook', label: 'Email webhook secret found', checkIds: ['resend-webhook-secret-enabled'] },
+  { id: 'webhook-retry', label: 'Webhook retry secret found', checkIds: ['webhook-retry-secret'] },
+  { id: 'public-url', label: 'Public store URL set', checkIds: ['next-public-store-url'] },
+  { id: 'deployment', label: 'Deployment env detected', checkIds: ['vercel-deployment'] },
 ];
 
 const SETUP_COMMANDS = [
@@ -82,6 +82,25 @@ const PROVIDER_HINTS = [
   'Resend: set RESEND_API_KEY for live sends. Leave unset for preview mode.',
   'Email webhooks: set RESEND_WEBHOOK_SECRET before enabling provider webhook delivery.',
   'Deployment: set NEXT_PUBLIC_STORE_URL and configure VERCEL_URL/VERCEL_ENV for hosted environments.',
+];
+
+const SETUP_ENV_TEMPLATE = [
+  '# Doopify setup template',
+  'DATABASE_URL=',
+  'JWT_SECRET="generate-a-random-32-character-secret"',
+  'STRIPE_SECRET_KEY=',
+  'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=',
+  'STRIPE_WEBHOOK_SECRET=',
+  'WEBHOOK_RETRY_SECRET="generate-a-random-32-character-secret"',
+  'RESEND_API_KEY=',
+  'RESEND_WEBHOOK_SECRET=',
+  'NEXT_PUBLIC_STORE_URL=',
+].join('\n');
+
+const SETUP_PROVIDER_VERIFICATION_PLACEHOLDERS = [
+  'Verify Stripe API connection — coming soon',
+  'Verify Resend API connection — coming soon',
+  'Verify webhook endpoint — coming soon',
 ];
 
 const FONT_OPTIONS = BRAND_FONT_VALUES.map((value) => ({ value, label: value }));
@@ -419,6 +438,9 @@ export default function SettingsWorkspace() {
   const showSetupLoadingState = activeSection === 'setup' && setupLoading && !setupStatus && !setupError;
   const showSetupErrorState = activeSection === 'setup' && Boolean(setupError);
   const showSetupDiagnostics = activeSection === 'setup' && hasSetupDiagnostics;
+  const setupRequiredNextSteps = setupStatus?.requiredNextSteps || [];
+  const setupProviderSetupSteps = setupStatus?.providerSetupSteps || [];
+  const setupOptionalProductionSteps = setupStatus?.optionalProductionSteps || [];
 
   useEffect(() => {
     const timer = window.setInterval(() => setSaveClock(Date.now()), 1000);
@@ -1716,6 +1738,15 @@ export default function SettingsWorkspace() {
 
             {!loading && !error && activeSection === 'setup' ? (
               <div className={styles.setupPanel}>
+                <AdminCard className={styles.setupSummaryCard} variant="card">
+                  <h4>Setup mode</h4>
+                  <p className={styles.statusText}>
+                    This page checks runtime setup status. It does not save secrets or run local setup commands from
+                    the browser. Use the CLI commands below to write <code>.env.local</code>, run Prisma setup, and
+                    configure provider webhooks.
+                  </p>
+                </AdminCard>
+
                 {showSetupDiagnostics ? (
                   <AdminCard className={styles.setupSummaryCard} variant="card">
                     <div>
@@ -1784,6 +1815,25 @@ export default function SettingsWorkspace() {
                       </AdminCard>
 
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
+                        <h4>Copy .env template</h4>
+                        <div className={styles.commandList}>
+                          <div className={styles.commandRow}>
+                            <code className={styles.commandCode}>.env.local template</code>
+                            <AdminButton
+                              onClick={() => handleCopyCommand('env-template', SETUP_ENV_TEMPLATE)}
+                              size="sm"
+                              variant="secondary"
+                            >
+                              {setupCopiedCommandId === 'env-template' ? 'Copied' : 'Copy'}
+                            </AdminButton>
+                          </div>
+                        </div>
+                        <pre className={styles.setupTemplateCode}>{SETUP_ENV_TEMPLATE}</pre>
+                      </AdminCard>
+                    </section>
+
+                    <section className={styles.setupColumns}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Copy/paste CLI commands</h4>
                         <div className={styles.commandList}>
                           {SETUP_COMMANDS.map((entry) => (
@@ -1800,24 +1850,66 @@ export default function SettingsWorkspace() {
                           ))}
                         </div>
                       </AdminCard>
+
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
+                        <h4>Provider verification</h4>
+                        <p className={styles.statusText}>
+                          Provider API verification is not available from this screen yet.
+                        </p>
+                        <div className={styles.setupActionButtons}>
+                          {SETUP_PROVIDER_VERIFICATION_PLACEHOLDERS.map((label) => (
+                            <AdminButton disabled key={label} size="sm" variant="secondary">
+                              {label}
+                            </AdminButton>
+                          ))}
+                        </div>
+                      </AdminCard>
                     </section>
 
                     <section className={styles.setupColumns}>
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
-                        <h4>Safe next actions</h4>
-                        {(setupStatus?.safeNextActions?.length || setupStatus?.nextActions?.length) ? (
+                        <h4>Required next steps</h4>
+                        {setupRequiredNextSteps.length ? (
                           <ul className={styles.setupList}>
-                            {(setupStatus.safeNextActions || setupStatus.nextActions || []).map((action) => (
+                            {setupRequiredNextSteps.map((action) => (
                               <li key={action}>{action}</li>
                             ))}
                           </ul>
                         ) : (
-                          <p className={styles.statusText}>No required fixes right now.</p>
+                          <p className={styles.statusText}>No required steps right now.</p>
                         )}
                       </AdminCard>
 
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
-                        <h4>Provider connection hints</h4>
+                        <h4>Provider setup steps</h4>
+                        {setupProviderSetupSteps.length ? (
+                          <ul className={styles.setupList}>
+                            {setupProviderSetupSteps.map((action) => (
+                              <li key={action}>{action}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className={styles.statusText}>No provider setup steps right now.</p>
+                        )}
+                      </AdminCard>
+                    </section>
+
+                    <section className={styles.setupColumns}>
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
+                        <h4>Optional production steps</h4>
+                        {setupOptionalProductionSteps.length ? (
+                          <ul className={styles.setupList}>
+                            {setupOptionalProductionSteps.map((action) => (
+                              <li key={action}>{action}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className={styles.statusText}>No optional production steps right now.</p>
+                        )}
+                      </AdminCard>
+
+                      <AdminCard as="article" className={styles.setupColumnCard} variant="card">
+                        <h4>General setup hints</h4>
                         <ul className={styles.setupList}>
                           {PROVIDER_HINTS.map((hint) => (
                             <li key={hint}>{hint}</li>
