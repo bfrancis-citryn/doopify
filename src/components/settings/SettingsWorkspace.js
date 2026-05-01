@@ -147,6 +147,12 @@ const BRAND_DRAWER = {
   SOCIAL_LINKS: 'SOCIAL_LINKS',
 };
 
+const TAX_DRAWER = {
+  COLLECTION: 'COLLECTION',
+  REGIONS: 'REGIONS',
+  CUSTOMS: 'CUSTOMS',
+};
+
 const EMAIL_TEMPLATE_SUMMARY = [
   {
     id: 'order_confirmation',
@@ -248,6 +254,30 @@ const EMPTY_SHIPPING_TAX_PREVIEW = {
   selectedRateId: '',
 };
 
+const EMPTY_BRAND_KIT = Object.freeze({
+  name: '',
+  supportEmail: '',
+  logoUrl: '',
+  faviconUrl: '',
+  primaryColor: '',
+  secondaryColor: '',
+  accentColor: '',
+  textColor: '',
+  headingFont: '',
+  bodyFont: '',
+  buttonRadius: '',
+  buttonStyle: '',
+  buttonTextTransform: '',
+  checkoutLogoUrl: '',
+  emailLogoUrl: '',
+  emailHeaderColor: '',
+  emailFooterText: '',
+  instagramUrl: '',
+  facebookUrl: '',
+  tiktokUrl: '',
+  youtubeUrl: '',
+});
+
 const LEGACY_SHIPPING_MODE_OPTIONS = [
   { value: 'MANUAL', label: 'Manual only' },
   { value: 'LIVE_RATES', label: 'Live rates only' },
@@ -279,6 +309,17 @@ function parseNumberOrNull(value) {
   if (value == null || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeBrandKit(input) {
+  if (!input || typeof input !== 'object') {
+    return { ...EMPTY_BRAND_KIT };
+  }
+
+  return {
+    ...EMPTY_BRAND_KIT,
+    ...input,
+  };
 }
 
 function toZoneForm(zone) {
@@ -697,6 +738,7 @@ export default function SettingsWorkspace() {
   const [activePaymentDrawer, setActivePaymentDrawer] = useState(null);
   const [activeEmailDrawer, setActiveEmailDrawer] = useState(null);
   const [activeBrandDrawer, setActiveBrandDrawer] = useState(null);
+  const [activeTaxDrawer, setActiveTaxDrawer] = useState(null);
   const [activeEmailTemplateId, setActiveEmailTemplateId] = useState('');
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
@@ -716,8 +758,10 @@ export default function SettingsWorkspace() {
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
   const [saveClock, setSaveClock] = useState(Date.now());
-  const [brandKit, setBrandKit] = useState(null);
+  const [brandKit, setBrandKit] = useState(() => normalizeBrandKit(null));
   const [brandKitLoading, setBrandKitLoading] = useState(false);
+  const [brandKitLoaded, setBrandKitLoaded] = useState(false);
+  const [brandKitLoadWarning, setBrandKitLoadWarning] = useState(false);
   const [brandKitError, setBrandKitError] = useState('');
   const [brandKitNotice, setBrandKitNotice] = useState('');
   const [showAdvancedUrls, setShowAdvancedUrls] = useState(false);
@@ -742,7 +786,7 @@ export default function SettingsWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (activeSection !== 'brand-kit' || brandKit || brandKitLoading) {
+    if (activeSection !== 'brand-kit' || brandKitLoaded || brandKitLoading) {
       return;
     }
 
@@ -751,18 +795,21 @@ export default function SettingsWorkspace() {
     async function loadBrandKit() {
       setBrandKitLoading(true);
       setBrandKitError('');
+      setBrandKitLoadWarning(false);
       try {
         const data = await fetch('/api/settings/brand-kit', { cache: 'no-store' }).then(parseApiJson);
         if (!cancelled) {
-          setBrandKit(data);
+          setBrandKit(normalizeBrandKit(data));
         }
-      } catch (loadError) {
+      } catch {
         if (!cancelled) {
-          setBrandKitError(loadError instanceof Error ? loadError.message : 'Failed to load brand kit');
+          setBrandKit(normalizeBrandKit(null));
+          setBrandKitLoadWarning(true);
         }
       } finally {
         if (!cancelled) {
           setBrandKitLoading(false);
+          setBrandKitLoaded(true);
         }
       }
     }
@@ -772,7 +819,23 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, brandKit, brandKitLoading]);
+  }, [activeSection, brandKitLoaded, brandKitLoading]);
+
+  async function refreshBrandKit() {
+    try {
+      setBrandKitLoading(true);
+      setBrandKitError('');
+      setBrandKitLoadWarning(false);
+      const data = await fetch('/api/settings/brand-kit', { cache: 'no-store' }).then(parseApiJson);
+      setBrandKit(normalizeBrandKit(data));
+    } catch {
+      setBrandKit(normalizeBrandKit(null));
+      setBrandKitLoadWarning(true);
+    } finally {
+      setBrandKitLoading(false);
+      setBrandKitLoaded(true);
+    }
+  }
 
   useEffect(() => {
     if (!['shipping', 'taxes'].includes(activeSection) || shippingConfigLoaded || shippingConfigLoading) {
@@ -1464,6 +1527,42 @@ export default function SettingsWorkspace() {
     );
   }, [settings, shippingTaxPreview, shippingZones, taxSettings]);
 
+  const taxRegionSummaryRows = useMemo(() => {
+    const defaultRatePercent = parseNumberOrUndefined(taxSettings.defaultTaxRatePercent) ?? 0;
+    const defaultSource = `Manual default (${defaultRatePercent.toFixed(2)}%)`;
+
+    const activeRules = taxRules.filter((rule) => rule.isActive);
+    const usRule = activeRules.find((rule) => String(rule.countryCode || '').toUpperCase() === 'US') || null;
+    const restRule = activeRules.find((rule) => String(rule.countryCode || '').toUpperCase() !== 'US') || null;
+
+    const baseRows = [
+      {
+        id: 'region-us',
+        region: 'United States',
+        collectingStatus: taxSettings.enabled && (usRule || defaultRatePercent > 0) ? 'Collecting' : 'Not collecting',
+        source: usRule ? `Manual rule (${parseNumberOrUndefined(usRule.ratePercent)?.toFixed(2) || '0.00'}%)` : defaultSource,
+      },
+      {
+        id: 'region-row',
+        region: 'Rest of world',
+        collectingStatus: taxSettings.enabled && (restRule || defaultRatePercent > 0) ? 'Collecting' : 'Not collecting',
+        source: restRule ? `Manual rule (${parseNumberOrUndefined(restRule.ratePercent)?.toFixed(2) || '0.00'}%)` : defaultSource,
+      },
+    ];
+
+    const configuredRows = taxRules.map((rule) => {
+      const regionParts = [rule.name, rule.countryCode, rule.provinceCode].filter(Boolean);
+      return {
+        id: `configured-${rule.id}`,
+        region: regionParts.join(' - ') || 'Configured region',
+        collectingStatus: taxSettings.enabled && rule.isActive ? 'Collecting' : 'Not collecting',
+        source: `Manual rule (${parseNumberOrUndefined(rule.ratePercent)?.toFixed(2) || '0.00'}%)`,
+      };
+    });
+
+    return [...baseRows, ...configuredRows];
+  }, [taxRules, taxSettings.defaultTaxRatePercent, taxSettings.enabled]);
+
   async function handleSaveTaxSettings() {
     const ratePercent = parseNumberOrUndefined(taxSettings.defaultTaxRatePercent);
     if (ratePercent == null || ratePercent < 0 || ratePercent > 100) {
@@ -1612,6 +1711,14 @@ export default function SettingsWorkspace() {
 
   function closeBrandDrawer() {
     setActiveBrandDrawer(null);
+  }
+
+  function openTaxDrawer(drawerId) {
+    setActiveTaxDrawer(drawerId);
+  }
+
+  function closeTaxDrawer() {
+    setActiveTaxDrawer(null);
   }
 
   function openEmailTemplateDrawer(templateId) {
@@ -2075,7 +2182,7 @@ export default function SettingsWorkspace() {
                       activeSection !== 'brand-kit' ||
                       loading ||
                       Boolean(error) ||
-                      (activeSection === 'brand-kit' && (brandKitLoading || !brandKit))
+                      (activeSection === 'brand-kit' && brandKitLoading)
                     }
                     onClick={activeSection === 'brand-kit' ? handleBrandKitSave : undefined}
                     size="sm"
@@ -2197,8 +2304,7 @@ export default function SettingsWorkspace() {
                   </p>
                 </div>
 
-                {brandKit ? (
-                  <>
+                <>
                     <section className={styles.brandPreviewGrid}>
                       <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
@@ -2347,15 +2453,24 @@ export default function SettingsWorkspace() {
                         </div>
                       </AdminCard>
                     </section>
-                  </>
-                ) : null}
+                </>
 
                 {brandKitNotice ? (
                   <div className={styles.statusBlock}>
                     <p className={styles.statusText}>{brandKitNotice}</p>
                   </div>
                 ) : null}
-                {brandKitLoading ? <p className={styles.statusText}>Loading Brand & appearance...</p> : null}
+                {brandKitLoading && !brandKitLoaded ? <p className={styles.statusText}>Loading Brand & appearance...</p> : null}
+                {brandKitLoadWarning ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusText}>Could not load saved brand settings.</p>
+                    <div className={styles.compactActionRow}>
+                      <AdminButton disabled={brandKitLoading} onClick={() => refreshBrandKit()} size="sm" variant="secondary">
+                        {brandKitLoading ? 'Retrying...' : 'Retry'}
+                      </AdminButton>
+                    </div>
+                  </div>
+                ) : null}
                 {brandKitError ? (
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>Brand & appearance error</p>
@@ -2372,70 +2487,29 @@ export default function SettingsWorkspace() {
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
                     <h3>Tax collection</h3>
-                    <p className={styles.cardSubtext}>
-                      Configure whether tax is collected, how it is applied, and whether catalog prices include tax.
-                    </p>
                   </div>
-
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.checkboxField}>
-                      <AdminInput
-                        checked={taxSettings.enabled}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, enabled: event.target.checked }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>Enable tax collection</span>
-                    </label>
-                    <label className={styles.field}>
-                      <span>Strategy</span>
-                      <AdminSelect
-                        className={styles.input}
-                        onChange={(nextValue) =>
-                          setTaxSettings((current) => ({ ...current, strategy: nextValue }))
-                        }
-                        options={TAX_STRATEGY_OPTIONS}
-                        value={taxSettings.strategy}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Manual tax rate (%)</span>
-                      <AdminInput
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({
-                            ...current,
-                            defaultTaxRatePercent: event.target.value,
-                          }))
-                        }
-                        value={taxSettings.defaultTaxRatePercent}
-                      />
-                    </label>
-                    <label className={styles.checkboxField}>
-                      <AdminInput
-                        checked={taxSettings.taxShipping}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, taxShipping: event.target.checked }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>Tax shipping</span>
-                    </label>
-                    <label className={styles.checkboxField}>
-                      <AdminInput
-                        checked={taxSettings.pricesIncludeTax}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, pricesIncludeTax: event.target.checked }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>Prices include tax</span>
-                    </label>
-                    <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
-                      {taxSettingsSaving ? 'Saving tax settings...' : 'Save tax collection'}
-                    </AdminButton>
-                  </div>
+                  <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
+                    <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                      <h4>Tax collection</h4>
+                      <AdminStatusChip tone={taxSettings.enabled ? 'success' : 'warning'}>
+                        {taxSettings.enabled ? 'On' : 'Off'}
+                      </AdminStatusChip>
+                    </div>
+                    <div className={styles.taxSummaryList}>
+                      <p className={styles.taxSummaryRow}><strong>Status:</strong> {taxSettings.enabled ? 'On' : 'Off'}</p>
+                      <p className={styles.taxSummaryRow}><strong>Strategy:</strong> {taxSettings.strategy}</p>
+                      <p className={styles.taxSummaryRow}>
+                        <strong>Manual tax rate:</strong> {(parseNumberOrUndefined(taxSettings.defaultTaxRatePercent) ?? 0).toFixed(2)}%
+                      </p>
+                      <p className={styles.taxSummaryRow}><strong>Tax shipping:</strong> {taxSettings.taxShipping ? 'Yes' : 'No'}</p>
+                      <p className={styles.taxSummaryRow}><strong>Prices include tax:</strong> {taxSettings.pricesIncludeTax ? 'Yes' : 'No'}</p>
+                    </div>
+                    <div className={styles.compactActionRow}>
+                      <AdminButton onClick={() => openTaxDrawer(TAX_DRAWER.COLLECTION)} size="sm" variant="secondary">
+                        Manage
+                      </AdminButton>
+                    </div>
+                  </AdminCard>
                 </section>
 
                 {shippingConfigLoading ? (
@@ -2456,131 +2530,66 @@ export default function SettingsWorkspace() {
                   <div className={styles.sectionHeading}>
                     <h3>Tax regions</h3>
                   </div>
-
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span>Rule name</span>
-                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, name: event.target.value }))} value={newTaxRule.name} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Country code</span>
-                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, countryCode: event.target.value }))} value={newTaxRule.countryCode} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Province code</span>
-                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, provinceCode: event.target.value }))} value={newTaxRule.provinceCode} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Tax rate (%)</span>
-                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, ratePercent: event.target.value }))} value={newTaxRule.ratePercent} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Priority</span>
-                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, priority: event.target.value }))} value={newTaxRule.priority} />
-                    </label>
-                    <label className={styles.checkboxField}>
-                      <AdminInput checked={newTaxRule.isActive} onChange={(event) => setNewTaxRule((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
-                      <span>Active</span>
-                    </label>
-                    <AdminButton onClick={handleCreateTaxRule} size="sm" variant="secondary">
-                      Add tax rule
-                    </AdminButton>
-                  </div>
-
-                  {taxRules.map((rule) => (
-                    <div className={styles.configRow} key={rule.id}>
-                      <div className={styles.inlineGrid}>
-                        <label className={styles.field}>
-                          <span>Name</span>
-                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { name: event.target.value })} value={rule.name} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Country</span>
-                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { countryCode: event.target.value })} value={rule.countryCode} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Province</span>
-                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { provinceCode: event.target.value })} value={rule.provinceCode} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Tax rate (%)</span>
-                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { ratePercent: event.target.value })} value={rule.ratePercent} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Priority</span>
-                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { priority: event.target.value })} value={rule.priority} />
-                        </label>
-                        <label className={styles.checkboxField}>
-                          <AdminInput checked={rule.isActive} onChange={(event) => updateTaxRuleDraft(rule.id, { isActive: event.target.checked })} type="checkbox" />
-                          <span>Active</span>
-                        </label>
-                      </div>
-                      <div className={styles.actionRow}>
-                        <AdminButton onClick={() => handleSaveTaxRule(rule)} size="sm" variant="secondary">
-                          Save tax rule
-                        </AdminButton>
-                        <AdminButton onClick={() => handleDeleteTaxRule(rule.id)} size="sm" variant="danger">
-                          Delete tax rule
-                        </AdminButton>
-                      </div>
+                  <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
+                    <div className={styles.taxRegionList}>
+                      {taxRegionSummaryRows.map((row) => (
+                        <div className={styles.taxRegionRow} key={row.id}>
+                          <div>
+                            <p className={styles.taxRegionTitle}>{row.region}</p>
+                            <p className={styles.compactMeta}>
+                              <strong>Status:</strong> {row.collectingStatus}
+                            </p>
+                            <p className={styles.compactMeta}>
+                              <strong>Tax source:</strong> {row.source}
+                            </p>
+                          </div>
+                          <AdminButton onClick={() => openTaxDrawer(TAX_DRAWER.REGIONS)} size="sm" variant="secondary">
+                            Manage
+                          </AdminButton>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </AdminCard>
                 </section>
 
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
                     <h3>Duties & import taxes</h3>
                   </div>
-                  <div className={styles.statusBlock}>
-                    <p className={styles.statusText}>
-                      Duties and import-tax automation is configured per destination policy and can be expanded as provider support is finalized.
+                  <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
+                    <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                      <h4>Duties & import taxes</h4>
+                      <AdminStatusChip tone="warning">Not configured</AdminStatusChip>
+                    </div>
+                    <p className={styles.compactMeta}>
+                      Duties automation and import-tax workflows will be added after the current manual tax foundation.
                     </p>
-                  </div>
+                    <div className={styles.compactActionRow}>
+                      <AdminButton disabled size="sm" variant="ghost">
+                        Set up later (Coming soon)
+                      </AdminButton>
+                    </div>
+                  </AdminCard>
                 </section>
 
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
                     <h3>Customs information</h3>
-                    <p className={styles.cardSubtext}>
-                      Use origin details to improve tax and customs decisioning for international destinations.
-                    </p>
                   </div>
-
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span>Origin country</span>
-                      <AdminInput
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, originCountry: event.target.value }))
-                        }
-                        value={taxSettings.originCountry}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Origin state</span>
-                      <AdminInput
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, originState: event.target.value }))
-                        }
-                        value={taxSettings.originState}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Origin postal code</span>
-                      <AdminInput
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, originPostalCode: event.target.value }))
-                        }
-                        value={taxSettings.originPostalCode}
-                      />
-                    </label>
-                    <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
-                      {taxSettingsSaving ? 'Saving tax settings...' : 'Save customs information'}
-                    </AdminButton>
-                  </div>
+                  <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
+                    <div className={styles.taxSummaryList}>
+                      <p className={styles.taxSummaryRow}><strong>Origin country:</strong> {taxSettings.originCountry || 'Not set'}</p>
+                      <p className={styles.taxSummaryRow}><strong>Origin state:</strong> {taxSettings.originState || 'Not set'}</p>
+                      <p className={styles.taxSummaryRow}><strong>Origin postal code:</strong> {taxSettings.originPostalCode || 'Not set'}</p>
+                      <p className={styles.taxSummaryRow}><strong>Country of origin:</strong> Not supported yet</p>
+                      <p className={styles.taxSummaryRow}><strong>HS codes:</strong> Not supported yet</p>
+                    </div>
+                    <div className={styles.compactActionRow}>
+                      <AdminButton onClick={() => openTaxDrawer(TAX_DRAWER.CUSTOMS)} size="sm" variant="secondary">
+                        Manage
+                      </AdminButton>
+                    </div>
+                  </AdminCard>
                 </section>
 
                 <section className={styles.configSection}>
@@ -2623,7 +2632,7 @@ export default function SettingsWorkspace() {
 
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>
-                      Subtotal ${((shippingTaxPreviewPricing.subtotalCents || 0) / 100).toFixed(2)} • Tax $
+                      Subtotal ${((shippingTaxPreviewPricing.subtotalCents || 0) / 100).toFixed(2)} - Tax $
                       {((shippingTaxPreviewPricing.taxAmountCents || 0) / 100).toFixed(2)}
                     </p>
                     <p className={styles.statusText}>
@@ -3009,7 +3018,7 @@ export default function SettingsWorkspace() {
                         <AdminInput
                           checked={Boolean(providerForms.SMTP.secure)}
                           onChange={(event) => patchProviderForm('SMTP', { secure: event.target.checked })}
-                          type="checkbox"
+                          className={styles.settingsCheckbox} type="checkbox"
                         />
                         <span>Secure/TLS connection</span>
                       </label>
@@ -3819,7 +3828,7 @@ export default function SettingsWorkspace() {
                   <AdminInput
                     checked={Boolean(providerForms.SMTP.secure)}
                     onChange={(event) => patchProviderForm('SMTP', { secure: event.target.checked })}
-                    type="checkbox"
+                    className={styles.settingsCheckbox} type="checkbox"
                   />
                   <span>Secure/TLS connection</span>
                 </label>
@@ -4148,6 +4157,237 @@ export default function SettingsWorkspace() {
         ) : null}
       </AdminDrawer>
       <AdminDrawer
+        onClose={closeTaxDrawer}
+        open={Boolean(activeTaxDrawer)}
+        subtitle={
+          activeTaxDrawer === TAX_DRAWER.COLLECTION
+            ? 'Configure collection behavior and manual strategy settings.'
+            : activeTaxDrawer === TAX_DRAWER.REGIONS
+              ? 'Manage manual tax regions and rule-level overrides.'
+              : activeTaxDrawer === TAX_DRAWER.CUSTOMS
+                ? 'Manage origin details used for tax and customs decisioning.'
+                : 'Tax settings details.'
+        }
+        title={
+          activeTaxDrawer === TAX_DRAWER.COLLECTION
+            ? 'Tax collection'
+            : activeTaxDrawer === TAX_DRAWER.REGIONS
+              ? 'Tax regions'
+              : activeTaxDrawer === TAX_DRAWER.CUSTOMS
+                ? 'Customs information'
+                : 'Taxes & duties'
+        }
+      >
+        {activeTaxDrawer === TAX_DRAWER.COLLECTION ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Collection settings</h4>
+              </div>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <label className={styles.checkboxField}>
+                  <AdminInput
+                    checked={taxSettings.enabled}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({ ...current, enabled: event.target.checked }))
+                    }
+                    className={styles.settingsCheckbox} type="checkbox"
+                  />
+                  <span>Enable tax collection</span>
+                </label>
+                <label className={styles.field}>
+                  <span>Strategy</span>
+                  <AdminSelect
+                    className={styles.input}
+                    onChange={(nextValue) =>
+                      setTaxSettings((current) => ({ ...current, strategy: nextValue }))
+                    }
+                    options={TAX_STRATEGY_OPTIONS}
+                    value={taxSettings.strategy}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Manual tax rate (%)</span>
+                  <AdminInput
+                    className={styles.input}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({
+                        ...current,
+                        defaultTaxRatePercent: event.target.value,
+                      }))
+                    }
+                    value={taxSettings.defaultTaxRatePercent}
+                  />
+                </label>
+                <label className={styles.checkboxField}>
+                  <AdminInput
+                    checked={taxSettings.taxShipping}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({ ...current, taxShipping: event.target.checked }))
+                    }
+                    className={styles.settingsCheckbox} type="checkbox"
+                  />
+                  <span>Tax shipping</span>
+                </label>
+                <label className={styles.checkboxField}>
+                  <AdminInput
+                    checked={taxSettings.pricesIncludeTax}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({ ...current, pricesIncludeTax: event.target.checked }))
+                    }
+                    className={styles.settingsCheckbox} type="checkbox"
+                  />
+                  <span>Prices include tax</span>
+                </label>
+              </div>
+              <div className={styles.compactActionRow}>
+                <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
+                  {taxSettingsSaving ? 'Saving tax settings...' : 'Save tax collection'}
+                </AdminButton>
+              </div>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeTaxDrawer === TAX_DRAWER.REGIONS ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Add tax rule</h4>
+              </div>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <label className={styles.field}>
+                  <span>Rule name</span>
+                  <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, name: event.target.value }))} value={newTaxRule.name} />
+                </label>
+                <label className={styles.field}>
+                  <span>Country code</span>
+                  <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, countryCode: event.target.value }))} value={newTaxRule.countryCode} />
+                </label>
+                <label className={styles.field}>
+                  <span>State/Province code</span>
+                  <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, provinceCode: event.target.value }))} value={newTaxRule.provinceCode} />
+                </label>
+                <label className={styles.field}>
+                  <span>Tax rate (%)</span>
+                  <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, ratePercent: event.target.value }))} value={newTaxRule.ratePercent} />
+                </label>
+                <label className={styles.field}>
+                  <span>Priority</span>
+                  <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, priority: event.target.value }))} value={newTaxRule.priority} />
+                </label>
+                <label className={styles.checkboxField}>
+                  <AdminInput checked={newTaxRule.isActive} onChange={(event) => setNewTaxRule((current) => ({ ...current, isActive: event.target.checked }))} className={styles.settingsCheckbox} type="checkbox" />
+                  <span>Active</span>
+                </label>
+              </div>
+              <div className={styles.compactActionRow}>
+                <AdminButton onClick={handleCreateTaxRule} size="sm" variant="secondary">
+                  Add tax rule
+                </AdminButton>
+              </div>
+            </AdminCard>
+
+            {taxRules.map((rule) => (
+              <AdminCard as="section" className={styles.compactDrawerCard} key={rule.id} variant="card">
+                <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                  <h4>{rule.name || 'Tax rule'}</h4>
+                </div>
+                <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                  <label className={styles.field}>
+                    <span>Rule name</span>
+                    <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { name: event.target.value })} value={rule.name} />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Country code</span>
+                    <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { countryCode: event.target.value })} value={rule.countryCode} />
+                  </label>
+                  <label className={styles.field}>
+                    <span>State/Province code</span>
+                    <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { provinceCode: event.target.value })} value={rule.provinceCode} />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Tax rate (%)</span>
+                    <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { ratePercent: event.target.value })} value={rule.ratePercent} />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Priority</span>
+                    <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { priority: event.target.value })} value={rule.priority} />
+                  </label>
+                  <label className={styles.checkboxField}>
+                    <AdminInput checked={rule.isActive} onChange={(event) => updateTaxRuleDraft(rule.id, { isActive: event.target.checked })} className={styles.settingsCheckbox} type="checkbox" />
+                    <span>Active</span>
+                  </label>
+                </div>
+                <div className={styles.compactActionRow}>
+                  <AdminButton onClick={() => handleSaveTaxRule(rule)} size="sm" variant="secondary">
+                    Save tax rule
+                  </AdminButton>
+                  <AdminButton onClick={() => handleDeleteTaxRule(rule.id)} size="sm" variant="danger">
+                    Delete tax rule
+                  </AdminButton>
+                </div>
+              </AdminCard>
+            ))}
+          </div>
+        ) : null}
+
+        {activeTaxDrawer === TAX_DRAWER.CUSTOMS ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Origin details</h4>
+              </div>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <label className={styles.field}>
+                  <span>Origin country</span>
+                  <AdminInput
+                    className={styles.input}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({ ...current, originCountry: event.target.value }))
+                    }
+                    value={taxSettings.originCountry}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Origin state</span>
+                  <AdminInput
+                    className={styles.input}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({ ...current, originState: event.target.value }))
+                    }
+                    value={taxSettings.originState}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Origin postal code</span>
+                  <AdminInput
+                    className={styles.input}
+                    onChange={(event) =>
+                      setTaxSettings((current) => ({ ...current, originPostalCode: event.target.value }))
+                    }
+                    value={taxSettings.originPostalCode}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Country of origin</span>
+                  <AdminInput className={styles.input} disabled placeholder="Not supported yet" value="" />
+                </label>
+                <label className={styles.field}>
+                  <span>HS codes</span>
+                  <AdminInput className={styles.input} disabled placeholder="Not supported yet" value="" />
+                </label>
+              </div>
+              <div className={styles.compactActionRow}>
+                <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
+                  {taxSettingsSaving ? 'Saving customs settings...' : 'Save customs information'}
+                </AdminButton>
+              </div>
+            </AdminCard>
+          </div>
+        ) : null}
+      </AdminDrawer>
+      <AdminDrawer
         onClose={closeEmailTemplateDrawer}
         open={Boolean(activeEmailTemplate)}
         subtitle="Template status, trigger, and editor readiness."
@@ -4171,4 +4411,5 @@ export default function SettingsWorkspace() {
     </AppShell>
   );
 }
+
 

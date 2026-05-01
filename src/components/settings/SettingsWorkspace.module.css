@@ -475,6 +475,83 @@
   line-height: 1.35;
 }
 
+:global(.admin-input),
+:global(.admin-textarea),
+:global(.admin-select__trigger) {
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 84%, transparent);
+  color: var(--on-surface);
+  border-radius: 0.72rem;
+  min-height: 2.2rem;
+  padding: 0.5rem 0.68rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+:global(.admin-input::placeholder),
+:global(.admin-textarea::placeholder) {
+  color: var(--on-surface-variant);
+}
+
+:global(.admin-input:focus),
+:global(.admin-textarea:focus),
+:global(.admin-select__trigger:focus-visible) {
+  outline: none;
+  border-color: var(--glass-border-strong);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
+}
+
+:global(.admin-textarea) {
+  min-height: 5.75rem;
+  resize: vertical;
+}
+
+.settingsCheckbox {
+  appearance: none;
+  width: 1rem;
+  min-width: 1rem;
+  height: 1rem;
+  min-height: 1rem;
+  margin: 0;
+  border: 1px solid var(--glass-border-strong, var(--glass-border));
+  border-radius: 0.28rem;
+  background: color-mix(in srgb, var(--surface-container-low) 82%, transparent);
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.settingsCheckbox::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.14rem;
+  background: var(--on-surface);
+  transform: scale(0);
+  transition: transform 120ms ease-in-out;
+}
+
+.settingsCheckbox:checked {
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--glass-border));
+  background: color-mix(in srgb, var(--primary) 24%, var(--surface-container-low) 76%);
+}
+
+.settingsCheckbox:checked::after {
+  transform: scale(1);
+}
+
+.settingsCheckbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+}
+
+.settingsCheckbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .configRow {
   border: 1px solid var(--glass-border);
   border-radius: 0.8rem;
@@ -895,6 +972,52 @@
   gap: 0.36rem;
 }
 
+.taxSummaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.taxSummaryCard {
+  gap: 0.58rem;
+}
+
+.taxSummaryList {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.taxSummaryRow {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--on-surface-variant);
+}
+
+.taxRegionList {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.taxRegionRow {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.78rem;
+  padding: 0.64rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 72%, transparent);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.52rem;
+  align-items: center;
+}
+
+.taxRegionTitle {
+  margin: 0;
+  font-size: 0.83rem;
+  line-height: 1.35;
+  color: var(--on-surface);
+  font-weight: 730;
+}
+
 .compactInfoStrip p {
   margin: 0;
   font-size: 0.78rem;
@@ -1012,7 +1135,8 @@
   .checkoutMethodGrid,
   .groupGrid,
   .endpointRow,
-  .brandPreviewGrid {
+  .brandPreviewGrid,
+  .taxRegionRow {
     grid-template-columns: 1fr;
   }
 

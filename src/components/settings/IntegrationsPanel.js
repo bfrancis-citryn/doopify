@@ -442,7 +442,7 @@ export default function IntegrationsPanel() {
                         checked={(draft.eventGroupIds || []).includes(group.id)}
                         disabled={Boolean(group.comingSoon)}
                         onChange={() => toggleGroup(group.id)}
-                        type="checkbox"
+                        className={styles.settingsCheckbox} type="checkbox"
                       />
                       <span className={styles.groupOptionTitle}>{group.label}</span>
                       {group.comingSoon ? <AdminStatusChip tone="warning">Coming soon</AdminStatusChip> : null}
@@ -474,7 +474,7 @@ export default function IntegrationsPanel() {
                     <AdminInput
                       checked={Boolean(draft.clearWebhookSecret)}
                       onChange={(event) => setDraft((current) => ({ ...current, clearWebhookSecret: event.target.checked }))}
-                      type="checkbox"
+                      className={styles.settingsCheckbox} type="checkbox"
                     />
                     <span>Clear existing signing secret</span>
                   </label>
@@ -532,3 +532,4 @@ export default function IntegrationsPanel() {
     </div>
   );
 }
+
