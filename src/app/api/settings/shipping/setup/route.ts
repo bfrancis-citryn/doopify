@@ -12,6 +12,7 @@ import {
 const setupPatchSchema = z.object({
   shippingMode: z.enum(['MANUAL', 'LIVE_RATES', 'HYBRID']).optional(),
   shippingLiveProvider: z.enum(['EASYPOST', 'SHIPPO']).nullable().optional(),
+  shippingProviderUsage: z.enum(['LIVE_AND_LABELS', 'LABELS_ONLY', 'LIVE_RATES_ONLY']).optional(),
   shippingOriginName: z.string().max(120).nullable().optional(),
   shippingOriginPhone: z.string().max(64).nullable().optional(),
   shippingOriginAddress1: z.string().max(160).nullable().optional(),
@@ -42,6 +43,7 @@ function serializeSetupSnapshot(store: any) {
   return {
     shippingMode: store.shippingMode,
     shippingLiveProvider: store.shippingLiveProvider,
+    shippingProviderUsage: store.shippingProviderUsage,
     shippingOriginName: store.shippingOriginName,
     shippingOriginPhone: store.shippingOriginPhone,
     shippingOriginAddress1: store.shippingOriginAddress1,
@@ -83,6 +85,9 @@ export async function PATCH(req: Request) {
       ...(parsed.data.shippingMode !== undefined ? { shippingMode: parsed.data.shippingMode } : {}),
       ...(parsed.data.shippingLiveProvider !== undefined
         ? { shippingLiveProvider: parsed.data.shippingLiveProvider }
+        : {}),
+      ...(parsed.data.shippingProviderUsage !== undefined
+        ? { shippingProviderUsage: parsed.data.shippingProviderUsage }
         : {}),
       ...(parsed.data.shippingOriginName !== undefined
         ? { shippingOriginName: normalizeOptional(parsed.data.shippingOriginName) }

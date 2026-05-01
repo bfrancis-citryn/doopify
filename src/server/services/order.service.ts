@@ -19,6 +19,11 @@ function buildOrderTotals(input: {
   items: Array<{ priceCents: number; quantity: number }>
   taxAmountCents?: number
   shippingAmountCents?: number
+  shippingMethodName?: string | null
+  shippingRateType?: string | null
+  shippingProvider?: string | null
+  shippingProviderRateId?: string | null
+  estimatedDeliveryText?: string | null
   discountAmountCents?: number
 }) {
   const subtotalCents = input.items.reduce(
@@ -226,6 +231,11 @@ export async function createOrder(data: {
   }
   taxAmountCents?: number
   shippingAmountCents?: number
+  shippingMethodName?: string | null
+  shippingRateType?: string | null
+  shippingProvider?: string | null
+  shippingProviderRateId?: string | null
+  estimatedDeliveryText?: string | null
   discountAmountCents?: number
   currency?: string
   discountApplications?: CheckoutAppliedDiscount[]
@@ -284,6 +294,11 @@ export async function createOrder(data: {
           subtotalCents: totals.subtotalCents,
           taxAmountCents: totals.taxAmountCents,
           shippingAmountCents: totals.shippingAmountCents,
+          shippingMethodName: data.shippingMethodName,
+          shippingRateType: data.shippingRateType,
+          shippingProvider: data.shippingProvider,
+          shippingProviderRateId: data.shippingProviderRateId,
+          estimatedDeliveryText: data.estimatedDeliveryText,
           discountAmountCents: totals.discountAmountCents,
           totalCents: totals.totalCents,
           currency: (data.currency ?? 'USD').toUpperCase(),

@@ -58,6 +58,8 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - manual fulfillment now uses an admin-only API (`POST /api/orders/[orderNumber]/manual-fulfillment`) with order-item ownership checks, over-fulfillment rejection, and paid-order gating
 - shipping label rates and purchases now use admin-only order APIs (`POST /api/orders/[orderNumber]/shipping-rates`, `POST /api/orders/[orderNumber]/shipping-labels`) with provider-rate revalidation against fresh server-fetched rates
 - shipping label purchase persists a separate `ShippingLabel.labelAmountCents` value and must not mutate checkout/order totals or payment status
+- checkout shipping-rate mode selection (`LIVE_RATES` / `MANUAL` / `HYBRID`) is persisted server-side and enforced in the shipping-rate service using persisted provider/package/location/manual/fallback configuration
+- checkout rate selection and label purchase remain decoupled: manual checkout rates do not imply a label exists, and connected label providers remain available for post-order label buying even when checkout used a manual rate
 - fulfillment lifecycle jobs now run through the shared job system: `SYNC_SHIPPING_TRACKING` for safe tracking-field sync plus provider polling-driven `deliveredAt` updates, and `SEND_FULFILLMENT_EMAIL` for tracked shipping-update delivery attempts
 - shipping provider webhook ingestion now supports `POST /api/webhooks/shipping-provider?provider=EASYPOST|SHIPPO` with signature verification and tracked fulfillment/shipping-label updates
 - inbound Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
@@ -208,6 +210,7 @@ These invariants should not be broken by future work:
 - checkout shipping charges must be server-calculated and revalidated from server-owned shipping configuration
 - label-purchase cost and checkout shipping charge are separate values and must never be conflated
 - buying labels must never mutate order totals or payment status
+- checkout rates decide what customers pay; label providers create postage after order placement
 - manual shipping and manual fulfillment paths must remain available without live carrier credentials
 - shipping setup wizard/status/test-rate admin routes must remain admin-authorized and must not expose provider credentials
 - shipping provider connect/disconnect/test routes must remain admin-authorized, store credentials only in encrypted `IntegrationSecret` rows, and never return credential values

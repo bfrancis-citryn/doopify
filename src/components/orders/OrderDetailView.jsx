@@ -116,6 +116,9 @@ export default function OrderDetailView({ order }) {
   const timeline = currentOrder?.timeline || [];
   const shippingAddress = currentOrder?.shippingSummary?.address || currentOrder?.shippingAddress || null;
   const billingAddress = currentOrder?.billingAddress || null;
+  const shippingCapabilities = currentOrder?.shippingCapabilities || {};
+  const labelProviderConnected = Boolean(shippingCapabilities.providerConnected);
+  const canBuyShippingLabel = Boolean(currentOrder?.availableActions?.canBuyShippingLabel);
 
   useEffect(() => {
     setInternalNoteDraft(currentOrder?.notes || "");
@@ -622,80 +625,88 @@ export default function OrderDetailView({ order }) {
               <p className={styles.metaText}>All line items are already fulfilled.</p>
             )}
 
-            <div className={styles.formGrid}>
-              <AdminField hint="Required for label rates and purchase." label="Weight (oz)">
-                <AdminInput
-                  min="0"
-                  onChange={(event) => setParcel((previous) => ({ ...previous, weightOz: event.target.value }))}
-                  step="0.01"
-                  type="number"
-                  value={parcel.weightOz}
-                />
-              </AdminField>
-              <AdminField label="Length (in)">
-                <AdminInput
-                  min="0"
-                  onChange={(event) => setParcel((previous) => ({ ...previous, lengthIn: event.target.value }))}
-                  step="0.01"
-                  type="number"
-                  value={parcel.lengthIn}
-                />
-              </AdminField>
-              <AdminField label="Width (in)">
-                <AdminInput
-                  min="0"
-                  onChange={(event) => setParcel((previous) => ({ ...previous, widthIn: event.target.value }))}
-                  step="0.01"
-                  type="number"
-                  value={parcel.widthIn}
-                />
-              </AdminField>
-              <AdminField label="Height (in)">
-                <AdminInput
-                  min="0"
-                  onChange={(event) => setParcel((previous) => ({ ...previous, heightIn: event.target.value }))}
-                  step="0.01"
-                  type="number"
-                  value={parcel.heightIn}
-                />
-              </AdminField>
-            </div>
+            {labelProviderConnected ? (
+              <>
+                <div className={styles.formGrid}>
+                  <AdminField hint="Required for label rates and purchase." label="Weight (oz)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((previous) => ({ ...previous, weightOz: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.weightOz}
+                    />
+                  </AdminField>
+                  <AdminField label="Length (in)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((previous) => ({ ...previous, lengthIn: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.lengthIn}
+                    />
+                  </AdminField>
+                  <AdminField label="Width (in)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((previous) => ({ ...previous, widthIn: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.widthIn}
+                    />
+                  </AdminField>
+                  <AdminField label="Height (in)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((previous) => ({ ...previous, heightIn: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.heightIn}
+                    />
+                  </AdminField>
+                </div>
 
-            <div className={styles.actionRow}>
-              <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
-                Load shipping rates
-              </AdminButton>
-            </div>
-
-            {rateQuotes.length ? (
-              <div className={styles.rateList}>
-                {rateQuotes.map((quote) => {
-                  const rateId = quote.providerRateId || quote.id;
-                  return (
-                    <label className={styles.rateRow} key={rateId}>
-                      <input
-                        checked={selectedRateId === rateId}
-                        name="shipping-rate"
-                        onChange={() => setSelectedRateId(rateId)}
-                        type="radio"
-                      />
-                      <span>
-                        <strong>{quote.displayName || quote.service || "Carrier rate"}</strong>
-                        <small>
-                          {(quote.carrier ? `${quote.carrier} | ` : "") +
-                            formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)}
-                        </small>
-                      </span>
-                    </label>
-                  );
-                })}
                 <div className={styles.actionRow}>
-                  <AdminButton loading={buyingLabel} onClick={buyShippingLabel} size="sm">
-                    Buy shipping label{rateProvider ? ` (${rateProvider})` : ""}
+                  <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
+                    Load shipping rates
                   </AdminButton>
                 </div>
-              </div>
-            ) : null}
+
+                {rateQuotes.length ? (
+                  <div className={styles.rateList}>
+                    {rateQuotes.map((quote) => {
+                      const rateId = quote.providerRateId || quote.id;
+                      return (
+                        <label className={styles.rateRow} key={rateId}>
+                          <input
+                            checked={selectedRateId === rateId}
+                            name="shipping-rate"
+                            onChange={() => setSelectedRateId(rateId)}
+                            type="radio"
+                          />
+                          <span>
+                            <strong>{quote.displayName || quote.service || "Carrier rate"}</strong>
+                            <small>
+                              {(quote.carrier ? `${quote.carrier} | ` : "") +
+                                formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)}
+                            </small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled={!canBuyShippingLabel} loading={buyingLabel} onClick={buyShippingLabel} size="sm">
+                        Buy shipping label{rateProvider ? ` (${rateProvider})` : ""}
+                      </AdminButton>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className={styles.metaText}>
+                No label provider is connected. Use manual fulfillment below to mark shipped and add tracking.
+              </p>
+            )}
 
             {shippingLabels.length ? (
               <>
@@ -725,7 +736,7 @@ export default function OrderDetailView({ order }) {
 
             <div className={styles.divider} />
             <div className={styles.cardHeader}>
-              <h3>Add tracking manually</h3>
+              <h3>Mark fulfilled / add tracking manually</h3>
             </div>
             <div className={styles.formGrid}>
               <AdminField label="Carrier">
@@ -821,6 +832,9 @@ export default function OrderDetailView({ order }) {
             <div className={styles.summaryRows}>
               <SummaryRow label="Subtotal" value={formatMoney(currentOrder.subtotal, currency)} />
               <SummaryRow label="Shipping" value={formatMoney(currentOrder.shippingAmount, currency)} />
+              {currentOrder.shippingMethodName ? (
+                <SummaryRow label="Shipping method" value={currentOrder.shippingMethodName} />
+              ) : null}
               <SummaryRow label="Tax" value={formatMoney(currentOrder.taxAmount, currency)} />
               <SummaryRow label="Discount" value={formatMoney(currentOrder.discountAmount || 0, currency)} />
               <SummaryRow label="Total" strong value={formatMoney(currentOrder.total, currency)} />

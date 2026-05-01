@@ -1,379 +1,494 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import AppShell from '../AppShell';
-import AdminButton from '../admin/ui/AdminButton';
-import styles from './SettingsWorkspace.module.css';
+import AppShell from "../AppShell";
+import AdminButton from "../admin/ui/AdminButton";
+import AdminCard from "../admin/ui/AdminCard";
+import AdminDrawer from "../admin/ui/AdminDrawer";
+import AdminEmptyState from "../admin/ui/AdminEmptyState";
+import AdminField from "../admin/ui/AdminField";
+import AdminInput from "../admin/ui/AdminInput";
+import AdminSelect from "../admin/ui/AdminSelect";
+import AdminStatusChip from "../admin/ui/AdminStatusChip";
+import styles from "./SettingsWorkspace.module.css";
 
-const EMPTY_ZONE = {
-  name: '',
-  countryCode: '',
-  provinceCode: '',
-  priority: '100',
+const DEFAULT_PACKAGE_FORM = {
+  id: "",
+  name: "",
+  type: "BOX",
+  length: "",
+  width: "",
+  height: "",
+  dimensionUnit: "IN",
+  emptyPackageWeight: "",
+  weightUnit: "OZ",
+  isDefault: true,
   isActive: true,
 };
 
-const EMPTY_RATE = {
-  name: '',
-  method: 'FLAT',
-  amount: '',
-  minSubtotal: '',
-  maxSubtotal: '',
-  priority: '100',
+const DEFAULT_LOCATION_FORM = {
+  id: "",
+  name: "",
+  contactName: "",
+  company: "",
+  address1: "",
+  address2: "",
+  city: "",
+  stateProvince: "",
+  postalCode: "",
+  country: "US",
+  phone: "",
+  isDefault: true,
   isActive: true,
 };
 
-function parseNumberOrUndefined(value) {
-  if (value == null || value === '') return undefined;
+const DEFAULT_MANUAL_RATE_FORM = {
+  id: "",
+  name: "",
+  regionCountry: "US",
+  regionStateProvince: "",
+  rateType: "FLAT",
+  amount: "",
+  minWeight: "",
+  maxWeight: "",
+  minSubtotal: "",
+  maxSubtotal: "",
+  freeOverAmount: "",
+  estimatedDeliveryText: "",
+  isActive: true,
+};
+
+const DEFAULT_FALLBACK_RATE_FORM = {
+  id: "",
+  name: "",
+  regionCountry: "US",
+  regionStateProvince: "",
+  amount: "",
+  estimatedDeliveryText: "",
+  isActive: true,
+};
+
+function parseNumber(value) {
+  if (value == null || value === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function parseNumberOrNull(value) {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
+function normalizeOptional(value) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function normalizeCountry(value) {
+  return String(value || "").trim().toUpperCase();
 }
 
 async function parseApiJson(response) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.success) {
-    throw new Error(payload?.error || 'Request failed');
+    throw new Error(payload?.error || "Request failed");
   }
   return payload.data;
 }
 
-function normalizeCountryCode(value) {
-  const normalized = String(value || '').trim().toUpperCase();
-  if (!normalized) return '';
-  if (normalized === 'USA' || normalized === 'UNITED STATES') return 'US';
-  return normalized;
+function formatMoney(amount, currency = "USD") {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount || 0));
 }
 
-function normalizeProvinceCode(value) {
-  return String(value || '').trim().toUpperCase();
+function formatPackageLine(item) {
+  return `${item.length}x${item.width}x${item.height} ${item.dimensionUnit} | ${item.emptyPackageWeight} ${item.weightUnit}`;
 }
 
-function mapZoneForm(zone) {
-  return {
-    id: zone.id,
-    name: zone.name || '',
-    countryCode: zone.countryCode || '',
-    provinceCode: zone.provinceCode || '',
-    priority: String(zone.priority ?? 100),
-    isActive: zone.isActive !== false,
-    rates: (zone.rates || []).map((rate) => ({
-      id: rate.id,
-      name: rate.name || '',
-      method: rate.method || 'FLAT',
-      amount: String(rate.amount ?? ''),
-      minSubtotal: rate.minSubtotal == null ? '' : String(rate.minSubtotal),
-      maxSubtotal: rate.maxSubtotal == null ? '' : String(rate.maxSubtotal),
-      priority: String(rate.priority ?? 100),
-      isActive: rate.isActive !== false,
-    })),
-  };
+function formatLocationLine(item) {
+  return `${item.address1}, ${item.city}, ${item.stateProvince || ""} ${item.postalCode}, ${item.country}`.replace(/\s+,/g, ",").trim();
 }
 
-function computeManualPreview(input) {
-  const subtotal = parseNumberOrUndefined(input.subtotal) ?? 0;
-  const destinationCountry = normalizeCountryCode(input.countryCode);
-  const destinationProvince = normalizeProvinceCode(input.provinceCode);
-  const threshold = parseNumberOrUndefined(input.shippingThreshold);
-
-  if (subtotal <= 0) {
-    return { amount: 0, source: 'none', label: 'No shipping for empty subtotal' };
-  }
-
-  if (threshold != null && subtotal >= threshold) {
-    return { amount: 0, source: 'threshold', label: `Free shipping threshold met at $${threshold.toFixed(2)}` };
-  }
-
-  const zones = input.shippingZones
-    .filter((zone) => zone.isActive)
-    .filter((zone) => normalizeCountryCode(zone.countryCode) === destinationCountry)
-    .filter((zone) => {
-      const province = normalizeProvinceCode(zone.provinceCode);
-      return !province || province === destinationProvince;
-    })
-    .sort((left, right) => {
-      const leftPriority = Number(left.priority || 100);
-      const rightPriority = Number(right.priority || 100);
-      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-
-      const leftSpecificity = normalizeProvinceCode(left.provinceCode) ? 1 : 0;
-      const rightSpecificity = normalizeProvinceCode(right.provinceCode) ? 1 : 0;
-      return rightSpecificity - leftSpecificity;
-    });
-
-  const matchedZone = zones[0];
-  if (matchedZone) {
-    const eligibleRates = matchedZone.rates
-      .filter((rate) => rate.isActive)
-      .filter((rate) => {
-        if (rate.method !== 'SUBTOTAL_TIER') return true;
-        const min = parseNumberOrNull(rate.minSubtotal);
-        const max = parseNumberOrNull(rate.maxSubtotal);
-        if (min != null && subtotal < min) return false;
-        if (max != null && subtotal > max) return false;
-        return true;
-      })
-      .sort((left, right) => {
-        const leftPriority = Number(left.priority || 100);
-        const rightPriority = Number(right.priority || 100);
-        if (leftPriority !== rightPriority) return leftPriority - rightPriority;
-        return (parseNumberOrUndefined(right.minSubtotal) ?? -1) - (parseNumberOrUndefined(left.minSubtotal) ?? -1);
-      });
-
-    const matchedRate = eligibleRates[0];
-    if (matchedRate) {
-      const amount = parseNumberOrUndefined(matchedRate.amount) ?? 0;
-      return {
-        amount,
-        source: 'zone',
-        label: `${matchedZone.name} • ${matchedRate.name}`,
-      };
-    }
-  }
-
-  const storeCountry = normalizeCountryCode(input.storeCountry);
-  const isInternational = destinationCountry && storeCountry && destinationCountry !== storeCountry;
-  const amount = isInternational
-    ? parseNumberOrUndefined(input.shippingInternationalRate) ?? 0
-    : parseNumberOrUndefined(input.shippingDomesticRate) ?? 0;
-
-  return {
-    amount,
-    source: 'fallback',
-    label: isInternational ? 'International fallback rate' : 'Domestic fallback rate',
-  };
+function renderRateSummary(rate, currency) {
+  if (rate.rateType === "FREE") return "Free";
+  return formatMoney(rate.amount, currency);
 }
 
 export default function ShippingSettingsWorkspace() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const [storeId, setStoreId] = useState('');
-  const [storeCountry, setStoreCountry] = useState('');
-  const [shippingMode, setShippingMode] = useState('MANUAL');
-  const [shippingLiveProvider, setShippingLiveProvider] = useState('');
-  const [shippingThreshold, setShippingThreshold] = useState('');
-  const [shippingDomesticRate, setShippingDomesticRate] = useState('');
-  const [shippingInternationalRate, setShippingInternationalRate] = useState('');
-  const [shippingZones, setShippingZones] = useState([]);
+  const [settings, setSettings] = useState(null);
+  const [setupStatus, setSetupStatus] = useState(null);
+  const [mode, setMode] = useState("MANUAL");
+  const [provider, setProvider] = useState("");
+  const [providerUsage, setProviderUsage] = useState("LIVE_AND_LABELS");
 
-  const [newZone, setNewZone] = useState(EMPTY_ZONE);
-  const [newRateByZoneId, setNewRateByZoneId] = useState({});
-  const [previewInput, setPreviewInput] = useState({
-    subtotal: '75',
-    countryCode: 'US',
-    provinceCode: '',
-  });
+  const [providerDrawerOpen, setProviderDrawerOpen] = useState(false);
+  const [providerToken, setProviderToken] = useState("");
+  const [providerTestMessage, setProviderTestMessage] = useState("");
 
-  const loadShippingSettings = useCallback(async () => {
-    setError('');
-    setSuccess('');
+  const [packageDrawerOpen, setPackageDrawerOpen] = useState(false);
+  const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
+  const [manualDrawerOpen, setManualDrawerOpen] = useState(false);
+  const [fallbackDrawerOpen, setFallbackDrawerOpen] = useState(false);
+
+  const [packageForm, setPackageForm] = useState(DEFAULT_PACKAGE_FORM);
+  const [locationForm, setLocationForm] = useState(DEFAULT_LOCATION_FORM);
+  const [manualForm, setManualForm] = useState(DEFAULT_MANUAL_RATE_FORM);
+  const [fallbackForm, setFallbackForm] = useState(DEFAULT_FALLBACK_RATE_FORM);
+  const [locationValidationMessage, setLocationValidationMessage] = useState("");
+
+  const packages = settings?.shippingPackages || [];
+  const locations = settings?.shippingLocations || [];
+  const manualRates = settings?.shippingManualRates || [];
+  const fallbackRates = settings?.shippingFallbackRates || [];
+  const currency = settings?.currency || "USD";
+
+  const hasDefaultPackage = useMemo(
+    () => packages.some((entry) => entry.isDefault && entry.isActive),
+    [packages]
+  );
+
+  const hasDefaultLocation = useMemo(
+    () => locations.some((entry) => entry.isDefault && entry.isActive),
+    [locations]
+  );
+
+  const load = useCallback(async () => {
     setLoading(true);
-
+    setError("");
     try {
-      const data = await fetch('/api/settings/shipping').then(parseApiJson);
-      setStoreId(data.storeId || '');
-      setStoreCountry(data.storeCountry || '');
-      setShippingMode(data.shippingMode || 'MANUAL');
-      setShippingLiveProvider(data.shippingLiveProvider || '');
-      setShippingThreshold(data.shippingThreshold == null ? '' : String(data.shippingThreshold));
-      setShippingDomesticRate(String(data.shippingDomesticRate ?? ''));
-      setShippingInternationalRate(String(data.shippingInternationalRate ?? ''));
-      setShippingZones((data.shippingZones || []).map(mapZoneForm));
+      const [shipping, setup] = await Promise.all([
+        fetch("/api/settings/shipping", { cache: "no-store" }).then(parseApiJson),
+        fetch("/api/settings/shipping/setup-status", { cache: "no-store" }).then(parseApiJson),
+      ]);
+      setSettings(shipping);
+      setSetupStatus(setup);
+      setMode(shipping.shippingMode || "MANUAL");
+      setProvider(shipping.shippingLiveProvider || "");
+      setProviderUsage(shipping.shippingProviderUsage || "LIVE_AND_LABELS");
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load shipping settings');
+      setError(loadError instanceof Error ? loadError.message : "Failed to load shipping settings");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadShippingSettings();
-  }, [loadShippingSettings]);
+    load();
+  }, [load]);
 
-  const previewResult = useMemo(
-    () =>
-      computeManualPreview({
-        subtotal: previewInput.subtotal,
-        countryCode: previewInput.countryCode,
-        provinceCode: previewInput.provinceCode,
-        shippingThreshold,
-        shippingDomesticRate,
-        shippingInternationalRate,
-        shippingZones,
-        storeCountry,
-      }),
-    [
-      previewInput.countryCode,
-      previewInput.provinceCode,
-      previewInput.subtotal,
-      shippingDomesticRate,
-      shippingInternationalRate,
-      shippingThreshold,
-      shippingZones,
-      storeCountry,
-    ]
-  );
-
-  async function saveShippingSettings() {
+  async function persistSettings(patch, message) {
     setSaving(true);
-    setError('');
-    setSuccess('');
-
+    setError("");
+    setNotice("");
     try {
-      await fetch('/api/settings/shipping', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shippingMode,
-          shippingLiveProvider: shippingLiveProvider || null,
-          shippingThreshold: parseNumberOrNull(shippingThreshold),
-          shippingDomesticRate: parseNumberOrUndefined(shippingDomesticRate),
-          shippingInternationalRate: parseNumberOrUndefined(shippingInternationalRate),
-        }),
+      await fetch("/api/settings/shipping", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
       }).then(parseApiJson);
-
-      setSuccess('Shipping settings saved.');
-      await loadShippingSettings();
+      setNotice(message || "Saved.");
+      await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save shipping settings');
+      setError(saveError instanceof Error ? saveError.message : "Failed to save shipping settings");
     } finally {
       setSaving(false);
     }
   }
 
-  async function createZone() {
-    setError('');
-    setSuccess('');
+  async function saveMode() {
+    await persistSettings(
+      {
+        shippingMode: mode,
+        shippingLiveProvider: provider || null,
+        shippingProviderUsage: providerUsage,
+      },
+      "Shipping mode saved."
+    );
+  }
+
+  async function saveProviderToken() {
+    if (!provider || !providerToken.trim()) {
+      setError("Select a provider and enter an API token.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setNotice("");
     try {
-      await fetch('/api/settings/shipping-zones', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/settings/shipping/connect-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey: providerToken.trim() }),
+      }).then(parseApiJson);
+
+      await fetch("/api/settings/shipping", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newZone.name,
-          countryCode: newZone.countryCode,
-          provinceCode: newZone.provinceCode || null,
-          priority: parseNumberOrUndefined(newZone.priority),
-          isActive: newZone.isActive,
+          shippingLiveProvider: provider,
+          shippingProviderUsage: providerUsage,
         }),
       }).then(parseApiJson);
 
-      setNewZone(EMPTY_ZONE);
-      await loadShippingSettings();
-    } catch (zoneError) {
-      setError(zoneError instanceof Error ? zoneError.message : 'Failed to create shipping zone');
+      setProviderToken("");
+      setProviderTestMessage("");
+      setNotice("Provider credentials saved.");
+      await load();
+    } catch (providerError) {
+      setError(providerError instanceof Error ? providerError.message : "Failed to save provider token");
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function saveZone(zone) {
-    setError('');
-    setSuccess('');
+  async function testProvider() {
+    if (!provider) {
+      setError("Select a provider before testing connection.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/settings/shipping-zones/${zone.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const data = await fetch("/api/settings/shipping/test-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      }).then(parseApiJson);
+
+      setProviderTestMessage(data?.result?.message || "Provider verification completed.");
+      await load();
+    } catch (providerError) {
+      setError(providerError instanceof Error ? providerError.message : "Failed to test provider");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function persistEntity(url, method, payload, successMessage = "Saved.") {
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: payload ? JSON.stringify(payload) : undefined,
+      }).then(parseApiJson);
+      setNotice(successMessage);
+      await load();
+    } catch (persistError) {
+      setError(persistError instanceof Error ? persistError.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function validateLocationAddress() {
+    setSaving(true);
+    setError("");
+    setLocationValidationMessage("");
+
+    try {
+      const data = await fetch("/api/settings/shipping/locations/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: zone.name,
-          countryCode: zone.countryCode,
-          provinceCode: zone.provinceCode || null,
-          priority: parseNumberOrUndefined(zone.priority),
-          isActive: zone.isActive,
+          address1: locationForm.address1,
+          city: locationForm.city,
+          stateProvince: normalizeOptional(locationForm.stateProvince),
+          postalCode: locationForm.postalCode,
+          country: normalizeCountry(locationForm.country),
         }),
       }).then(parseApiJson);
 
-      await loadShippingSettings();
-    } catch (zoneError) {
-      setError(zoneError instanceof Error ? zoneError.message : 'Failed to save shipping zone');
+      setLocationValidationMessage(data?.message || "Validation complete.");
+    } catch (validationError) {
+      setError(validationError instanceof Error ? validationError.message : "Address validation failed");
+    } finally {
+      setSaving(false);
     }
   }
 
-  async function deleteZone(zoneId) {
-    setError('');
-    setSuccess('');
-    try {
-      await fetch(`/api/settings/shipping-zones/${zoneId}`, {
-        method: 'DELETE',
-      }).then(parseApiJson);
-      await loadShippingSettings();
-    } catch (zoneError) {
-      setError(zoneError instanceof Error ? zoneError.message : 'Failed to delete shipping zone');
+  function openPackageDrawer(entry) {
+    if (!entry) {
+      setPackageForm({ ...DEFAULT_PACKAGE_FORM });
+      setPackageDrawerOpen(true);
+      return;
     }
+
+    setPackageForm({
+      id: entry.id,
+      name: entry.name || "",
+      type: entry.type || "BOX",
+      length: String(entry.length ?? ""),
+      width: String(entry.width ?? ""),
+      height: String(entry.height ?? ""),
+      dimensionUnit: entry.dimensionUnit || "IN",
+      emptyPackageWeight: String(entry.emptyPackageWeight ?? ""),
+      weightUnit: entry.weightUnit || "OZ",
+      isDefault: Boolean(entry.isDefault),
+      isActive: Boolean(entry.isActive),
+    });
+    setPackageDrawerOpen(true);
   }
 
-  async function saveRate(zoneId, rate) {
-    setError('');
-    setSuccess('');
-    try {
-      await fetch(`/api/settings/shipping-zones/${zoneId}/rates/${rate.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: rate.name,
-          method: rate.method,
-          amount: parseNumberOrUndefined(rate.amount),
-          minSubtotal: parseNumberOrNull(rate.minSubtotal),
-          maxSubtotal: parseNumberOrNull(rate.maxSubtotal),
-          priority: parseNumberOrUndefined(rate.priority),
-          isActive: rate.isActive,
-        }),
-      }).then(parseApiJson);
+  function openLocationDrawer(entry) {
+    setLocationValidationMessage("");
 
-      await loadShippingSettings();
-    } catch (rateError) {
-      setError(rateError instanceof Error ? rateError.message : 'Failed to save shipping rate');
+    if (!entry) {
+      setLocationForm({ ...DEFAULT_LOCATION_FORM });
+      setLocationDrawerOpen(true);
+      return;
     }
+
+    setLocationForm({
+      id: entry.id,
+      name: entry.name || "",
+      contactName: entry.contactName || "",
+      company: entry.company || "",
+      address1: entry.address1 || "",
+      address2: entry.address2 || "",
+      city: entry.city || "",
+      stateProvince: entry.stateProvince || "",
+      postalCode: entry.postalCode || "",
+      country: entry.country || "US",
+      phone: entry.phone || "",
+      isDefault: Boolean(entry.isDefault),
+      isActive: Boolean(entry.isActive),
+    });
+    setLocationDrawerOpen(true);
   }
 
-  async function createRate(zoneId) {
-    const draft = newRateByZoneId[zoneId] || EMPTY_RATE;
-    setError('');
-    setSuccess('');
-
-    try {
-      await fetch(`/api/settings/shipping-zones/${zoneId}/rates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: draft.name,
-          method: draft.method,
-          amount: parseNumberOrUndefined(draft.amount),
-          minSubtotal: parseNumberOrNull(draft.minSubtotal),
-          maxSubtotal: parseNumberOrNull(draft.maxSubtotal),
-          priority: parseNumberOrUndefined(draft.priority),
-          isActive: draft.isActive,
-        }),
-      }).then(parseApiJson);
-
-      setNewRateByZoneId((current) => ({
-        ...current,
-        [zoneId]: { ...EMPTY_RATE },
-      }));
-      await loadShippingSettings();
-    } catch (rateError) {
-      setError(rateError instanceof Error ? rateError.message : 'Failed to create shipping rate');
+  function openManualRateDrawer(entry) {
+    if (!entry) {
+      setManualForm({ ...DEFAULT_MANUAL_RATE_FORM });
+      setManualDrawerOpen(true);
+      return;
     }
+
+    setManualForm({
+      id: entry.id,
+      name: entry.name || "",
+      regionCountry: entry.regionCountry || "",
+      regionStateProvince: entry.regionStateProvince || "",
+      rateType: entry.rateType || "FLAT",
+      amount: String(entry.amount ?? ""),
+      minWeight: entry.minWeight == null ? "" : String(entry.minWeight),
+      maxWeight: entry.maxWeight == null ? "" : String(entry.maxWeight),
+      minSubtotal: entry.minSubtotal == null ? "" : String(entry.minSubtotal),
+      maxSubtotal: entry.maxSubtotal == null ? "" : String(entry.maxSubtotal),
+      freeOverAmount: entry.freeOverAmount == null ? "" : String(entry.freeOverAmount),
+      estimatedDeliveryText: entry.estimatedDeliveryText || "",
+      isActive: Boolean(entry.isActive),
+    });
+    setManualDrawerOpen(true);
   }
 
-  async function deleteRate(zoneId, rateId) {
-    setError('');
-    setSuccess('');
-    try {
-      await fetch(`/api/settings/shipping-zones/${zoneId}/rates/${rateId}`, {
-        method: 'DELETE',
-      }).then(parseApiJson);
-      await loadShippingSettings();
-    } catch (rateError) {
-      setError(rateError instanceof Error ? rateError.message : 'Failed to delete shipping rate');
+  function openFallbackRateDrawer(entry) {
+    if (!entry) {
+      setFallbackForm({ ...DEFAULT_FALLBACK_RATE_FORM });
+      setFallbackDrawerOpen(true);
+      return;
     }
+
+    setFallbackForm({
+      id: entry.id,
+      name: entry.name || "",
+      regionCountry: entry.regionCountry || "",
+      regionStateProvince: entry.regionStateProvince || "",
+      amount: String(entry.amount ?? ""),
+      estimatedDeliveryText: entry.estimatedDeliveryText || "",
+      isActive: Boolean(entry.isActive),
+    });
+    setFallbackDrawerOpen(true);
+  }
+
+  async function savePackage() {
+    await persistEntity(
+      packageForm.id ? `/api/settings/shipping/packages/${packageForm.id}` : "/api/settings/shipping/packages",
+      packageForm.id ? "PATCH" : "POST",
+      {
+        name: packageForm.name.trim(),
+        type: packageForm.type,
+        length: parseNumber(packageForm.length),
+        width: parseNumber(packageForm.width),
+        height: parseNumber(packageForm.height),
+        dimensionUnit: packageForm.dimensionUnit,
+        emptyPackageWeight: parseNumber(packageForm.emptyPackageWeight),
+        weightUnit: packageForm.weightUnit,
+        isDefault: Boolean(packageForm.isDefault),
+        isActive: Boolean(packageForm.isActive),
+      },
+      packageForm.id ? "Package updated." : "Package added."
+    );
+    setPackageDrawerOpen(false);
+  }
+
+  async function saveLocation() {
+    await persistEntity(
+      locationForm.id ? `/api/settings/shipping/locations/${locationForm.id}` : "/api/settings/shipping/locations",
+      locationForm.id ? "PATCH" : "POST",
+      {
+        name: locationForm.name.trim(),
+        contactName: normalizeOptional(locationForm.contactName),
+        company: normalizeOptional(locationForm.company),
+        address1: locationForm.address1.trim(),
+        address2: normalizeOptional(locationForm.address2),
+        city: locationForm.city.trim(),
+        stateProvince: normalizeOptional(locationForm.stateProvince),
+        postalCode: locationForm.postalCode.trim(),
+        country: normalizeCountry(locationForm.country),
+        phone: normalizeOptional(locationForm.phone),
+        isDefault: Boolean(locationForm.isDefault),
+        isActive: Boolean(locationForm.isActive),
+      },
+      locationForm.id ? "Ship-from location updated." : "Ship-from location added."
+    );
+    setLocationDrawerOpen(false);
+  }
+
+  async function saveManualRate() {
+    await persistEntity(
+      manualForm.id ? `/api/settings/shipping/manual-rates/${manualForm.id}` : "/api/settings/shipping/manual-rates",
+      manualForm.id ? "PATCH" : "POST",
+      {
+        name: manualForm.name.trim(),
+        regionCountry: normalizeOptional(manualForm.regionCountry)?.toUpperCase() || null,
+        regionStateProvince: normalizeOptional(manualForm.regionStateProvince),
+        rateType: manualForm.rateType,
+        amount: parseNumber(manualForm.amount),
+        minWeight: parseNumber(manualForm.minWeight),
+        maxWeight: parseNumber(manualForm.maxWeight),
+        minSubtotal: parseNumber(manualForm.minSubtotal),
+        maxSubtotal: parseNumber(manualForm.maxSubtotal),
+        freeOverAmount: parseNumber(manualForm.freeOverAmount),
+        estimatedDeliveryText: normalizeOptional(manualForm.estimatedDeliveryText),
+        isActive: Boolean(manualForm.isActive),
+      },
+      manualForm.id ? "Manual rate updated." : "Manual rate added."
+    );
+    setManualDrawerOpen(false);
+  }
+
+  async function saveFallbackRate() {
+    await persistEntity(
+      fallbackForm.id
+        ? `/api/settings/shipping/fallback-rates/${fallbackForm.id}`
+        : "/api/settings/shipping/fallback-rates",
+      fallbackForm.id ? "PATCH" : "POST",
+      {
+        name: fallbackForm.name.trim(),
+        regionCountry: normalizeOptional(fallbackForm.regionCountry)?.toUpperCase() || null,
+        regionStateProvince: normalizeOptional(fallbackForm.regionStateProvince),
+        amount: parseNumber(fallbackForm.amount),
+        estimatedDeliveryText: normalizeOptional(fallbackForm.estimatedDeliveryText),
+        isActive: Boolean(fallbackForm.isActive),
+      },
+      fallbackForm.id ? "Fallback rate updated." : "Fallback rate added."
+    );
+    setFallbackDrawerOpen(false);
   }
 
   return (
@@ -381,531 +496,358 @@ export default function ShippingSettingsWorkspace() {
       <div className={styles.pageWrap}>
         <div className={styles.pageHeader}>
           <div>
-            <h2>Shipping Settings</h2>
-            <p>Configure manual rates, mode selection, and zone-level subtotal tiers.</p>
-            {storeId ? <p className={styles.statusText}>Store: {storeId}</p> : null}
+            <h2>Shipping & delivery</h2>
+            <p>Checkout rates decide what customers pay. Label providers buy postage after order placement.</p>
           </div>
-          <div className={styles.actionRow}>
-            <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/admin/settings/shipping/setup">
-              Open setup wizard
-            </Link>
-            <AdminButton disabled={saving} onClick={saveShippingSettings} size="sm" variant="primary">
-              {saving ? 'Saving...' : 'Save shipping settings'}
-            </AdminButton>
-          </div>
+          <AdminButton onClick={load} size="sm" variant="secondary">
+            Refresh
+          </AdminButton>
         </div>
 
-        {loading ? <p className={styles.statusText}>Loading shipping settings...</p> : null}
-        {error ? (
-          <div className={styles.statusBlock}>
-            <p className={styles.statusTitle}>Shipping configuration error</p>
-            <p className={styles.statusText}>{error}</p>
-          </div>
-        ) : null}
-        {success ? (
-          <div className={styles.statusBlock}>
-            <p className={styles.statusTitle}>{success}</p>
-          </div>
-        ) : null}
+        {loading ? <p className={styles.statusText}>Loading...</p> : null}
+        {error ? <div className={styles.statusBlock}><p className={styles.statusText}>{error}</p></div> : null}
+        {notice ? <div className={styles.statusBlock}><p className={styles.statusText}>{notice}</p></div> : null}
 
         {!loading ? (
           <div className={styles.configStack}>
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}>
-                <h3>Shipping mode</h3>
-              </div>
+              <div className={styles.sectionHeading}><h3>Checkout rate method</h3></div>
               <div className={styles.formGrid}>
                 <label className={styles.field}>
-                  <span>Mode</span>
-                  <select className={styles.input} onChange={(event) => setShippingMode(event.target.value)} value={shippingMode}>
-                    <option value="MANUAL">Manual</option>
-                    <option value="LIVE_RATES">Live rates</option>
-                    <option value="HYBRID">Hybrid</option>
-                  </select>
-                </label>
-                <label className={styles.field}>
-                  <span>Live provider</span>
-                  <select className={styles.input} onChange={(event) => setShippingLiveProvider(event.target.value)} value={shippingLiveProvider}>
-                    <option value="">Not connected</option>
-                    <option value="EASYPOST">EasyPost</option>
-                    <option value="SHIPPO">Shippo</option>
-                  </select>
+                  <span>Shipping mode</span>
+                  <AdminSelect
+                    value={mode}
+                    onChange={setMode}
+                    options={[
+                      { value: "LIVE_RATES", label: "Live rates" },
+                      { value: "MANUAL", label: "Manual only" },
+                      { value: "HYBRID", label: "Hybrid" },
+                    ]}
+                  />
                 </label>
               </div>
-            </section>
-
-            <section className={styles.configSection}>
-              <div className={styles.sectionHeading}>
-                <h3>Manual flat rates</h3>
-              </div>
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Domestic flat rate (USD)</span>
-                  <input className={styles.input} onChange={(event) => setShippingDomesticRate(event.target.value)} value={shippingDomesticRate} />
-                </label>
-                <label className={styles.field}>
-                  <span>International flat rate (USD)</span>
-                  <input className={styles.input} onChange={(event) => setShippingInternationalRate(event.target.value)} value={shippingInternationalRate} />
-                </label>
-              </div>
-            </section>
-
-            <section className={styles.configSection}>
-              <div className={styles.sectionHeading}>
-                <h3>Free-shipping threshold</h3>
-              </div>
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Threshold subtotal (USD)</span>
-                  <input className={styles.input} onChange={(event) => setShippingThreshold(event.target.value)} value={shippingThreshold} />
-                </label>
-              </div>
-            </section>
-
-            <section className={styles.configSection}>
-              <div className={styles.sectionHeading}>
-                <h3>Shipping zones</h3>
-              </div>
-
-              <div className={styles.inlineGrid}>
-                <label className={styles.field}>
-                  <span>Zone name</span>
-                  <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, name: event.target.value }))} value={newZone.name} />
-                </label>
-                <label className={styles.field}>
-                  <span>Country code</span>
-                  <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, countryCode: event.target.value }))} value={newZone.countryCode} />
-                </label>
-                <label className={styles.field}>
-                  <span>Province code</span>
-                  <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, provinceCode: event.target.value }))} value={newZone.provinceCode} />
-                </label>
-                <label className={styles.field}>
-                  <span>Priority</span>
-                  <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, priority: event.target.value }))} value={newZone.priority} />
-                </label>
-                <label className={styles.checkboxField}>
-                  <input checked={newZone.isActive} onChange={(event) => setNewZone((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
-                  <span>Active</span>
-                </label>
-                <AdminButton onClick={createZone} size="sm" variant="secondary">
-                  Add zone
+              <p className={styles.statusText}>
+                LIVE_RATES tries provider quotes first. MANUAL uses manual rates only. HYBRID combines live rates with manual/fallback paths.
+              </p>
+              <div className={styles.actionRow}>
+                <AdminButton disabled={saving} onClick={saveMode} size="sm" variant="secondary">
+                  {saving ? "Saving..." : "Save mode"}
                 </AdminButton>
               </div>
-
-              {shippingZones.map((zone) => (
-                <div className={styles.configRow} key={zone.id}>
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span>Name</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setShippingZones((current) =>
-                            current.map((entry) => (entry.id === zone.id ? { ...entry, name: event.target.value } : entry))
-                          )
-                        }
-                        value={zone.name}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Country</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setShippingZones((current) =>
-                            current.map((entry) =>
-                              entry.id === zone.id ? { ...entry, countryCode: event.target.value } : entry
-                            )
-                          )
-                        }
-                        value={zone.countryCode}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Province</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setShippingZones((current) =>
-                            current.map((entry) =>
-                              entry.id === zone.id ? { ...entry, provinceCode: event.target.value } : entry
-                            )
-                          )
-                        }
-                        value={zone.provinceCode}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Priority</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setShippingZones((current) =>
-                            current.map((entry) =>
-                              entry.id === zone.id ? { ...entry, priority: event.target.value } : entry
-                            )
-                          )
-                        }
-                        value={zone.priority}
-                      />
-                    </label>
-                    <label className={styles.checkboxField}>
-                      <input
-                        checked={zone.isActive}
-                        onChange={(event) =>
-                          setShippingZones((current) =>
-                            current.map((entry) =>
-                              entry.id === zone.id ? { ...entry, isActive: event.target.checked } : entry
-                            )
-                          )
-                        }
-                        type="checkbox"
-                      />
-                      <span>Active</span>
-                    </label>
-                  </div>
-
-                  <div className={styles.actionRow}>
-                    <AdminButton onClick={() => saveZone(zone)} size="sm" variant="secondary">
-                      Save zone
-                    </AdminButton>
-                    <AdminButton onClick={() => deleteZone(zone.id)} size="sm" variant="danger">
-                      Delete zone
-                    </AdminButton>
-                  </div>
-
-                  <div className={styles.rateList}>
-                    {zone.rates.map((rate) => (
-                      <div className={styles.rateRow} key={rate.id}>
-                        <div className={styles.inlineGrid}>
-                          <label className={styles.field}>
-                            <span>Rate name</span>
-                            <input
-                              className={styles.input}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, name: event.target.value }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              value={rate.name}
-                            />
-                          </label>
-                          <label className={styles.field}>
-                            <span>Method</span>
-                            <select
-                              className={styles.input}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, method: event.target.value }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              value={rate.method}
-                            >
-                              <option value="FLAT">Flat</option>
-                              <option value="SUBTOTAL_TIER">Subtotal tier</option>
-                            </select>
-                          </label>
-                          <label className={styles.field}>
-                            <span>Amount (USD)</span>
-                            <input
-                              className={styles.input}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, amount: event.target.value }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              value={rate.amount}
-                            />
-                          </label>
-                          <label className={styles.field}>
-                            <span>Min subtotal</span>
-                            <input
-                              className={styles.input}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, minSubtotal: event.target.value }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              value={rate.minSubtotal}
-                            />
-                          </label>
-                          <label className={styles.field}>
-                            <span>Max subtotal</span>
-                            <input
-                              className={styles.input}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, maxSubtotal: event.target.value }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              value={rate.maxSubtotal}
-                            />
-                          </label>
-                          <label className={styles.field}>
-                            <span>Priority</span>
-                            <input
-                              className={styles.input}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, priority: event.target.value }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              value={rate.priority}
-                            />
-                          </label>
-                          <label className={styles.checkboxField}>
-                            <input
-                              checked={rate.isActive}
-                              onChange={(event) =>
-                                setShippingZones((current) =>
-                                  current.map((entry) =>
-                                    entry.id === zone.id
-                                      ? {
-                                          ...entry,
-                                          rates: entry.rates.map((zoneRate) =>
-                                            zoneRate.id === rate.id
-                                              ? { ...zoneRate, isActive: event.target.checked }
-                                              : zoneRate
-                                          ),
-                                        }
-                                      : entry
-                                  )
-                                )
-                              }
-                              type="checkbox"
-                            />
-                            <span>Active</span>
-                          </label>
-                        </div>
-                        <div className={styles.actionRow}>
-                          <AdminButton onClick={() => saveRate(zone.id, rate)} size="sm" variant="secondary">
-                            Save rate
-                          </AdminButton>
-                          <AdminButton onClick={() => deleteRate(zone.id, rate.id)} size="sm" variant="danger">
-                            Delete rate
-                          </AdminButton>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span>New rate name</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              name: event.target.value,
-                            },
-                          }))
-                        }
-                        value={(newRateByZoneId[zone.id] || EMPTY_RATE).name}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Method</span>
-                      <select
-                        className={styles.input}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              method: event.target.value,
-                            },
-                          }))
-                        }
-                        value={(newRateByZoneId[zone.id] || EMPTY_RATE).method}
-                      >
-                        <option value="FLAT">Flat</option>
-                        <option value="SUBTOTAL_TIER">Subtotal tier</option>
-                      </select>
-                    </label>
-                    <label className={styles.field}>
-                      <span>Amount (USD)</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              amount: event.target.value,
-                            },
-                          }))
-                        }
-                        value={(newRateByZoneId[zone.id] || EMPTY_RATE).amount}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Min subtotal</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              minSubtotal: event.target.value,
-                            },
-                          }))
-                        }
-                        value={(newRateByZoneId[zone.id] || EMPTY_RATE).minSubtotal}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Max subtotal</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              maxSubtotal: event.target.value,
-                            },
-                          }))
-                        }
-                        value={(newRateByZoneId[zone.id] || EMPTY_RATE).maxSubtotal}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Priority</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              priority: event.target.value,
-                            },
-                          }))
-                        }
-                        value={(newRateByZoneId[zone.id] || EMPTY_RATE).priority}
-                      />
-                    </label>
-                    <label className={styles.checkboxField}>
-                      <input
-                        checked={(newRateByZoneId[zone.id] || EMPTY_RATE).isActive}
-                        onChange={(event) =>
-                          setNewRateByZoneId((current) => ({
-                            ...current,
-                            [zone.id]: {
-                              ...(current[zone.id] || EMPTY_RATE),
-                              isActive: event.target.checked,
-                            },
-                          }))
-                        }
-                        type="checkbox"
-                      />
-                      <span>Active</span>
-                    </label>
-                    <AdminButton onClick={() => createRate(zone.id)} size="sm" variant="secondary">
-                      Add rate
-                    </AdminButton>
-                  </div>
-                </div>
-              ))}
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}>
-                <h3>Manual rate preview</h3>
+              <div className={styles.sectionHeading}><h3>Live rate and label provider</h3></div>
+              <div className={styles.actionRow}>
+                <AdminStatusChip tone={setupStatus?.providerConnected ? "success" : "warning"}>
+                  {setupStatus?.providerConnected ? "Connected" : "Not connected"}
+                </AdminStatusChip>
+                <p className={styles.statusText}>Provider: {provider || "None selected"}</p>
               </div>
-              <div className={styles.inlineGrid}>
-                <label className={styles.field}>
-                  <span>Subtotal (USD)</span>
-                  <input className={styles.input} onChange={(event) => setPreviewInput((current) => ({ ...current, subtotal: event.target.value }))} value={previewInput.subtotal} />
-                </label>
-                <label className={styles.field}>
-                  <span>Destination country</span>
-                  <input className={styles.input} onChange={(event) => setPreviewInput((current) => ({ ...current, countryCode: event.target.value }))} value={previewInput.countryCode} />
-                </label>
-                <label className={styles.field}>
-                  <span>Destination province</span>
-                  <input className={styles.input} onChange={(event) => setPreviewInput((current) => ({ ...current, provinceCode: event.target.value }))} value={previewInput.provinceCode} />
-                </label>
+              <div className={styles.actionRow}>
+                <AdminButton onClick={() => setProviderDrawerOpen(true)} size="sm" variant="secondary">
+                  Manage provider
+                </AdminButton>
               </div>
-              <div className={styles.statusBlock}>
-                <p className={styles.statusTitle}>Preview amount: ${Number(previewResult.amount || 0).toFixed(2)}</p>
-                <p className={styles.statusText}>{previewResult.label}</p>
+            </section>
+
+            <section className={styles.configSection}>
+              <div className={styles.sectionHeading}><h3>Live-rate requirements</h3></div>
+              <div className={styles.actionRow}>
+                <AdminStatusChip tone={hasDefaultLocation ? "success" : "warning"}>
+                  {hasDefaultLocation ? "Ship-from location ready" : "Ship-from location missing"}
+                </AdminStatusChip>
+                <AdminStatusChip tone={hasDefaultPackage ? "success" : "warning"}>
+                  {hasDefaultPackage ? "Default package ready" : "Default package missing"}
+                </AdminStatusChip>
+              </div>
+              {setupStatus?.warnings?.length ? (
+                <ul className={styles.setupList}>
+                  {setupStatus.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={styles.statusText}>No setup warnings.</p>
+              )}
+
+              <div className={styles.divider} />
+              <div className={styles.sectionHeading}><h3>Ship-from locations</h3></div>
+              {locations.length ? (
+                locations.map((entry) => (
+                  <div className={styles.configRow} key={entry.id}>
+                    <p className={styles.statusText}>
+                      <strong>{entry.name}</strong> | {formatLocationLine(entry)}
+                    </p>
+                    <div className={styles.actionRow}>
+                      {entry.isDefault ? <AdminStatusChip tone="success">Default</AdminStatusChip> : null}
+                      {!entry.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
+                      <AdminButton onClick={() => openLocationDrawer(entry)} size="sm" variant="secondary">Edit</AdminButton>
+                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/locations/${entry.id}`, "DELETE", undefined, "Ship-from location removed.")} size="sm" variant="danger">Delete</AdminButton>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <AdminEmptyState
+                  title="No ship-from locations"
+                  description="Add a default ship-from location for live rates, labels, return labels, and packing slips."
+                  icon="warehouse"
+                />
+              )}
+              <div className={styles.actionRow}>
+                <AdminButton onClick={() => openLocationDrawer(null)} size="sm" variant="secondary">
+                  Add ship-from location
+                </AdminButton>
+              </div>
+            </section>
+
+            <section className={styles.configSection}>
+              <div className={styles.sectionHeading}><h3>Packages</h3></div>
+              {packages.length ? (
+                packages.map((entry) => (
+                  <div className={styles.configRow} key={entry.id}>
+                    <p className={styles.statusText}>
+                      <strong>{entry.name}</strong> | {formatPackageLine(entry)}
+                    </p>
+                    <div className={styles.actionRow}>
+                      {entry.isDefault ? <AdminStatusChip tone="success">Default</AdminStatusChip> : null}
+                      {!entry.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
+                      <AdminButton onClick={() => openPackageDrawer(entry)} size="sm" variant="secondary">Edit</AdminButton>
+                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/packages/${entry.id}`, "DELETE", undefined, "Package removed.")} size="sm" variant="danger">Delete</AdminButton>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <AdminEmptyState
+                  title="No packages"
+                  description="Add a default package so live rates and label buying can estimate shipping correctly."
+                  icon="inventory_2"
+                />
+              )}
+              <div className={styles.actionRow}>
+                <AdminButton onClick={() => openPackageDrawer(null)} size="sm" variant="secondary">
+                  Add package
+                </AdminButton>
+              </div>
+            </section>
+
+            <section className={styles.configSection}>
+              <div className={styles.sectionHeading}><h3>Manual checkout rates</h3></div>
+              <p className={styles.statusText}>Manual rates control what customers pay. They do not buy postage.</p>
+              {manualRates.length ? (
+                manualRates.map((rate) => (
+                  <div className={styles.configRow} key={rate.id}>
+                    <p className={styles.statusText}>
+                      <strong>{rate.name}</strong> | {rate.rateType} | {renderRateSummary(rate, currency)}
+                    </p>
+                    <div className={styles.actionRow}>
+                      {!rate.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
+                      <AdminButton onClick={() => openManualRateDrawer(rate)} size="sm" variant="secondary">Edit</AdminButton>
+                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/manual-rates/${rate.id}`, "DELETE", undefined, "Manual rate removed.")} size="sm" variant="danger">Delete</AdminButton>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <AdminEmptyState title="No manual rates" description="Add rates if checkout should work without live quotes." icon="paid" />
+              )}
+              <div className={styles.actionRow}>
+                <AdminButton onClick={() => openManualRateDrawer(null)} size="sm" variant="secondary">
+                  Add manual rate
+                </AdminButton>
+              </div>
+            </section>
+
+            <section className={styles.configSection}>
+              <div className={styles.sectionHeading}><h3>Live-rate fallback</h3></div>
+              <p className={styles.statusText}>Fallback rates are used only if live provider requests fail or time out.</p>
+              {fallbackRates.length ? (
+                fallbackRates.map((rate) => (
+                  <div className={styles.configRow} key={rate.id}>
+                    <p className={styles.statusText}>
+                      <strong>{rate.name}</strong> | {formatMoney(rate.amount, currency)}
+                    </p>
+                    <div className={styles.actionRow}>
+                      {!rate.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
+                      <AdminButton onClick={() => openFallbackRateDrawer(rate)} size="sm" variant="secondary">Edit</AdminButton>
+                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/fallback-rates/${rate.id}`, "DELETE", undefined, "Fallback rate removed.")} size="sm" variant="danger">Delete</AdminButton>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <AdminEmptyState title="No fallback rates" description="Configure fallback rates for live provider outage paths." icon="error" />
+              )}
+              <div className={styles.actionRow}>
+                <AdminButton onClick={() => openFallbackRateDrawer(null)} size="sm" variant="secondary">
+                  Add fallback rate
+                </AdminButton>
+              </div>
+            </section>
+
+            <section className={styles.configSection}>
+              <div className={styles.sectionHeading}><h3>Local options and documents</h3></div>
+              <div className={styles.setupGrid}>
+                <AdminCard as="article" className={styles.setupCard} variant="card">
+                  <p className={styles.statusText}><strong>Manual fulfillment:</strong> Mark shipped and add tracking without label purchase.</p>
+                </AdminCard>
+                <AdminCard as="article" className={styles.setupCard} variant="card">
+                  <p className={styles.statusText}><strong>Local delivery and pickup:</strong> Setup drawer can be added when backend activation lands.</p>
+                </AdminCard>
+                <AdminCard as="article" className={styles.setupCard} variant="card">
+                  <p className={styles.statusText}><strong>Packing slip:</strong> Show settings after print flow ships.</p>
+                </AdminCard>
               </div>
             </section>
           </div>
         ) : null}
       </div>
+
+      <AdminDrawer
+        open={providerDrawerOpen}
+        onClose={() => setProviderDrawerOpen(false)}
+        title="Live rate and label provider"
+        subtitle="Save encrypted credentials, set usage, and verify connection."
+      >
+        <AdminField label="Provider">
+          <AdminSelect
+            value={provider}
+            onChange={setProvider}
+            options={[
+              { value: "", label: "Select provider" },
+              { value: "SHIPPO", label: "Shippo" },
+              { value: "EASYPOST", label: "EasyPost" },
+            ]}
+          />
+        </AdminField>
+
+        <AdminField label="Provider usage">
+          <AdminSelect
+            value={providerUsage}
+            onChange={setProviderUsage}
+            options={[
+              { value: "LIVE_AND_LABELS", label: "Live rates and label buying" },
+              { value: "LABELS_ONLY", label: "Label buying only" },
+              { value: "LIVE_RATES_ONLY", label: "Live rates only" },
+            ]}
+          />
+        </AdminField>
+
+        <AdminField label="API token">
+          <AdminInput
+            type="password"
+            value={providerToken}
+            onChange={(event) => setProviderToken(event.target.value)}
+            placeholder="sk_live_..."
+          />
+        </AdminField>
+
+        <p className={styles.statusText}>Stored secrets are encrypted and never shown again in settings.</p>
+
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} onClick={saveProviderToken} size="sm" variant="secondary">Save credentials</AdminButton>
+          <AdminButton disabled={saving} onClick={testProvider} size="sm" variant="secondary">Verify connection</AdminButton>
+          <AdminButton disabled={saving} onClick={saveMode} size="sm" variant="secondary">Save usage</AdminButton>
+        </div>
+
+        {providerTestMessage ? <p className={styles.statusText}>{providerTestMessage}</p> : null}
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={packageDrawerOpen}
+        onClose={() => setPackageDrawerOpen(false)}
+        title={packageForm.id ? "Edit package" : "Add package"}
+        subtitle="Used for live rates and label buying."
+      >
+        <AdminField label="Name">
+          <AdminInput value={packageForm.name} onChange={(event) => setPackageForm((current) => ({ ...current, name: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Type">
+          <AdminSelect value={packageForm.type} onChange={(value) => setPackageForm((current) => ({ ...current, type: value }))} options={[{ value: "BOX", label: "Box" }, { value: "POLY_MAILER", label: "Poly mailer" }, { value: "ENVELOPE", label: "Envelope" }, { value: "CUSTOM", label: "Custom" }]} />
+        </AdminField>
+        <AdminField label="Length">
+          <AdminInput type="number" value={packageForm.length} onChange={(event) => setPackageForm((current) => ({ ...current, length: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Width">
+          <AdminInput type="number" value={packageForm.width} onChange={(event) => setPackageForm((current) => ({ ...current, width: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Height">
+          <AdminInput type="number" value={packageForm.height} onChange={(event) => setPackageForm((current) => ({ ...current, height: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Dimension unit">
+          <AdminSelect value={packageForm.dimensionUnit} onChange={(value) => setPackageForm((current) => ({ ...current, dimensionUnit: value }))} options={[{ value: "IN", label: "IN" }, { value: "CM", label: "CM" }]} />
+        </AdminField>
+        <AdminField label="Empty package weight">
+          <AdminInput type="number" value={packageForm.emptyPackageWeight} onChange={(event) => setPackageForm((current) => ({ ...current, emptyPackageWeight: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Weight unit">
+          <AdminSelect value={packageForm.weightUnit} onChange={(value) => setPackageForm((current) => ({ ...current, weightUnit: value }))} options={[{ value: "OZ", label: "OZ" }, { value: "LB", label: "LB" }, { value: "G", label: "G" }, { value: "KG", label: "KG" }]} />
+        </AdminField>
+        <label className={styles.checkboxField}><input checked={Boolean(packageForm.isDefault)} onChange={(event) => setPackageForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" /><span>Default package</span></label>
+        <label className={styles.checkboxField}><input checked={Boolean(packageForm.isActive)} onChange={(event) => setPackageForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} onClick={savePackage} size="sm">Save package</AdminButton>
+        </div>
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={locationDrawerOpen}
+        onClose={() => setLocationDrawerOpen(false)}
+        title={locationForm.id ? "Edit ship-from location" : "Add ship-from location"}
+        subtitle="Used for live rates, labels, return labels, and packing slips."
+      >
+        <AdminField label="Name"><AdminInput value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} /></AdminField>
+        <AdminField label="Contact name"><AdminInput value={locationForm.contactName} onChange={(event) => setLocationForm((current) => ({ ...current, contactName: event.target.value }))} /></AdminField>
+        <AdminField label="Company"><AdminInput value={locationForm.company} onChange={(event) => setLocationForm((current) => ({ ...current, company: event.target.value }))} /></AdminField>
+        <AdminField label="Address line 1"><AdminInput value={locationForm.address1} onChange={(event) => setLocationForm((current) => ({ ...current, address1: event.target.value }))} /></AdminField>
+        <AdminField label="Address line 2"><AdminInput value={locationForm.address2} onChange={(event) => setLocationForm((current) => ({ ...current, address2: event.target.value }))} /></AdminField>
+        <AdminField label="City"><AdminInput value={locationForm.city} onChange={(event) => setLocationForm((current) => ({ ...current, city: event.target.value }))} /></AdminField>
+        <AdminField label="State / province"><AdminInput value={locationForm.stateProvince} onChange={(event) => setLocationForm((current) => ({ ...current, stateProvince: event.target.value }))} /></AdminField>
+        <AdminField label="Postal code"><AdminInput value={locationForm.postalCode} onChange={(event) => setLocationForm((current) => ({ ...current, postalCode: event.target.value }))} /></AdminField>
+        <AdminField label="Country"><AdminInput value={locationForm.country} onChange={(event) => setLocationForm((current) => ({ ...current, country: event.target.value }))} /></AdminField>
+        <AdminField label="Phone"><AdminInput value={locationForm.phone} onChange={(event) => setLocationForm((current) => ({ ...current, phone: event.target.value }))} /></AdminField>
+        <label className={styles.checkboxField}><input checked={Boolean(locationForm.isDefault)} onChange={(event) => setLocationForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" /><span>Default location</span></label>
+        <label className={styles.checkboxField}><input checked={Boolean(locationForm.isActive)} onChange={(event) => setLocationForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} onClick={saveLocation} size="sm">Save location</AdminButton>
+          <AdminButton disabled={saving} onClick={validateLocationAddress} size="sm" variant="secondary">Validate address</AdminButton>
+        </div>
+        {locationValidationMessage ? <p className={styles.statusText}>{locationValidationMessage}</p> : null}
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={manualDrawerOpen}
+        onClose={() => setManualDrawerOpen(false)}
+        title={manualForm.id ? "Edit manual checkout rate" : "Add manual checkout rate"}
+        subtitle="Manual rates change checkout price only."
+      >
+        <AdminField label="Name"><AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} /></AdminField>
+        <AdminField label="Region country"><AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} /></AdminField>
+        <AdminField label="Region state / province"><AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} /></AdminField>
+        <AdminField label="Rate type"><AdminSelect value={manualForm.rateType} onChange={(value) => setManualForm((current) => ({ ...current, rateType: value }))} options={[{ value: "FLAT", label: "Flat" }, { value: "FREE", label: "Free" }, { value: "WEIGHT_BASED", label: "Weight-based" }, { value: "PRICE_BASED", label: "Price-based" }]} /></AdminField>
+        <AdminField label="Amount"><AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} /></AdminField>
+        <AdminField label="Min weight"><AdminInput type="number" value={manualForm.minWeight} onChange={(event) => setManualForm((current) => ({ ...current, minWeight: event.target.value }))} /></AdminField>
+        <AdminField label="Max weight"><AdminInput type="number" value={manualForm.maxWeight} onChange={(event) => setManualForm((current) => ({ ...current, maxWeight: event.target.value }))} /></AdminField>
+        <AdminField label="Min subtotal"><AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} /></AdminField>
+        <AdminField label="Max subtotal"><AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} /></AdminField>
+        <AdminField label="Free over amount"><AdminInput type="number" value={manualForm.freeOverAmount} onChange={(event) => setManualForm((current) => ({ ...current, freeOverAmount: event.target.value }))} /></AdminField>
+        <AdminField label="Estimated delivery text"><AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} /></AdminField>
+        <label className={styles.checkboxField}><input checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
+        <div className={styles.actionRow}><AdminButton disabled={saving} onClick={saveManualRate} size="sm">Save manual rate</AdminButton></div>
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={fallbackDrawerOpen}
+        onClose={() => setFallbackDrawerOpen(false)}
+        title={fallbackForm.id ? "Edit live-rate fallback" : "Add live-rate fallback"}
+        subtitle="Fallback rates are used only when live provider requests fail."
+      >
+        <AdminField label="Name"><AdminInput value={fallbackForm.name} onChange={(event) => setFallbackForm((current) => ({ ...current, name: event.target.value }))} /></AdminField>
+        <AdminField label="Region country"><AdminInput value={fallbackForm.regionCountry} onChange={(event) => setFallbackForm((current) => ({ ...current, regionCountry: event.target.value }))} /></AdminField>
+        <AdminField label="Region state / province"><AdminInput value={fallbackForm.regionStateProvince} onChange={(event) => setFallbackForm((current) => ({ ...current, regionStateProvince: event.target.value }))} /></AdminField>
+        <AdminField label="Amount"><AdminInput type="number" value={fallbackForm.amount} onChange={(event) => setFallbackForm((current) => ({ ...current, amount: event.target.value }))} /></AdminField>
+        <AdminField label="Estimated delivery text"><AdminInput value={fallbackForm.estimatedDeliveryText} onChange={(event) => setFallbackForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} /></AdminField>
+        <label className={styles.checkboxField}><input checked={Boolean(fallbackForm.isActive)} onChange={(event) => setFallbackForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
+        <div className={styles.actionRow}><AdminButton disabled={saving} onClick={saveFallbackRate} size="sm">Save fallback rate</AdminButton></div>
+      </AdminDrawer>
     </AppShell>
   );
 }

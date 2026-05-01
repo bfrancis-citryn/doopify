@@ -1,5 +1,6 @@
 import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
+import { getShippingProviderConnectionStatus } from '@/server/shipping/shipping-provider.service'
 
 function normalizeStatusLabel(value: string | null | undefined) {
   return String(value || '').toLowerCase().replaceAll('_', ' ')
@@ -80,6 +81,19 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
   })
 
   if (!order) return null
+
+  const store = await prisma.store.findFirst({
+    select: {
+      shippingLiveProvider: true,
+      shippingProviderUsage: true,
+    },
+  })
+  const providerStatus = store?.shippingLiveProvider
+    ? await getShippingProviderConnectionStatus(store.shippingLiveProvider)
+    : null
+  const canBuyShippingLabelFromProvider = Boolean(
+    providerStatus?.connected && store?.shippingProviderUsage !== 'LIVE_RATES_ONLY'
+  )
 
   const shippingAddress = order.addresses.find((entry) => entry.type === 'SHIPPING') || null
   const billingAddress = order.addresses.find((entry) => entry.type === 'BILLING') || null
@@ -305,6 +319,11 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
     shippingSummary: {
       amount: paymentSummary.shippingAmount,
       amountCents: paymentSummary.shippingAmountCents,
+      methodName: order.shippingMethodName,
+      rateType: order.shippingRateType,
+      provider: order.shippingProvider,
+      providerRateId: order.shippingProviderRateId,
+      estimatedDeliveryText: order.estimatedDeliveryText,
       address: shippingAddress
         ? {
             firstName: shippingAddress.firstName,
@@ -366,6 +385,17 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
     ]) || null,
     addresses: order.addresses,
     deliveryMethod: order.shippingAmountCents > 0 ? 'Standard shipping' : 'Free shipping',
+    shippingMethodName: order.shippingMethodName,
+    shippingRateType: order.shippingRateType,
+    shippingProvider: order.shippingProvider,
+    shippingProviderRateId: order.shippingProviderRateId,
+    estimatedDeliveryText: order.estimatedDeliveryText,
+    shippingCapabilities: {
+      labelProvider: store?.shippingLiveProvider || null,
+      providerConnected: Boolean(providerStatus?.connected),
+      providerUsage: store?.shippingProviderUsage || null,
+      canBuyShippingLabel: canBuyShippingLabelFromProvider,
+    },
     total: paymentSummary.total,
     subtotal: paymentSummary.subtotal,
     shippingAmount: paymentSummary.shippingAmount,
@@ -377,9 +407,9 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
       canManualFulfill: ['paid', 'partially refunded'].includes(
         normalizeStatusLabel(order.paymentStatus)
       ),
-      canBuyShippingLabel: ['paid', 'partially refunded'].includes(
-        normalizeStatusLabel(order.paymentStatus)
-      ),
+      canBuyShippingLabel:
+        ['paid', 'partially refunded'].includes(normalizeStatusLabel(order.paymentStatus)) &&
+        canBuyShippingLabelFromProvider,
       canRefund: ['paid', 'partially refunded'].includes(normalizeStatusLabel(order.paymentStatus)),
       canCreateReturn: true,
       canMarkPaid: ['pending', 'failed', 'voided'].includes(normalizeStatusLabel(order.paymentStatus)),

@@ -5,11 +5,19 @@ const mocks = vi.hoisted(() => ({
     order: {
       findUnique: vi.fn(),
     },
+    store: {
+      findFirst: vi.fn(),
+    },
   },
+  getShippingProviderConnectionStatus: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: mocks.prisma,
+}))
+
+vi.mock('@/server/shipping/shipping-provider.service', () => ({
+  getShippingProviderConnectionStatus: mocks.getShippingProviderConnectionStatus,
 }))
 
 import { getAdminOrderDetailByOrderNumber } from './admin-order-detail.service'
@@ -17,6 +25,14 @@ import { getAdminOrderDetailByOrderNumber } from './admin-order-detail.service'
 describe('getAdminOrderDetailByOrderNumber', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.prisma.store.findFirst.mockResolvedValue({
+      shippingLiveProvider: 'EASYPOST',
+      shippingProviderUsage: 'LIVE_AND_LABELS',
+    })
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'EASYPOST',
+      connected: true,
+    })
   })
 
   it('returns normalized admin detail payload', async () => {
@@ -159,5 +175,51 @@ describe('getAdminOrderDetailByOrderNumber', () => {
   it('returns null when order does not exist', async () => {
     mocks.prisma.order.findUnique.mockResolvedValue(null)
     await expect(getAdminOrderDetailByOrderNumber(9999)).resolves.toBeNull()
+  })
+
+  it('keeps label purchase available when order used manual checkout rate and label provider is connected', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue({
+      id: 'ord_2',
+      orderNumber: 1002,
+      channel: 'online',
+      status: 'OPEN',
+      paymentStatus: 'PAID',
+      fulfillmentStatus: 'UNFULFILLED',
+      subtotalCents: 5000,
+      taxAmountCents: 0,
+      shippingAmountCents: 900,
+      shippingMethodName: 'Manual economy',
+      shippingRateType: 'FLAT',
+      shippingProvider: null,
+      shippingProviderRateId: null,
+      estimatedDeliveryText: '3-5 business days',
+      discountAmountCents: 0,
+      totalCents: 5900,
+      currency: 'USD',
+      email: 'buyer@example.com',
+      note: null,
+      tags: [],
+      createdAt: new Date('2026-04-30T10:00:00.000Z'),
+      updatedAt: new Date('2026-04-30T10:00:00.000Z'),
+      customer: null,
+      items: [],
+      addresses: [{ type: 'SHIPPING', address1: '123 Main', city: 'LA', province: 'CA' }],
+      payments: [],
+      fulfillments: [],
+      shippingLabels: [],
+      events: [],
+      refunds: [],
+      returns: [],
+      discountApplications: [],
+    })
+
+    const detail = await getAdminOrderDetailByOrderNumber(1002)
+    expect(detail?.shippingMethodName).toBe('Manual economy')
+    expect(detail?.shippingProvider).toBeNull()
+    expect(detail?.shippingCapabilities).toMatchObject({
+      providerConnected: true,
+      canBuyShippingLabel: true,
+    })
+    expect(detail?.availableActions?.canBuyShippingLabel).toBe(true)
   })
 })

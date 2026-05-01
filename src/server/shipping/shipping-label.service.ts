@@ -209,13 +209,28 @@ function buildShippingRateRequest(input: {
     throw new Error('Order does not have a shipping address')
   }
 
-  if (
-    !input.store.shippingOriginAddress1 ||
-    !input.store.shippingOriginCity ||
-    !input.store.shippingOriginPostalCode ||
-    !input.store.shippingOriginCountry
-  ) {
-    throw new Error('Store shipping origin is incomplete. Complete shipping setup before buying labels.')
+  const locations = input.store.shippingLocations || []
+  const defaultLocation =
+    locations.find((location) => location.isDefault && location.isActive) ||
+    locations.find((location) => location.isActive) ||
+    null
+
+  if (!defaultLocation) {
+    throw new Error('A default active ship-from location is required before buying labels.')
+  }
+
+  if (!defaultLocation.address1 || !defaultLocation.city || !defaultLocation.postalCode || !defaultLocation.country) {
+    throw new Error('Default ship-from location is incomplete. Complete shipping setup before buying labels.')
+  }
+
+  const shippingPackages = input.store.shippingPackages || []
+  const defaultPackage =
+    shippingPackages.find((entry) => entry.isDefault && entry.isActive) ||
+    shippingPackages.find((entry) => entry.isActive) ||
+    null
+
+  if (!defaultPackage) {
+    throw new Error('A default active package is required before buying labels.')
   }
 
   if (!shippingAddress.address1 || !shippingAddress.city || !shippingAddress.postalCode || !shippingAddress.country) {
@@ -226,14 +241,14 @@ function buildShippingRateRequest(input: {
     apiKey: '',
     currency: (input.store.currency || 'USD').toUpperCase(),
     originAddress: {
-      name: input.store.shippingOriginName,
-      phone: input.store.shippingOriginPhone,
-      address1: input.store.shippingOriginAddress1,
-      address2: input.store.shippingOriginAddress2,
-      city: input.store.shippingOriginCity,
-      province: input.store.shippingOriginProvince,
-      postalCode: input.store.shippingOriginPostalCode,
-      country: normalizeCountry(input.store.shippingOriginCountry),
+      name: defaultLocation.contactName || defaultLocation.name || input.store.shippingOriginName,
+      phone: defaultLocation.phone || input.store.shippingOriginPhone,
+      address1: defaultLocation.address1,
+      address2: defaultLocation.address2,
+      city: defaultLocation.city,
+      province: defaultLocation.stateProvince,
+      postalCode: defaultLocation.postalCode,
+      country: normalizeCountry(defaultLocation.country),
     },
     destinationAddress: {
       name: [shippingAddress.firstName, shippingAddress.lastName].filter(Boolean).join(' ').trim() || undefined,
@@ -261,6 +276,10 @@ async function resolveLiveProviderForLabels() {
   const provider = store.shippingLiveProvider
   if (!provider) {
     throw new Error('A live shipping provider must be connected to buy labels')
+  }
+
+  if (store.shippingProviderUsage === 'LIVE_RATES_ONLY') {
+    throw new Error('Provider usage is set to live rates only. Enable label buying in shipping settings.')
   }
 
   const connection = await getShippingProviderConnectionStatus(provider)

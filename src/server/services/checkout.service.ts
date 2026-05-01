@@ -66,12 +66,14 @@ type CheckoutPayload = {
   selectedShippingRate?: {
     id: string
     source: 'MANUAL' | 'EASYPOST' | 'SHIPPO'
+    rateType?: 'LIVE_RATE' | 'FALLBACK' | 'FLAT' | 'FREE' | 'WEIGHT_BASED' | 'PRICE_BASED'
     carrier?: string
     service?: string
     displayName: string
     amountCents: number
     currency: string
     estimatedDays?: number
+    estimatedDeliveryText?: string
     providerRateId?: string
   }
 }
@@ -142,14 +144,37 @@ function mapShippingQuoteForSnapshot(quote: ShippingRateQuote) {
   return {
     id: quote.id,
     source: quote.source,
+    rateType: quote.rateType,
     carrier: quote.carrier,
     service: quote.service,
     displayName: quote.displayName,
     amountCents: quote.amountCents,
     currency: quote.currency,
     estimatedDays: quote.estimatedDays,
+    estimatedDeliveryText: quote.estimatedDeliveryText,
     providerRateId: quote.providerRateId,
   }
+}
+
+function convertVariantWeightToOz(weight: number | null | undefined, unit: string | null | undefined) {
+  if (!Number.isFinite(weight) || Number(weight) <= 0) return 0
+
+  const normalizedUnit = String(unit || 'oz').trim().toLowerCase()
+  const normalizedWeight = Number(weight)
+
+  if (normalizedUnit === 'lb' || normalizedUnit === 'lbs' || normalizedUnit === 'pound') {
+    return normalizedWeight * 16
+  }
+
+  if (normalizedUnit === 'g' || normalizedUnit === 'gram') {
+    return normalizedWeight * 0.0352739619
+  }
+
+  if (normalizedUnit === 'kg' || normalizedUnit === 'kilogram') {
+    return normalizedWeight * 35.2739619
+  }
+
+  return normalizedWeight
 }
 
 async function resolveLineItems(items: CheckoutItemInput[]) {
@@ -189,6 +214,7 @@ async function resolveLineItems(items: CheckoutItemInput[]) {
       variantTitle: variant.title,
       sku: variant.sku ?? undefined,
       priceCents: variant.priceCents ?? dollarsToCents((variant as { price?: number }).price ?? 0),
+      weightOz: convertVariantWeightToOz(variant.weight, variant.weightUnit),
       quantity: item.quantity,
     }
   })
@@ -213,13 +239,19 @@ function subtotalFromLineItems(lineItems: Array<{ priceCents: number; quantity: 
 
 async function resolveSelectedShippingQuote(input: {
   storeId?: string
-  lineItems: Array<{ priceCents: number; quantity: number }>
+  lineItems: Array<{ priceCents: number; weightOz?: number; quantity: number }>
   shippingAddress: CheckoutAddress
   selectedShippingQuoteId?: string
 }) {
+  const totalWeightOz = input.lineItems.reduce(
+    (sum, item) => sum + Number(item.weightOz || 0) * Number(item.quantity || 0),
+    0
+  )
+
   const quotes = await getShippingRatesForCheckout({
     storeId: input.storeId,
     subtotalCents: subtotalFromLineItems(input.lineItems),
+    totalWeightOz,
     shippingAddress: toShippingRateAddress(input.shippingAddress),
   })
 
@@ -511,10 +543,15 @@ export async function getCheckoutShippingRates(input: {
   const store = await getStoreSettings()
   const lineItems = await resolveLineItems(input.items)
   const shippingAddress = normalizeAddress(input.shippingAddress)
+  const totalWeightOz = lineItems.reduce(
+    (sum, item) => sum + Number((item as { weightOz?: number }).weightOz || 0) * Number(item.quantity || 0),
+    0
+  )
 
   const quotes = await getShippingRatesForCheckout({
     storeId: store?.id,
     subtotalCents: subtotalFromLineItems(lineItems),
+    totalWeightOz,
     shippingAddress: toShippingRateAddress(shippingAddress),
   })
 
@@ -548,6 +585,7 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
 
   const payload = checkoutSession.payload as unknown as CheckoutPayload
   const customer = await resolveCheckoutCustomer(payload)
+  const selectedShippingRate = payload.selectedShippingRate
 
   const order = await createOrder({
     customerId: customer?.id,
@@ -558,6 +596,20 @@ export async function completeCheckoutFromPaymentIntent(intent: StripePaymentInt
     discountApplications: payload.discountApplications,
     taxAmountCents: checkoutSession.taxAmountCents,
     shippingAmountCents: checkoutSession.shippingAmountCents,
+    shippingMethodName: selectedShippingRate?.displayName,
+    shippingRateType:
+      selectedShippingRate?.rateType ??
+      (selectedShippingRate?.source === 'MANUAL' ? 'MANUAL' : selectedShippingRate?.source ?? null),
+    shippingProvider:
+      selectedShippingRate?.source && selectedShippingRate.source !== 'MANUAL'
+        ? selectedShippingRate.source
+        : null,
+    shippingProviderRateId: selectedShippingRate?.providerRateId ?? null,
+    estimatedDeliveryText:
+      selectedShippingRate?.estimatedDeliveryText ??
+      (Number.isFinite(selectedShippingRate?.estimatedDays)
+        ? `${selectedShippingRate?.estimatedDays} business day${selectedShippingRate?.estimatedDays === 1 ? '' : 's'}`
+        : null),
     discountAmountCents: checkoutSession.discountAmountCents,
     currency: checkoutSession.currency,
     stripePaymentIntentId: intent.id,

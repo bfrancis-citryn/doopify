@@ -112,6 +112,18 @@ async function ensureStoreRow() {
 export async function getStoreSettings() {
   return prisma.store.findFirst({
     include: {
+      shippingPackages: {
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      },
+      shippingLocations: {
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      },
+      shippingManualRates: {
+        orderBy: [{ createdAt: 'asc' }],
+      },
+      shippingFallbackRates: {
+        orderBy: [{ createdAt: 'asc' }],
+      },
       shippingZones: {
         include: {
           rates: {
@@ -147,6 +159,7 @@ export async function updateStoreSettings(
     shippingThresholdCents: number
     shippingDomesticRateCents: number
     shippingInternationalRateCents: number
+    shippingProviderUsage: 'LIVE_AND_LABELS' | 'LABELS_ONLY' | 'LIVE_RATES_ONLY'
     domesticTaxRate: number
     internationalTaxRate: number
     taxEnabled: boolean

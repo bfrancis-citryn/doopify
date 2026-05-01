@@ -81,6 +81,7 @@ const baseStore = {
   id: 'store_1',
   currency: 'USD',
   shippingLiveProvider: 'EASYPOST',
+  shippingProviderUsage: 'LIVE_AND_LABELS',
   shippingOriginName: 'Doopify Warehouse',
   shippingOriginPhone: '555-000-0000',
   shippingOriginAddress1: '10 Origin St',
@@ -91,6 +92,38 @@ const baseStore = {
   shippingOriginCountry: 'US',
   defaultLabelFormat: 'PDF',
   defaultLabelSize: '4x6',
+  shippingLocations: [
+    {
+      id: 'loc_1',
+      name: 'HQ',
+      contactName: 'Warehouse',
+      company: 'Doopify',
+      address1: '10 Origin St',
+      address2: null,
+      city: 'Austin',
+      stateProvince: 'TX',
+      postalCode: '78701',
+      country: 'US',
+      phone: '555-000-0000',
+      isDefault: true,
+      isActive: true,
+    },
+  ],
+  shippingPackages: [
+    {
+      id: 'pkg_1',
+      name: 'Default Box',
+      type: 'BOX',
+      length: 10,
+      width: 8,
+      height: 4,
+      dimensionUnit: 'IN',
+      emptyPackageWeight: 12,
+      weightUnit: 'OZ',
+      isDefault: true,
+      isActive: true,
+    },
+  ],
 }
 
 beforeEach(() => {

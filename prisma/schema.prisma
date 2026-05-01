@@ -77,6 +77,38 @@ enum ShippingLiveProvider {
   SHIPPO
 }
 
+enum ShippingProviderUsage {
+  LIVE_AND_LABELS
+  LABELS_ONLY
+  LIVE_RATES_ONLY
+}
+
+enum ShippingPackageType {
+  BOX
+  POLY_MAILER
+  ENVELOPE
+  CUSTOM
+}
+
+enum ShippingDimensionUnit {
+  IN
+  CM
+}
+
+enum ShippingWeightUnit {
+  OZ
+  LB
+  G
+  KG
+}
+
+enum ShippingManualRateType {
+  FLAT
+  FREE
+  WEIGHT_BASED
+  PRICE_BASED
+}
+
 enum TaxStrategy {
   NONE
   MANUAL
@@ -190,6 +222,7 @@ model Store {
   shippingInternationalRateCents Int @default(1999)
   shippingMode      ShippingMode @default(MANUAL)
   shippingLiveProvider ShippingLiveProvider?
+  shippingProviderUsage ShippingProviderUsage @default(LIVE_AND_LABELS)
   shippingOriginName String?
   shippingOriginPhone String?
   shippingOriginAddress1 String?
@@ -218,6 +251,10 @@ model Store {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   shippingZones     ShippingZone[]
+  shippingPackages  ShippingPackage[]
+  shippingLocations ShippingLocation[]
+  shippingManualRates ShippingManualRate[]
+  shippingFallbackRates ShippingFallbackRate[]
   taxRules          TaxRule[]
 
   @@map("stores")
@@ -271,6 +308,90 @@ model ShippingPackagePreset {
   updatedAt DateTime @updatedAt
 
   @@map("shipping_package_presets")
+}
+
+model ShippingPackage {
+  id                 String                @id @default(cuid())
+  storeId            String
+  name               String
+  type               ShippingPackageType   @default(BOX)
+  length             Float
+  width              Float
+  height             Float
+  dimensionUnit      ShippingDimensionUnit @default(IN)
+  emptyPackageWeight Float
+  weightUnit         ShippingWeightUnit    @default(OZ)
+  isDefault          Boolean               @default(false)
+  isActive           Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  store              Store                 @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, isActive])
+  @@map("shipping_packages")
+}
+
+model ShippingLocation {
+  id            String   @id @default(cuid())
+  storeId       String
+  name          String
+  contactName   String?
+  company       String?
+  address1      String
+  address2      String?
+  city          String
+  stateProvince String?
+  postalCode    String
+  country       String
+  phone         String?
+  isDefault     Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, isActive])
+  @@map("shipping_locations")
+}
+
+model ShippingManualRate {
+  id                    String                 @id @default(cuid())
+  storeId               String
+  name                  String
+  regionCountry         String?
+  regionStateProvince   String?
+  rateType              ShippingManualRateType @default(FLAT)
+  amountCents           Int
+  minWeight             Float?
+  maxWeight             Float?
+  minSubtotalCents      Int?
+  maxSubtotalCents      Int?
+  freeOverAmountCents   Int?
+  estimatedDeliveryText String?
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  store                 Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, isActive])
+  @@map("shipping_manual_rates")
+}
+
+model ShippingFallbackRate {
+  id                    String   @id @default(cuid())
+  storeId               String
+  name                  String
+  regionCountry         String?
+  regionStateProvince   String?
+  amountCents           Int
+  estimatedDeliveryText String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  store                 Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, isActive])
+  @@map("shipping_fallback_rates")
 }
 
 model TaxRule {
@@ -503,6 +624,11 @@ model Order {
   subtotalCents             Int                   @default(0)
   taxAmountCents            Int                   @default(0)
   shippingAmountCents       Int                   @default(0)
+  shippingMethodName        String?
+  shippingRateType          String?
+  shippingProvider          String?
+  shippingProviderRateId    String?
+  estimatedDeliveryText     String?
   discountAmountCents       Int                   @default(0)
   totalCents                Int                   @default(0)
   currency             String                @default("USD")

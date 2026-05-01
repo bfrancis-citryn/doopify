@@ -1,12 +1,14 @@
 export type ShippingRateQuote = {
   id: string
   source: 'MANUAL' | 'EASYPOST' | 'SHIPPO'
+  rateType?: 'LIVE_RATE' | 'FALLBACK' | 'FLAT' | 'FREE' | 'WEIGHT_BASED' | 'PRICE_BASED'
   carrier?: string
   service?: string
   displayName: string
   amountCents: number
   currency: string
   estimatedDays?: number
+  estimatedDeliveryText?: string
   providerRateId?: string
   metadata?: Record<string, unknown>
 }

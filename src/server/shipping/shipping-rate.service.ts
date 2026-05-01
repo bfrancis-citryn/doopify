@@ -1,4 +1,4 @@
-import type { ShippingLiveProvider, ShippingMode } from '@prisma/client'
+import type { ShippingLiveProvider, ShippingMode, ShippingWeightUnit } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import {
@@ -28,6 +28,7 @@ export class ShippingRateSetupError extends Error {
 export type GetShippingRatesForCheckoutInput = {
   storeId?: string
   subtotalCents: number
+  totalWeightOz?: number
   shippingAddress: ShippingRateAddress
 }
 
@@ -72,35 +73,82 @@ function ensureValidSubtotalCents(subtotalCents: number) {
 }
 
 async function getShippingRateStore(storeId?: string) {
-  if (storeId) {
-    return prisma.store.findUnique({
-      where: { id: storeId },
-      include: {
-        shippingZones: {
-          include: {
-            rates: true,
-          },
-        },
-      },
-    })
-  }
-
-  return prisma.store.findFirst({
+  const query = {
     include: {
+      shippingPackages: {
+        orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'asc' as const }],
+      },
+      shippingLocations: {
+        orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'asc' as const }],
+      },
+      shippingManualRates: {
+        orderBy: [{ createdAt: 'asc' as const }],
+      },
+      shippingFallbackRates: {
+        orderBy: [{ createdAt: 'asc' as const }],
+      },
       shippingZones: {
         include: {
           rates: true,
         },
       },
     },
-  })
+  }
+
+  if (storeId) {
+    return prisma.store.findUnique({
+      where: { id: storeId },
+      ...query,
+    })
+  }
+
+  return prisma.store.findFirst(query)
 }
 
 function hasAddressForLiveRateQuotes(address: ShippingRateAddress) {
   return Boolean(address.address1 && address.city && address.postalCode && address.country)
 }
 
+function convertToOz(weight: number, unit: ShippingWeightUnit) {
+  if (!Number.isFinite(weight) || weight <= 0) return 0
+
+  switch (unit) {
+    case 'LB':
+      return weight * 16
+    case 'G':
+      return weight * 0.0352739619
+    case 'KG':
+      return weight * 35.2739619
+    default:
+      return weight
+  }
+}
+
+function convertToInches(length: number, unit: 'IN' | 'CM') {
+  if (!Number.isFinite(length) || length <= 0) return 0
+  return unit === 'CM' ? length * 0.3937007874 : length
+}
+
+function resolveDefaultLocation(store: NonNullable<ShippingRateStore>) {
+  const locations = store.shippingLocations || []
+  const persistedDefault = locations.find((location) => location.isDefault && location.isActive)
+  if (persistedDefault) return persistedDefault
+  return locations.find((location) => location.isActive) || null
+}
+
+function resolveDefaultPackage(store: NonNullable<ShippingRateStore>) {
+  const shippingPackages = store.shippingPackages || []
+  const persistedDefault = shippingPackages.find((entry) => entry.isDefault && entry.isActive)
+  if (persistedDefault) return persistedDefault
+  return shippingPackages.find((entry) => entry.isActive) || null
+}
+
 function hasOriginForLiveRateQuotes(store: NonNullable<ShippingRateStore>) {
+  const location = resolveDefaultLocation(store)
+  if (location) {
+    return Boolean(location.address1 && location.city && location.postalCode && location.country)
+  }
+
   return Boolean(
     store.shippingOriginAddress1 &&
       store.shippingOriginCity &&
@@ -110,6 +158,16 @@ function hasOriginForLiveRateQuotes(store: NonNullable<ShippingRateStore>) {
 }
 
 function hasDefaultPackageForLiveRates(store: NonNullable<ShippingRateStore>) {
+  const shippingPackage = resolveDefaultPackage(store)
+  if (shippingPackage) {
+    return Boolean(
+      Number(shippingPackage.emptyPackageWeight ?? 0) > 0 &&
+        Number(shippingPackage.length ?? 0) > 0 &&
+        Number(shippingPackage.width ?? 0) > 0 &&
+        Number(shippingPackage.height ?? 0) > 0
+    )
+  }
+
   return Boolean(
     Number(store.defaultPackageWeightOz ?? 0) > 0 &&
       Number(store.defaultPackageLengthIn ?? 0) > 0 &&
@@ -133,35 +191,46 @@ function buildRateRequestFromStore(input: {
 
   if (!hasOriginForLiveRateQuotes(store)) {
     throw new ShippingRateSetupError(
-      'Store shipping origin is incomplete. Complete origin address in shipping setup before requesting live rates.'
+      'Ship-from location is incomplete. Add a default active location before requesting live rates.'
     )
   }
 
   if (!hasDefaultPackageForLiveRates(store)) {
     throw new ShippingRateSetupError(
-      'Default package is incomplete. Complete package weight and dimensions in shipping setup before requesting live rates.'
+      'Default package is incomplete. Add a default active package before requesting live rates.'
     )
   }
+
+  const location = resolveDefaultLocation(store)
+  const shippingPackage = resolveDefaultPackage(store)
 
   return {
     apiKey: '',
     currency: (store.currency || 'USD').toUpperCase(),
     originAddress: {
-      name: store.shippingOriginName,
-      phone: store.shippingOriginPhone,
-      address1: store.shippingOriginAddress1,
-      address2: store.shippingOriginAddress2,
-      city: store.shippingOriginCity,
-      province: store.shippingOriginProvince,
-      postalCode: store.shippingOriginPostalCode,
-      country: store.shippingOriginCountry,
+      name: location?.contactName || location?.name || store.shippingOriginName,
+      phone: location?.phone || store.shippingOriginPhone,
+      address1: location?.address1 || store.shippingOriginAddress1,
+      address2: location?.address2 || store.shippingOriginAddress2,
+      city: location?.city || store.shippingOriginCity,
+      province: location?.stateProvince || store.shippingOriginProvince,
+      postalCode: location?.postalCode || store.shippingOriginPostalCode,
+      country: location?.country || store.shippingOriginCountry,
     },
     destinationAddress,
     parcel: {
-      weightOz: Number(store.defaultPackageWeightOz),
-      lengthIn: Number(store.defaultPackageLengthIn),
-      widthIn: Number(store.defaultPackageWidthIn),
-      heightIn: Number(store.defaultPackageHeightIn),
+      weightOz: shippingPackage
+        ? convertToOz(shippingPackage.emptyPackageWeight, shippingPackage.weightUnit)
+        : Number(store.defaultPackageWeightOz),
+      lengthIn: shippingPackage
+        ? convertToInches(shippingPackage.length, shippingPackage.dimensionUnit)
+        : Number(store.defaultPackageLengthIn),
+      widthIn: shippingPackage
+        ? convertToInches(shippingPackage.width, shippingPackage.dimensionUnit)
+        : Number(store.defaultPackageWidthIn),
+      heightIn: shippingPackage
+        ? convertToInches(shippingPackage.height, shippingPackage.dimensionUnit)
+        : Number(store.defaultPackageHeightIn),
     },
   }
 }
@@ -174,7 +243,85 @@ function getProvider(store: NonNullable<ShippingRateStore>): ShippingLiveProvide
   return store.shippingLiveProvider ?? null
 }
 
-function resolveManualQuotes(input: {
+function filterByRegion(input: {
+  destinationCountry: string
+  destinationProvince: string
+  regionCountry?: string | null
+  regionStateProvince?: string | null
+}) {
+  const regionCountry = normalizeCountry(input.regionCountry)
+  if (regionCountry && regionCountry !== input.destinationCountry) {
+    return false
+  }
+
+  const regionProvince = normalizeProvince(input.regionStateProvince)
+  if (regionProvince && regionProvince !== input.destinationProvince) {
+    return false
+  }
+
+  return true
+}
+
+function resolveModernManualQuotes(input: {
+  store: NonNullable<ShippingRateStore>
+  subtotalCents: number
+  totalWeightOz: number
+  shippingAddress: ShippingRateAddress
+}): ShippingRateQuote[] {
+  const destinationCountry = normalizeCountry(input.shippingAddress.country)
+  const destinationProvince = normalizeProvince(input.shippingAddress.province)
+  const currency = (input.store.currency || 'USD').toUpperCase()
+
+  const eligible = (input.store.shippingManualRates || [])
+    .filter((rate) => rate.isActive)
+    .filter((rate) =>
+      filterByRegion({
+        destinationCountry,
+        destinationProvince,
+        regionCountry: rate.regionCountry,
+        regionStateProvince: rate.regionStateProvince,
+      })
+    )
+    .filter((rate) => {
+      if (rate.rateType === 'PRICE_BASED') {
+        const minSubtotalCents = rate.minSubtotalCents ?? 0
+        const maxSubtotalCents = rate.maxSubtotalCents ?? Number.POSITIVE_INFINITY
+        return input.subtotalCents >= minSubtotalCents && input.subtotalCents <= maxSubtotalCents
+      }
+
+      if (rate.rateType === 'WEIGHT_BASED') {
+        const minWeight = rate.minWeight ?? 0
+        const maxWeight = rate.maxWeight ?? Number.POSITIVE_INFINITY
+        return input.totalWeightOz >= minWeight && input.totalWeightOz <= maxWeight
+      }
+
+      if (rate.rateType === 'FREE' && rate.freeOverAmountCents != null) {
+        return input.subtotalCents >= rate.freeOverAmountCents
+      }
+
+      return true
+    })
+
+  return eligible.map((rate) => {
+    const amountCents = rate.rateType === 'FREE' ? 0 : rate.amountCents
+    return {
+      id: `manual-rate:${rate.id}`,
+      source: 'MANUAL',
+      rateType: rate.rateType,
+      displayName: rate.name,
+      amountCents,
+      currency,
+      estimatedDeliveryText: rate.estimatedDeliveryText ?? undefined,
+      metadata: {
+        manualRateId: rate.id,
+        regionCountry: rate.regionCountry,
+        regionStateProvince: rate.regionStateProvince,
+      },
+    } satisfies ShippingRateQuote
+  })
+}
+
+function resolveLegacyManualQuotes(input: {
   store: NonNullable<ShippingRateStore>
   subtotalCents: number
   shippingAddress: ShippingRateAddress
@@ -201,6 +348,7 @@ function resolveManualQuotes(input: {
       {
         id: 'manual:threshold',
         source: 'MANUAL',
+        rateType: 'FREE',
         displayName: 'Free shipping threshold',
         amountCents: 0,
         currency,
@@ -244,6 +392,7 @@ function resolveManualQuotes(input: {
       .map((rate) => ({
         id: `manual:${matchingZone.id}:${rate.id}`,
         source: 'MANUAL' as const,
+        rateType: rate.method === 'SUBTOTAL_TIER' ? 'PRICE_BASED' as const : 'FLAT' as const,
         displayName: `${matchingZone.name} - ${rate.name}`,
         amountCents: rate.amountCents,
         currency,
@@ -266,6 +415,7 @@ function resolveManualQuotes(input: {
     {
       id: `manual:fallback:${isInternational ? 'international' : 'domestic'}`,
       source: 'MANUAL',
+      rateType: 'FLAT',
       displayName: isInternational ? 'International shipping' : 'Domestic shipping',
       amountCents,
       currency,
@@ -275,6 +425,57 @@ function resolveManualQuotes(input: {
       },
     },
   ]
+}
+
+function resolveManualQuotes(input: {
+  store: NonNullable<ShippingRateStore>
+  subtotalCents: number
+  totalWeightOz: number
+  shippingAddress: ShippingRateAddress
+}): ShippingRateQuote[] {
+  const modernQuotes = resolveModernManualQuotes(input)
+  if (modernQuotes.length) {
+    return modernQuotes
+  }
+
+  return resolveLegacyManualQuotes(input)
+}
+
+function resolveFallbackQuotes(input: {
+  store: NonNullable<ShippingRateStore>
+  shippingAddress: ShippingRateAddress
+}): ShippingRateQuote[] {
+  const destinationCountry = normalizeCountry(input.shippingAddress.country)
+  const destinationProvince = normalizeProvince(input.shippingAddress.province)
+  const currency = (input.store.currency || 'USD').toUpperCase()
+
+  const eligibleFallbackRates = (input.store.shippingFallbackRates || [])
+    .filter((rate) => rate.isActive)
+    .filter((rate) =>
+      filterByRegion({
+        destinationCountry,
+        destinationProvince,
+        regionCountry: rate.regionCountry,
+        regionStateProvince: rate.regionStateProvince,
+      })
+    )
+
+  if (eligibleFallbackRates.length) {
+    return eligibleFallbackRates.map((rate) => ({
+      id: `fallback:${rate.id}`,
+      source: 'MANUAL',
+      rateType: 'FALLBACK',
+      displayName: rate.name,
+      amountCents: rate.amountCents,
+      currency,
+      estimatedDeliveryText: rate.estimatedDeliveryText ?? undefined,
+      metadata: {
+        fallbackRateId: rate.id,
+      },
+    }))
+  }
+
+  return []
 }
 
 async function resolveLiveQuotes(input: {
@@ -315,7 +516,10 @@ async function resolveLiveQuotes(input: {
     throw new ShippingRateSetupError(`${input.provider} returned no live rates for this shipment.`, 'PROVIDER_ERROR')
   }
 
-  return quotes
+  return quotes.map((quote) => ({
+    ...quote,
+    rateType: quote.rateType ?? 'LIVE_RATE',
+  }))
 }
 
 export async function getShippingRatesForCheckout(input: GetShippingRatesForCheckoutInput): Promise<ShippingRateQuote[]> {
@@ -328,10 +532,17 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
 
   const mode = getMode(store)
   const provider = getProvider(store)
+  const totalWeightOz = Number(input.totalWeightOz ?? 0)
   const manualQuotes = () =>
     resolveManualQuotes({
       store,
       subtotalCents: input.subtotalCents,
+      totalWeightOz,
+      shippingAddress: input.shippingAddress,
+    })
+  const fallbackQuotes = () =>
+    resolveFallbackQuotes({
+      store,
       shippingAddress: input.shippingAddress,
     })
 
@@ -340,30 +551,63 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
   }
 
   if (!provider) {
-    if (mode === 'HYBRID') return manualQuotes()
+    if (mode === 'HYBRID') {
+      const manual = manualQuotes()
+      if (manual.length) return manual
+      throw new ShippingRateSetupError('Hybrid shipping mode requires manual rates when no provider is selected.')
+    }
+
     throw new ShippingRateSetupError('Live shipping mode requires selecting a shipping provider in settings.')
   }
 
-  if (mode === 'LIVE_RATES') {
-    return resolveLiveQuotes({
-      store,
-      provider,
-      shippingAddress: input.shippingAddress,
-    })
+  const providerUsage = store.shippingProviderUsage ?? 'LIVE_AND_LABELS'
+  if (providerUsage === 'LABELS_ONLY') {
+    if (mode === 'HYBRID') {
+      const manual = manualQuotes()
+      if (manual.length) return manual
+      throw new ShippingRateSetupError('Provider is configured for labels only. Add manual rates for hybrid checkout.')
+    }
+
+    throw new ShippingRateSetupError('Provider is configured for labels only. Enable live-rate usage to quote checkout rates.')
   }
 
-  // HYBRID mode: attempt live first, then fall back to manual quotes.
+  if (mode === 'LIVE_RATES') {
+    try {
+      return await resolveLiveQuotes({
+        store,
+        provider,
+        shippingAddress: input.shippingAddress,
+      })
+    } catch (error) {
+      const fallback = fallbackQuotes()
+      if (fallback.length) {
+        return fallback
+      }
+      throw error
+    }
+  }
+
+  // HYBRID mode: include manual rates when configured and prefer live rates when available.
+  const manual = manualQuotes()
   try {
-    return await resolveLiveQuotes({
+    const live = await resolveLiveQuotes({
       store,
       provider,
       shippingAddress: input.shippingAddress,
     })
+
+    return [...live, ...manual]
   } catch {
-    if (!store.shippingFallbackEnabled) {
-      throw new ShippingRateSetupError('Live rates are unavailable and manual fallback is disabled for hybrid mode.')
+    const fallback = fallbackQuotes()
+    if (fallback.length) {
+      return [...fallback, ...manual]
     }
-    return manualQuotes()
+
+    if (manual.length) {
+      return manual
+    }
+
+    throw new ShippingRateSetupError('Live rates are unavailable and no fallback/manual rates are configured.')
   }
 }
 
@@ -382,7 +626,18 @@ export function buildDefaultShippingAddressForRates(input: {
 }
 
 export function buildDefaultParcelFromStore(store: NonNullable<ShippingRateStore>): ShippingRateParcel | null {
+  const shippingPackage = resolveDefaultPackage(store)
+  if (shippingPackage) {
+    return {
+      weightOz: convertToOz(shippingPackage.emptyPackageWeight, shippingPackage.weightUnit),
+      lengthIn: convertToInches(shippingPackage.length, shippingPackage.dimensionUnit),
+      widthIn: convertToInches(shippingPackage.width, shippingPackage.dimensionUnit),
+      heightIn: convertToInches(shippingPackage.height, shippingPackage.dimensionUnit),
+    }
+  }
+
   if (!hasDefaultPackageForLiveRates(store)) return null
+
   return {
     weightOz: Number(store.defaultPackageWeightOz),
     lengthIn: Number(store.defaultPackageLengthIn),

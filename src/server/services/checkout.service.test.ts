@@ -593,6 +593,71 @@ describe('checkout service', () => {
     expect(mocks.createOrder).not.toHaveBeenCalled()
   })
 
+  it('stores selected shipping method snapshot fields when finalizing an order', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValue(null)
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValue({
+      id: 'checkout_shipping_snapshot',
+      paymentIntentId: 'pi_shipping_snapshot',
+      email: 'ada@example.com',
+      currency: 'USD',
+      taxAmountCents: 0,
+      shippingAmountCents: 900,
+      discountAmountCents: 0,
+      payload: {
+        email: 'ada@example.com',
+        items: [
+          {
+            productId: 'product_1',
+            variantId: 'variant_1',
+            title: 'Test Shirt',
+            priceCents: 5000,
+            quantity: 1,
+          },
+        ],
+        shippingAddress: address,
+        billingAddress: address,
+        selectedShippingRate: {
+          id: 'manual-rate:rate_1',
+          source: 'MANUAL',
+          rateType: 'FLAT',
+          displayName: 'Manual economy',
+          amountCents: 900,
+          currency: 'USD',
+          estimatedDeliveryText: '3-5 business days',
+        },
+      },
+    })
+    mocks.getCustomerByEmail.mockResolvedValue({
+      id: 'customer_1',
+      email: 'ada@example.com',
+      addresses: [{}],
+    })
+    mocks.createOrder.mockResolvedValue({
+      id: 'order_shipping_snapshot',
+      orderNumber: 1002,
+    })
+    mocks.prisma.checkoutSession.update.mockResolvedValue({
+      id: 'checkout_shipping_snapshot',
+    })
+
+    await completeCheckoutFromPaymentIntent({
+      id: 'pi_shipping_snapshot',
+      amount: 5900,
+      currency: 'usd',
+      status: 'succeeded',
+    })
+
+    expect(mocks.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shippingMethodName: 'Manual economy',
+        shippingRateType: 'FLAT',
+        shippingProvider: null,
+        shippingProviderRateId: null,
+        estimatedDeliveryText: '3-5 business days',
+      })
+    )
+  })
+
   it('marks pending checkout sessions as failed and emits an internal event', async () => {
     mocks.getOrderByPaymentIntentId.mockResolvedValue(null)
     mocks.prisma.checkoutSession.findUnique.mockResolvedValue({

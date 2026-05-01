@@ -1,4 +1,4 @@
-import { type ShippingLiveProvider, type ShippingMode } from '@prisma/client'
+import { type ShippingLiveProvider, type ShippingMode, type ShippingProviderUsage } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { getShippingProviderConnectionStatus } from '@/server/shipping/shipping-provider.service'
@@ -20,6 +20,7 @@ export type ShippingSetupStatus = {
 type ShippingSetupPatch = Partial<{
   shippingMode: ShippingMode
   shippingLiveProvider: ShippingLiveProvider | null
+  shippingProviderUsage: ShippingProviderUsage
   shippingOriginName: string | null
   shippingOriginPhone: string | null
   shippingOriginAddress1: string | null
@@ -42,6 +43,18 @@ type ShippingSetupPatch = Partial<{
 
 function includeStoreRelations() {
   return {
+    shippingPackages: {
+      orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'asc' as const }],
+    },
+    shippingLocations: {
+      orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'asc' as const }],
+    },
+    shippingManualRates: {
+      orderBy: [{ createdAt: 'asc' as const }],
+    },
+    shippingFallbackRates: {
+      orderBy: [{ createdAt: 'asc' as const }],
+    },
     shippingZones: {
       include: {
         rates: {
@@ -59,6 +72,16 @@ function normalizeOptionalText(value?: string | null) {
 }
 
 function hasOriginAddress(store: any) {
+  const defaultLocation = (store.shippingLocations || []).find((location: any) => location.isDefault) || null
+  if (defaultLocation) {
+    return Boolean(
+      normalizeOptionalText(defaultLocation.address1) &&
+        normalizeOptionalText(defaultLocation.city) &&
+        normalizeOptionalText(defaultLocation.postalCode) &&
+        normalizeOptionalText(defaultLocation.country)
+    )
+  }
+
   return Boolean(
     normalizeOptionalText(store.shippingOriginAddress1) &&
       normalizeOptionalText(store.shippingOriginCity) &&
@@ -68,6 +91,16 @@ function hasOriginAddress(store: any) {
 }
 
 function hasDefaultPackage(store: any) {
+  const defaultPackage = (store.shippingPackages || []).find((entry: any) => entry.isDefault) || null
+  if (defaultPackage) {
+    return Boolean(
+      Number(defaultPackage.emptyPackageWeight ?? 0) > 0 &&
+        Number(defaultPackage.length ?? 0) > 0 &&
+        Number(defaultPackage.width ?? 0) > 0 &&
+        Number(defaultPackage.height ?? 0) > 0
+    )
+  }
+
   return Boolean(
     (store.defaultPackageWeightOz ?? 0) > 0 &&
       (store.defaultPackageLengthIn ?? 0) > 0 &&
@@ -77,6 +110,11 @@ function hasDefaultPackage(store: any) {
 }
 
 function hasManualRates(store: any) {
+  const hasManualConfigRates = (store.shippingManualRates || []).some((rate: any) => rate.isActive)
+  if (hasManualConfigRates) {
+    return true
+  }
+
   const hasFallbackRates =
     Number.isInteger(store.shippingDomesticRateCents) && Number.isInteger(store.shippingInternationalRateCents)
   const hasActiveZoneRates = store.shippingZones.some(
@@ -113,10 +151,19 @@ export async function buildShippingSetupStatus(store: any) {
   const packageReady = hasDefaultPackage(store)
   const manualReady = hasManualRates(store)
   const mode = store.shippingMode
+  const usage = store.shippingProviderUsage ?? 'LIVE_AND_LABELS'
 
   const canUseManualRates = mode === 'MANUAL' ? manualReady : mode === 'HYBRID' ? manualReady : false
-  const canUseLiveRates = (mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && providerConnected
-  const canBuyLabels = originReady && packageReady && hasProvider && providerConnected
+  const providerAllowsLiveRates = usage !== 'LABELS_ONLY'
+  const providerAllowsLabels = usage !== 'LIVE_RATES_ONLY'
+  const canUseLiveRates =
+    (mode === 'LIVE_RATES' || mode === 'HYBRID') &&
+    hasProvider &&
+    providerConnected &&
+    providerAllowsLiveRates &&
+    originReady &&
+    packageReady
+  const canBuyLabels = originReady && packageReady && hasProvider && providerConnected && providerAllowsLabels
 
   const warnings: string[] = []
   const nextSteps: string[] = []
@@ -141,6 +188,10 @@ export async function buildShippingSetupStatus(store: any) {
   if ((mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && !providerConnected) {
     warnings.push('Selected shipping provider is not connected yet.')
     nextSteps.push('Connect and test the provider credentials in setup step 5.')
+  }
+  if ((mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && !providerAllowsLiveRates) {
+    warnings.push('Provider usage is set to label-only. Live rates require live-rate usage.')
+    nextSteps.push('Update provider usage to allow live rates.')
   }
   if (mode === 'HYBRID' && store.shippingFallbackEnabled && !manualReady) {
     warnings.push('Hybrid mode requires manual fallback rates.')
