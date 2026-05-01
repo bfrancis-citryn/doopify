@@ -4,6 +4,10 @@ import { centsToDollars, dollarsToCents } from '@/lib/money'
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
 import {
+  resolveActiveRateProvider,
+  resolveLabelProvider,
+} from '@/server/shipping/shipping-provider-selection'
+import {
   buildShippingSetupStatus,
   getShippingSetupStore,
   updateShippingSetup,
@@ -42,6 +46,10 @@ function normalizeOptional(value: string | null | undefined) {
 function serializeSetupSnapshot(store: any) {
   return {
     shippingMode: store.shippingMode,
+    activeRateProvider: resolveActiveRateProvider(store) || 'NONE',
+    labelProvider: resolveLabelProvider(store) || 'NONE',
+    fallbackBehavior:
+      store.fallbackBehavior || (store.shippingFallbackEnabled === false ? 'HIDE_SHIPPING' : 'SHOW_FALLBACK'),
     shippingLiveProvider: store.shippingLiveProvider,
     shippingProviderUsage: store.shippingProviderUsage,
     shippingOriginName: store.shippingOriginName,

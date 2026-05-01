@@ -60,6 +60,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - shipping label purchase persists a separate `ShippingLabel.labelAmountCents` value and must not mutate checkout/order totals or payment status
 - checkout shipping-rate mode selection (`LIVE_RATES` / `MANUAL` / `HYBRID`) is persisted server-side and enforced in the shipping-rate service using persisted provider/package/location/manual/fallback configuration
 - checkout rate selection and label purchase remain decoupled: manual checkout rates do not imply a label exists, and connected label providers remain available for post-order label buying even when checkout used a manual rate
+- shipping provider intent remains explicit: active-rate-provider and label-provider settings can diverge, and fallback behavior (`SHOW_FALLBACK` / `HIDE_SHIPPING` / `MANUAL_QUOTE`) must be enforced by server-owned shipping rate resolution
 - fulfillment lifecycle jobs now run through the shared job system: `SYNC_SHIPPING_TRACKING` for safe tracking-field sync plus provider polling-driven `deliveredAt` updates, and `SEND_FULFILLMENT_EMAIL` for tracked shipping-update delivery attempts
 - shipping provider webhook ingestion now supports `POST /api/webhooks/shipping-provider?provider=EASYPOST|SHIPPO` with signature verification and tracked fulfillment/shipping-label updates
 - inbound Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata

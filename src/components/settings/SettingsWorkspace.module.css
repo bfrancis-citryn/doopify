@@ -91,6 +91,32 @@
   color: var(--on-surface);
 }
 
+.pageWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
+  padding: 0.85rem;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pageHeader h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.pageHeader p {
+  margin-top: 0.28rem;
+  color: var(--on-surface-variant);
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+
 .statusText {
   color: var(--on-surface-variant);
 }
@@ -248,6 +274,12 @@
   border-radius: 0.8rem;
   padding: 0.85rem;
   background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
+}
+
+.divider {
+  height: 1px;
+  border: 0;
+  background: var(--glass-border);
 }
 
 .sectionHeading h3 {

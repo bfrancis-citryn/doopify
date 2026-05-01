@@ -2,6 +2,10 @@ import { type ShippingLiveProvider, type ShippingMode, type ShippingProviderUsag
 
 import { prisma } from '@/lib/prisma'
 import { getShippingProviderConnectionStatus } from '@/server/shipping/shipping-provider.service'
+import {
+  resolveActiveRateProvider,
+  resolveLabelProvider,
+} from '@/server/shipping/shipping-provider-selection'
 
 export type ShippingSetupStatus = {
   mode: 'MANUAL' | 'LIVE_RATES' | 'HYBRID'
@@ -139,11 +143,13 @@ export async function updateShippingSetup(storeId: string, patch: ShippingSetupP
 }
 
 export async function buildShippingSetupStatus(store: any) {
-  const hasProvider = Boolean(store.shippingLiveProvider)
+  const activeRateProvider = resolveActiveRateProvider(store)
+  const labelProvider = resolveLabelProvider(store)
+  const hasProvider = Boolean(activeRateProvider)
 
   let providerConnected = false
-  if (store.shippingLiveProvider) {
-    const providerStatus = await getShippingProviderConnectionStatus(store.shippingLiveProvider)
+  if (activeRateProvider) {
+    const providerStatus = await getShippingProviderConnectionStatus(activeRateProvider)
     providerConnected = providerStatus.connected
   }
 
@@ -151,19 +157,14 @@ export async function buildShippingSetupStatus(store: any) {
   const packageReady = hasDefaultPackage(store)
   const manualReady = hasManualRates(store)
   const mode = store.shippingMode
-  const usage = store.shippingProviderUsage ?? 'LIVE_AND_LABELS'
-
   const canUseManualRates = mode === 'MANUAL' ? manualReady : mode === 'HYBRID' ? manualReady : false
-  const providerAllowsLiveRates = usage !== 'LABELS_ONLY'
-  const providerAllowsLabels = usage !== 'LIVE_RATES_ONLY'
   const canUseLiveRates =
     (mode === 'LIVE_RATES' || mode === 'HYBRID') &&
     hasProvider &&
     providerConnected &&
-    providerAllowsLiveRates &&
     originReady &&
     packageReady
-  const canBuyLabels = originReady && packageReady && hasProvider && providerConnected && providerAllowsLabels
+  const canBuyLabels = originReady && packageReady && Boolean(labelProvider) && providerConnected
 
   const warnings: string[] = []
   const nextSteps: string[] = []
@@ -188,10 +189,6 @@ export async function buildShippingSetupStatus(store: any) {
   if ((mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && !providerConnected) {
     warnings.push('Selected shipping provider is not connected yet.')
     nextSteps.push('Connect and test the provider credentials in setup step 5.')
-  }
-  if ((mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && !providerAllowsLiveRates) {
-    warnings.push('Provider usage is set to label-only. Live rates require live-rate usage.')
-    nextSteps.push('Update provider usage to allow live rates.')
   }
   if (mode === 'HYBRID' && store.shippingFallbackEnabled && !manualReady) {
     warnings.push('Hybrid mode requires manual fallback rates.')

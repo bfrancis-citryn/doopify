@@ -1,6 +1,7 @@
 import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { getShippingProviderConnectionStatus } from '@/server/shipping/shipping-provider.service'
+import { resolveLabelProvider } from '@/server/shipping/shipping-provider-selection'
 
 function normalizeStatusLabel(value: string | null | undefined) {
   return String(value || '').toLowerCase().replaceAll('_', ' ')
@@ -86,14 +87,14 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
     select: {
       shippingLiveProvider: true,
       shippingProviderUsage: true,
+      labelProvider: true,
     },
   })
-  const providerStatus = store?.shippingLiveProvider
-    ? await getShippingProviderConnectionStatus(store.shippingLiveProvider)
+  const labelProvider = store ? resolveLabelProvider(store) : null
+  const providerStatus = labelProvider
+    ? await getShippingProviderConnectionStatus(labelProvider)
     : null
-  const canBuyShippingLabelFromProvider = Boolean(
-    providerStatus?.connected && store?.shippingProviderUsage !== 'LIVE_RATES_ONLY'
-  )
+  const canBuyShippingLabelFromProvider = Boolean(providerStatus?.connected)
 
   const shippingAddress = order.addresses.find((entry) => entry.type === 'SHIPPING') || null
   const billingAddress = order.addresses.find((entry) => entry.type === 'BILLING') || null
@@ -391,7 +392,7 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
     shippingProviderRateId: order.shippingProviderRateId,
     estimatedDeliveryText: order.estimatedDeliveryText,
     shippingCapabilities: {
-      labelProvider: store?.shippingLiveProvider || null,
+      labelProvider: labelProvider || null,
       providerConnected: Boolean(providerStatus?.connected),
       providerUsage: store?.shippingProviderUsage || null,
       canBuyShippingLabel: canBuyShippingLabelFromProvider,

@@ -1,7 +1,5 @@
-"use client";
-
-import ShippingSetupWorkspace from '@/components/settings/ShippingSetupWorkspace';
+import { redirect } from 'next/navigation';
 
 export default function AdminShippingSetupPage() {
-  return <ShippingSetupWorkspace />;
+  redirect('/admin/settings/shipping?view=delivery');
 }

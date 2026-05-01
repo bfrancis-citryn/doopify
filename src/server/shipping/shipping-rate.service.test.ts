@@ -32,6 +32,9 @@ function storeFixture(overrides: Record<string, unknown> = {}) {
     shippingMode: 'MANUAL',
     shippingLiveProvider: null,
     shippingProviderUsage: 'LIVE_AND_LABELS',
+    activeRateProvider: 'NONE',
+    labelProvider: 'NONE',
+    fallbackBehavior: 'SHOW_FALLBACK',
     shippingFallbackEnabled: true,
     shippingThresholdCents: null,
     shippingDomesticRateCents: 999,
@@ -210,6 +213,7 @@ describe('shipping-rate service', () => {
       storeFixture({
         shippingMode: 'LIVE_RATES',
         shippingLiveProvider: 'EASYPOST',
+        activeRateProvider: 'EASYPOST',
       })
     )
     mocks.getShippingProviderConnectionStatus.mockResolvedValue({
@@ -252,6 +256,7 @@ describe('shipping-rate service', () => {
       storeFixture({
         shippingMode: 'LIVE_RATES',
         shippingLiveProvider: 'EASYPOST',
+        activeRateProvider: 'EASYPOST',
         shippingFallbackRates: [
           {
             id: 'fb_1',
@@ -323,6 +328,7 @@ describe('shipping-rate service', () => {
       storeFixture({
         shippingMode: 'HYBRID',
         shippingLiveProvider: 'EASYPOST',
+        activeRateProvider: 'EASYPOST',
         shippingManualRates: [
           {
             id: 'manual_hybrid',
@@ -398,5 +404,81 @@ describe('shipping-rate service', () => {
     expect(fallbackQuotes).toHaveLength(2)
     expect(fallbackQuotes[0]).toMatchObject({ id: 'fallback:fallback_hybrid', rateType: 'FALLBACK' })
     expect(fallbackQuotes[1]).toMatchObject({ id: 'manual-rate:manual_hybrid' })
+  })
+
+  it('returns manual-quote fallback when fallback behavior is MANUAL_QUOTE and live provider fails', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        shippingLiveProvider: 'EASYPOST',
+        activeRateProvider: 'EASYPOST',
+        fallbackBehavior: 'MANUAL_QUOTE',
+        shippingFallbackRates: [],
+      })
+    )
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      connected: true,
+    })
+    mocks.getShippingProviderApiKey.mockResolvedValue('ep_test_123')
+    mocks.getShippingProviderLiveRates.mockRejectedValue(new Error('provider timeout'))
+
+    const quotes = await getShippingRatesForCheckout({
+      subtotalCents: 4200,
+      shippingAddress: {
+        country: 'US',
+        province: 'CA',
+        address1: '123 Main St',
+        city: 'Los Angeles',
+        postalCode: '90001',
+      },
+    })
+
+    expect(quotes).toHaveLength(1)
+    expect(quotes[0]).toMatchObject({
+      id: 'fallback:manual-quote',
+      source: 'MANUAL',
+      rateType: 'FALLBACK',
+      amountCents: 0,
+    })
+  })
+
+  it('throws when fallback behavior is HIDE_SHIPPING and live rates fail', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        shippingLiveProvider: 'EASYPOST',
+        activeRateProvider: 'EASYPOST',
+        fallbackBehavior: 'HIDE_SHIPPING',
+        shippingFallbackRates: [
+          {
+            id: 'fb_ignored',
+            name: 'Ignored fallback',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            amountCents: 1200,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      connected: true,
+    })
+    mocks.getShippingProviderApiKey.mockResolvedValue('ep_test_123')
+    mocks.getShippingProviderLiveRates.mockRejectedValue(new Error('provider timeout'))
+
+    await expect(
+      getShippingRatesForCheckout({
+        subtotalCents: 4200,
+        shippingAddress: {
+          country: 'US',
+          province: 'CA',
+          address1: '123 Main St',
+          city: 'Los Angeles',
+          postalCode: '90001',
+        },
+      })
+    ).rejects.toThrow('provider timeout')
   })
 })

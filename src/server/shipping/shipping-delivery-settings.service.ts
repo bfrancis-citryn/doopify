@@ -1,10 +1,12 @@
 import type {
   Prisma,
+  ShippingFallbackBehavior,
   ShippingDimensionUnit,
   ShippingLiveProvider,
   ShippingManualRateType,
   ShippingMode,
   ShippingPackageType,
+  ShippingProviderSelection,
   ShippingProviderUsage,
   ShippingWeightUnit,
 } from '@prisma/client'
@@ -29,9 +31,27 @@ type ShippingSettingsPatch = Partial<{
   shippingMode: ShippingMode
   shippingLiveProvider: ShippingLiveProvider | null
   shippingProviderUsage: ShippingProviderUsage
+  activeRateProvider: ShippingProviderSelection
+  labelProvider: ShippingProviderSelection
+  fallbackBehavior: ShippingFallbackBehavior
   shippingThresholdCents: number | null
   shippingDomesticRateCents: number
   shippingInternationalRateCents: number
+  manualFulfillmentInstructions: string | null
+  manualTrackingBehavior: string | null
+  localDeliveryEnabled: boolean
+  localDeliveryPriceCents: number | null
+  localDeliveryMinimumOrderCents: number | null
+  localDeliveryCoverage: string | null
+  localDeliveryInstructions: string | null
+  pickupEnabled: boolean
+  pickupLocation: string | null
+  pickupInstructions: string | null
+  pickupEstimate: string | null
+  packingSlipUseLogo: boolean
+  packingSlipShowSku: boolean
+  packingSlipShowProductImages: boolean
+  packingSlipFooterNote: string | null
 }>
 
 type ShippingPackageCreateInput = {

@@ -160,6 +160,24 @@ export async function updateStoreSettings(
     shippingDomesticRateCents: number
     shippingInternationalRateCents: number
     shippingProviderUsage: 'LIVE_AND_LABELS' | 'LABELS_ONLY' | 'LIVE_RATES_ONLY'
+    activeRateProvider: 'NONE' | 'EASYPOST' | 'SHIPPO'
+    labelProvider: 'NONE' | 'EASYPOST' | 'SHIPPO'
+    fallbackBehavior: 'SHOW_FALLBACK' | 'HIDE_SHIPPING' | 'MANUAL_QUOTE'
+    manualFulfillmentInstructions: string | null
+    manualTrackingBehavior: string | null
+    localDeliveryEnabled: boolean
+    localDeliveryPriceCents: number | null
+    localDeliveryMinimumOrderCents: number | null
+    localDeliveryCoverage: string | null
+    localDeliveryInstructions: string | null
+    pickupEnabled: boolean
+    pickupLocation: string | null
+    pickupInstructions: string | null
+    pickupEstimate: string | null
+    packingSlipUseLogo: boolean
+    packingSlipShowSku: boolean
+    packingSlipShowProductImages: boolean
+    packingSlipFooterNote: string | null
     domesticTaxRate: number
     internationalTaxRate: number
     taxEnabled: boolean

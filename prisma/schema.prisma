@@ -83,6 +83,18 @@ enum ShippingProviderUsage {
   LIVE_RATES_ONLY
 }
 
+enum ShippingProviderSelection {
+  NONE
+  EASYPOST
+  SHIPPO
+}
+
+enum ShippingFallbackBehavior {
+  SHOW_FALLBACK
+  HIDE_SHIPPING
+  MANUAL_QUOTE
+}
+
 enum ShippingPackageType {
   BOX
   POLY_MAILER
@@ -223,6 +235,9 @@ model Store {
   shippingMode      ShippingMode @default(MANUAL)
   shippingLiveProvider ShippingLiveProvider?
   shippingProviderUsage ShippingProviderUsage @default(LIVE_AND_LABELS)
+  activeRateProvider ShippingProviderSelection @default(NONE)
+  labelProvider      ShippingProviderSelection @default(NONE)
+  fallbackBehavior   ShippingFallbackBehavior @default(SHOW_FALLBACK)
   shippingOriginName String?
   shippingOriginPhone String?
   shippingOriginAddress1 String?
@@ -238,6 +253,21 @@ model Store {
   defaultLabelFormat String? @default("PDF")
   defaultLabelSize String? @default("4x6")
   shippingFallbackEnabled Boolean @default(true)
+  manualFulfillmentInstructions String?
+  manualTrackingBehavior String?
+  localDeliveryEnabled Boolean @default(false)
+  localDeliveryPriceCents Int?
+  localDeliveryMinimumOrderCents Int?
+  localDeliveryCoverage String?
+  localDeliveryInstructions String?
+  pickupEnabled Boolean @default(false)
+  pickupLocation String?
+  pickupInstructions String?
+  pickupEstimate String?
+  packingSlipUseLogo Boolean @default(true)
+  packingSlipShowSku Boolean @default(true)
+  packingSlipShowProductImages Boolean @default(false)
+  packingSlipFooterNote String?
   domesticTaxRate   Float   @default(0.07)
   internationalTaxRate Float @default(0.0)
   taxEnabled        Boolean @default(false)

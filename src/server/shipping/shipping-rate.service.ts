@@ -6,6 +6,7 @@ import {
   getShippingProviderConnectionStatus,
   getShippingProviderLiveRates,
 } from '@/server/shipping/shipping-provider.service'
+import { resolveActiveRateProvider } from '@/server/shipping/shipping-provider-selection'
 import type {
   ShippingRateAddress,
   ShippingRateParcel,
@@ -240,7 +241,19 @@ function getMode(store: NonNullable<ShippingRateStore>): ShippingMode {
 }
 
 function getProvider(store: NonNullable<ShippingRateStore>): ShippingLiveProvider | null {
-  return store.shippingLiveProvider ?? null
+  return resolveActiveRateProvider(store)
+}
+
+function getFallbackBehavior(store: NonNullable<ShippingRateStore>) {
+  if (store.fallbackBehavior) {
+    return store.fallbackBehavior
+  }
+
+  if (store.shippingFallbackEnabled === false) {
+    return 'HIDE_SHIPPING' as const
+  }
+
+  return 'SHOW_FALLBACK' as const
 }
 
 function filterByRegion(input: {
@@ -478,6 +491,21 @@ function resolveFallbackQuotes(input: {
   return []
 }
 
+function buildManualQuoteFallback(store: NonNullable<ShippingRateStore>): ShippingRateQuote {
+  return {
+    id: 'fallback:manual-quote',
+    source: 'MANUAL',
+    rateType: 'FALLBACK',
+    displayName: 'Shipping quoted after checkout',
+    amountCents: 0,
+    currency: (store.currency || 'USD').toUpperCase(),
+    estimatedDeliveryText: 'We will confirm shipping cost after order review.',
+    metadata: {
+      fallbackMode: 'MANUAL_QUOTE',
+    },
+  }
+}
+
 async function resolveLiveQuotes(input: {
   store: NonNullable<ShippingRateStore>
   provider: ShippingLiveProvider
@@ -532,6 +560,7 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
 
   const mode = getMode(store)
   const provider = getProvider(store)
+  const fallbackBehavior = getFallbackBehavior(store)
   const totalWeightOz = Number(input.totalWeightOz ?? 0)
   const manualQuotes = () =>
     resolveManualQuotes({
@@ -579,9 +608,15 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
         shippingAddress: input.shippingAddress,
       })
     } catch (error) {
-      const fallback = fallbackQuotes()
-      if (fallback.length) {
-        return fallback
+      if (fallbackBehavior !== 'HIDE_SHIPPING') {
+        const fallback = fallbackQuotes()
+        if (fallback.length) {
+          return fallback
+        }
+      }
+
+      if (fallbackBehavior === 'MANUAL_QUOTE') {
+        return [buildManualQuoteFallback(store)]
       }
       throw error
     }
@@ -598,9 +633,15 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
 
     return [...live, ...manual]
   } catch {
-    const fallback = fallbackQuotes()
-    if (fallback.length) {
-      return [...fallback, ...manual]
+    if (fallbackBehavior !== 'HIDE_SHIPPING') {
+      const fallback = fallbackQuotes()
+      if (fallback.length) {
+        return [...fallback, ...manual]
+      }
+    }
+
+    if (fallbackBehavior === 'MANUAL_QUOTE') {
+      return [buildManualQuoteFallback(store), ...manual]
     }
 
     if (manual.length) {

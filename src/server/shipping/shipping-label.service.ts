@@ -8,6 +8,7 @@ import {
   getShippingProviderLiveRates,
   purchaseShippingProviderLabel,
 } from '@/server/shipping/shipping-provider.service'
+import { resolveLabelProvider } from '@/server/shipping/shipping-provider-selection'
 import type { ShippingRateRequest, ShippingRateQuote } from '@/server/shipping/shipping-rate.types'
 import { getStoreSettings } from '@/server/services/settings.service'
 
@@ -273,13 +274,9 @@ async function resolveLiveProviderForLabels() {
   const store = await getStoreSettings()
   if (!store) throw new Error('Store is not configured')
 
-  const provider = store.shippingLiveProvider
+  const provider = resolveLabelProvider(store)
   if (!provider) {
     throw new Error('A live shipping provider must be connected to buy labels')
-  }
-
-  if (store.shippingProviderUsage === 'LIVE_RATES_ONLY') {
-    throw new Error('Provider usage is set to live rates only. Enable label buying in shipping settings.')
   }
 
   const connection = await getShippingProviderConnectionStatus(provider)

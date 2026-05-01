@@ -4,14 +4,38 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AppShell from "../AppShell";
 import AdminButton from "../admin/ui/AdminButton";
-import AdminCard from "../admin/ui/AdminCard";
 import AdminDrawer from "../admin/ui/AdminDrawer";
 import AdminEmptyState from "../admin/ui/AdminEmptyState";
 import AdminField from "../admin/ui/AdminField";
 import AdminInput from "../admin/ui/AdminInput";
 import AdminSelect from "../admin/ui/AdminSelect";
 import AdminStatusChip from "../admin/ui/AdminStatusChip";
+import AdminTextarea from "../admin/ui/AdminTextarea";
 import styles from "./SettingsWorkspace.module.css";
+
+const PROVIDER_OPTIONS = [
+  { value: "NONE", label: "None" },
+  { value: "SHIPPO", label: "Shippo" },
+  { value: "EASYPOST", label: "EasyPost" },
+];
+
+const MODE_OPTIONS = [
+  { value: "LIVE_RATES", label: "Live carrier rates" },
+  { value: "MANUAL", label: "Manual rates" },
+  { value: "HYBRID", label: "Hybrid" },
+];
+
+const FALLBACK_BEHAVIOR_OPTIONS = [
+  { value: "SHOW_FALLBACK", label: "Show configured fallback rates" },
+  { value: "HIDE_SHIPPING", label: "Hide shipping (show checkout error)" },
+  { value: "MANUAL_QUOTE", label: "Show manual quote request" },
+];
+
+const PROVIDER_USAGE_OPTIONS = [
+  { value: "LIVE_AND_LABELS", label: "Live rates and label buying" },
+  { value: "LABELS_ONLY", label: "Label buying only" },
+  { value: "LIVE_RATES_ONLY", label: "Live rates only" },
+];
 
 const DEFAULT_PACKAGE_FORM = {
   id: "",
@@ -69,6 +93,39 @@ const DEFAULT_FALLBACK_RATE_FORM = {
   isActive: true,
 };
 
+const DEFAULT_PROVIDER_FORM = {
+  provider: "NONE",
+  usage: "LIVE_AND_LABELS",
+  token: "",
+};
+
+const DEFAULT_MANUAL_FULFILLMENT_FORM = {
+  manualFulfillmentInstructions: "",
+  manualTrackingBehavior: "",
+};
+
+const DEFAULT_LOCAL_DELIVERY_FORM = {
+  localDeliveryEnabled: false,
+  localDeliveryPrice: "",
+  localDeliveryMinimumOrder: "",
+  localDeliveryCoverage: "",
+  localDeliveryInstructions: "",
+};
+
+const DEFAULT_PICKUP_FORM = {
+  pickupEnabled: false,
+  pickupLocation: "",
+  pickupInstructions: "",
+  pickupEstimate: "",
+};
+
+const DEFAULT_PACKING_SLIP_FORM = {
+  packingSlipUseLogo: true,
+  packingSlipShowSku: true,
+  packingSlipShowProductImages: false,
+  packingSlipFooterNote: "",
+};
+
 function parseNumber(value) {
   if (value == null || value === "") return undefined;
   const parsed = Number(value);
@@ -97,16 +154,42 @@ function formatMoney(amount, currency = "USD") {
 }
 
 function formatPackageLine(item) {
-  return `${item.length}x${item.width}x${item.height} ${item.dimensionUnit} | ${item.emptyPackageWeight} ${item.weightUnit}`;
+  return `${item.length} x ${item.width} x ${item.height} ${item.dimensionUnit} · ${item.emptyPackageWeight} ${item.weightUnit}`;
 }
 
 function formatLocationLine(item) {
-  return `${item.address1}, ${item.city}, ${item.stateProvince || ""} ${item.postalCode}, ${item.country}`.replace(/\s+,/g, ",").trim();
+  return `${item.address1}, ${item.city}, ${item.stateProvince || ""} ${item.postalCode}, ${item.country}`
+    .replace(/\s+,/g, ",")
+    .trim();
 }
 
 function renderRateSummary(rate, currency) {
-  if (rate.rateType === "FREE") return "Free";
+  if (rate.rateType === "FREE") {
+    if (rate.freeOverAmount != null) {
+      return `Free over ${formatMoney(rate.freeOverAmount, currency)}`;
+    }
+    return "Free";
+  }
+  if (rate.rateType === "WEIGHT_BASED") {
+    return `${formatMoney(rate.amount, currency)} weight-based`;
+  }
+  if (rate.rateType === "PRICE_BASED") {
+    return `${formatMoney(rate.amount, currency)} price-based`;
+  }
   return formatMoney(rate.amount, currency);
+}
+
+function providerSelectionToLegacyUsage(activeRateProvider, labelProvider) {
+  if (activeRateProvider !== "NONE" && labelProvider !== "NONE" && activeRateProvider === labelProvider) {
+    return "LIVE_AND_LABELS";
+  }
+  if (activeRateProvider !== "NONE" && labelProvider === "NONE") {
+    return "LIVE_RATES_ONLY";
+  }
+  if (activeRateProvider === "NONE" && labelProvider !== "NONE") {
+    return "LABELS_ONLY";
+  }
+  return "LIVE_AND_LABELS";
 }
 
 export default function ShippingSettingsWorkspace() {
@@ -117,23 +200,33 @@ export default function ShippingSettingsWorkspace() {
 
   const [settings, setSettings] = useState(null);
   const [setupStatus, setSetupStatus] = useState(null);
+
   const [mode, setMode] = useState("MANUAL");
-  const [provider, setProvider] = useState("");
-  const [providerUsage, setProviderUsage] = useState("LIVE_AND_LABELS");
+  const [activeRateProvider, setActiveRateProvider] = useState("NONE");
+  const [labelProvider, setLabelProvider] = useState("NONE");
+  const [fallbackBehavior, setFallbackBehavior] = useState("SHOW_FALLBACK");
 
   const [providerDrawerOpen, setProviderDrawerOpen] = useState(false);
-  const [providerToken, setProviderToken] = useState("");
+  const [providerForm, setProviderForm] = useState(DEFAULT_PROVIDER_FORM);
   const [providerTestMessage, setProviderTestMessage] = useState("");
 
   const [packageDrawerOpen, setPackageDrawerOpen] = useState(false);
   const [locationDrawerOpen, setLocationDrawerOpen] = useState(false);
   const [manualDrawerOpen, setManualDrawerOpen] = useState(false);
   const [fallbackDrawerOpen, setFallbackDrawerOpen] = useState(false);
+  const [manualFulfillmentDrawerOpen, setManualFulfillmentDrawerOpen] = useState(false);
+  const [localDeliveryDrawerOpen, setLocalDeliveryDrawerOpen] = useState(false);
+  const [pickupDrawerOpen, setPickupDrawerOpen] = useState(false);
+  const [packingSlipDrawerOpen, setPackingSlipDrawerOpen] = useState(false);
 
   const [packageForm, setPackageForm] = useState(DEFAULT_PACKAGE_FORM);
   const [locationForm, setLocationForm] = useState(DEFAULT_LOCATION_FORM);
   const [manualForm, setManualForm] = useState(DEFAULT_MANUAL_RATE_FORM);
   const [fallbackForm, setFallbackForm] = useState(DEFAULT_FALLBACK_RATE_FORM);
+  const [manualFulfillmentForm, setManualFulfillmentForm] = useState(DEFAULT_MANUAL_FULFILLMENT_FORM);
+  const [localDeliveryForm, setLocalDeliveryForm] = useState(DEFAULT_LOCAL_DELIVERY_FORM);
+  const [pickupForm, setPickupForm] = useState(DEFAULT_PICKUP_FORM);
+  const [packingSlipForm, setPackingSlipForm] = useState(DEFAULT_PACKING_SLIP_FORM);
   const [locationValidationMessage, setLocationValidationMessage] = useState("");
 
   const packages = settings?.shippingPackages || [];
@@ -146,11 +239,11 @@ export default function ShippingSettingsWorkspace() {
     () => packages.some((entry) => entry.isDefault && entry.isActive),
     [packages]
   );
-
   const hasDefaultLocation = useMemo(
     () => locations.some((entry) => entry.isDefault && entry.isActive),
     [locations]
   );
+  const hasProviderConnection = Boolean(setupStatus?.providerConnected);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,11 +253,50 @@ export default function ShippingSettingsWorkspace() {
         fetch("/api/settings/shipping", { cache: "no-store" }).then(parseApiJson),
         fetch("/api/settings/shipping/setup-status", { cache: "no-store" }).then(parseApiJson),
       ]);
+
       setSettings(shipping);
       setSetupStatus(setup);
       setMode(shipping.shippingMode || "MANUAL");
-      setProvider(shipping.shippingLiveProvider || "");
-      setProviderUsage(shipping.shippingProviderUsage || "LIVE_AND_LABELS");
+      setActiveRateProvider(shipping.activeRateProvider || "NONE");
+      setLabelProvider(shipping.labelProvider || "NONE");
+      setFallbackBehavior(shipping.fallbackBehavior || "SHOW_FALLBACK");
+      setProviderForm({
+        provider:
+          shipping.activeRateProvider && shipping.activeRateProvider !== "NONE"
+            ? shipping.activeRateProvider
+            : shipping.labelProvider && shipping.labelProvider !== "NONE"
+              ? shipping.labelProvider
+              : "NONE",
+        usage:
+          shipping.shippingProviderUsage ||
+          providerSelectionToLegacyUsage(shipping.activeRateProvider || "NONE", shipping.labelProvider || "NONE"),
+        token: "",
+      });
+      setManualFulfillmentForm({
+        manualFulfillmentInstructions: shipping.manualFulfillmentInstructions || "",
+        manualTrackingBehavior: shipping.manualTrackingBehavior || "",
+      });
+      setLocalDeliveryForm({
+        localDeliveryEnabled: Boolean(shipping.localDeliveryEnabled),
+        localDeliveryPrice:
+          shipping.localDeliveryPrice == null ? "" : String(shipping.localDeliveryPrice),
+        localDeliveryMinimumOrder:
+          shipping.localDeliveryMinimumOrder == null ? "" : String(shipping.localDeliveryMinimumOrder),
+        localDeliveryCoverage: shipping.localDeliveryCoverage || "",
+        localDeliveryInstructions: shipping.localDeliveryInstructions || "",
+      });
+      setPickupForm({
+        pickupEnabled: Boolean(shipping.pickupEnabled),
+        pickupLocation: shipping.pickupLocation || "",
+        pickupInstructions: shipping.pickupInstructions || "",
+        pickupEstimate: shipping.pickupEstimate || "",
+      });
+      setPackingSlipForm({
+        packingSlipUseLogo: shipping.packingSlipUseLogo !== false,
+        packingSlipShowSku: shipping.packingSlipShowSku !== false,
+        packingSlipShowProductImages: Boolean(shipping.packingSlipShowProductImages),
+        packingSlipFooterNote: shipping.packingSlipFooterNote || "",
+      });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load shipping settings");
     } finally {
@@ -195,77 +327,6 @@ export default function ShippingSettingsWorkspace() {
     }
   }
 
-  async function saveMode() {
-    await persistSettings(
-      {
-        shippingMode: mode,
-        shippingLiveProvider: provider || null,
-        shippingProviderUsage: providerUsage,
-      },
-      "Shipping mode saved."
-    );
-  }
-
-  async function saveProviderToken() {
-    if (!provider || !providerToken.trim()) {
-      setError("Select a provider and enter an API token.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    setNotice("");
-    try {
-      await fetch("/api/settings/shipping/connect-provider", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey: providerToken.trim() }),
-      }).then(parseApiJson);
-
-      await fetch("/api/settings/shipping", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shippingLiveProvider: provider,
-          shippingProviderUsage: providerUsage,
-        }),
-      }).then(parseApiJson);
-
-      setProviderToken("");
-      setProviderTestMessage("");
-      setNotice("Provider credentials saved.");
-      await load();
-    } catch (providerError) {
-      setError(providerError instanceof Error ? providerError.message : "Failed to save provider token");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function testProvider() {
-    if (!provider) {
-      setError("Select a provider before testing connection.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    try {
-      const data = await fetch("/api/settings/shipping/test-provider", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider }),
-      }).then(parseApiJson);
-
-      setProviderTestMessage(data?.result?.message || "Provider verification completed.");
-      await load();
-    } catch (providerError) {
-      setError(providerError instanceof Error ? providerError.message : "Failed to test provider");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function persistEntity(url, method, payload, successMessage = "Saved.") {
     setSaving(true);
     setError("");
@@ -285,11 +346,145 @@ export default function ShippingSettingsWorkspace() {
     }
   }
 
+  async function saveCheckoutMethod() {
+    const legacyUsage = providerSelectionToLegacyUsage(activeRateProvider, labelProvider);
+    const legacyProvider =
+      activeRateProvider !== "NONE"
+        ? activeRateProvider
+        : labelProvider !== "NONE"
+          ? labelProvider
+          : null;
+    await persistSettings(
+      {
+        shippingMode: mode,
+        activeRateProvider,
+        labelProvider,
+        fallbackBehavior,
+        shippingLiveProvider: legacyProvider,
+        shippingProviderUsage: legacyUsage,
+      },
+      "Checkout shipping method saved."
+    );
+  }
+
+  async function saveProviderSettings() {
+    const provider = providerForm.provider;
+    const usage = providerForm.usage;
+    if (provider === "NONE") {
+      setError("Select Shippo or EasyPost in provider setup.");
+      return;
+    }
+
+    const isLiveAllowed = usage !== "LABELS_ONLY";
+    const isLabelAllowed = usage !== "LIVE_RATES_ONLY";
+    const nextActive = isLiveAllowed ? provider : "NONE";
+    const nextLabel = isLabelAllowed ? provider : "NONE";
+
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      if (providerForm.token.trim()) {
+        await fetch("/api/settings/shipping/connect-provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, apiKey: providerForm.token.trim() }),
+        }).then(parseApiJson);
+      }
+
+      await fetch("/api/settings/shipping", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shippingLiveProvider: provider,
+          shippingProviderUsage: usage,
+          activeRateProvider: nextActive,
+          labelProvider: nextLabel,
+        }),
+      }).then(parseApiJson);
+
+      setProviderForm((current) => ({ ...current, token: "" }));
+      setNotice("Provider settings saved.");
+      await load();
+    } catch (providerError) {
+      setError(providerError instanceof Error ? providerError.message : "Failed to save provider settings");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function verifyProvider() {
+    const provider = providerForm.provider;
+    if (provider === "NONE") {
+      setError("Select a provider before verification.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const data = await fetch("/api/settings/shipping/test-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      }).then(parseApiJson);
+
+      setProviderTestMessage(data?.result?.message || "Provider verification completed.");
+      await load();
+    } catch (providerError) {
+      setError(providerError instanceof Error ? providerError.message : "Failed to verify provider");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function disconnectProvider() {
+    const provider = providerForm.provider;
+    if (provider === "NONE") {
+      setError("Select a provider to disconnect.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      await fetch("/api/settings/shipping/disconnect-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      }).then(parseApiJson);
+
+      const nextActive = activeRateProvider === provider ? "NONE" : activeRateProvider;
+      const nextLabel = labelProvider === provider ? "NONE" : labelProvider;
+      const legacyUsage = providerSelectionToLegacyUsage(nextActive, nextLabel);
+      const legacyProvider = nextActive !== "NONE" ? nextActive : nextLabel !== "NONE" ? nextLabel : null;
+
+      await fetch("/api/settings/shipping", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shippingLiveProvider: legacyProvider,
+          shippingProviderUsage: legacyUsage,
+          activeRateProvider: nextActive,
+          labelProvider: nextLabel,
+        }),
+      }).then(parseApiJson);
+
+      setProviderForm((current) => ({ ...current, token: "" }));
+      setNotice("Provider disconnected.");
+      await load();
+    } catch (providerError) {
+      setError(providerError instanceof Error ? providerError.message : "Failed to disconnect provider");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function validateLocationAddress() {
     setSaving(true);
     setError("");
     setLocationValidationMessage("");
-
     try {
       const data = await fetch("/api/settings/shipping/locations/validate", {
         method: "POST",
@@ -302,7 +497,6 @@ export default function ShippingSettingsWorkspace() {
           country: normalizeCountry(locationForm.country),
         }),
       }).then(parseApiJson);
-
       setLocationValidationMessage(data?.message || "Validation complete.");
     } catch (validationError) {
       setError(validationError instanceof Error ? validationError.message : "Address validation failed");
@@ -314,94 +508,85 @@ export default function ShippingSettingsWorkspace() {
   function openPackageDrawer(entry) {
     if (!entry) {
       setPackageForm({ ...DEFAULT_PACKAGE_FORM });
-      setPackageDrawerOpen(true);
-      return;
+    } else {
+      setPackageForm({
+        id: entry.id,
+        name: entry.name || "",
+        type: entry.type || "BOX",
+        length: String(entry.length ?? ""),
+        width: String(entry.width ?? ""),
+        height: String(entry.height ?? ""),
+        dimensionUnit: entry.dimensionUnit || "IN",
+        emptyPackageWeight: String(entry.emptyPackageWeight ?? ""),
+        weightUnit: entry.weightUnit || "OZ",
+        isDefault: Boolean(entry.isDefault),
+        isActive: Boolean(entry.isActive),
+      });
     }
-
-    setPackageForm({
-      id: entry.id,
-      name: entry.name || "",
-      type: entry.type || "BOX",
-      length: String(entry.length ?? ""),
-      width: String(entry.width ?? ""),
-      height: String(entry.height ?? ""),
-      dimensionUnit: entry.dimensionUnit || "IN",
-      emptyPackageWeight: String(entry.emptyPackageWeight ?? ""),
-      weightUnit: entry.weightUnit || "OZ",
-      isDefault: Boolean(entry.isDefault),
-      isActive: Boolean(entry.isActive),
-    });
     setPackageDrawerOpen(true);
   }
 
   function openLocationDrawer(entry) {
     setLocationValidationMessage("");
-
     if (!entry) {
       setLocationForm({ ...DEFAULT_LOCATION_FORM });
-      setLocationDrawerOpen(true);
-      return;
+    } else {
+      setLocationForm({
+        id: entry.id,
+        name: entry.name || "",
+        contactName: entry.contactName || "",
+        company: entry.company || "",
+        address1: entry.address1 || "",
+        address2: entry.address2 || "",
+        city: entry.city || "",
+        stateProvince: entry.stateProvince || "",
+        postalCode: entry.postalCode || "",
+        country: entry.country || "US",
+        phone: entry.phone || "",
+        isDefault: Boolean(entry.isDefault),
+        isActive: Boolean(entry.isActive),
+      });
     }
-
-    setLocationForm({
-      id: entry.id,
-      name: entry.name || "",
-      contactName: entry.contactName || "",
-      company: entry.company || "",
-      address1: entry.address1 || "",
-      address2: entry.address2 || "",
-      city: entry.city || "",
-      stateProvince: entry.stateProvince || "",
-      postalCode: entry.postalCode || "",
-      country: entry.country || "US",
-      phone: entry.phone || "",
-      isDefault: Boolean(entry.isDefault),
-      isActive: Boolean(entry.isActive),
-    });
     setLocationDrawerOpen(true);
   }
 
   function openManualRateDrawer(entry) {
     if (!entry) {
       setManualForm({ ...DEFAULT_MANUAL_RATE_FORM });
-      setManualDrawerOpen(true);
-      return;
+    } else {
+      setManualForm({
+        id: entry.id,
+        name: entry.name || "",
+        regionCountry: entry.regionCountry || "",
+        regionStateProvince: entry.regionStateProvince || "",
+        rateType: entry.rateType || "FLAT",
+        amount: String(entry.amount ?? ""),
+        minWeight: entry.minWeight == null ? "" : String(entry.minWeight),
+        maxWeight: entry.maxWeight == null ? "" : String(entry.maxWeight),
+        minSubtotal: entry.minSubtotal == null ? "" : String(entry.minSubtotal),
+        maxSubtotal: entry.maxSubtotal == null ? "" : String(entry.maxSubtotal),
+        freeOverAmount: entry.freeOverAmount == null ? "" : String(entry.freeOverAmount),
+        estimatedDeliveryText: entry.estimatedDeliveryText || "",
+        isActive: Boolean(entry.isActive),
+      });
     }
-
-    setManualForm({
-      id: entry.id,
-      name: entry.name || "",
-      regionCountry: entry.regionCountry || "",
-      regionStateProvince: entry.regionStateProvince || "",
-      rateType: entry.rateType || "FLAT",
-      amount: String(entry.amount ?? ""),
-      minWeight: entry.minWeight == null ? "" : String(entry.minWeight),
-      maxWeight: entry.maxWeight == null ? "" : String(entry.maxWeight),
-      minSubtotal: entry.minSubtotal == null ? "" : String(entry.minSubtotal),
-      maxSubtotal: entry.maxSubtotal == null ? "" : String(entry.maxSubtotal),
-      freeOverAmount: entry.freeOverAmount == null ? "" : String(entry.freeOverAmount),
-      estimatedDeliveryText: entry.estimatedDeliveryText || "",
-      isActive: Boolean(entry.isActive),
-    });
     setManualDrawerOpen(true);
   }
 
   function openFallbackRateDrawer(entry) {
     if (!entry) {
       setFallbackForm({ ...DEFAULT_FALLBACK_RATE_FORM });
-      setFallbackDrawerOpen(true);
-      return;
+    } else {
+      setFallbackForm({
+        id: entry.id,
+        name: entry.name || "",
+        regionCountry: entry.regionCountry || "",
+        regionStateProvince: entry.regionStateProvince || "",
+        amount: String(entry.amount ?? ""),
+        estimatedDeliveryText: entry.estimatedDeliveryText || "",
+        isActive: Boolean(entry.isActive),
+      });
     }
-
-    setFallbackForm({
-      id: entry.id,
-      name: entry.name || "",
-      regionCountry: entry.regionCountry || "",
-      regionStateProvince: entry.regionStateProvince || "",
-      amount: String(entry.amount ?? ""),
-      estimatedDeliveryText: entry.estimatedDeliveryText || "",
-      isActive: Boolean(entry.isActive),
-    });
     setFallbackDrawerOpen(true);
   }
 
@@ -491,68 +676,174 @@ export default function ShippingSettingsWorkspace() {
     setFallbackDrawerOpen(false);
   }
 
+  async function saveManualFulfillmentSettings() {
+    await persistSettings(
+      {
+        manualFulfillmentInstructions: normalizeOptional(manualFulfillmentForm.manualFulfillmentInstructions),
+        manualTrackingBehavior: normalizeOptional(manualFulfillmentForm.manualTrackingBehavior),
+      },
+      "Manual fulfillment settings saved."
+    );
+    setManualFulfillmentDrawerOpen(false);
+  }
+
+  async function saveLocalDeliverySettings() {
+    await persistSettings(
+      {
+        localDeliveryEnabled: Boolean(localDeliveryForm.localDeliveryEnabled),
+        localDeliveryPrice:
+          parseNumber(localDeliveryForm.localDeliveryPrice) == null
+            ? null
+            : parseNumber(localDeliveryForm.localDeliveryPrice),
+        localDeliveryMinimumOrder:
+          parseNumber(localDeliveryForm.localDeliveryMinimumOrder) == null
+            ? null
+            : parseNumber(localDeliveryForm.localDeliveryMinimumOrder),
+        localDeliveryCoverage: normalizeOptional(localDeliveryForm.localDeliveryCoverage),
+        localDeliveryInstructions: normalizeOptional(localDeliveryForm.localDeliveryInstructions),
+      },
+      "Local delivery settings saved."
+    );
+    setLocalDeliveryDrawerOpen(false);
+  }
+
+  async function savePickupSettings() {
+    await persistSettings(
+      {
+        pickupEnabled: Boolean(pickupForm.pickupEnabled),
+        pickupLocation: normalizeOptional(pickupForm.pickupLocation),
+        pickupInstructions: normalizeOptional(pickupForm.pickupInstructions),
+        pickupEstimate: normalizeOptional(pickupForm.pickupEstimate),
+      },
+      "Pickup settings saved."
+    );
+    setPickupDrawerOpen(false);
+  }
+
+  async function savePackingSlipSettings() {
+    await persistSettings(
+      {
+        packingSlipUseLogo: Boolean(packingSlipForm.packingSlipUseLogo),
+        packingSlipShowSku: Boolean(packingSlipForm.packingSlipShowSku),
+        packingSlipShowProductImages: Boolean(packingSlipForm.packingSlipShowProductImages),
+        packingSlipFooterNote: normalizeOptional(packingSlipForm.packingSlipFooterNote),
+      },
+      "Packing slip settings saved."
+    );
+    setPackingSlipDrawerOpen(false);
+  }
+
   return (
     <AppShell>
       <div className={styles.pageWrap}>
         <div className={styles.pageHeader}>
           <div>
             <h2>Shipping & delivery</h2>
-            <p>Checkout rates decide what customers pay. Label providers buy postage after order placement.</p>
+            <p>
+              Choose what customers pay at checkout, how labels are created, and what happens if live rates fail.
+            </p>
           </div>
           <AdminButton onClick={load} size="sm" variant="secondary">
             Refresh
           </AdminButton>
         </div>
 
-        {loading ? <p className={styles.statusText}>Loading...</p> : null}
-        {error ? <div className={styles.statusBlock}><p className={styles.statusText}>{error}</p></div> : null}
-        {notice ? <div className={styles.statusBlock}><p className={styles.statusText}>{notice}</p></div> : null}
+        {loading ? <p className={styles.statusText}>Loading shipping settings...</p> : null}
+        {error ? (
+          <div className={styles.statusBlock}>
+            <p className={styles.statusText}>{error}</p>
+          </div>
+        ) : null}
+        {notice ? (
+          <div className={styles.statusBlock}>
+            <p className={styles.statusText}>{notice}</p>
+          </div>
+        ) : null}
 
         {!loading ? (
           <div className={styles.configStack}>
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Checkout rate method</h3></div>
-              <div className={styles.formGrid}>
-                <label className={styles.field}>
-                  <span>Shipping mode</span>
-                  <AdminSelect
-                    value={mode}
-                    onChange={setMode}
-                    options={[
-                      { value: "LIVE_RATES", label: "Live rates" },
-                      { value: "MANUAL", label: "Manual only" },
-                      { value: "HYBRID", label: "Hybrid" },
-                    ]}
-                  />
-                </label>
+              <div className={styles.sectionHeading}>
+                <h3>Simple rule</h3>
               </div>
               <p className={styles.statusText}>
-                LIVE_RATES tries provider quotes first. MANUAL uses manual rates only. HYBRID combines live rates with manual/fallback paths.
+                Checkout rates decide what customers pay. Label providers create postage after the order is placed.
               </p>
+              <div className={styles.methodChipRow}>
+                <span className={styles.methodChip}>Checkout rates</span>
+                <span className={styles.methodChip}>Label buying</span>
+                <span className={styles.methodChip}>Fallbacks</span>
+              </div>
+            </section>
+
+            <section className={styles.configSection}>
+              <div className={styles.sectionHeading}>
+                <h3>Checkout rate method</h3>
+              </div>
+              <p className={styles.statusText}>Choose how customers are charged for shipping.</p>
+              <div className={styles.formGrid}>
+                <AdminField label="Shipping mode">
+                  <AdminSelect value={mode} onChange={setMode} options={MODE_OPTIONS} />
+                </AdminField>
+                <AdminField label="Fallback behavior">
+                  <AdminSelect value={fallbackBehavior} onChange={setFallbackBehavior} options={FALLBACK_BEHAVIOR_OPTIONS} />
+                </AdminField>
+              </div>
               <div className={styles.actionRow}>
-                <AdminButton disabled={saving} onClick={saveMode} size="sm" variant="secondary">
-                  {saving ? "Saving..." : "Save mode"}
+                <AdminButton disabled={saving} onClick={saveCheckoutMethod} size="sm" variant="secondary">
+                  {saving ? "Saving..." : "Save checkout method"}
                 </AdminButton>
               </div>
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Live rate and label provider</h3></div>
-              <div className={styles.actionRow}>
-                <AdminStatusChip tone={setupStatus?.providerConnected ? "success" : "warning"}>
-                  {setupStatus?.providerConnected ? "Connected" : "Not connected"}
-                </AdminStatusChip>
-                <p className={styles.statusText}>Provider: {provider || "None selected"}</p>
+              <div className={styles.sectionHeading}>
+                <h3>Live rate and label provider</h3>
+              </div>
+              <div className={styles.configRow}>
+                <p className={styles.statusText}>
+                  <strong>Shippo</strong> · Live rates, labels, tracking, and validation.
+                </p>
+                <div className={styles.actionRow}>
+                  <AdminStatusChip tone={activeRateProvider === "SHIPPO" || labelProvider === "SHIPPO" ? "success" : "neutral"}>
+                    {activeRateProvider === "SHIPPO" || labelProvider === "SHIPPO" ? "In use" : "Not in use"}
+                  </AdminStatusChip>
+                </div>
+              </div>
+              <div className={styles.configRow}>
+                <p className={styles.statusText}>
+                  <strong>EasyPost</strong> · Alternative rate and label provider.
+                </p>
+                <div className={styles.actionRow}>
+                  <AdminStatusChip tone={activeRateProvider === "EASYPOST" || labelProvider === "EASYPOST" ? "success" : "neutral"}>
+                    {activeRateProvider === "EASYPOST" || labelProvider === "EASYPOST" ? "In use" : "Not in use"}
+                  </AdminStatusChip>
+                </div>
+              </div>
+              <div className={styles.configRow}>
+                <p className={styles.statusText}>
+                  <strong>Manual fulfillment</strong> · Mark shipped and add tracking manually. No label buying.
+                </p>
+                <div className={styles.actionRow}>
+                  <AdminButton size="sm" variant="secondary" onClick={() => setManualFulfillmentDrawerOpen(true)}>
+                    Configure
+                  </AdminButton>
+                </div>
               </div>
               <div className={styles.actionRow}>
-                <AdminButton onClick={() => setProviderDrawerOpen(true)} size="sm" variant="secondary">
+                <AdminStatusChip tone={hasProviderConnection ? "success" : "warning"}>
+                  {hasProviderConnection ? "Connected" : "Not connected"}
+                </AdminStatusChip>
+                <AdminButton size="sm" variant="secondary" onClick={() => setProviderDrawerOpen(true)}>
                   Manage provider
                 </AdminButton>
               </div>
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Live-rate requirements</h3></div>
+              <div className={styles.sectionHeading}>
+                <h3>Live-rate requirements</h3>
+              </div>
               <div className={styles.actionRow}>
                 <AdminStatusChip tone={hasDefaultLocation ? "success" : "warning"}>
                   {hasDefaultLocation ? "Ship-from location ready" : "Ship-from location missing"}
@@ -570,131 +861,177 @@ export default function ShippingSettingsWorkspace() {
               ) : (
                 <p className={styles.statusText}>No setup warnings.</p>
               )}
-
-              <div className={styles.divider} />
-              <div className={styles.sectionHeading}><h3>Ship-from locations</h3></div>
+              <div className={styles.actionRow}>
+                <AdminButton onClick={() => openLocationDrawer(null)} size="sm" variant="secondary">
+                  Set location
+                </AdminButton>
+              </div>
               {locations.length ? (
                 locations.map((entry) => (
                   <div className={styles.configRow} key={entry.id}>
                     <p className={styles.statusText}>
-                      <strong>{entry.name}</strong> | {formatLocationLine(entry)}
+                      <strong>{entry.name}</strong> · {formatLocationLine(entry)}
                     </p>
                     <div className={styles.actionRow}>
                       {entry.isDefault ? <AdminStatusChip tone="success">Default</AdminStatusChip> : null}
                       {!entry.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
-                      <AdminButton onClick={() => openLocationDrawer(entry)} size="sm" variant="secondary">Edit</AdminButton>
-                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/locations/${entry.id}`, "DELETE", undefined, "Ship-from location removed.")} size="sm" variant="danger">Delete</AdminButton>
+                      <AdminButton size="sm" variant="secondary" onClick={() => openLocationDrawer(entry)}>
+                        Edit
+                      </AdminButton>
                     </div>
                   </div>
                 ))
               ) : (
                 <AdminEmptyState
                   title="No ship-from locations"
-                  description="Add a default ship-from location for live rates, labels, return labels, and packing slips."
+                  description="Add a default ship-from location for quotes, labels, and returns."
                   icon="warehouse"
                 />
               )}
-              <div className={styles.actionRow}>
-                <AdminButton onClick={() => openLocationDrawer(null)} size="sm" variant="secondary">
-                  Add ship-from location
-                </AdminButton>
-              </div>
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Packages</h3></div>
+              <div className={styles.sectionHeading}>
+                <h3>Packages</h3>
+              </div>
               {packages.length ? (
                 packages.map((entry) => (
                   <div className={styles.configRow} key={entry.id}>
                     <p className={styles.statusText}>
-                      <strong>{entry.name}</strong> | {formatPackageLine(entry)}
+                      <strong>{entry.name}</strong> · {formatPackageLine(entry)}
                     </p>
                     <div className={styles.actionRow}>
                       {entry.isDefault ? <AdminStatusChip tone="success">Default</AdminStatusChip> : null}
                       {!entry.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
-                      <AdminButton onClick={() => openPackageDrawer(entry)} size="sm" variant="secondary">Edit</AdminButton>
-                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/packages/${entry.id}`, "DELETE", undefined, "Package removed.")} size="sm" variant="danger">Delete</AdminButton>
+                      <AdminButton size="sm" variant="secondary" onClick={() => openPackageDrawer(entry)}>
+                        Edit
+                      </AdminButton>
                     </div>
                   </div>
                 ))
               ) : (
                 <AdminEmptyState
-                  title="No packages"
+                  title="No packages yet."
                   description="Add a default package so live rates and label buying can estimate shipping correctly."
                   icon="inventory_2"
                 />
               )}
               <div className={styles.actionRow}>
-                <AdminButton onClick={() => openPackageDrawer(null)} size="sm" variant="secondary">
+                <AdminButton size="sm" variant="secondary" onClick={() => openPackageDrawer(null)}>
                   Add package
                 </AdminButton>
               </div>
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Manual checkout rates</h3></div>
-              <p className={styles.statusText}>Manual rates control what customers pay. They do not buy postage.</p>
+              <div className={styles.sectionHeading}>
+                <h3>Manual checkout rates</h3>
+              </div>
+              <p className={styles.statusText}>Used in Manual mode, or as fallback in Hybrid mode.</p>
               {manualRates.length ? (
                 manualRates.map((rate) => (
                   <div className={styles.configRow} key={rate.id}>
                     <p className={styles.statusText}>
-                      <strong>{rate.name}</strong> | {rate.rateType} | {renderRateSummary(rate, currency)}
+                      <strong>{rate.name}</strong> · {rate.regionCountry || "All regions"} ·{" "}
+                      {renderRateSummary(rate, currency)}
+                      {rate.estimatedDeliveryText ? ` · ${rate.estimatedDeliveryText}` : ""}
                     </p>
                     <div className={styles.actionRow}>
                       {!rate.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
-                      <AdminButton onClick={() => openManualRateDrawer(rate)} size="sm" variant="secondary">Edit</AdminButton>
-                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/manual-rates/${rate.id}`, "DELETE", undefined, "Manual rate removed.")} size="sm" variant="danger">Delete</AdminButton>
+                      <AdminButton size="sm" variant="secondary" onClick={() => openManualRateDrawer(rate)}>
+                        Edit
+                      </AdminButton>
                     </div>
                   </div>
                 ))
               ) : (
-                <AdminEmptyState title="No manual rates" description="Add rates if checkout should work without live quotes." icon="paid" />
+                <AdminEmptyState
+                  title="No manual checkout rates"
+                  description="Add rates if checkout should work without live carrier rates."
+                  icon="paid"
+                />
               )}
+              <p className={styles.statusText}>Manual rates control what customers pay. They do not buy postage.</p>
               <div className={styles.actionRow}>
-                <AdminButton onClick={() => openManualRateDrawer(null)} size="sm" variant="secondary">
+                <AdminButton size="sm" variant="secondary" onClick={() => openManualRateDrawer(null)}>
                   Add manual rate
                 </AdminButton>
               </div>
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Live-rate fallback</h3></div>
-              <p className={styles.statusText}>Fallback rates are used only if live provider requests fail or time out.</p>
+              <div className={styles.sectionHeading}>
+                <h3>Live-rate fallback</h3>
+              </div>
+              <p className={styles.statusText}>Used only if Shippo/EasyPost cannot return live rates.</p>
               {fallbackRates.length ? (
                 fallbackRates.map((rate) => (
                   <div className={styles.configRow} key={rate.id}>
                     <p className={styles.statusText}>
-                      <strong>{rate.name}</strong> | {formatMoney(rate.amount, currency)}
+                      <strong>{rate.name}</strong> · {formatMoney(rate.amount, currency)}
+                      {rate.estimatedDeliveryText ? ` · ${rate.estimatedDeliveryText}` : ""}
                     </p>
                     <div className={styles.actionRow}>
                       {!rate.isActive ? <AdminStatusChip tone="warning">Inactive</AdminStatusChip> : null}
-                      <AdminButton onClick={() => openFallbackRateDrawer(rate)} size="sm" variant="secondary">Edit</AdminButton>
-                      <AdminButton onClick={() => persistEntity(`/api/settings/shipping/fallback-rates/${rate.id}`, "DELETE", undefined, "Fallback rate removed.")} size="sm" variant="danger">Delete</AdminButton>
+                      <AdminButton size="sm" variant="secondary" onClick={() => openFallbackRateDrawer(rate)}>
+                        Edit
+                      </AdminButton>
                     </div>
                   </div>
                 ))
               ) : (
-                <AdminEmptyState title="No fallback rates" description="Configure fallback rates for live provider outage paths." icon="error" />
+                <AdminEmptyState
+                  title="No fallback rates"
+                  description="Add fallback rates for live-provider outage paths."
+                  icon="error"
+                />
               )}
               <div className={styles.actionRow}>
-                <AdminButton onClick={() => openFallbackRateDrawer(null)} size="sm" variant="secondary">
-                  Add fallback rate
+                <AdminButton size="sm" variant="secondary" onClick={() => openFallbackRateDrawer(null)}>
+                  Add fallback
                 </AdminButton>
               </div>
             </section>
 
             <section className={styles.configSection}>
-              <div className={styles.sectionHeading}><h3>Local options and documents</h3></div>
-              <div className={styles.setupGrid}>
-                <AdminCard as="article" className={styles.setupCard} variant="card">
-                  <p className={styles.statusText}><strong>Manual fulfillment:</strong> Mark shipped and add tracking without label purchase.</p>
-                </AdminCard>
-                <AdminCard as="article" className={styles.setupCard} variant="card">
-                  <p className={styles.statusText}><strong>Local delivery and pickup:</strong> Setup drawer can be added when backend activation lands.</p>
-                </AdminCard>
-                <AdminCard as="article" className={styles.setupCard} variant="card">
-                  <p className={styles.statusText}><strong>Packing slip:</strong> Show settings after print flow ships.</p>
-                </AdminCard>
+              <div className={styles.sectionHeading}>
+                <h3>Local options and documents</h3>
+              </div>
+              <div className={styles.configRow}>
+                <p className={styles.statusText}>
+                  <strong>Local delivery</strong> · Offer delivery by ZIP code or radius.
+                </p>
+                <div className={styles.actionRow}>
+                  <AdminStatusChip tone={localDeliveryForm.localDeliveryEnabled ? "success" : "neutral"}>
+                    {localDeliveryForm.localDeliveryEnabled ? "Enabled" : "Disabled"}
+                  </AdminStatusChip>
+                  <AdminButton size="sm" variant="secondary" onClick={() => setLocalDeliveryDrawerOpen(true)}>
+                    Set up
+                  </AdminButton>
+                </div>
+              </div>
+              <div className={styles.configRow}>
+                <p className={styles.statusText}>
+                  <strong>Pickup in store</strong> · Let customers pick up from your location.
+                </p>
+                <div className={styles.actionRow}>
+                  <AdminStatusChip tone={pickupForm.pickupEnabled ? "success" : "neutral"}>
+                    {pickupForm.pickupEnabled ? "Enabled" : "Disabled"}
+                  </AdminStatusChip>
+                  <AdminButton size="sm" variant="secondary" onClick={() => setPickupDrawerOpen(true)}>
+                    Set up
+                  </AdminButton>
+                </div>
+              </div>
+              <div className={styles.configRow}>
+                <p className={styles.statusText}>
+                  <strong>Packing slip</strong> · Logo, SKU, product images, and footer note.
+                </p>
+                <div className={styles.actionRow}>
+                  <AdminButton size="sm" variant="secondary" onClick={() => setPackingSlipDrawerOpen(true)}>
+                    Edit
+                  </AdminButton>
+                </div>
               </div>
             </section>
           </div>
@@ -704,51 +1041,99 @@ export default function ShippingSettingsWorkspace() {
       <AdminDrawer
         open={providerDrawerOpen}
         onClose={() => setProviderDrawerOpen(false)}
-        title="Live rate and label provider"
-        subtitle="Save encrypted credentials, set usage, and verify connection."
+        title="Manage provider"
+        subtitle="Credentials, verification, usage, and disconnect."
       >
         <AdminField label="Provider">
           <AdminSelect
-            value={provider}
-            onChange={setProvider}
-            options={[
-              { value: "", label: "Select provider" },
-              { value: "SHIPPO", label: "Shippo" },
-              { value: "EASYPOST", label: "EasyPost" },
-            ]}
+            value={providerForm.provider}
+            onChange={(value) => setProviderForm((current) => ({ ...current, provider: value }))}
+            options={PROVIDER_OPTIONS}
           />
         </AdminField>
-
         <AdminField label="Provider usage">
           <AdminSelect
-            value={providerUsage}
-            onChange={setProviderUsage}
-            options={[
-              { value: "LIVE_AND_LABELS", label: "Live rates and label buying" },
-              { value: "LABELS_ONLY", label: "Label buying only" },
-              { value: "LIVE_RATES_ONLY", label: "Live rates only" },
-            ]}
+            value={providerForm.usage}
+            onChange={(value) => setProviderForm((current) => ({ ...current, usage: value }))}
+            options={PROVIDER_USAGE_OPTIONS}
           />
         </AdminField>
-
         <AdminField label="API token">
           <AdminInput
             type="password"
-            value={providerToken}
-            onChange={(event) => setProviderToken(event.target.value)}
-            placeholder="sk_live_..."
+            value={providerForm.token}
+            onChange={(event) => setProviderForm((current) => ({ ...current, token: event.target.value }))}
+            placeholder="Paste token to save or update"
           />
         </AdminField>
-
-        <p className={styles.statusText}>Stored secrets are encrypted and never shown again in settings.</p>
-
+        <p className={styles.statusText}>Saved credentials stay encrypted and are never rendered in raw form.</p>
         <div className={styles.actionRow}>
-          <AdminButton disabled={saving} onClick={saveProviderToken} size="sm" variant="secondary">Save credentials</AdminButton>
-          <AdminButton disabled={saving} onClick={testProvider} size="sm" variant="secondary">Verify connection</AdminButton>
-          <AdminButton disabled={saving} onClick={saveMode} size="sm" variant="secondary">Save usage</AdminButton>
+          <AdminButton disabled={saving} size="sm" variant="secondary" onClick={saveProviderSettings}>
+            Save credentials
+          </AdminButton>
+          <AdminButton disabled={saving} size="sm" variant="secondary" onClick={verifyProvider}>
+            Verify connection
+          </AdminButton>
+          <AdminButton disabled={saving} size="sm" variant="ghost" onClick={disconnectProvider}>
+            Disconnect provider
+          </AdminButton>
         </div>
-
         {providerTestMessage ? <p className={styles.statusText}>{providerTestMessage}</p> : null}
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={locationDrawerOpen}
+        onClose={() => setLocationDrawerOpen(false)}
+        title={locationForm.id ? "Edit ship-from location" : "Set location"}
+        subtitle="Address used for quotes, labels, and returns."
+      >
+        <AdminField label="Location name">
+          <AdminInput value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Contact name">
+          <AdminInput value={locationForm.contactName} onChange={(event) => setLocationForm((current) => ({ ...current, contactName: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Company">
+          <AdminInput value={locationForm.company} onChange={(event) => setLocationForm((current) => ({ ...current, company: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Address 1">
+          <AdminInput value={locationForm.address1} onChange={(event) => setLocationForm((current) => ({ ...current, address1: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Address 2">
+          <AdminInput value={locationForm.address2} onChange={(event) => setLocationForm((current) => ({ ...current, address2: event.target.value }))} />
+        </AdminField>
+        <AdminField label="City">
+          <AdminInput value={locationForm.city} onChange={(event) => setLocationForm((current) => ({ ...current, city: event.target.value }))} />
+        </AdminField>
+        <AdminField label="State / province">
+          <AdminInput value={locationForm.stateProvince} onChange={(event) => setLocationForm((current) => ({ ...current, stateProvince: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Postal code">
+          <AdminInput value={locationForm.postalCode} onChange={(event) => setLocationForm((current) => ({ ...current, postalCode: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Country">
+          <AdminInput value={locationForm.country} onChange={(event) => setLocationForm((current) => ({ ...current, country: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Phone">
+          <AdminInput value={locationForm.phone} onChange={(event) => setLocationForm((current) => ({ ...current, phone: event.target.value }))} />
+        </AdminField>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(locationForm.isDefault)} onChange={(event) => setLocationForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
+          <span>Default location</span>
+        </label>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(locationForm.isActive)} onChange={(event) => setLocationForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <span>Active</span>
+        </label>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={saveLocation}>
+            Save location
+          </AdminButton>
+          <AdminButton disabled={saving} size="sm" variant="secondary" onClick={validateLocationAddress}>
+            Validate address
+          </AdminButton>
+        </div>
+        {locationValidationMessage ? <p className={styles.statusText}>{locationValidationMessage}</p> : null}
       </AdminDrawer>
 
       <AdminDrawer
@@ -757,11 +1142,20 @@ export default function ShippingSettingsWorkspace() {
         title={packageForm.id ? "Edit package" : "Add package"}
         subtitle="Used for live rates and label buying."
       >
-        <AdminField label="Name">
+        <AdminField label="Package name">
           <AdminInput value={packageForm.name} onChange={(event) => setPackageForm((current) => ({ ...current, name: event.target.value }))} />
         </AdminField>
-        <AdminField label="Type">
-          <AdminSelect value={packageForm.type} onChange={(value) => setPackageForm((current) => ({ ...current, type: value }))} options={[{ value: "BOX", label: "Box" }, { value: "POLY_MAILER", label: "Poly mailer" }, { value: "ENVELOPE", label: "Envelope" }, { value: "CUSTOM", label: "Custom" }]} />
+        <AdminField label="Package type">
+          <AdminSelect
+            value={packageForm.type}
+            onChange={(value) => setPackageForm((current) => ({ ...current, type: value }))}
+            options={[
+              { value: "BOX", label: "Box" },
+              { value: "POLY_MAILER", label: "Poly mailer" },
+              { value: "ENVELOPE", label: "Envelope" },
+              { value: "CUSTOM", label: "Custom" },
+            ]}
+          />
         </AdminField>
         <AdminField label="Length">
           <AdminInput type="number" value={packageForm.length} onChange={(event) => setPackageForm((current) => ({ ...current, length: event.target.value }))} />
@@ -773,80 +1167,234 @@ export default function ShippingSettingsWorkspace() {
           <AdminInput type="number" value={packageForm.height} onChange={(event) => setPackageForm((current) => ({ ...current, height: event.target.value }))} />
         </AdminField>
         <AdminField label="Dimension unit">
-          <AdminSelect value={packageForm.dimensionUnit} onChange={(value) => setPackageForm((current) => ({ ...current, dimensionUnit: value }))} options={[{ value: "IN", label: "IN" }, { value: "CM", label: "CM" }]} />
+          <AdminSelect
+            value={packageForm.dimensionUnit}
+            onChange={(value) => setPackageForm((current) => ({ ...current, dimensionUnit: value }))}
+            options={[{ value: "IN", label: "IN" }, { value: "CM", label: "CM" }]}
+          />
         </AdminField>
         <AdminField label="Empty package weight">
           <AdminInput type="number" value={packageForm.emptyPackageWeight} onChange={(event) => setPackageForm((current) => ({ ...current, emptyPackageWeight: event.target.value }))} />
         </AdminField>
         <AdminField label="Weight unit">
-          <AdminSelect value={packageForm.weightUnit} onChange={(value) => setPackageForm((current) => ({ ...current, weightUnit: value }))} options={[{ value: "OZ", label: "OZ" }, { value: "LB", label: "LB" }, { value: "G", label: "G" }, { value: "KG", label: "KG" }]} />
+          <AdminSelect
+            value={packageForm.weightUnit}
+            onChange={(value) => setPackageForm((current) => ({ ...current, weightUnit: value }))}
+            options={[
+              { value: "OZ", label: "OZ" },
+              { value: "LB", label: "LB" },
+              { value: "G", label: "G" },
+              { value: "KG", label: "KG" },
+            ]}
+          />
         </AdminField>
-        <label className={styles.checkboxField}><input checked={Boolean(packageForm.isDefault)} onChange={(event) => setPackageForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" /><span>Default package</span></label>
-        <label className={styles.checkboxField}><input checked={Boolean(packageForm.isActive)} onChange={(event) => setPackageForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(packageForm.isDefault)} onChange={(event) => setPackageForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
+          <span>Default package</span>
+        </label>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(packageForm.isActive)} onChange={(event) => setPackageForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <span>Active</span>
+        </label>
         <div className={styles.actionRow}>
-          <AdminButton disabled={saving} onClick={savePackage} size="sm">Save package</AdminButton>
+          <AdminButton disabled={saving} size="sm" onClick={savePackage}>
+            Save package
+          </AdminButton>
         </div>
-      </AdminDrawer>
-
-      <AdminDrawer
-        open={locationDrawerOpen}
-        onClose={() => setLocationDrawerOpen(false)}
-        title={locationForm.id ? "Edit ship-from location" : "Add ship-from location"}
-        subtitle="Used for live rates, labels, return labels, and packing slips."
-      >
-        <AdminField label="Name"><AdminInput value={locationForm.name} onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} /></AdminField>
-        <AdminField label="Contact name"><AdminInput value={locationForm.contactName} onChange={(event) => setLocationForm((current) => ({ ...current, contactName: event.target.value }))} /></AdminField>
-        <AdminField label="Company"><AdminInput value={locationForm.company} onChange={(event) => setLocationForm((current) => ({ ...current, company: event.target.value }))} /></AdminField>
-        <AdminField label="Address line 1"><AdminInput value={locationForm.address1} onChange={(event) => setLocationForm((current) => ({ ...current, address1: event.target.value }))} /></AdminField>
-        <AdminField label="Address line 2"><AdminInput value={locationForm.address2} onChange={(event) => setLocationForm((current) => ({ ...current, address2: event.target.value }))} /></AdminField>
-        <AdminField label="City"><AdminInput value={locationForm.city} onChange={(event) => setLocationForm((current) => ({ ...current, city: event.target.value }))} /></AdminField>
-        <AdminField label="State / province"><AdminInput value={locationForm.stateProvince} onChange={(event) => setLocationForm((current) => ({ ...current, stateProvince: event.target.value }))} /></AdminField>
-        <AdminField label="Postal code"><AdminInput value={locationForm.postalCode} onChange={(event) => setLocationForm((current) => ({ ...current, postalCode: event.target.value }))} /></AdminField>
-        <AdminField label="Country"><AdminInput value={locationForm.country} onChange={(event) => setLocationForm((current) => ({ ...current, country: event.target.value }))} /></AdminField>
-        <AdminField label="Phone"><AdminInput value={locationForm.phone} onChange={(event) => setLocationForm((current) => ({ ...current, phone: event.target.value }))} /></AdminField>
-        <label className={styles.checkboxField}><input checked={Boolean(locationForm.isDefault)} onChange={(event) => setLocationForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" /><span>Default location</span></label>
-        <label className={styles.checkboxField}><input checked={Boolean(locationForm.isActive)} onChange={(event) => setLocationForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
-        <div className={styles.actionRow}>
-          <AdminButton disabled={saving} onClick={saveLocation} size="sm">Save location</AdminButton>
-          <AdminButton disabled={saving} onClick={validateLocationAddress} size="sm" variant="secondary">Validate address</AdminButton>
-        </div>
-        {locationValidationMessage ? <p className={styles.statusText}>{locationValidationMessage}</p> : null}
       </AdminDrawer>
 
       <AdminDrawer
         open={manualDrawerOpen}
         onClose={() => setManualDrawerOpen(false)}
         title={manualForm.id ? "Edit manual checkout rate" : "Add manual checkout rate"}
-        subtitle="Manual rates change checkout price only."
+        subtitle="Controls checkout charge, not postage purchase."
       >
-        <AdminField label="Name"><AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} /></AdminField>
-        <AdminField label="Region country"><AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} /></AdminField>
-        <AdminField label="Region state / province"><AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} /></AdminField>
-        <AdminField label="Rate type"><AdminSelect value={manualForm.rateType} onChange={(value) => setManualForm((current) => ({ ...current, rateType: value }))} options={[{ value: "FLAT", label: "Flat" }, { value: "FREE", label: "Free" }, { value: "WEIGHT_BASED", label: "Weight-based" }, { value: "PRICE_BASED", label: "Price-based" }]} /></AdminField>
-        <AdminField label="Amount"><AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} /></AdminField>
-        <AdminField label="Min weight"><AdminInput type="number" value={manualForm.minWeight} onChange={(event) => setManualForm((current) => ({ ...current, minWeight: event.target.value }))} /></AdminField>
-        <AdminField label="Max weight"><AdminInput type="number" value={manualForm.maxWeight} onChange={(event) => setManualForm((current) => ({ ...current, maxWeight: event.target.value }))} /></AdminField>
-        <AdminField label="Min subtotal"><AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} /></AdminField>
-        <AdminField label="Max subtotal"><AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} /></AdminField>
-        <AdminField label="Free over amount"><AdminInput type="number" value={manualForm.freeOverAmount} onChange={(event) => setManualForm((current) => ({ ...current, freeOverAmount: event.target.value }))} /></AdminField>
-        <AdminField label="Estimated delivery text"><AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} /></AdminField>
-        <label className={styles.checkboxField}><input checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
-        <div className={styles.actionRow}><AdminButton disabled={saving} onClick={saveManualRate} size="sm">Save manual rate</AdminButton></div>
+        <AdminField label="Rate name">
+          <AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Region country">
+          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Region state / province">
+          <AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Rate type">
+          <AdminSelect
+            value={manualForm.rateType}
+            onChange={(value) => setManualForm((current) => ({ ...current, rateType: value }))}
+            options={[
+              { value: "FLAT", label: "Flat" },
+              { value: "FREE", label: "Free" },
+              { value: "WEIGHT_BASED", label: "Weight-based" },
+              { value: "PRICE_BASED", label: "Price-based" },
+            ]}
+          />
+        </AdminField>
+        <AdminField label="Amount">
+          <AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Min weight">
+          <AdminInput type="number" value={manualForm.minWeight} onChange={(event) => setManualForm((current) => ({ ...current, minWeight: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Max weight">
+          <AdminInput type="number" value={manualForm.maxWeight} onChange={(event) => setManualForm((current) => ({ ...current, maxWeight: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Min subtotal">
+          <AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Max subtotal">
+          <AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Free-over amount">
+          <AdminInput type="number" value={manualForm.freeOverAmount} onChange={(event) => setManualForm((current) => ({ ...current, freeOverAmount: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Estimated delivery">
+          <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} />
+        </AdminField>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <span>Active</span>
+        </label>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={saveManualRate}>
+            Save manual rate
+          </AdminButton>
+        </div>
       </AdminDrawer>
 
       <AdminDrawer
         open={fallbackDrawerOpen}
         onClose={() => setFallbackDrawerOpen(false)}
-        title={fallbackForm.id ? "Edit live-rate fallback" : "Add live-rate fallback"}
-        subtitle="Fallback rates are used only when live provider requests fail."
+        title={fallbackForm.id ? "Edit fallback" : "Add fallback"}
+        subtitle="Shown only when live rates fail."
       >
-        <AdminField label="Name"><AdminInput value={fallbackForm.name} onChange={(event) => setFallbackForm((current) => ({ ...current, name: event.target.value }))} /></AdminField>
-        <AdminField label="Region country"><AdminInput value={fallbackForm.regionCountry} onChange={(event) => setFallbackForm((current) => ({ ...current, regionCountry: event.target.value }))} /></AdminField>
-        <AdminField label="Region state / province"><AdminInput value={fallbackForm.regionStateProvince} onChange={(event) => setFallbackForm((current) => ({ ...current, regionStateProvince: event.target.value }))} /></AdminField>
-        <AdminField label="Amount"><AdminInput type="number" value={fallbackForm.amount} onChange={(event) => setFallbackForm((current) => ({ ...current, amount: event.target.value }))} /></AdminField>
-        <AdminField label="Estimated delivery text"><AdminInput value={fallbackForm.estimatedDeliveryText} onChange={(event) => setFallbackForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} /></AdminField>
-        <label className={styles.checkboxField}><input checked={Boolean(fallbackForm.isActive)} onChange={(event) => setFallbackForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" /><span>Active</span></label>
-        <div className={styles.actionRow}><AdminButton disabled={saving} onClick={saveFallbackRate} size="sm">Save fallback rate</AdminButton></div>
+        <AdminField label="Fallback name">
+          <AdminInput value={fallbackForm.name} onChange={(event) => setFallbackForm((current) => ({ ...current, name: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Region country">
+          <AdminInput value={fallbackForm.regionCountry} onChange={(event) => setFallbackForm((current) => ({ ...current, regionCountry: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Region state / province">
+          <AdminInput value={fallbackForm.regionStateProvince} onChange={(event) => setFallbackForm((current) => ({ ...current, regionStateProvince: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Amount">
+          <AdminInput type="number" value={fallbackForm.amount} onChange={(event) => setFallbackForm((current) => ({ ...current, amount: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Estimated delivery">
+          <AdminInput value={fallbackForm.estimatedDeliveryText} onChange={(event) => setFallbackForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} />
+        </AdminField>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(fallbackForm.isActive)} onChange={(event) => setFallbackForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <span>Active</span>
+        </label>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={saveFallbackRate}>
+            Save fallback
+          </AdminButton>
+        </div>
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={manualFulfillmentDrawerOpen}
+        onClose={() => setManualFulfillmentDrawerOpen(false)}
+        title="Configure manual fulfillment"
+        subtitle="For teams buying labels outside Doopify."
+      >
+        <AdminField label="Default fulfillment instructions">
+          <AdminTextarea rows={4} value={manualFulfillmentForm.manualFulfillmentInstructions} onChange={(event) => setManualFulfillmentForm((current) => ({ ...current, manualFulfillmentInstructions: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Manual tracking behavior">
+          <AdminInput value={manualFulfillmentForm.manualTrackingBehavior} onChange={(event) => setManualFulfillmentForm((current) => ({ ...current, manualTrackingBehavior: event.target.value }))} placeholder="Example: Tracking number required before mark shipped" />
+        </AdminField>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={saveManualFulfillmentSettings}>
+            Save settings
+          </AdminButton>
+        </div>
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={localDeliveryDrawerOpen}
+        onClose={() => setLocalDeliveryDrawerOpen(false)}
+        title="Local delivery"
+        subtitle="ZIP/radius pricing and delivery instructions."
+      >
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(localDeliveryForm.localDeliveryEnabled)} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryEnabled: event.target.checked }))} type="checkbox" />
+          <span>Enable local delivery</span>
+        </label>
+        <AdminField label="Delivery price">
+          <AdminInput type="number" value={localDeliveryForm.localDeliveryPrice} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryPrice: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Minimum order">
+          <AdminInput type="number" value={localDeliveryForm.localDeliveryMinimumOrder} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryMinimumOrder: event.target.value }))} />
+        </AdminField>
+        <AdminField label="ZIP codes or radius">
+          <AdminTextarea rows={3} value={localDeliveryForm.localDeliveryCoverage} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryCoverage: event.target.value }))} placeholder="Example: 90001, 90002 or 10-mile radius from store" />
+        </AdminField>
+        <AdminField label="Delivery instructions">
+          <AdminTextarea rows={3} value={localDeliveryForm.localDeliveryInstructions} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryInstructions: event.target.value }))} />
+        </AdminField>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={saveLocalDeliverySettings}>
+            Save local delivery
+          </AdminButton>
+        </div>
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={pickupDrawerOpen}
+        onClose={() => setPickupDrawerOpen(false)}
+        title="Pickup in store"
+        subtitle="Pickup location, instructions, and estimate."
+      >
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(pickupForm.pickupEnabled)} onChange={(event) => setPickupForm((current) => ({ ...current, pickupEnabled: event.target.checked }))} type="checkbox" />
+          <span>Enable pickup</span>
+        </label>
+        <AdminField label="Pickup location">
+          <AdminInput value={pickupForm.pickupLocation} onChange={(event) => setPickupForm((current) => ({ ...current, pickupLocation: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Pickup instructions">
+          <AdminTextarea rows={3} value={pickupForm.pickupInstructions} onChange={(event) => setPickupForm((current) => ({ ...current, pickupInstructions: event.target.value }))} />
+        </AdminField>
+        <AdminField label="Pickup estimate">
+          <AdminInput value={pickupForm.pickupEstimate} onChange={(event) => setPickupForm((current) => ({ ...current, pickupEstimate: event.target.value }))} placeholder="Example: Ready in 2 hours" />
+        </AdminField>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={savePickupSettings}>
+            Save pickup
+          </AdminButton>
+        </div>
+      </AdminDrawer>
+
+      <AdminDrawer
+        open={packingSlipDrawerOpen}
+        onClose={() => setPackingSlipDrawerOpen(false)}
+        title="Packing slip"
+        subtitle="Logo, SKU, images, footer, and preview settings."
+      >
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(packingSlipForm.packingSlipUseLogo)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipUseLogo: event.target.checked }))} type="checkbox" />
+          <span>Use store logo</span>
+        </label>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(packingSlipForm.packingSlipShowSku)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipShowSku: event.target.checked }))} type="checkbox" />
+          <span>Show SKU</span>
+        </label>
+        <label className={styles.checkboxField}>
+          <input checked={Boolean(packingSlipForm.packingSlipShowProductImages)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipShowProductImages: event.target.checked }))} type="checkbox" />
+          <span>Show product images (if available)</span>
+        </label>
+        <AdminField label="Footer note">
+          <AdminTextarea rows={3} value={packingSlipForm.packingSlipFooterNote} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipFooterNote: event.target.value }))} />
+        </AdminField>
+        <p className={styles.statusText}>Preview uses current store logo and order data in the packing-slip print flow.</p>
+        <div className={styles.actionRow}>
+          <AdminButton disabled={saving} size="sm" onClick={savePackingSlipSettings}>
+            Save packing slip
+          </AdminButton>
+        </div>
       </AdminDrawer>
     </AppShell>
   );

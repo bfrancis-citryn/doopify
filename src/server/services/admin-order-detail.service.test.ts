@@ -28,6 +28,7 @@ describe('getAdminOrderDetailByOrderNumber', () => {
     mocks.prisma.store.findFirst.mockResolvedValue({
       shippingLiveProvider: 'EASYPOST',
       shippingProviderUsage: 'LIVE_AND_LABELS',
+      labelProvider: 'EASYPOST',
     })
     mocks.getShippingProviderConnectionStatus.mockResolvedValue({
       provider: 'EASYPOST',
