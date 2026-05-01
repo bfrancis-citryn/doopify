@@ -20,13 +20,15 @@ import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminTooltip from '../admin/ui/AdminTooltip';
+import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
 import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
 
 const SETTINGS_SECTIONS = [
   { id: 'general', label: 'General' },
   { id: 'payments', label: 'Payments' },
-  { id: 'shipping', label: 'Shipping & tax' },
+  { id: 'shipping', label: 'Shipping & delivery' },
+  { id: 'taxes', label: 'Taxes & duties' },
   { id: 'webhooks', label: 'Webhooks' },
   { id: 'email', label: 'Email' },
   { id: 'brand-kit', label: 'Storefront / brand' },
@@ -708,7 +710,7 @@ export default function SettingsWorkspace() {
   }, [activeSection, brandKit, brandKitLoading]);
 
   useEffect(() => {
-    if (activeSection !== 'shipping' || shippingConfigLoaded || shippingConfigLoading) {
+    if (!['shipping', 'taxes'].includes(activeSection) || shippingConfigLoaded || shippingConfigLoading) {
       return;
     }
 
@@ -2216,7 +2218,9 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'shipping' ? (
+            {!loading && !error && activeSection === 'shipping' ? <ShippingSettingsWorkspace embedded /> : null}
+
+            {!loading && !error && activeSection === 'taxes' ? (
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
@@ -3637,12 +3641,12 @@ export default function SettingsWorkspace() {
         open={Boolean(activePaymentDrawer)}
         subtitle={
           activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE
-            ? 'Manage Stripe credentials, verification, webhook setup, and checkout method readiness.'
+            ? 'Configure credentials, checkout methods, and Stripe safety checks.'
             : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.PAYPAL
-              ? 'PayPal setup is future-ready in UI, but checkout runtime support is not active yet.'
+              ? 'Status and rollout notes for PayPal checkout support.'
               : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.MANUAL
-                ? 'Configure offline/manual payment guidance for draft and invoice workflows.'
-                : ''
+                ? 'Offline payment guidance for draft and invoice workflows.'
+                : 'Provider setup details.'
         }
         title={
           activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE
@@ -3657,24 +3661,27 @@ export default function SettingsWorkspace() {
         {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE ? (
           <div className={styles.drawerStack}>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={styles.setupCardHeader}>
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Connection status</h4>
                 <AdminStatusChip tone={stripeSetupStatus.tone}>{stripeSetupStatus.label}</AdminStatusChip>
               </div>
               <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
-              <div className={styles.drawerStatusGrid}>
+              <div className={styles.compactDrawerGrid}>
                 <p className={styles.compactMeta}>
-                  <strong>Runtime source:</strong> {stripeCheckoutSourceLabel}
+                  <strong>API keys:</strong> {stripeSetupStatus.label}
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Runtime:</strong> {stripeCheckoutSourceLabel}
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Webhook:</strong> {stripeWebhookSourceLabel}
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Verified:</strong>{' '}
+                  {stripeSetupStatus.lastVerifiedAt ? new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString() : 'Not verified yet'}
                 </p>
                 <p className={styles.compactMeta}>
                   <strong>Mode:</strong> {stripeRuntimeModeLabel}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Webhook source:</strong> {stripeWebhookSourceLabel}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Verified at:</strong>{' '}
-                  {stripeSetupStatus.lastVerifiedAt ? new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString() : 'Not verified yet'}
                 </p>
               </div>
               {showStripeRuntimeMismatchWarning ? (
@@ -3685,8 +3692,8 @@ export default function SettingsWorkspace() {
             </AdminCard>
 
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={styles.setupCardHeader}>
-                <h4>Stripe credentials</h4>
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Credentials</h4>
                 <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
               </div>
               <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
@@ -3726,7 +3733,7 @@ export default function SettingsWorkspace() {
                   </select>
                 </label>
               </div>
-              <div className={styles.actionRow}>
+              <div className={styles.compactActionRow}>
                 <AdminButton
                   disabled={
                     providerActionById.STRIPE === 'saving' ||
@@ -3767,12 +3774,12 @@ export default function SettingsWorkspace() {
                   ))}
                 </div>
               ) : (
-                <p className={styles.providerMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
+                <p className={styles.compactMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
               )}
             </AdminCard>
 
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={styles.setupCardHeader}>
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Checkout methods through Stripe</h4>
               </div>
               <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
@@ -3782,16 +3789,14 @@ export default function SettingsWorkspace() {
                   </span>
                 ))}
               </div>
-              <p className={styles.compactMeta}>
-                Cards can be active once Stripe runtime source is DB or env. Wallet methods still depend on eligibility, HTTPS, live mode, and domain checks.
-              </p>
+              <p className={styles.compactMeta}>Wallets depend on HTTPS, live mode, and domain checks.</p>
             </AdminCard>
 
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
-                <h4>Danger zone</h4>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Advanced</h4>
               </div>
-              <p className={styles.statusText}>
+              <p className={styles.compactMeta}>
                 Disconnecting Stripe removes DB-backed credentials. Env fallback may remain active if env keys still exist.
               </p>
               <div className={styles.compactActionRow}>
@@ -3813,39 +3818,36 @@ export default function SettingsWorkspace() {
 
         {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.PAYPAL ? (
           <div className={styles.drawerStack}>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>PayPal status</h4>
                 <AdminStatusChip tone="warning">Setup needed</AdminStatusChip>
               </div>
-              <p className={styles.statusText}>
-                PayPal runtime support is not active. Checkout remains hidden until payment creation, webhook verification, refund support, and order finalization are implemented.
-              </p>
-              <p className={styles.providerMeta}>
-                <strong>Runtime source:</strong> not implemented
-              </p>
+              <div className={styles.compactDrawerGrid}>
+                <p className={styles.compactMeta}>
+                  <strong>Runtime:</strong> Not implemented
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Checkout visibility:</strong> Hidden
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Refund support:</strong> Not implemented
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Webhooks:</strong> Not implemented
+                </p>
+              </div>
             </AdminCard>
 
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
-                <h4>Future credential fields</h4>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Not yet available</h4>
               </div>
-              <div className={styles.drawerFormGrid}>
-                <AdminField label="Client ID">
-                  <AdminInput defaultValue="" disabled placeholder="PayPal client id (future)" />
-                </AdminField>
-                <AdminField label="Client secret">
-                  <AdminInput defaultValue="" disabled placeholder="PayPal client secret (future)" type="password" />
-                </AdminField>
-                <AdminField label="Webhook ID">
-                  <AdminInput defaultValue="" disabled placeholder="PayPal webhook id (future)" />
-                </AdminField>
-                <AdminField label="Mode">
-                  <AdminInput defaultValue="sandbox/live (future)" disabled />
-                </AdminField>
-              </div>
-              <p className={styles.setupFixText}>
-                Keep this provider disabled until the runtime implementation exists and has tests for create-payment, webhook verification, refunds, and order finalization.
+              <p className={styles.compactMeta}>
+                PayPal support is planned. Keep hidden until payment creation, webhook verification, refunds, and order finalization are implemented.
+              </p>
+              <p className={styles.compactMeta}>
+                Future credential fields stay hidden until runtime support exists to avoid fake setup.
               </p>
             </AdminCard>
           </div>
@@ -3853,20 +3855,18 @@ export default function SettingsWorkspace() {
 
         {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.MANUAL ? (
           <div className={styles.drawerStack}>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Manual payment usage</h4>
                 <AdminStatusChip tone="neutral">Built-in</AdminStatusChip>
               </div>
-              <p className={styles.statusText}>
-                Manual payments are currently intended for draft-order and invoice-style workflows, not storefront checkout finalization.
-              </p>
+              <p className={styles.compactMeta}>Manual payments are for draft orders, invoices, and phone orders.</p>
             </AdminCard>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Offline instructions</h4>
               </div>
-              <div className={styles.drawerFormGrid}>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField hint="Shown internally to staff during draft order collection." label="Cash instructions">
                   <AdminTextarea placeholder="Example: Collect cash on pickup and mark payment received after handoff." rows={3} />
                 </AdminField>
@@ -3877,8 +3877,13 @@ export default function SettingsWorkspace() {
               <AdminField hint="Optional merchant-facing reminder for invoice flows." label="Manual payment notes">
                 <AdminTextarea placeholder="Example: Payment due within 7 days. Include order number in transfer memo." rows={3} />
               </AdminField>
-              <p className={styles.setupFixText}>
-                Do not mark manual storefront checkout active unless a server-owned manual-payment finalization flow is implemented.
+              <div className={styles.compactActionRow}>
+                <AdminButton disabled size="sm" variant="secondary">
+                  Save instructions
+                </AdminButton>
+              </div>
+              <p className={styles.compactMeta}>
+                Manual storefront checkout is disabled until server-owned manual payment finalization is implemented.
               </p>
             </AdminCard>
           </div>
@@ -3889,12 +3894,12 @@ export default function SettingsWorkspace() {
         open={Boolean(activeEmailDrawer)}
         subtitle={
           activeEmailDrawer === EMAIL_PROVIDER_DRAWER.RESEND
-            ? 'Manage Resend credentials, webhook secret status, verification, and test sends.'
+            ? 'Save credentials, verify status, and send a test message.'
             : activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SMTP
-              ? 'Manage SMTP host/auth credentials, verification, and test sends.'
+              ? 'Configure SMTP credentials and verify connectivity.'
               : activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SENDLAYER
-                ? 'SendLayer UI is prepared, but runtime support is not active yet.'
-                : ''
+                ? 'Provider status while runtime support remains pending.'
+                : 'Email provider setup details.'
         }
         title={
           activeEmailDrawer === EMAIL_PROVIDER_DRAWER.RESEND
@@ -3908,30 +3913,30 @@ export default function SettingsWorkspace() {
       >
         {activeEmailDrawer === EMAIL_PROVIDER_DRAWER.RESEND ? (
           <div className={styles.drawerStack}>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Connection status</h4>
                 <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
               </div>
               <p className={styles.statusText}>{resendSetupStatus.detail}</p>
-              <div className={`${styles.drawerStatusGrid} ${styles.compactDrawerGrid}`}>
-                <p className={styles.providerMeta}>
+              <div className={styles.compactDrawerGrid}>
+                <p className={styles.compactMeta}>
                   <strong>Active source:</strong> {resendSetupStatus.sourceLabel || 'Not active'}
                 </p>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Webhook status:</strong> {describeResendSetup(setupCheckById).label}
                 </p>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Last verified:</strong> {formatDateTime(resendSetupStatus.lastVerifiedAt)}
                 </p>
               </div>
             </AdminCard>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Credentials</h4>
                 <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
               </div>
-              <div className={styles.drawerFormGrid}>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField label="Resend API key">
                   <AdminInput
                     onChange={(event) => patchProviderForm('RESEND', { apiKey: event.target.value })}
@@ -3998,7 +4003,7 @@ export default function SettingsWorkspace() {
               {resendSavedCredentialMeta.length ? (
                 <div className={styles.maskedSecretList}>
                   {resendSavedCredentialMeta.map((entry) => (
-                    <p className={styles.providerMeta} key={`resend-${entry.key}`}>
+                    <p className={styles.compactMeta} key={`resend-${entry.key}`}>
                       <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
                     </p>
                   ))}
@@ -4008,11 +4013,11 @@ export default function SettingsWorkspace() {
               )}
             </AdminCard>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={styles.setupCardHeader}>
-                <h4>Danger zone</h4>
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Advanced</h4>
               </div>
-              <p className={styles.statusText}>Disconnecting removes DB-backed credentials. Env fallback may remain active if env keys still exist.</p>
-              <div className={styles.actionRow}>
+              <p className={styles.compactMeta}>Disconnecting removes DB-backed credentials. Env fallback may remain active if env keys still exist.</p>
+              <div className={styles.compactActionRow}>
                 <AdminButton
                   disabled={providerActionById.RESEND === 'disconnecting'}
                   onClick={() => handleDisconnectProvider('RESEND')}
@@ -4028,27 +4033,27 @@ export default function SettingsWorkspace() {
 
         {activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SMTP ? (
           <div className={styles.drawerStack}>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Connection status</h4>
                 <AdminStatusChip tone={smtpSetupStatus.tone}>{smtpSetupStatus.label}</AdminStatusChip>
               </div>
               <p className={styles.statusText}>{smtpSetupStatus.detail}</p>
-              <div className={styles.drawerStatusGrid}>
-                <p className={styles.providerMeta}>
+              <div className={styles.compactDrawerGrid}>
+                <p className={styles.compactMeta}>
                   <strong>Active source:</strong> {smtpSetupStatus.sourceLabel || 'Not active'}
                 </p>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Last verified:</strong> {formatDateTime(smtpSetupStatus.lastVerifiedAt)}
                 </p>
               </div>
             </AdminCard>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Credentials</h4>
                 <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
               </div>
-              <div className={styles.drawerFormGrid}>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField label="Host">
                   <AdminInput
                     onChange={(event) => patchProviderForm('SMTP', { host: event.target.value })}
@@ -4099,7 +4104,7 @@ export default function SettingsWorkspace() {
                   />
                 </AdminField>
               </div>
-              <div className={styles.actionRow}>
+              <div className={styles.compactActionRow}>
                 <AdminButton
                   disabled={
                     providerActionById.SMTP === 'saving' ||
@@ -4143,21 +4148,21 @@ export default function SettingsWorkspace() {
               {smtpSavedCredentialMeta.length ? (
                 <div className={styles.maskedSecretList}>
                   {smtpSavedCredentialMeta.map((entry) => (
-                    <p className={styles.providerMeta} key={`smtp-${entry.key}`}>
+                    <p className={styles.compactMeta} key={`smtp-${entry.key}`}>
                       <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
                     </p>
                   ))}
                 </div>
               ) : (
-                <p className={styles.providerMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
+                <p className={styles.compactMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
               )}
             </AdminCard>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
-                <h4>Danger zone</h4>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Advanced</h4>
               </div>
-              <p className={styles.statusText}>Disconnecting removes DB-backed credentials. Env fallback may remain active if env keys still exist.</p>
-              <div className={styles.actionRow}>
+              <p className={styles.compactMeta}>Disconnecting removes DB-backed credentials. Env fallback may remain active if env keys still exist.</p>
+              <div className={styles.compactActionRow}>
                 <AdminButton
                   disabled={providerActionById.SMTP === 'disconnecting'}
                   onClick={() => handleDisconnectProvider('SMTP')}
@@ -4173,30 +4178,29 @@ export default function SettingsWorkspace() {
 
         {activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SENDLAYER ? (
           <div className={styles.drawerStack}>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Setup status</h4>
                 <AdminStatusChip tone="warning">Coming soon</AdminStatusChip>
               </div>
-              <p className={styles.statusText}>SendLayer runtime support is not active yet. Do not mark it active for checkout email sends.</p>
-              <p className={styles.providerMeta}>
-                <strong>Runtime source:</strong> not implemented
-              </p>
+              <div className={styles.compactDrawerGrid}>
+                <p className={styles.compactMeta}>
+                  <strong>Runtime:</strong> Not implemented
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Checkout visibility:</strong> Hidden
+                </p>
+                <p className={styles.compactMeta}>
+                  <strong>Webhooks:</strong> Not implemented
+                </p>
+              </div>
             </AdminCard>
-            <AdminCard as="section" variant="card">
-              <div className={styles.setupCardHeader}>
-                <h4>Future credential fields</h4>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Not yet available</h4>
               </div>
-              <div className={styles.drawerFormGrid}>
-                <AdminField label="API key">
-                  <AdminInput defaultValue="" disabled placeholder="sendlayer api key (future)" type="password" />
-                </AdminField>
-                <AdminField label="Webhook secret">
-                  <AdminInput defaultValue="" disabled placeholder="sendlayer webhook secret (future)" type="password" />
-                </AdminField>
-              </div>
-              <p className={styles.setupFixText}>
-                Keep this provider inactive until runtime send, webhook verification, and delivery logging support exists.
+              <p className={styles.compactMeta}>
+                Keep this provider hidden until runtime send, webhook verification, and delivery logging support exists.
               </p>
             </AdminCard>
           </div>

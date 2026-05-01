@@ -118,7 +118,11 @@
 }
 
 .statusText {
+  margin: 0;
   color: var(--on-surface-variant);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .cardSubtext {
@@ -302,22 +306,26 @@
 }
 
 .field span {
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 680;
   color: var(--on-surface-variant);
+  line-height: 1.35;
 }
 
 .input {
   width: 100%;
+  min-height: 2.25rem;
 }
 
 .checkboxField {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-height: 2.8rem;
+  min-height: 2.25rem;
   color: var(--on-surface-variant);
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .configRow {
@@ -348,7 +356,7 @@
 
 .actionRow {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.36rem;
   flex-wrap: wrap;
 }
 
@@ -418,14 +426,18 @@
 }
 
 .setupCardHeader h4 {
+  margin: 0;
   font-size: 0.92rem;
   font-weight: 800;
   color: var(--on-surface);
+  line-height: 1.35;
 }
 
 .setupFixText {
+  margin: 0;
   font-size: 0.8rem;
   color: var(--on-surface-variant);
+  line-height: 1.35;
 }
 
 .setupColumns {
@@ -629,7 +641,7 @@
 
 .drawerStack {
   display: grid;
-  gap: 0.62rem;
+  gap: 0.58rem;
 }
 
 .drawerStatusGrid {
@@ -707,7 +719,7 @@
 }
 
 .compactDrawerCard {
-  padding: 0.75rem;
+  padding: 0.78rem;
 }
 
 .compactDrawerGrid {
@@ -716,13 +728,14 @@
 }
 
 .compactFormGrid {
-  gap: 0.58rem;
+  gap: 0.52rem;
 }
 
 .compactActionRow {
   display: flex;
   flex-wrap: wrap;
   gap: 0.36rem;
+  align-items: center;
 }
 
 .compactInfoStrip {

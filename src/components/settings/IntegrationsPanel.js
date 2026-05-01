@@ -401,8 +401,8 @@ export default function IntegrationsPanel() {
         open={Boolean(drawerMode)}
         subtitle={
           drawerMode === 'create'
-            ? 'Paste a destination URL, choose updates to send, and save an encrypted signing secret.'
-            : 'Update destination, event groups, and endpoint security without exposing stored secrets.'
+            ? 'Destination, updates, and signing secret.'
+            : 'Update destination, event groups, and endpoint security.'
         }
         title={drawerMode === 'create' ? 'Connect another app' : (editingIntegration?.name || 'Manage endpoint')}
       >
@@ -520,7 +520,7 @@ export default function IntegrationsPanel() {
                       Enable endpoint
                     </AdminButton>
                   )}
-                  <AdminButton onClick={handleDelete} size="sm" variant="danger">
+                  <AdminButton onClick={handleDelete} size="sm" variant="ghost">
                     Delete endpoint
                   </AdminButton>
                 </div>

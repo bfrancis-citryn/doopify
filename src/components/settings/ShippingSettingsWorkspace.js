@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AppShell from "../AppShell";
 import AdminButton from "../admin/ui/AdminButton";
+import AdminCard from "../admin/ui/AdminCard";
 import AdminDrawer from "../admin/ui/AdminDrawer";
 import AdminEmptyState from "../admin/ui/AdminEmptyState";
 import AdminField from "../admin/ui/AdminField";
@@ -192,7 +193,7 @@ function providerSelectionToLegacyUsage(activeRateProvider, labelProvider) {
   return "LIVE_AND_LABELS";
 }
 
-export default function ShippingSettingsWorkspace() {
+export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -733,8 +734,8 @@ export default function ShippingSettingsWorkspace() {
     setPackingSlipDrawerOpen(false);
   }
 
-  return (
-    <AppShell>
+  const content = (
+    <>
       <div className={styles.pageWrap}>
         <div className={styles.pageHeader}>
           <div>
@@ -1044,41 +1045,54 @@ export default function ShippingSettingsWorkspace() {
         title="Manage provider"
         subtitle="Credentials, verification, usage, and disconnect."
       >
-        <AdminField label="Provider">
-          <AdminSelect
-            value={providerForm.provider}
-            onChange={(value) => setProviderForm((current) => ({ ...current, provider: value }))}
-            options={PROVIDER_OPTIONS}
-          />
-        </AdminField>
-        <AdminField label="Provider usage">
-          <AdminSelect
-            value={providerForm.usage}
-            onChange={(value) => setProviderForm((current) => ({ ...current, usage: value }))}
-            options={PROVIDER_USAGE_OPTIONS}
-          />
-        </AdminField>
-        <AdminField label="API token">
-          <AdminInput
-            type="password"
-            value={providerForm.token}
-            onChange={(event) => setProviderForm((current) => ({ ...current, token: event.target.value }))}
-            placeholder="Paste token to save or update"
-          />
-        </AdminField>
-        <p className={styles.statusText}>Saved credentials stay encrypted and are never rendered in raw form.</p>
-        <div className={styles.actionRow}>
-          <AdminButton disabled={saving} size="sm" variant="secondary" onClick={saveProviderSettings}>
-            Save credentials
-          </AdminButton>
-          <AdminButton disabled={saving} size="sm" variant="secondary" onClick={verifyProvider}>
-            Verify connection
-          </AdminButton>
-          <AdminButton disabled={saving} size="sm" variant="ghost" onClick={disconnectProvider}>
-            Disconnect provider
-          </AdminButton>
+        <div className={styles.drawerStack}>
+          <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+            <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+              <AdminField label="Provider">
+                <AdminSelect
+                  value={providerForm.provider}
+                  onChange={(value) => setProviderForm((current) => ({ ...current, provider: value }))}
+                  options={PROVIDER_OPTIONS}
+                />
+              </AdminField>
+              <AdminField label="Provider usage">
+                <AdminSelect
+                  value={providerForm.usage}
+                  onChange={(value) => setProviderForm((current) => ({ ...current, usage: value }))}
+                  options={PROVIDER_USAGE_OPTIONS}
+                />
+              </AdminField>
+              <AdminField label="API token">
+                <AdminInput
+                  type="password"
+                  value={providerForm.token}
+                  onChange={(event) => setProviderForm((current) => ({ ...current, token: event.target.value }))}
+                  placeholder="Paste token to save or update"
+                />
+              </AdminField>
+            </div>
+            <p className={styles.compactMeta}>Saved credentials stay encrypted and are never rendered in raw form.</p>
+            <div className={styles.compactActionRow}>
+              <AdminButton disabled={saving} size="sm" variant="secondary" onClick={saveProviderSettings}>
+                Save credentials
+              </AdminButton>
+              <AdminButton disabled={saving} size="sm" variant="secondary" onClick={verifyProvider}>
+                Verify connection
+              </AdminButton>
+            </div>
+          </AdminCard>
+          <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+            <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+              <h4>Advanced</h4>
+            </div>
+            <div className={styles.compactActionRow}>
+              <AdminButton disabled={saving} size="sm" variant="ghost" onClick={disconnectProvider}>
+                Disconnect provider
+              </AdminButton>
+            </div>
+            {providerTestMessage ? <p className={styles.statusText}>{providerTestMessage}</p> : null}
+          </AdminCard>
         </div>
-        {providerTestMessage ? <p className={styles.statusText}>{providerTestMessage}</p> : null}
       </AdminDrawer>
 
       <AdminDrawer
@@ -1396,6 +1410,12 @@ export default function ShippingSettingsWorkspace() {
           </AdminButton>
         </div>
       </AdminDrawer>
-    </AppShell>
+    </>
   );
+
+  if (embedded) {
+    return content;
+  }
+
+  return <AppShell>{content}</AppShell>;
 }

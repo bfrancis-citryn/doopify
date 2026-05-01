@@ -16,12 +16,50 @@ describe('settings compact flow', () => {
     expect(workspace).toContain("const [activeSection, setActiveSection] = useState('general')")
   })
 
+  it('uses Shipping & delivery tab and splits taxes into a separate tab', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain("{ id: 'shipping', label: 'Shipping & delivery' }")
+    expect(workspace).toContain("{ id: 'taxes', label: 'Taxes & duties' }")
+    expect(workspace).not.toContain("{ id: 'shipping', label: 'Shipping & tax' }")
+    expect(workspace).toContain("activeSection === 'shipping' ? <ShippingSettingsWorkspace embedded /> : null")
+    expect(workspace).toContain("activeSection === 'taxes'")
+  })
+
   it('keeps Payments rows compact with drawer-based management', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 
     expect(workspace).toContain('compactProviderRow')
     expect(workspace).toContain('onClick={() => openPaymentDrawer(providerRow.id)}')
     expect(workspace).toContain('open={Boolean(activePaymentDrawer)}')
+  })
+
+  it('renders compact Stripe drawer status labels and keeps secret metadata masked', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain('<strong>API keys:</strong>')
+    expect(workspace).toContain('<strong>Runtime:</strong>')
+    expect(workspace).toContain('<strong>Webhook:</strong>')
+    expect(workspace).toContain('<strong>Verified:</strong>')
+    expect(workspace).toContain('Saved secret values are not rendered back.')
+  })
+
+  it('keeps PayPal and SendLayer drawers honest without fake editable credential forms', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).not.toContain('PayPal client id (future)')
+    expect(workspace).not.toContain('sendlayer api key (future)')
+    expect(workspace).toContain('<strong>Checkout visibility:</strong> Hidden')
+    expect(workspace).toContain('<strong>Runtime:</strong> Not implemented')
+  })
+
+  it('keeps the manual payments drawer compact with instructions and safety warning', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain('Cash instructions')
+    expect(workspace).toContain('Bank transfer instructions')
+    expect(workspace).toContain('Save instructions')
+    expect(workspace).toContain('Manual storefront checkout is disabled until server-owned manual payment finalization is implemented.')
   })
 
   it('renders Webhooks as a compact endpoint manager instead of the old giant add form', () => {
@@ -33,6 +71,14 @@ describe('settings compact flow', () => {
     expect(integrationsPanel).toContain('open={Boolean(drawerMode)}')
     expect(integrationsPanel).not.toContain('Add integration')
     expect(integrationsPanel).not.toContain('Subscribed events')
+  })
+
+  it('applies compact drawer cards to shipping provider manage flow', () => {
+    const shippingWorkspace = read('src/components/settings/ShippingSettingsWorkspace.js')
+
+    expect(shippingWorkspace).toContain('title="Manage provider"')
+    expect(shippingWorkspace).toContain('className={styles.compactDrawerCard}')
+    expect(shippingWorkspace).toContain('<h4>Advanced</h4>')
   })
 
   it('maps friendly webhook groups only to real typed events', () => {
