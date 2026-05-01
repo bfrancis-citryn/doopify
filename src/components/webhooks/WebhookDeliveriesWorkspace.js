@@ -1,5 +1,6 @@
-"use client";
+﻿"use client";
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AppShell from '../AppShell';
@@ -14,17 +15,29 @@ import AdminStatCard, { AdminStatsGrid } from '../admin/ui/AdminStatCard';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminToolbar from '../admin/ui/AdminToolbar';
+import {
+  buildDeliveryStats,
+  DELIVERY_STATUS_OPTIONS,
+  DELIVERY_TYPE_OPTIONS,
+  filterDeliveriesBySearch,
+  getDeliveryDisplayStatus,
+  getModeStatusFilter,
+  typeToMode,
+} from './delivery-logs.helpers';
 import styles from './WebhookDeliveriesWorkspace.module.css';
 
-const INBOUND_STATUS_OPTIONS = ['ALL', 'RECEIVED', 'PROCESSED', 'FAILED', 'SIGNATURE_FAILED', 'RETRY_PENDING', 'RETRY_EXHAUSTED'];
-const OUTBOUND_STATUS_OPTIONS = ['ALL', 'PENDING', 'SUCCESS', 'FAILED', 'RETRYING', 'EXHAUSTED'];
-const EMAIL_STATUS_OPTIONS = ['ALL', 'PENDING', 'SENT', 'FAILED', 'BOUNCED', 'COMPLAINED', 'RETRYING', 'RESEND_REQUESTED'];
 const EMAIL_TEMPLATE_OPTIONS = [
   { value: 'ALL', label: 'All templates' },
   { value: 'order_confirmation', label: 'Order confirmation' },
   { value: 'fulfillment_tracking', label: 'Fulfillment tracking' },
 ];
 const EMAIL_RESEND_ELIGIBLE_STATUSES = ['FAILED', 'BOUNCED', 'COMPLAINED'];
+export const DELIVERY_LOGS_TITLE = 'Delivery logs';
+export const DELIVERY_LOGS_SUBTITLE = 'See what Doopify sent or received, what failed, and what will retry. This page is for monitoring - setup lives in Payments, Email, Shipping, and Settings -> Webhooks.';
+export const DELIVERY_LOGS_SETUP_COPY = 'Use Settings -> Webhooks to create outbound endpoints. Stripe webhooks are in Payments, email delivery webhooks are in Email, and shipping callbacks are in Shipping.';
+export const DELIVERY_LOGS_EMPTY_TITLE = 'No delivery logs yet.';
+export const DELIVERY_LOGS_EMPTY_DESCRIPTION = 'Logs will appear here after provider webhooks, outbound webhooks, or customer emails are sent or received.';
+export const DELIVERY_LOG_METRIC_LABELS = ['Received', 'Processed', 'Retrying', 'Failed'];
 
 function formatTimestamp(value, fallback = 'Not scheduled') {
   if (!value) return fallback;
@@ -50,10 +63,9 @@ function getEmailResendDisabledReason(delivery) {
   return '';
 }
 
-const toSelectOptions = (values, allLabel) => [{ value: 'ALL', label: allLabel }, ...values.map((value) => ({ value, label: value }))];
-
 export default function WebhookDeliveriesWorkspace() {
-  const [mode, setMode] = useState('inbound');
+  const [typeFilter, setTypeFilter] = useState('inbound');
+  const mode = typeToMode(typeFilter);
 
   const [deliveries, setDeliveries] = useState([]);
   const [outboundDeliveries, setOutboundDeliveries] = useState([]);
@@ -78,21 +90,20 @@ export default function WebhookDeliveriesWorkspace() {
 
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('ALL');
-  const [outboundStatus, setOutboundStatus] = useState('ALL');
-  const [emailStatus, setEmailStatus] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [emailTemplate, setEmailTemplate] = useState('ALL');
 
   const loadDeliveries = useCallback(async (nextPage = 1) => {
     setLoading(true);
 
     try {
+      const inboundStatus = getModeStatusFilter('inbound', statusFilter);
       const params = new URLSearchParams({
         page: String(nextPage),
         pageSize: String(pagination.pageSize || 20),
       });
       if (search.trim()) params.set('search', search.trim());
-      if (status !== 'ALL') params.set('status', status);
+      if (inboundStatus !== 'ALL') params.set('status', inboundStatus);
 
       const response = await fetch(`/api/webhook-deliveries?${params.toString()}`);
       const json = await response.json();
@@ -112,12 +123,13 @@ export default function WebhookDeliveriesWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.pageSize, search, status]);
+  }, [pagination.pageSize, search, statusFilter]);
 
   const loadOutboundDeliveries = useCallback(async (nextPage = 1) => {
     setOutboundLoading(true);
 
     try {
+      const outboundStatus = getModeStatusFilter('outbound', statusFilter);
       const params = new URLSearchParams({
         page: String(nextPage),
         pageSize: String(outboundPagination.pageSize || 20),
@@ -142,12 +154,13 @@ export default function WebhookDeliveriesWorkspace() {
     } finally {
       setOutboundLoading(false);
     }
-  }, [outboundPagination.pageSize, outboundStatus]);
+  }, [outboundPagination.pageSize, statusFilter]);
 
   const loadEmailDeliveries = useCallback(async (nextPage = 1) => {
     setEmailLoading(true);
 
     try {
+      const emailStatus = getModeStatusFilter('email', statusFilter);
       const params = new URLSearchParams({
         page: String(nextPage),
         pageSize: String(emailPagination.pageSize || 20),
@@ -173,7 +186,7 @@ export default function WebhookDeliveriesWorkspace() {
     } finally {
       setEmailLoading(false);
     }
-  }, [emailPagination.pageSize, emailStatus, emailTemplate]);
+  }, [emailPagination.pageSize, statusFilter, emailTemplate]);
 
   useEffect(() => {
     if (mode === 'inbound') loadDeliveries(1);
@@ -187,34 +200,28 @@ export default function WebhookDeliveriesWorkspace() {
     if (mode === 'email') loadEmailDeliveries(1);
   }, [mode, loadEmailDeliveries]);
 
-  const retryCount = useMemo(
-    () => deliveries.filter((delivery) => ['RETRY_PENDING', 'RETRY_EXHAUSTED'].includes(delivery.status)).length,
-    [deliveries]
-  );
-
-  const processedCount = useMemo(
-    () => deliveries.filter((delivery) => delivery.status === 'PROCESSED').length,
-    [deliveries]
-  );
-
-  const outboundRetryCount = useMemo(
-    () => outboundDeliveries.filter((delivery) => ['RETRYING', 'EXHAUSTED'].includes(delivery.status)).length,
-    [outboundDeliveries]
-  );
-
-  const outboundSuccessCount = useMemo(
-    () => outboundDeliveries.filter((delivery) => delivery.status === 'SUCCESS').length,
-    [outboundDeliveries]
-  );
-
-  const emailRetryWatchCount = useMemo(
-    () => emailDeliveries.filter((delivery) => ['FAILED', 'BOUNCED', 'COMPLAINED', 'RETRYING'].includes(delivery.status)).length,
-    [emailDeliveries]
-  );
-
-  const emailSentCount = useMemo(
-    () => emailDeliveries.filter((delivery) => delivery.status === 'SENT').length,
-    [emailDeliveries]
+  const stats = useMemo(
+    () =>
+      buildDeliveryStats({
+        mode,
+        inboundRows: deliveries,
+        outboundRows: outboundDeliveries,
+        emailRows: emailDeliveries,
+        totals: {
+          inbound: pagination.total,
+          outbound: outboundPagination.total,
+          email: emailPagination.total,
+        },
+      }),
+    [
+      deliveries,
+      emailDeliveries,
+      emailPagination.total,
+      mode,
+      outboundDeliveries,
+      outboundPagination.total,
+      pagination.total,
+    ]
   );
 
   async function handleReplay(delivery) {
@@ -353,15 +360,50 @@ export default function WebhookDeliveriesWorkspace() {
   const isOutbound = mode === 'outbound';
   const isEmail = mode === 'email';
 
-  const activeRows = isInbound ? deliveries : isOutbound ? outboundDeliveries : emailDeliveries;
+  const sourceRows = isInbound ? deliveries : isOutbound ? outboundDeliveries : emailDeliveries;
+  const activeRows = useMemo(
+    () => filterDeliveriesBySearch(mode, sourceRows, search),
+    [mode, search, sourceRows]
+  );
   const activeLoading = isInbound ? loading : isOutbound ? outboundLoading : emailLoading;
 
   const columns = useMemo(() => {
     if (isOutbound) {
       return [
         {
-          key: 'integration',
-          header: 'Integration',
+          key: 'date',
+          header: 'Date',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{formatTimestamp(delivery.createdAt, 'Unknown')}</strong>
+              <small>Updated: {formatTimestamp(delivery.updatedAt, 'Unknown')}</small>
+            </div>
+          ),
+        },
+        {
+          key: 'status',
+          header: 'Status',
+          render: (delivery) => {
+            const display = getDeliveryDisplayStatus('outbound', delivery.status);
+            return <AdminStatusChip tone={display.tone}>{display.label}</AdminStatusChip>;
+          },
+        },
+        {
+          key: 'summary',
+          header: 'Delivery summary',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{formatEventType(delivery.event)}</strong>
+              <small>
+                Outbound webhook · {delivery.integration?.name || 'Integration'} ·{' '}
+                {delivery.statusCode ? `HTTP ${delivery.statusCode}` : (delivery.lastError || 'Awaiting response')}
+              </small>
+            </div>
+          ),
+        },
+        {
+          key: 'source',
+          header: 'Destination',
           render: (delivery) => (
             <div className={styles.cellStack}>
               <strong>{delivery.integration?.name || 'Integration'}</strong>
@@ -369,8 +411,6 @@ export default function WebhookDeliveriesWorkspace() {
             </div>
           ),
         },
-        { key: 'event', header: 'Event', render: (delivery) => formatEventType(delivery.event) },
-        { key: 'status', header: 'Status', render: (delivery) => <AdminStatusChip tone={delivery.status === 'SUCCESS' ? 'success' : delivery.status === 'EXHAUSTED' ? 'danger' : 'warning'}>{delivery.status}</AdminStatusChip> },
         {
           key: 'attempts',
           header: 'Attempts',
@@ -384,11 +424,20 @@ export default function WebhookDeliveriesWorkspace() {
         { key: 'response', header: 'Response', render: (delivery) => delivery.statusCode || '-' },
         {
           key: 'actions',
-          header: '',
+          header: 'Action',
           render: (delivery) => (
-            <AdminButton disabled={retryingOutboundId === delivery.id} onClick={() => handleRetryOutbound(delivery)} size="sm" variant="secondary">
-              {retryingOutboundId === delivery.id ? 'Retrying...' : 'Retry now'}
-            </AdminButton>
+            <div className={styles.actionGroup}>
+              <AdminButton
+                onClick={() => setNotice(`Outbound delivery ${delivery.id.slice(0, 8)} · ${delivery.integration?.name || 'Integration'} · ${delivery.lastError || 'No error details recorded.'}`)}
+                size="sm"
+                variant="secondary"
+              >
+                View
+              </AdminButton>
+              <AdminButton disabled={retryingOutboundId === delivery.id} onClick={() => handleRetryOutbound(delivery)} size="sm" variant="secondary">
+                {retryingOutboundId === delivery.id ? 'Retrying...' : 'Retry'}
+              </AdminButton>
+            </div>
           ),
         },
       ];
@@ -397,22 +446,49 @@ export default function WebhookDeliveriesWorkspace() {
     if (isEmail) {
       return [
         {
-          key: 'recipient',
-          header: 'Recipient',
+          key: 'date',
+          header: 'Date',
           render: (delivery) => (
             <div className={styles.cellStack}>
-              <strong>{delivery.recipientEmail}</strong>
-              <small>{delivery.subject}</small>
+              <strong>{formatTimestamp(delivery.createdAt, 'Unknown')}</strong>
+              <small>Updated: {formatTimestamp(delivery.updatedAt, 'Unknown')}</small>
             </div>
           ),
         },
-        { key: 'template', header: 'Template', render: (delivery) => formatEventType(delivery.template) },
-        { key: 'status', header: 'Status', render: (delivery) => <AdminStatusChip tone={delivery.status === 'SENT' ? 'success' : EMAIL_RESEND_ELIGIBLE_STATUSES.includes(delivery.status) ? 'danger' : 'warning'}>{delivery.status}</AdminStatusChip> },
+        {
+          key: 'status',
+          header: 'Status',
+          render: (delivery) => {
+            const display = getDeliveryDisplayStatus('email', delivery.status);
+            return <AdminStatusChip tone={display.tone}>{display.label}</AdminStatusChip>;
+          },
+        },
+        {
+          key: 'summary',
+          header: 'Delivery summary',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{delivery.subject || formatEventType(delivery.template)}</strong>
+              <small>
+                Email delivery · {formatEventType(delivery.template)} · {delivery.recipientEmail}
+              </small>
+            </div>
+          ),
+        },
+        {
+          key: 'provider',
+          header: 'Provider/source',
+          render: (delivery) => (
+            <div className={styles.cellStack}>
+              <strong>{delivery.provider}</strong>
+              <small>Order: {delivery.orderId || 'N/A'}</small>
+            </div>
+          ),
+        },
         { key: 'attempts', header: 'Attempts', render: (delivery) => delivery.attempts },
-        { key: 'provider', header: 'Provider', render: (delivery) => delivery.provider },
         {
           key: 'actions',
-          header: '',
+          header: 'Action',
           render: (delivery) => {
             const resendDisabledReason = getEmailResendDisabledReason(delivery);
             return (
@@ -427,7 +503,7 @@ export default function WebhookDeliveriesWorkspace() {
                   title={resendDisabledReason || 'Safely resend this transactional email'}
                   variant="secondary"
                 >
-                  {resendingEmailId === delivery.id ? 'Resending...' : 'Resend'}
+                  {resendingEmailId === delivery.id ? 'Resending...' : 'Retry'}
                 </AdminButton>
               </div>
             );
@@ -438,17 +514,45 @@ export default function WebhookDeliveriesWorkspace() {
 
     return [
       {
-        key: 'event',
-        header: 'Provider event',
+        key: 'date',
+        header: 'Date',
         render: (delivery) => (
           <div className={styles.cellStack}>
-            <strong>{delivery.providerEventId}</strong>
-            <small>{delivery.payloadHash}</small>
+            <strong>{formatTimestamp(delivery.createdAt, 'Unknown')}</strong>
+            <small>Updated: {formatTimestamp(delivery.updatedAt, 'Unknown')}</small>
           </div>
         ),
       },
-      { key: 'type', header: 'Type', render: (delivery) => formatEventType(delivery.eventType) },
-      { key: 'status', header: 'Status', render: (delivery) => <AdminStatusChip tone={delivery.status === 'PROCESSED' ? 'success' : delivery.status === 'FAILED' ? 'danger' : 'warning'}>{delivery.status}</AdminStatusChip> },
+      {
+        key: 'status',
+        header: 'Status',
+        render: (delivery) => {
+          const display = getDeliveryDisplayStatus('inbound', delivery.status);
+          return <AdminStatusChip tone={display.tone}>{display.label}</AdminStatusChip>;
+        },
+      },
+      {
+        key: 'summary',
+        header: 'Delivery summary',
+        render: (delivery) => (
+          <div className={styles.cellStack}>
+            <strong>{formatEventType(delivery.eventType)}</strong>
+            <small>
+              Provider inbound · {delivery.provider} · {delivery.providerEventId}
+            </small>
+          </div>
+        ),
+      },
+      {
+        key: 'source',
+        header: 'Provider/source',
+        render: (delivery) => (
+          <div className={styles.cellStack}>
+            <strong>{delivery.provider}</strong>
+            <small>{delivery.hasVerifiedPayload ? 'Verified local payload' : 'Hash only'}</small>
+          </div>
+        ),
+      },
       {
         key: 'attempts',
         header: 'Attempts',
@@ -459,10 +563,9 @@ export default function WebhookDeliveriesWorkspace() {
           </div>
         ),
       },
-      { key: 'payload', header: 'Payload', render: (delivery) => delivery.hasVerifiedPayload ? 'Verified local payload' : 'Hash only' },
       {
         key: 'actions',
-        header: '',
+        header: 'Action',
         render: (delivery) => {
           const disabledReason = getReplayDisabledReason(delivery);
           return (
@@ -474,10 +577,10 @@ export default function WebhookDeliveriesWorkspace() {
                 title={disabledReason || 'Replay stored payload'}
                 variant="secondary"
               >
-                {replayingId === delivery.id ? 'Replaying...' : 'Replay'}
+                {replayingId === delivery.id ? 'Replaying...' : 'Retry'}
               </AdminButton>
               <AdminButton disabled={inspectingId === delivery.id} onClick={() => loadDiagnostics(delivery.id)} size="sm" variant="secondary">
-                {inspectingId === delivery.id ? 'Inspecting...' : 'Inspect'}
+                {inspectingId === delivery.id ? 'Inspecting...' : 'View'}
               </AdminButton>
             </div>
           );
@@ -507,77 +610,78 @@ export default function WebhookDeliveriesWorkspace() {
     <AppShell>
       <AdminPage>
         <AdminPageHeader
-          description="Inbound provider webhooks, outbound merchant webhooks, and transactional email delivery visibility."
-          eyebrow="Observability"
-          title="Webhook and email deliveries"
+          description={DELIVERY_LOGS_SUBTITLE}
+          eyebrow="System"
+          title={DELIVERY_LOGS_TITLE}
           actions={<AdminButton onClick={() => changePage(currentPage)} size="sm" variant="secondary">Refresh</AdminButton>}
         />
 
+        <AdminCard className={styles.setupCallout} variant="card">
+          <div className={styles.setupCalloutHeader}>
+            <h3>Looking to set something up?</h3>
+            <p>
+              {DELIVERY_LOGS_SETUP_COPY}
+            </p>
+          </div>
+          <div className={styles.linkRow}>
+            <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=webhooks">Manage outbound webhooks</Link>
+            <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=email">Email settings</Link>
+            <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=payments">Payment settings</Link>
+          </div>
+        </AdminCard>
+
         <AdminStatsGrid>
-          {isInbound ? (
-            <>
-              <AdminStatCard label="Inbound" value={String(pagination.total)} />
-              <AdminStatCard label="Processed" value={String(processedCount)} />
-              <AdminStatCard label="Retry watch" value={String(retryCount)} />
-              <AdminStatCard label="Page" value={`${pagination.page}/${pagination.totalPages || 1}`} />
-            </>
-          ) : isOutbound ? (
-            <>
-              <AdminStatCard label="Outbound" value={String(outboundPagination.total)} />
-              <AdminStatCard label="Successful" value={String(outboundSuccessCount)} />
-              <AdminStatCard label="Retry/dead-letter" value={String(outboundRetryCount)} />
-              <AdminStatCard label="Page" value={`${outboundPagination.page}/${outboundPagination.totalPages || 1}`} />
-            </>
-          ) : (
-            <>
-              <AdminStatCard label="Emails" value={String(emailPagination.total)} />
-              <AdminStatCard label="Sent" value={String(emailSentCount)} />
-              <AdminStatCard label="Needs attention" value={String(emailRetryWatchCount)} />
-              <AdminStatCard label="Page" value={`${emailPagination.page}/${emailPagination.totalPages || 1}`} />
-            </>
-          )}
+          <AdminStatCard label={DELIVERY_LOG_METRIC_LABELS[0]} value={String(stats.received || 0)} />
+          <AdminStatCard label={DELIVERY_LOG_METRIC_LABELS[1]} value={String(stats.processed || 0)} />
+          <AdminStatCard label={DELIVERY_LOG_METRIC_LABELS[2]} value={String(stats.retrying || 0)} />
+          <AdminStatCard label={DELIVERY_LOG_METRIC_LABELS[3]} value={String(stats.failed || 0)} />
         </AdminStatsGrid>
 
+        <div className={styles.categoryGrid}>
+          <AdminCard className={styles.categoryCard} variant="card">
+            <h3>Provider webhooks</h3>
+            <p>Stripe, email, and shipping providers sending events into Doopify.</p>
+          </AdminCard>
+          <AdminCard className={styles.categoryCard} variant="card">
+            <h3>Outbound webhooks</h3>
+            <p>Doopify sending store updates to external apps and endpoints.</p>
+          </AdminCard>
+          <AdminCard className={styles.categoryCard} variant="card">
+            <h3>Email deliveries</h3>
+            <p>Doopify sending customer and admin emails.</p>
+          </AdminCard>
+        </div>
+
         <AdminCard className={styles.panel} variant="panel">
+          <div className={styles.sectionHeader}>
+            <h2>Recent deliveries</h2>
+            <p>Filter by type, status, event id, order, customer, provider, or error.</p>
+          </div>
+
           <AdminToolbar
-            actions={
-              <AdminSelect
-                onChange={(value) => {
-                  setMode(value);
-                  setNotice('');
-                }}
-                options={[
-                  { value: 'inbound', label: 'Inbound provider webhooks' },
-                  { value: 'outbound', label: 'Outbound merchant webhooks' },
-                  { value: 'email', label: 'Transactional email deliveries' },
-                ]}
-                value={mode}
-              />
-            }
+            actions={isEmail ? <AdminSelect onChange={setEmailTemplate} options={EMAIL_TEMPLATE_OPTIONS} value={emailTemplate} /> : null}
           >
-            {isInbound ? (
-              <>
-                <AdminSelect onChange={setStatus} options={toSelectOptions(INBOUND_STATUS_OPTIONS, 'All statuses')} value={status} />
-                <AdminInput
-                  className={styles.searchInput}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search provider event id or error..."
-                  type="search"
-                  value={search}
-                />
-              </>
-            ) : null}
-
-            {isOutbound ? (
-              <AdminSelect onChange={setOutboundStatus} options={toSelectOptions(OUTBOUND_STATUS_OPTIONS, 'All statuses')} value={outboundStatus} />
-            ) : null}
-
-            {isEmail ? (
-              <>
-                <AdminSelect onChange={setEmailStatus} options={toSelectOptions(EMAIL_STATUS_OPTIONS, 'All statuses')} value={emailStatus} />
-                <AdminSelect onChange={setEmailTemplate} options={EMAIL_TEMPLATE_OPTIONS} value={emailTemplate} />
-              </>
-            ) : null}
+            <AdminSelect
+              onChange={(value) => {
+                if (value === 'all') {
+                  setTypeFilter('inbound');
+                  setNotice('Combined all-types view is not available yet. Showing Provider inbound logs.');
+                  return;
+                }
+                setTypeFilter(value);
+                setNotice('');
+              }}
+              options={DELIVERY_TYPE_OPTIONS}
+              value={typeFilter}
+            />
+            <AdminSelect onChange={setStatusFilter} options={DELIVERY_STATUS_OPTIONS} value={statusFilter} />
+            <AdminInput
+              className={styles.searchInput}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search event id, order, customer, provider, or error..."
+              type="search"
+              value={search}
+            />
           </AdminToolbar>
 
           {notice ? <p className={styles.notice}>{notice}</p> : null}
@@ -586,9 +690,16 @@ export default function WebhookDeliveriesWorkspace() {
             <AdminTable columns={columns} isLoading={activeLoading} rows={activeRows} />
           ) : (
             <AdminEmptyState
-              description={isInbound ? 'No webhook deliveries match this filter.' : isOutbound ? 'No outbound deliveries match this filter.' : 'No email deliveries match this filter.'}
+              action={
+                <div className={styles.emptyLinks}>
+                  <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=webhooks">Manage outbound webhooks</Link>
+                  <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=email">Set up email</Link>
+                  <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=payments">Set up payments</Link>
+                </div>
+              }
+              description={DELIVERY_LOGS_EMPTY_DESCRIPTION}
               icon="sync_problem"
-              title="No deliveries"
+              title={DELIVERY_LOGS_EMPTY_TITLE}
             />
           )}
 
@@ -628,3 +739,5 @@ export default function WebhookDeliveriesWorkspace() {
     </AppShell>
   );
 }
+
+

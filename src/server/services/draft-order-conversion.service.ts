@@ -22,7 +22,12 @@ type DraftConversionLineItemInput = {
   variantTitle?: string | null
   sku?: string | null
   quantity: number
-  price: number
+  price?: number
+  unitPrice?: number
+  originalPrice?: number
+  priceOverridden?: boolean
+  priceOverrideAmount?: number | null
+  priceOverrideReason?: string | null
 }
 
 export type ConvertDraftOrderInput = {
@@ -60,6 +65,12 @@ function draftMarker(draftId: string) {
   return `draft:${draftId}`
 }
 
+function parseNonNegativeMoney(value: unknown) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return parsed
+}
+
 export async function convertDraftOrder(input: ConvertDraftOrderInput): Promise<ConvertDraftOrderResult> {
   const draftId = normalizeText(input.draftId)
   if (!draftId) {
@@ -94,15 +105,68 @@ export async function convertDraftOrder(input: ConvertDraftOrderInput): Promise<
     }
   }
 
-  const orderItems = input.lineItems.map((item) => ({
-    productId: item.productId || undefined,
-    variantId: item.variantId || undefined,
-    title: normalizeText(item.title) || 'Line item',
-    variantTitle: normalizeText(item.variantTitle) || undefined,
-    sku: normalizeText(item.sku) || undefined,
-    quantity: Number(item.quantity),
-    priceCents: dollarsToCents(item.price),
-  }))
+  const overrideAuditEvents: Array<{
+    title: string
+    sku?: string
+    reason: string
+    originalPrice: number
+    finalPrice: number
+  }> = []
+
+  const orderItems = input.lineItems.map((item) => {
+    const quantity = Number(item.quantity)
+    const originalPrice =
+      parseNonNegativeMoney(item.originalPrice) ??
+      parseNonNegativeMoney(item.unitPrice)
+
+    if (originalPrice == null) {
+      throw new DraftOrderConversionError(
+        'INVALID_DRAFT',
+        'Draft line items must include a non-negative snapshot/catalog unit price'
+      )
+    }
+
+    const priceOverridden = Boolean(item.priceOverridden)
+    let finalPrice = originalPrice
+
+    if (priceOverridden) {
+      const overrideReason = normalizeText(item.priceOverrideReason)
+      const overrideAmount = parseNonNegativeMoney(item.priceOverrideAmount)
+
+      if (!overrideReason) {
+        throw new DraftOrderConversionError(
+          'INVALID_DRAFT',
+          'Overridden line prices require an override reason'
+        )
+      }
+
+      if (overrideAmount == null) {
+        throw new DraftOrderConversionError(
+          'INVALID_DRAFT',
+          'Overridden line prices must use a non-negative override amount'
+        )
+      }
+
+      finalPrice = overrideAmount
+      overrideAuditEvents.push({
+        title: normalizeText(item.title) || 'Line item',
+        sku: normalizeText(item.sku) || undefined,
+        reason: overrideReason,
+        originalPrice,
+        finalPrice,
+      })
+    }
+
+    return {
+      productId: item.productId || undefined,
+      variantId: item.variantId || undefined,
+      title: normalizeText(item.title) || 'Line item',
+      variantTitle: normalizeText(item.variantTitle) || undefined,
+      sku: normalizeText(item.sku) || undefined,
+      quantity,
+      priceCents: dollarsToCents(finalPrice),
+    }
+  })
 
   if (orderItems.some((item) => !Number.isInteger(item.quantity) || item.quantity <= 0)) {
     throw new DraftOrderConversionError('INVALID_DRAFT', 'Draft line item quantities must be positive integers')
@@ -138,6 +202,23 @@ export async function convertDraftOrder(input: ConvertDraftOrderInput): Promise<
       detail: draftMarker(draftId),
       actorType: 'STAFF',
     })
+
+    if (overrideAuditEvents.length) {
+      const detail = overrideAuditEvents
+        .map((entry) => {
+          const skuPart = entry.sku ? ` (${entry.sku})` : ''
+          return `${entry.title}${skuPart}: $${entry.originalPrice.toFixed(2)} -> $${entry.finalPrice.toFixed(2)}. Reason: ${entry.reason}`
+        })
+        .join(' | ')
+
+      // TODO: add schema-backed override audit fields on OrderItem once the model supports them.
+      await createOrderEvent(order.id, {
+        type: 'DRAFT_LINE_PRICE_OVERRIDE_APPLIED',
+        title: `Manual line price override applied (${overrideAuditEvents.length})`,
+        detail,
+        actorType: 'STAFF',
+      })
+    }
 
     return {
       duplicate: false,

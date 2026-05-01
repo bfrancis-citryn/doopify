@@ -16,6 +16,34 @@ function toMoneyNumber(value, fallback = 0) {
   return parsed;
 }
 
+function resolveSnapshotOriginalPrice(item, catalogSnapshot) {
+  if (item?.originalPrice != null) {
+    return toMoneyNumber(item.originalPrice, 0);
+  }
+
+  if (item?.price != null) {
+    return toMoneyNumber(item.price, 0);
+  }
+
+  return toMoneyNumber(catalogSnapshot?.originalPrice ?? catalogSnapshot?.price, 0);
+}
+
+function resolveSnapshotOverrideAmount(item) {
+  if (item?.priceOverrideAmount == null || item?.priceOverrideAmount === '') return null;
+  return toMoneyNumber(item.priceOverrideAmount, 0);
+}
+
+export function resolveDraftLineItemUnitPrice(item, catalogSnapshot = null) {
+  const originalPrice = resolveSnapshotOriginalPrice(item, catalogSnapshot);
+  const overrideAmount = resolveSnapshotOverrideAmount(item);
+
+  if (item?.priceOverridden && overrideAmount != null) {
+    return Math.max(0, overrideAmount);
+  }
+
+  return Math.max(0, originalPrice);
+}
+
 function resolveVariantForProduct(product, variantId) {
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   if (!variants.length) return null;
@@ -66,6 +94,8 @@ export function createDraftLineItemFromProduct(product, variantId) {
   const variant = resolveVariantForProduct(product, variantId);
   const { imageUrl, imageAlt } = resolveImageSnapshot(product, variant);
 
+  const originalPrice = toMoneyNumber(variant?.price, toMoneyNumber(product?.basePrice, 0));
+
   return {
     id: `draft_item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     productId: product?.id || null,
@@ -76,7 +106,11 @@ export function createDraftLineItemFromProduct(product, variantId) {
     imageUrl,
     imageAlt,
     quantity: 1,
-    price: toMoneyNumber(variant?.price, toMoneyNumber(product?.basePrice, 0)),
+    originalPrice,
+    price: originalPrice,
+    priceOverridden: false,
+    priceOverrideAmount: null,
+    priceOverrideReason: '',
     compareAtPrice:
       variant?.compareAtPrice != null
         ? toMoneyNumber(variant.compareAtPrice, 0)
@@ -126,6 +160,11 @@ export function resolveDraftLineItemDisplay(item, products = []) {
   const variant = resolveVariantForProduct(product, item?.variantId);
   const catalogSnapshot = product ? createDraftLineItemFromProduct(product, variant?.id || null) : null;
 
+  const originalPrice = resolveSnapshotOriginalPrice(item, catalogSnapshot);
+  const priceOverrideAmount = resolveSnapshotOverrideAmount(item);
+  const priceOverridden = Boolean(item?.priceOverridden);
+  const unitPrice = resolveDraftLineItemUnitPrice(item, catalogSnapshot);
+
   return {
     product,
     variant,
@@ -138,10 +177,12 @@ export function resolveDraftLineItemDisplay(item, products = []) {
     sku: item?.sku || catalogSnapshot?.sku || '',
     imageUrl: item?.imageUrl || catalogSnapshot?.imageUrl || null,
     imageAlt: item?.imageAlt || catalogSnapshot?.imageAlt || '',
-    price:
-      item?.price == null
-        ? toMoneyNumber(catalogSnapshot?.price, 0)
-        : toMoneyNumber(item.price, 0),
+    originalPrice,
+    price: unitPrice,
+    unitPrice,
+    priceOverridden,
+    priceOverrideAmount,
+    priceOverrideReason: String(item?.priceOverrideReason || ''),
     compareAtPrice:
       item?.compareAtPrice == null
         ? catalogSnapshot?.compareAtPrice ?? null
@@ -153,7 +194,10 @@ export function resolveDraftLineItemDisplay(item, products = []) {
 }
 
 export function calculateDraftTotals(draftOrder, discounts = [], settings = {}) {
-  const subtotal = draftOrder.lineItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+  const subtotal = draftOrder.lineItems.reduce(
+    (sum, item) => sum + resolveDraftLineItemUnitPrice(item) * Number(item.quantity || 0),
+    0
+  );
   const selectedDiscount = discounts.find(discount => discount.id === draftOrder.discountId) || null;
   const subtotalCents = toCents(subtotal);
   const customDiscountAmountCents = toCents(draftOrder.customDiscountAmount);
@@ -284,7 +328,11 @@ export function convertDraftOrderToOrder(draftOrder, customer, discounts, existi
       sku: item.sku || '',
       imageUrl: item.imageUrl || null,
       quantity: item.quantity,
-      price: item.price,
+      originalPrice: resolveSnapshotOriginalPrice(item, null),
+      priceOverridden: Boolean(item.priceOverridden),
+      priceOverrideAmount: item.priceOverrideAmount == null ? null : toMoneyNumber(item.priceOverrideAmount, 0),
+      priceOverrideReason: String(item.priceOverrideReason || ''),
+      price: resolveDraftLineItemUnitPrice(item),
       compareAtPrice: item.compareAtPrice ?? null,
       taxable: item.taxable ?? true,
       shippable: item.shippable ?? true,

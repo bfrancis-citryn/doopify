@@ -909,3 +909,108 @@ export async function disconnectProvider(provider: SupportedProvider) {
   return getProviderStatus(provider)
 }
 
+export async function sendProviderTestEmail(input: {
+  provider: SupportedProvider
+  toEmail: string
+  fromEmail?: string | null
+}) {
+  const provider = input.provider
+  const toEmail = trimToNull(input.toEmail)
+  const requestedFromEmail = trimToNull(input.fromEmail ?? null)
+
+  if (!toEmail) {
+    throw new Error('A valid recipient email is required')
+  }
+
+  if (provider !== 'RESEND' && provider !== 'SMTP') {
+    throw new Error('Test email is only supported for RESEND and SMTP right now')
+  }
+
+  const runtime = await getRuntimeProviderConnectionInternal(provider)
+  if (!runtime.credentials || runtime.source === 'none') {
+    throw new Error('Active runtime credentials are not available. Save and verify provider credentials first.')
+  }
+
+  if (provider === 'RESEND') {
+    const apiKey = runtime.credentials.API_KEY
+    if (!apiKey) {
+      throw new Error('Resend API key is not available in the active runtime source')
+    }
+
+    const fromEmail = requestedFromEmail || runtime.credentials.FROM_EMAIL || 'Doopify <onboarding@resend.dev>'
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [toEmail],
+        subject: 'Doopify provider test email',
+        html: '<p>This is a Doopify provider test email.</p>',
+      }),
+      cache: 'no-store',
+    })
+
+    const responseText = await response.text()
+    if (!response.ok) {
+      throw new Error(`Resend test email failed: ${responseText}`)
+    }
+
+    let messageId: string | null = null
+    try {
+      const parsed = JSON.parse(responseText)
+      messageId = typeof parsed?.id === 'string' ? parsed.id : null
+    } catch {
+      messageId = null
+    }
+
+    return {
+      provider: 'RESEND' as const,
+      source: runtime.source,
+      toEmail,
+      fromEmail,
+      messageId,
+    }
+  }
+
+  const nodemailer = await import('nodemailer')
+  const host = runtime.credentials.HOST
+  const port = Number(runtime.credentials.PORT)
+  const username = runtime.credentials.USERNAME
+  const password = runtime.credentials.PASSWORD
+  const secure = String(runtime.credentials.SECURE || '').toLowerCase() === 'true'
+
+  if (!host || !Number.isFinite(port) || !username || !password) {
+    throw new Error('SMTP runtime credentials are incomplete. Save and verify SMTP credentials first.')
+  }
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user: username,
+      pass: password,
+    },
+  })
+
+  const fromEmail = requestedFromEmail || runtime.credentials.FROM_EMAIL || `Doopify <${username}>`
+  const result = await transporter.sendMail({
+    from: fromEmail,
+    to: [toEmail],
+    subject: 'Doopify provider test email',
+    html: '<p>This is a Doopify provider test email.</p>',
+    text: 'This is a Doopify provider test email.',
+  })
+
+  return {
+    provider: 'SMTP' as const,
+    source: runtime.source,
+    toEmail,
+    fromEmail,
+    messageId: result.messageId || null,
+  }
+}
+

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-const STATIC_COMMANDS = [
+export const STATIC_COMMANDS = [
   { id: "go-dashboard", label: "Go to Dashboard", path: "/admin", keywords: ["home", "overview"] },
   { id: "go-orders", label: "Go to Orders", path: "/orders", keywords: ["sales", "fulfillment"] },
   { id: "go-draft-orders", label: "Go to Draft Orders", path: "/draft-orders", keywords: ["quotes"] },
@@ -14,7 +14,7 @@ const STATIC_COMMANDS = [
   { id: "go-discounts", label: "Go to Discounts", path: "/discounts", keywords: ["codes"] },
   { id: "go-abandoned", label: "Go to Abandoned", path: "/admin/abandoned-checkouts", keywords: ["recovery"] },
   { id: "go-analytics", label: "Go to Analytics", path: "/analytics", keywords: ["reports"] },
-  { id: "go-webhooks", label: "Open Webhooks", path: "/admin/webhooks", keywords: ["events"] },
+  { id: "go-webhooks", label: "Open Delivery logs", path: "/admin/webhooks", keywords: ["events", "observability", "logs"] },
   { id: "go-settings", label: "Go to Settings", path: "/settings", keywords: ["configuration"] },
   { id: "go-brand-kit", label: "Open Brand Kit", path: "/settings?section=brand-kit", keywords: ["branding"] },
 ];

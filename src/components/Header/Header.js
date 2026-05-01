@@ -3,8 +3,8 @@ import AdminThemeToggle from '@/components/admin/ui/AdminThemeToggle';
 import { usePathname } from 'next/navigation';
 import styles from './Header.module.css';
 
-const PAGE_META = [
-  { match: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
+export const PAGE_META = [
+  { match: '/admin/webhooks', label: 'Delivery logs', icon: 'sync_problem' },
   { match: '/admin/collections', label: 'Collections', icon: 'dashboard_customize' },
   { match: '/admin/abandoned-checkouts', label: 'Abandoned', icon: 'mark_email_unread' },
   { match: '/settings', label: 'Settings', icon: 'settings' },

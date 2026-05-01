@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './Sidebar.module.css';
 
-const NAV_GROUPS = [
+export const NAV_GROUPS = [
   {
     id: 'workspace',
     label: 'Workspace',
@@ -43,7 +43,7 @@ const NAV_GROUPS = [
     id: 'system',
     label: 'System',
     items: [
-      { href: '/admin/webhooks', label: 'Webhooks', icon: 'sync_problem' },
+      { href: '/admin/webhooks', label: 'Delivery logs', icon: 'sync_problem' },
       { href: '/settings', label: 'Settings', icon: 'settings' },
     ],
   },

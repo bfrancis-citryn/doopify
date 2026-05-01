@@ -214,7 +214,7 @@ export default function AdminDashboardWorkspace() {
             <div className={styles.linkList}>
               <Link href="/orders">Review order queue</Link>
               <Link href="/products">Update catalog and inventory</Link>
-              <Link href="/admin/webhooks">Open observability workspace</Link>
+              <Link href="/admin/webhooks">Open delivery logs</Link>
               <Link href="/draft-orders?new=1">Create draft order</Link>
             </div>
           </AdminCard>

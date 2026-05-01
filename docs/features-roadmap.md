@@ -230,6 +230,7 @@ Status: active; refund/return, outbound webhook, transactional email observabili
 - cron-compatible due retry processing through the existing retry runner
 - manual retry API and admin retry button
 - inbound/outbound delivery visibility in `/admin/webhooks`
+- `/admin/webhooks` is user-labeled as **System -> Delivery logs** for monitoring; setup/config remains in `Settings -> Webhooks` and provider settings
 - fast service and API coverage for queueing, signing, delivery, retry, exhaustion, listing, manual retry, and claim behavior
 
 #### Analytics Event Fan-Out

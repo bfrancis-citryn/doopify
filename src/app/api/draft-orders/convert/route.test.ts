@@ -81,7 +81,7 @@ describe('POST /api/draft-orders/convert', () => {
         body: JSON.stringify({
           draftId: 'draft_1',
           paymentStatus: 'pending',
-          lineItems: [{ title: 'Product', quantity: 1, price: 25 }],
+          lineItems: [{ title: 'Product', quantity: 1, originalPrice: 25 }],
         }),
       })
     )
@@ -96,5 +96,32 @@ describe('POST /api/draft-orders/convert', () => {
         redirectUrl: '/orders/1010',
       },
     })
+  })
+
+  it('returns 422 for negative override amount', async () => {
+    mocks.requireAdmin.mockResolvedValue({ ok: true, user: { id: 'admin_1', role: 'OWNER' } })
+
+    const response = await POST(
+      new Request('http://localhost/api/draft-orders/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId: 'draft_1',
+          lineItems: [
+            {
+              title: 'Product',
+              quantity: 1,
+              originalPrice: 25,
+              priceOverridden: true,
+              priceOverrideAmount: -1,
+              priceOverrideReason: 'Bad input',
+            },
+          ],
+        }),
+      })
+    )
+
+    expect(response.status).toBe(422)
+    expect(mocks.convertDraftOrder).not.toHaveBeenCalled()
   })
 })

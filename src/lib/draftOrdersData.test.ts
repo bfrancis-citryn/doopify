@@ -19,7 +19,11 @@ const baseDraft = {
       title: 'Shirt',
       variantTitle: 'Default',
       quantity: 1,
+      originalPrice: 100,
       price: 100,
+      priceOverridden: false,
+      priceOverrideAmount: null,
+      priceOverrideReason: '',
     },
   ],
   discountId: '',
@@ -93,6 +97,44 @@ describe('calculateDraftTotals', () => {
     expect(totals.tax).toBe(0)
     expect(totals.total).toBe(110)
   })
+
+  it('uses override amount only when priceOverridden is true', () => {
+    const withOverrideDisabled = calculateDraftTotals(
+      {
+        ...baseDraft,
+        lineItems: [
+          {
+            ...baseDraft.lineItems[0],
+            originalPrice: 100,
+            priceOverrideAmount: 30,
+            priceOverridden: false,
+          },
+        ],
+      },
+      [],
+      {}
+    )
+
+    const withOverrideEnabled = calculateDraftTotals(
+      {
+        ...baseDraft,
+        lineItems: [
+          {
+            ...baseDraft.lineItems[0],
+            originalPrice: 100,
+            priceOverrideAmount: 30,
+            priceOverridden: true,
+            priceOverrideReason: 'Loyalty adjustment',
+          },
+        ],
+      },
+      [],
+      {}
+    )
+
+    expect(withOverrideDisabled.subtotal).toBe(100)
+    expect(withOverrideEnabled.subtotal).toBe(30)
+  })
 })
 
 describe('draft line item snapshots', () => {
@@ -124,7 +166,11 @@ describe('draft line item snapshots', () => {
       sku: 'HD-L-BLK',
       imageUrl: 'https://cdn.test/hoodie.jpg',
       imageAlt: 'Hoodie image',
+      originalPrice: 82,
       price: 82,
+      priceOverridden: false,
+      priceOverrideAmount: null,
+      priceOverrideReason: '',
       compareAtPrice: 95,
       quantity: 1,
       taxable: true,
@@ -187,6 +233,30 @@ describe('draft line item snapshots', () => {
     expect(display.imageUrl).toBe('https://cdn.test/snapshot.jpg')
     expect(display.price).toBe(79)
     expect(display.compareAtPrice).toBe(91)
+  })
+
+  it('resolves final unit price from override fields when enabled', () => {
+    const display = resolveDraftLineItemDisplay(
+      {
+        id: 'line_4',
+        productId: 'prod_1',
+        variantId: 'var_1',
+        title: 'Performance Hoodie',
+        variantTitle: 'Large / Black',
+        quantity: 2,
+        originalPrice: 82,
+        priceOverridden: true,
+        priceOverrideAmount: 65,
+        priceOverrideReason: 'Manager approval',
+      },
+      [productFixture]
+    )
+
+    expect(display.originalPrice).toBe(82)
+    expect(display.priceOverridden).toBe(true)
+    expect(display.priceOverrideAmount).toBe(65)
+    expect(display.priceOverrideReason).toBe('Manager approval')
+    expect(display.unitPrice).toBe(65)
   })
 })
 

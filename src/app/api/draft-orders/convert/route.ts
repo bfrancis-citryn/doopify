@@ -14,7 +14,12 @@ const lineItemSchema = z.object({
   variantTitle: z.string().optional().nullable(),
   sku: z.string().optional().nullable(),
   quantity: z.number().int().min(1),
-  price: z.number().min(0),
+  price: z.number().min(0).optional(),
+  unitPrice: z.number().min(0).optional(),
+  originalPrice: z.number().min(0).optional(),
+  priceOverridden: z.boolean().optional(),
+  priceOverrideAmount: z.number().min(0).nullable().optional(),
+  priceOverrideReason: z.string().nullable().optional(),
 })
 
 const schema = z.object({

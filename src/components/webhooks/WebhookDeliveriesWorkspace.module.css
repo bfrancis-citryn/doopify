@@ -4,6 +4,71 @@
   padding: 0.82rem;
 }
 
+.sectionHeader {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  color: var(--on-surface);
+  font-size: 0.92rem;
+}
+
+.sectionHeader p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
+}
+
+.setupCallout {
+  display: grid;
+  gap: 0.62rem;
+  padding: 0.78rem;
+}
+
+.setupCalloutHeader h3 {
+  margin: 0 0 0.25rem;
+  color: var(--on-surface);
+  font-size: 0.88rem;
+}
+
+.setupCalloutHeader p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
+}
+
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.categoryGrid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.categoryCard {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.68rem;
+}
+
+.categoryCard h3 {
+  margin: 0;
+  color: var(--on-surface);
+  font-size: 0.82rem;
+}
+
+.categoryCard p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.75rem;
+}
+
 .searchInput {
   width: min(20rem, 100%);
 }
@@ -94,7 +159,17 @@
   font-size: 0.77rem;
 }
 
+.emptyLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+}
+
 @media (max-width: 900px) {
+  .categoryGrid {
+    grid-template-columns: 1fr;
+  }
+
   .searchInput {
     width: 100%;
   }

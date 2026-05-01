@@ -100,6 +100,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - due outbound deliveries are processed through the existing cron-compatible retry runner
 - manual retry is available through `POST /api/outbound-webhook-deliveries/[id]/retry`
 - `/admin/webhooks` shows inbound and outbound delivery visibility with outbound retry controls
+- `/admin/webhooks` is user-labeled as **System -> Delivery logs** to separate monitoring/debugging from setup workflows
 - settings integration UI supports webhook URL, selected events, active/inactive status, signing secret, explicit signing-secret clear, and encrypted custom headers
 - fast tests cover outbound queueing, signing, delivery success, retry/exhaustion, due processing, manual retry, claim behavior, listing, and retry route behavior
 
@@ -109,6 +110,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - safe resend eligibility is limited to failed, bounced, and complained deliveries
 - resend reuses order-confirmation template rendering and creates a new tracked delivery attempt instead of mutating order/payment/inventory/refund/return/webhook state
 - `/admin/webhooks` now includes an email delivery observability surface with filters, detail inspection, and resend controls
+- setup remains in Settings (`Settings -> Webhooks`, `Payments`, `Email`, and `Shipping`) while `/admin/webhooks` stays observability-only
 - provider webhook ingestion now exists at `POST /api/webhooks/email-provider` with Svix signature verification and bounced/complained status transitions
 - fast tests now cover email delivery API routes, resend eligibility behavior, and provider webhook signature/path handling
 - `DATABASE_URL_TEST`-gated integration specs now cover safe resend audit-trail behavior and provider bounce/complaint state transitions

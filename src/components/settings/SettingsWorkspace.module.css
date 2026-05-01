@@ -510,6 +510,18 @@
   background: color-mix(in srgb, var(--amber-500) 18%, var(--surface-container-high) 82%);
 }
 
+.providerIconResend {
+  background: color-mix(in srgb, var(--emerald-500) 18%, var(--surface-container-high) 82%);
+}
+
+.providerIconSmtp {
+  background: color-mix(in srgb, var(--slate-500) 20%, var(--surface-container-high) 80%);
+}
+
+.providerIconSendLayer {
+  background: color-mix(in srgb, var(--orange-500) 18%, var(--surface-container-high) 82%);
+}
+
 .providerMain {
   display: grid;
   gap: 0.35rem;

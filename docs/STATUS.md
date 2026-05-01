@@ -58,6 +58,7 @@ The repo currently includes:
 - Settings -> Payments now uses compact provider rows plus per-provider slide-over drawers so credential fields are not always visible on the main settings page
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
+- System sidebar now labels `/admin/webhooks` as **Delivery logs** (monitoring/debugging); outbound endpoint configuration remains in `Settings -> Webhooks`
 - typed internal event dispatcher and static integration registry
 - first-party logging and order-confirmation email consumers
 - Phase 4 refund service with pending refund persistence, Stripe idempotency keys, payment/order status updates, validated item-level restocking, and return linkage

@@ -68,6 +68,8 @@ export default function DraftOrdersWorkspace() {
     }));
   };
 
+  const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+
   const convertToOrder = async () => {
     setCustomerError('');
     setCustomerNotice('');
@@ -113,6 +115,22 @@ export default function DraftOrdersWorkspace() {
       return;
     }
 
+    const invalidPriceOverride = draftOrder.lineItems.find((lineItem) => {
+      const display = resolveDraftLineItemDisplay(lineItem, availableProducts);
+      if (!display.priceOverridden) return false;
+      if (display.priceOverrideAmount == null) return true;
+      if (!Number.isFinite(Number(display.priceOverrideAmount)) || Number(display.priceOverrideAmount) < 0) {
+        return true;
+      }
+      return !String(display.priceOverrideReason || '').trim();
+    });
+
+    if (invalidPriceOverride) {
+      setCustomerError('Every overridden line price needs a non-negative amount and an override reason.');
+      setConverting(false);
+      return;
+    }
+
     const customerForOrder = draftOrder.customerMode === 'guest' ? null : resolvedCustomer;
     const payload = {
       draftId: String(draftOrder.id || ''),
@@ -137,15 +155,23 @@ export default function DraftOrdersWorkspace() {
         draftOrder.customerMode === 'manual'
           ? draftOrder.manualCustomer.billingAddress || customerForOrder?.defaultAddress || settings.shippingOrigin
           : customerForOrder?.defaultAddress || settings.shippingOrigin,
-      lineItems: draftOrder.lineItems.map((item) => ({
-        productId: item.productId || null,
-        variantId: item.variantId || null,
-        title: item.title,
-        variantTitle: item.variantTitle || null,
-        sku: item.sku || null,
-        quantity: Number(item.quantity || 1),
-        price: Number(item.price || 0),
-      })),
+      lineItems: draftOrder.lineItems.map((item) => {
+        const display = resolveDraftLineItemDisplay(item, availableProducts);
+        return {
+          productId: item.productId || null,
+          variantId: item.variantId || null,
+          title: item.title,
+          variantTitle: item.variantTitle || null,
+          sku: item.sku || null,
+          quantity: Number(item.quantity || 1),
+          originalPrice: Number(display.originalPrice || 0),
+          unitPrice: Number(display.unitPrice || 0),
+          priceOverridden: Boolean(display.priceOverridden),
+          priceOverrideAmount:
+            display.priceOverrideAmount == null ? null : Number(display.priceOverrideAmount),
+          priceOverrideReason: String(display.priceOverrideReason || ''),
+        };
+      }),
     };
 
     let conversionResult = null;
@@ -404,98 +430,166 @@ export default function DraftOrdersWorkspace() {
                       </div>
 
                       <div className={styles.rowTwo}>
-                        <AdminSelect
-                          onChange={(value) => {
-                            if (value.startsWith('snapshot:')) return;
-                            const product = availableProducts.find((entry) => entry.id === value);
-                            if (!product) return;
-                            const nextVariant = product.variants?.[0] || null;
-                            const nextSnapshot = createDraftLineItemFromProduct(product, nextVariant?.id || null);
-                            setDraftOrder((current) => ({
-                              ...current,
-                              lineItems: current.lineItems.map((lineItem) =>
-                                lineItem.id === item.id
-                                  ? {
-                                      ...lineItem,
-                                      ...nextSnapshot,
-                                      id: lineItem.id,
-                                      quantity: lineItem.quantity,
-                                    }
-                                  : lineItem
-                              ),
-                            }));
-                          }}
-                          options={productOptions}
-                          value={productSelectValue}
-                        />
+                        <AdminField label="Product">
+                          <AdminSelect
+                            onChange={(value) => {
+                              if (value.startsWith('snapshot:')) return;
+                              const product = availableProducts.find((entry) => entry.id === value);
+                              if (!product) return;
+                              const nextVariant = product.variants?.[0] || null;
+                              const nextSnapshot = createDraftLineItemFromProduct(product, nextVariant?.id || null);
+                              setDraftOrder((current) => ({
+                                ...current,
+                                lineItems: current.lineItems.map((lineItem) =>
+                                  lineItem.id === item.id
+                                    ? {
+                                        ...lineItem,
+                                        ...nextSnapshot,
+                                        id: lineItem.id,
+                                        quantity: lineItem.quantity,
+                                      }
+                                    : lineItem
+                                ),
+                              }));
+                            }}
+                            options={productOptions}
+                            value={productSelectValue}
+                          />
+                        </AdminField>
 
-                        <AdminSelect
-                          onChange={(value) => {
-                            if (value.startsWith('snapshot:')) return;
-                            const variant = selectedProduct?.variants?.find((entry) => entry.id === value);
-                            const nextSnapshot = createDraftLineItemFromProduct(selectedProduct, variant?.id || null);
-                            setDraftOrder((current) => ({
-                              ...current,
-                              lineItems: current.lineItems.map((lineItem) =>
-                                lineItem.id === item.id
-                                  ? {
-                                      ...lineItem,
-                                      ...nextSnapshot,
-                                      id: lineItem.id,
-                                      quantity: lineItem.quantity,
-                                    }
-                                  : lineItem
-                              ),
-                            }));
-                          }}
-                          options={variantOptions}
-                          value={variantSelectValue}
-                        />
+                        <AdminField label="Variant">
+                          <AdminSelect
+                            onChange={(value) => {
+                              if (value.startsWith('snapshot:')) return;
+                              const variant = selectedProduct?.variants?.find((entry) => entry.id === value);
+                              const nextSnapshot = createDraftLineItemFromProduct(selectedProduct, variant?.id || null);
+                              setDraftOrder((current) => ({
+                                ...current,
+                                lineItems: current.lineItems.map((lineItem) =>
+                                  lineItem.id === item.id
+                                    ? {
+                                        ...lineItem,
+                                        ...nextSnapshot,
+                                        id: lineItem.id,
+                                        quantity: lineItem.quantity,
+                                      }
+                                    : lineItem
+                                ),
+                              }));
+                            }}
+                            options={variantOptions}
+                            value={variantSelectValue}
+                          />
+                        </AdminField>
                       </div>
 
-                      <div className={styles.rowThree}>
-                        <AdminInput
-                          min="1"
-                          onChange={(event) =>
-                            setDraftOrder((current) => ({
-                              ...current,
-                              lineItems: current.lineItems.map((lineItem) =>
-                                lineItem.id === item.id
-                                  ? { ...lineItem, quantity: Number(event.target.value || 1) }
-                                  : lineItem
-                              ),
-                            }))
-                          }
-                          type="number"
-                          value={display.quantity}
-                        />
-                        <AdminInput
-                          onChange={(event) =>
-                            setDraftOrder((current) => ({
-                              ...current,
-                              lineItems: current.lineItems.map((lineItem) =>
-                                lineItem.id === item.id
-                                  ? { ...lineItem, price: Number(event.target.value || 0) }
-                                  : lineItem
-                              ),
-                            }))
-                          }
-                          type="number"
-                          value={display.price}
-                        />
-                        <AdminButton
-                          onClick={() =>
-                            setDraftOrder((current) => ({
-                              ...current,
-                              lineItems: current.lineItems.filter((lineItem) => lineItem.id !== item.id),
-                            }))
-                          }
-                          size="sm"
-                          variant="danger"
-                        >
-                          Remove
-                        </AdminButton>
+                      <div className={styles.lineControls}>
+                        <AdminField label="Quantity">
+                          <AdminInput
+                            min="1"
+                            onChange={(event) =>
+                              setDraftOrder((current) => ({
+                                ...current,
+                                lineItems: current.lineItems.map((lineItem) =>
+                                  lineItem.id === item.id
+                                    ? { ...lineItem, quantity: Number(event.target.value || 1) }
+                                    : lineItem
+                                ),
+                              }))
+                            }
+                            type="number"
+                            value={display.quantity}
+                          />
+                        </AdminField>
+
+                        <AdminField label="Unit price">
+                          {display.priceOverridden ? (
+                            <AdminInput
+                              min="0"
+                              onChange={(event) =>
+                                setDraftOrder((current) => ({
+                                  ...current,
+                                  lineItems: current.lineItems.map((lineItem) =>
+                                    lineItem.id === item.id
+                                      ? {
+                                          ...lineItem,
+                                          priceOverrideAmount:
+                                            event.target.value === '' ? null : Number(event.target.value || 0),
+                                        }
+                                      : lineItem
+                                  ),
+                                }))
+                              }
+                              step="0.01"
+                              type="number"
+                              value={display.priceOverrideAmount ?? ''}
+                            />
+                          ) : (
+                            <p className={styles.readOnlyValue}>{formatMoney(display.unitPrice)}</p>
+                          )}
+                          <small className={styles.inlineHint}>Catalog: {formatMoney(display.originalPrice)}</small>
+                          <AdminButton
+                            onClick={() =>
+                              setDraftOrder((current) => ({
+                                ...current,
+                                lineItems: current.lineItems.map((lineItem) =>
+                                  lineItem.id === item.id
+                                    ? {
+                                        ...lineItem,
+                                        priceOverridden: !display.priceOverridden,
+                                        priceOverrideAmount: display.priceOverridden ? null : display.originalPrice,
+                                        priceOverrideReason: display.priceOverridden ? '' : lineItem.priceOverrideReason || '',
+                                      }
+                                    : lineItem
+                                ),
+                              }))
+                            }
+                            size="sm"
+                            variant="secondary"
+                          >
+                            {display.priceOverridden ? 'Use catalog price' : 'Override price'}
+                          </AdminButton>
+                        </AdminField>
+
+                        <AdminField label="Line total">
+                          <p className={styles.readOnlyValue}>{formatMoney(display.unitPrice * display.quantity)}</p>
+                        </AdminField>
+
+                        <div className={styles.removeWrap}>
+                          <AdminButton
+                            onClick={() =>
+                              setDraftOrder((current) => ({
+                                ...current,
+                                lineItems: current.lineItems.filter((lineItem) => lineItem.id !== item.id),
+                              }))
+                            }
+                            size="sm"
+                            variant="danger"
+                          >
+                            Remove
+                          </AdminButton>
+                        </div>
                       </div>
+
+                      {display.priceOverridden ? (
+                        <AdminField label="Override reason">
+                          <AdminInput
+                            onChange={(event) =>
+                              setDraftOrder((current) => ({
+                                ...current,
+                                lineItems: current.lineItems.map((lineItem) =>
+                                  lineItem.id === item.id
+                                    ? { ...lineItem, priceOverrideReason: event.target.value }
+                                    : lineItem
+                                ),
+                              }))
+                            }
+                            placeholder="Explain why this line price is overridden"
+                            type="text"
+                            value={display.priceOverrideReason}
+                          />
+                        </AdminField>
+                      ) : null}
                     </AdminCard>
                   );
                 })}
@@ -571,11 +665,12 @@ export default function DraftOrdersWorkspace() {
               </div>
 
               <div className={styles.summaryActions}>
-                <AdminButton size="sm" variant="secondary">Save draft</AdminButton>
+                <AdminButton disabled size="sm" variant="secondary">Save draft (not available yet)</AdminButton>
                 <AdminButton loading={converting} onClick={convertToOrder} size="sm" variant="primary">
-                  Convert to order
+                  Create and convert draft
                 </AdminButton>
               </div>
+              <small className={styles.inlineHint}>This flow currently supports creating and converting drafts in one session.</small>
             </AdminCard>
 
             <AdminCard className={styles.summaryCard} variant="card">

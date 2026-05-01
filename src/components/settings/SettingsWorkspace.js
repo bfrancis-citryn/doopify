@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import AppShell from '../AppShell';
 import { useSettings } from '../../context/SettingsContext';
 import styles from './SettingsWorkspace.module.css';
@@ -129,6 +130,20 @@ const PAYMENT_PROVIDER_DRAWER = {
   PAYPAL: 'PAYPAL',
   MANUAL: 'MANUAL',
 };
+
+const EMAIL_PROVIDER_DRAWER = {
+  RESEND: 'RESEND',
+  SMTP: 'SMTP',
+  SENDLAYER: 'SENDLAYER',
+};
+
+const EMAIL_TEMPLATE_SUMMARY = [
+  { id: 'order_confirmation', label: 'Order confirmation', statusLabel: 'Enabled', statusTone: 'success' },
+  { id: 'fulfillment_tracking', label: 'Shipping confirmation', statusLabel: 'Enabled', statusTone: 'success' },
+  { id: 'refund_confirmation', label: 'Refund confirmation', statusLabel: 'Coming soon', statusTone: 'warning' },
+  { id: 'draft_invoice', label: 'Draft order invoice', statusLabel: 'Coming soon', statusTone: 'warning' },
+  { id: 'customer_note', label: 'Customer note / order update', statusLabel: 'Coming soon', statusTone: 'warning' },
+];
 
 const EMPTY_PROVIDER_FORMS = {
   STRIPE: { publishableKey: '', secretKey: '', webhookSecret: '', mode: 'test' },
@@ -348,6 +363,19 @@ function normalizeStatusLabel(value) {
     .toLowerCase()
     .replace(/_/g, ' ')
     .trim();
+}
+
+function formatEventType(value) {
+  return String(value || '')
+    .replaceAll('_', ' ')
+    .replaceAll('.', ' / ')
+    .trim();
+}
+
+function formatDateTime(value) {
+  if (!value) return 'Not verified yet';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 'Not verified yet' : parsed.toLocaleString();
 }
 
 function statusToneFromLabel(value) {
@@ -601,12 +629,21 @@ export default function SettingsWorkspace() {
   const [providerNotice, setProviderNotice] = useState('');
   const [stripeRuntimeStatus, setStripeRuntimeStatus] = useState(null);
   const [activePaymentDrawer, setActivePaymentDrawer] = useState(null);
+  const [activeEmailDrawer, setActiveEmailDrawer] = useState(null);
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
+  const [providerTestEmailById, setProviderTestEmailById] = useState({
+    RESEND: '',
+    SMTP: '',
+  });
   const [paymentActivityRows, setPaymentActivityRows] = useState([]);
   const [paymentActivityLoading, setPaymentActivityLoading] = useState(false);
   const [paymentActivityLoaded, setPaymentActivityLoaded] = useState(false);
   const [paymentActivityError, setPaymentActivityError] = useState('');
+  const [emailActivityRows, setEmailActivityRows] = useState([]);
+  const [emailActivityLoading, setEmailActivityLoading] = useState(false);
+  const [emailActivityLoaded, setEmailActivityLoaded] = useState(false);
+  const [emailActivityError, setEmailActivityError] = useState('');
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
@@ -834,6 +871,58 @@ export default function SettingsWorkspace() {
     };
   }, [activeSection, paymentActivityLoaded, paymentActivityLoading]);
 
+  useEffect(() => {
+    if (activeSection !== 'email' || emailActivityLoaded || emailActivityLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadEmailActivity() {
+      setEmailActivityLoading(true);
+      setEmailActivityError('');
+      try {
+        const payload = await fetch('/api/email-deliveries?page=1&pageSize=12', { cache: 'no-store' }).then(parseApiJson);
+        if (cancelled) return;
+        const rows = (payload?.deliveries || []).map((delivery) => ({
+          id: delivery.id,
+          dateText: delivery.createdAt ? new Date(delivery.createdAt).toLocaleString() : 'Unknown',
+          recipientText: delivery.recipientEmail || 'Unknown',
+          templateText: formatEventType(delivery.template || delivery.event || 'email'),
+          statusText: normalizeStatusLabel(delivery.status) || 'unknown',
+          providerText: formatProviderLabel(delivery.provider),
+          referenceText: delivery.providerMessageId || delivery.id,
+        }));
+        setEmailActivityRows(rows);
+        setEmailActivityLoaded(true);
+      } catch (loadError) {
+        if (cancelled) return;
+        setEmailActivityRows([]);
+        setEmailActivityError(loadError instanceof Error ? loadError.message : 'Failed to load email activity');
+      } finally {
+        if (!cancelled) {
+          setEmailActivityLoading(false);
+        }
+      }
+    }
+
+    loadEmailActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, emailActivityLoaded, emailActivityLoading]);
+
+  useEffect(() => {
+    const fallbackEmail = String(settings.supportEmail || settings.senderEmail || '').trim();
+    if (!fallbackEmail) return;
+
+    setProviderTestEmailById((current) => ({
+      RESEND: current.RESEND || fallbackEmail,
+      SMTP: current.SMTP || fallbackEmail,
+    }));
+  }, [settings.senderEmail, settings.supportEmail]);
+
   const setupChecks = useMemo(() => {
     if (!setupStatus) return [];
     return [...(setupStatus.requiredChecks || []), ...(setupStatus.recommendedChecks || [])];
@@ -963,8 +1052,47 @@ export default function SettingsWorkspace() {
     ],
     []
   );
+  const emailActivityColumns = useMemo(
+    () => [
+      {
+        key: 'date',
+        header: 'Date',
+        render: (row) => row.dateText,
+      },
+      {
+        key: 'recipient',
+        header: 'Recipient',
+        render: (row) => row.recipientText,
+      },
+      {
+        key: 'template',
+        header: 'Template',
+        render: (row) => row.templateText,
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        render: (row) => <AdminStatusChip tone={statusToneFromLabel(row.statusText)}>{row.statusText}</AdminStatusChip>,
+      },
+      {
+        key: 'provider',
+        header: 'Provider',
+        render: (row) => row.providerText,
+      },
+      {
+        key: 'reference',
+        header: 'Reference',
+        render: (row) => <span className={styles.referenceCell}>{row.referenceText}</span>,
+      },
+    ],
+    []
+  );
   const stripeCredentialMeta = stripeProviderStatus?.credentialMeta || [];
   const stripeSavedCredentialMeta = stripeCredentialMeta.filter((entry) => entry.present);
+  const resendCredentialMeta = resendProviderStatus?.credentialMeta || [];
+  const smtpCredentialMeta = smtpProviderStatus?.credentialMeta || [];
+  const resendSavedCredentialMeta = resendCredentialMeta.filter((entry) => entry.present);
+  const smtpSavedCredentialMeta = smtpCredentialMeta.filter((entry) => entry.present);
   const resendSetupStatus = useMemo(
     () => describeProviderGatewayStatus(resendProviderStatus, describeResendSetup(setupCheckById)),
     [resendProviderStatus, setupCheckById]
@@ -977,6 +1105,53 @@ export default function SettingsWorkspace() {
         detail: 'SMTP credentials are not configured yet.',
       }),
     [smtpProviderStatus]
+  );
+  const emailProviderRows = useMemo(
+    () => [
+      {
+        id: EMAIL_PROVIDER_DRAWER.RESEND,
+        iconText: 'R',
+        iconClassName: 'providerIconResend',
+        name: 'Resend',
+        status: resendSetupStatus,
+        description: 'Transactional email API provider for customer receipts and updates.',
+        badges: [
+          { label: 'Official', tone: 'neutral' },
+          resendSetupStatus.label === 'Verified' ? { label: 'Active', tone: 'success' } : { label: 'Setup needed', tone: 'warning' },
+        ],
+        chips: ['Order confirmations', 'Shipping updates', 'Delivery webhooks'],
+      },
+      {
+        id: EMAIL_PROVIDER_DRAWER.SMTP,
+        iconText: 'S',
+        iconClassName: 'providerIconSmtp',
+        name: 'SMTP',
+        status: smtpSetupStatus,
+        description: 'Use host/port credentials from your mail service when SMTP delivery is required.',
+        badges: [
+          { label: 'Built-in', tone: 'neutral' },
+          smtpSetupStatus.label === 'Verified' ? { label: 'Ready', tone: 'success' } : { label: 'Setup needed', tone: 'warning' },
+        ],
+        chips: ['Host + port auth', 'TLS toggle', 'Manual verification'],
+      },
+      {
+        id: EMAIL_PROVIDER_DRAWER.SENDLAYER,
+        iconText: 'L',
+        iconClassName: 'providerIconSendLayer',
+        name: 'SendLayer',
+        status: {
+          label: 'Coming soon',
+          tone: 'warning',
+          detail: 'Runtime adapter support is not active yet.',
+          sourceLabel: 'Not active',
+          lastVerifiedAt: null,
+        },
+        description: 'Reserved provider slot for future SendLayer runtime support.',
+        badges: [{ label: 'Coming soon', tone: 'warning' }],
+        chips: ['Not active'],
+      },
+    ],
+    [resendSetupStatus, smtpSetupStatus]
   );
   const shippingMode = shippingSettingsProfile?.shippingMode || 'MANUAL';
   const shippingProvider = shippingSettingsProfile?.shippingLiveProvider || null;
@@ -1342,6 +1517,16 @@ export default function SettingsWorkspace() {
     setActivePaymentDrawer(null);
   }
 
+  function openEmailDrawer(providerId) {
+    setProviderStatusError('');
+    setProviderNotice('');
+    setActiveEmailDrawer(providerId);
+  }
+
+  function closeEmailDrawer() {
+    setActiveEmailDrawer(null);
+  }
+
   async function handleCopyStripeWebhookEndpoint() {
     if (typeof window === 'undefined') return;
     const endpoint = `${window.location.origin}/api/webhooks/stripe`;
@@ -1463,6 +1648,33 @@ export default function SettingsWorkspace() {
       setProviderStatusError(
         disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect provider credentials'
       );
+    } finally {
+      setProviderActionById((current) => ({ ...current, [provider]: '' }));
+    }
+  }
+
+  async function handleSendProviderTestEmail(provider) {
+    const toEmail = String(providerTestEmailById[provider] || '').trim();
+    if (!toEmail) {
+      setProviderStatusError('Enter a test recipient email before sending.');
+      return;
+    }
+
+    setProviderActionById((current) => ({ ...current, [provider]: 'testing' }));
+    setProviderNotice('');
+    setProviderStatusError('');
+    try {
+      const data = await fetch(`/api/settings/providers/${provider}/test-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail,
+          fromEmail: provider === 'RESEND' ? providerForms.RESEND.fromEmail || undefined : providerForms.SMTP.fromEmail || undefined,
+        }),
+      }).then(parseApiJson);
+      setProviderNotice(`Test email sent via ${provider} to ${data?.result?.toEmail || toEmail}.`);
+    } catch (testError) {
+      setProviderStatusError(testError instanceof Error ? testError.message : 'Failed to send test email');
     } finally {
       setProviderActionById((current) => ({ ...current, [provider]: '' }));
     }
@@ -2745,6 +2957,185 @@ export default function SettingsWorkspace() {
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
+                    <h3>Customer email system</h3>
+                    <p className={styles.cardSubtext}>
+                      Keep email setup compact: provider connection, sender identity, branding, templates, and delivery activity.
+                    </p>
+                  </div>
+                </section>
+                {providerStatusError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider action error</p>
+                    <p className={styles.statusText}>{providerStatusError}</p>
+                  </div>
+                ) : null}
+                {providerNotice ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Provider update</p>
+                    <p className={styles.statusText}>{providerNotice}</p>
+                  </div>
+                ) : null}
+
+                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
+                  <div className={styles.setupCardHeader}>
+                    <h4>Setup checklist</h4>
+                  </div>
+                  <div className={styles.checkoutMethodGrid}>
+                    <article className={styles.checkoutMethodCard}>
+                      <div className={styles.providerTitleLine}>
+                        <h4>Provider connected</h4>
+                        <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
+                      </div>
+                      <p className={styles.statusText}>{resendSetupStatus.detail}</p>
+                    </article>
+                    <article className={styles.checkoutMethodCard}>
+                      <div className={styles.providerTitleLine}>
+                        <h4>Sender identity</h4>
+                        <AdminStatusChip tone={settings.senderEmail ? 'success' : 'warning'}>
+                          {settings.senderEmail ? 'Configured' : 'Setup needed'}
+                        </AdminStatusChip>
+                      </div>
+                      <p className={styles.statusText}>
+                        {settings.senderEmail ? `Using ${settings.senderEmail}` : 'Add a sender email so customer messages use your store identity.'}
+                      </p>
+                    </article>
+                  </div>
+                </AdminCard>
+
+                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
+                  <div className={styles.setupCardHeader}>
+                    <h4>Email providers</h4>
+                    <AdminTooltip content="Credentials and secret fields are managed inside the provider drawer." />
+                  </div>
+                  <p className={styles.cardSubtext}>Choose a provider and manage credentials without exposing secret inputs on this page.</p>
+                  <div className={styles.providerList}>
+                    {emailProviderRows.map((providerRow) => (
+                      <article className={styles.providerRow} key={providerRow.id}>
+                        <div className={`${styles.providerIcon} ${styles[providerRow.iconClassName]}`}>{providerRow.iconText}</div>
+                        <div className={styles.providerMain}>
+                          <div className={styles.providerTitleLine}>
+                            <h4>{providerRow.name}</h4>
+                            <AdminStatusChip tone={providerRow.status.tone}>{providerRow.status.label}</AdminStatusChip>
+                            {providerRow.badges.map((badge) => (
+                              <AdminStatusChip key={`${providerRow.id}-${badge.label}`} tone={badge.tone}>
+                                {badge.label}
+                              </AdminStatusChip>
+                            ))}
+                          </div>
+                          <p className={styles.statusText}>{providerRow.description}</p>
+                          <p className={styles.providerMeta}>
+                            <strong>Active source:</strong> {providerRow.status.sourceLabel || 'Not active'}
+                          </p>
+                          <p className={styles.providerMeta}>
+                            <strong>Last verified:</strong> {formatDateTime(providerRow.status.lastVerifiedAt)}
+                          </p>
+                          <div className={styles.methodChipRow}>
+                            {providerRow.chips.map((chip) => (
+                              <span className={styles.methodChip} key={`${providerRow.id}-${chip}`}>
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className={styles.providerActions}>
+                          <AdminButton onClick={() => openEmailDrawer(providerRow.id)} size="sm" variant="secondary">
+                            Manage
+                          </AdminButton>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </AdminCard>
+
+                <section className={styles.setupColumns}>
+                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>Sender identity</h4>
+                    </div>
+                    <p className={styles.statusText}>Use verified sender details before enabling customer templates at scale.</p>
+                    <div className={styles.drawerFormGrid}>
+                      <label className={styles.field}>
+                        <span>From email</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => handleSettingsPatch({ senderEmail: event.target.value })}
+                          placeholder="store@example.com"
+                          value={settings.senderEmail || ''}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Support email</span>
+                        <input
+                          className={styles.input}
+                          onChange={(event) => handleSettingsPatch({ supportEmail: event.target.value })}
+                          placeholder="support@example.com"
+                          value={settings.supportEmail || ''}
+                        />
+                      </label>
+                    </div>
+                  </AdminCard>
+
+                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>Email branding</h4>
+                    </div>
+                    <p className={styles.statusText}>Logo and styling controls are tied to Brand kit and will be expanded in the Email tab next.</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton onClick={() => setActiveSection('brand-kit')} size="sm" variant="secondary">
+                        Open Brand kit
+                      </AdminButton>
+                    </div>
+                  </AdminCard>
+                </section>
+
+                <section className={styles.setupColumns}>
+                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>Customer email templates</h4>
+                    </div>
+                    <div className={styles.rateList}>
+                      {EMAIL_TEMPLATE_SUMMARY.map((template) => (
+                        <div className={styles.rateRow} key={template.id}>
+                          <div className={styles.providerTitleLine}>
+                            <h4>{template.label}</h4>
+                            <AdminStatusChip tone={template.statusTone}>{template.statusLabel}</AdminStatusChip>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AdminCard>
+
+                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
+                    <div className={styles.setupCardHeader}>
+                      <h4>Recent email activity</h4>
+                    </div>
+                    <p className={styles.cardSubtext}>Track customer email delivery outcomes here. Use Delivery logs for deeper observability and retries.</p>
+                    <div className={styles.actionRow}>
+                      <AdminButton asChild size="sm" variant="ghost">
+                        <Link href="/admin/webhooks">Open Delivery logs</Link>
+                      </AdminButton>
+                    </div>
+                    {emailActivityError ? <p className={styles.statusText}>{emailActivityError}</p> : null}
+                    {emailActivityRows.length ? (
+                      <AdminTable columns={emailActivityColumns} isLoading={emailActivityLoading} rows={emailActivityRows} />
+                    ) : emailActivityLoading ? (
+                      <AdminTable columns={emailActivityColumns} isLoading rows={[]} />
+                    ) : (
+                      <AdminEmptyState
+                        description="No email deliveries have been recorded yet."
+                        icon="mail"
+                        title="No email activity yet"
+                      />
+                    )}
+                  </AdminCard>
+                </section>
+              </div>
+            ) : null}
+
+            {!loading && !error && activeSection === 'email-legacy' ? (
+              <div className={styles.configStack}>
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
                     <h3>Email provider setup</h3>
                     <p className={styles.cardSubtext}>Configure transactional email providers and webhook verification. Provider setup now lives here.</p>
                   </div>
@@ -3399,6 +3790,324 @@ export default function SettingsWorkspace() {
               </AdminField>
               <p className={styles.setupFixText}>
                 Do not mark manual storefront checkout active unless a server-owned manual-payment finalization flow is implemented.
+              </p>
+            </AdminCard>
+          </div>
+        ) : null}
+      </AdminDrawer>
+      <AdminDrawer
+        onClose={closeEmailDrawer}
+        open={Boolean(activeEmailDrawer)}
+        subtitle={
+          activeEmailDrawer === EMAIL_PROVIDER_DRAWER.RESEND
+            ? 'Manage Resend credentials, webhook secret status, verification, and test sends.'
+            : activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SMTP
+              ? 'Manage SMTP host/auth credentials, verification, and test sends.'
+              : activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SENDLAYER
+                ? 'SendLayer UI is prepared, but runtime support is not active yet.'
+                : ''
+        }
+        title={
+          activeEmailDrawer === EMAIL_PROVIDER_DRAWER.RESEND
+            ? 'Resend'
+            : activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SMTP
+              ? 'SMTP'
+              : activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SENDLAYER
+                ? 'SendLayer'
+                : 'Email provider setup'
+        }
+      >
+        {activeEmailDrawer === EMAIL_PROVIDER_DRAWER.RESEND ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Connection status</h4>
+                <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
+              </div>
+              <p className={styles.statusText}>{resendSetupStatus.detail}</p>
+              <div className={styles.drawerStatusGrid}>
+                <p className={styles.providerMeta}>
+                  <strong>Active source:</strong> {resendSetupStatus.sourceLabel || 'Not active'}
+                </p>
+                <p className={styles.providerMeta}>
+                  <strong>Webhook status:</strong> {describeResendSetup(setupCheckById).label}
+                </p>
+                <p className={styles.providerMeta}>
+                  <strong>Last verified:</strong> {formatDateTime(resendSetupStatus.lastVerifiedAt)}
+                </p>
+              </div>
+            </AdminCard>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Credentials</h4>
+                <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
+              </div>
+              <div className={styles.drawerFormGrid}>
+                <AdminField label="Resend API key">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('RESEND', { apiKey: event.target.value })}
+                    placeholder="re_..."
+                    type="password"
+                    value={providerForms.RESEND.apiKey}
+                  />
+                </AdminField>
+                <AdminField hint="Optional for bounce/complaint signature checks." label="Webhook secret">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('RESEND', { webhookSecret: event.target.value })}
+                    placeholder="whsec_..."
+                    type="password"
+                    value={providerForms.RESEND.webhookSecret}
+                  />
+                </AdminField>
+                <AdminField hint="Optional sender override for test sends." label="From email">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('RESEND', { fromEmail: event.target.value })}
+                    placeholder="store@example.com"
+                    value={providerForms.RESEND.fromEmail}
+                  />
+                </AdminField>
+                <AdminField label="Test recipient email">
+                  <AdminInput
+                    onChange={(event) => setProviderTestEmailById((current) => ({ ...current, RESEND: event.target.value }))}
+                    placeholder="owner@example.com"
+                    value={providerTestEmailById.RESEND}
+                  />
+                </AdminField>
+              </div>
+              <div className={styles.actionRow}>
+                <AdminButton
+                  disabled={providerActionById.RESEND === 'saving' || !providerForms.RESEND.apiKey.trim()}
+                  onClick={() =>
+                    handleSaveProviderCredentials('RESEND', {
+                      apiKey: providerForms.RESEND.apiKey,
+                      webhookSecret: providerForms.RESEND.webhookSecret || undefined,
+                      fromEmail: providerForms.RESEND.fromEmail || undefined,
+                    })
+                  }
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.RESEND === 'saving' ? 'Saving...' : 'Save credentials'}
+                </AdminButton>
+                <AdminButton
+                  disabled={providerActionById.RESEND === 'verifying'}
+                  onClick={() => handleVerifyProvider('RESEND')}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.RESEND === 'verifying' ? 'Verifying...' : 'Verify provider'}
+                </AdminButton>
+                <AdminButton
+                  disabled={providerActionById.RESEND === 'testing' || !providerTestEmailById.RESEND.trim()}
+                  onClick={() => handleSendProviderTestEmail('RESEND')}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {providerActionById.RESEND === 'testing' ? 'Sending test...' : 'Send test email'}
+                </AdminButton>
+              </div>
+              {resendSavedCredentialMeta.length ? (
+                <div className={styles.maskedSecretList}>
+                  {resendSavedCredentialMeta.map((entry) => (
+                    <p className={styles.providerMeta} key={`resend-${entry.key}`}>
+                      <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.providerMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
+              )}
+            </AdminCard>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Danger zone</h4>
+              </div>
+              <p className={styles.statusText}>Disconnecting removes DB-backed credentials. Env fallback may remain active if env keys still exist.</p>
+              <div className={styles.actionRow}>
+                <AdminButton
+                  disabled={providerActionById.RESEND === 'disconnecting'}
+                  onClick={() => handleDisconnectProvider('RESEND')}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {providerActionById.RESEND === 'disconnecting' ? 'Disconnecting...' : 'Disconnect Resend'}
+                </AdminButton>
+              </div>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SMTP ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Connection status</h4>
+                <AdminStatusChip tone={smtpSetupStatus.tone}>{smtpSetupStatus.label}</AdminStatusChip>
+              </div>
+              <p className={styles.statusText}>{smtpSetupStatus.detail}</p>
+              <div className={styles.drawerStatusGrid}>
+                <p className={styles.providerMeta}>
+                  <strong>Active source:</strong> {smtpSetupStatus.sourceLabel || 'Not active'}
+                </p>
+                <p className={styles.providerMeta}>
+                  <strong>Last verified:</strong> {formatDateTime(smtpSetupStatus.lastVerifiedAt)}
+                </p>
+              </div>
+            </AdminCard>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Credentials</h4>
+                <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
+              </div>
+              <div className={styles.drawerFormGrid}>
+                <AdminField label="Host">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('SMTP', { host: event.target.value })}
+                    placeholder="smtp.provider.com"
+                    value={providerForms.SMTP.host}
+                  />
+                </AdminField>
+                <AdminField label="Port">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('SMTP', { port: event.target.value })}
+                    placeholder="587"
+                    value={providerForms.SMTP.port}
+                  />
+                </AdminField>
+                <AdminField label="Username">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('SMTP', { username: event.target.value })}
+                    value={providerForms.SMTP.username}
+                  />
+                </AdminField>
+                <AdminField label="Password">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('SMTP', { password: event.target.value })}
+                    type="password"
+                    value={providerForms.SMTP.password}
+                  />
+                </AdminField>
+                <label className={styles.checkboxField}>
+                  <input
+                    checked={Boolean(providerForms.SMTP.secure)}
+                    onChange={(event) => patchProviderForm('SMTP', { secure: event.target.checked })}
+                    type="checkbox"
+                  />
+                  <span>Secure/TLS connection</span>
+                </label>
+                <AdminField hint="Optional sender override for test sends." label="From email">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('SMTP', { fromEmail: event.target.value })}
+                    placeholder="store@example.com"
+                    value={providerForms.SMTP.fromEmail}
+                  />
+                </AdminField>
+                <AdminField label="Test recipient email">
+                  <AdminInput
+                    onChange={(event) => setProviderTestEmailById((current) => ({ ...current, SMTP: event.target.value }))}
+                    placeholder="owner@example.com"
+                    value={providerTestEmailById.SMTP}
+                  />
+                </AdminField>
+              </div>
+              <div className={styles.actionRow}>
+                <AdminButton
+                  disabled={
+                    providerActionById.SMTP === 'saving' ||
+                    !providerForms.SMTP.host.trim() ||
+                    !providerForms.SMTP.port.trim() ||
+                    !providerForms.SMTP.username.trim() ||
+                    !providerForms.SMTP.password.trim()
+                  }
+                  onClick={() =>
+                    handleSaveProviderCredentials('SMTP', {
+                      host: providerForms.SMTP.host,
+                      port: Number(providerForms.SMTP.port),
+                      secure: Boolean(providerForms.SMTP.secure),
+                      username: providerForms.SMTP.username,
+                      password: providerForms.SMTP.password,
+                      fromEmail: providerForms.SMTP.fromEmail || undefined,
+                    })
+                  }
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.SMTP === 'saving' ? 'Saving...' : 'Save credentials'}
+                </AdminButton>
+                <AdminButton
+                  disabled={providerActionById.SMTP === 'verifying'}
+                  onClick={() => handleVerifyProvider('SMTP')}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.SMTP === 'verifying' ? 'Verifying...' : 'Verify provider'}
+                </AdminButton>
+                <AdminButton
+                  disabled={providerActionById.SMTP === 'testing' || !providerTestEmailById.SMTP.trim()}
+                  onClick={() => handleSendProviderTestEmail('SMTP')}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {providerActionById.SMTP === 'testing' ? 'Sending test...' : 'Send test email'}
+                </AdminButton>
+              </div>
+              {smtpSavedCredentialMeta.length ? (
+                <div className={styles.maskedSecretList}>
+                  {smtpSavedCredentialMeta.map((entry) => (
+                    <p className={styles.providerMeta} key={`smtp-${entry.key}`}>
+                      <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.providerMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
+              )}
+            </AdminCard>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Danger zone</h4>
+              </div>
+              <p className={styles.statusText}>Disconnecting removes DB-backed credentials. Env fallback may remain active if env keys still exist.</p>
+              <div className={styles.actionRow}>
+                <AdminButton
+                  disabled={providerActionById.SMTP === 'disconnecting'}
+                  onClick={() => handleDisconnectProvider('SMTP')}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {providerActionById.SMTP === 'disconnecting' ? 'Disconnecting...' : 'Disconnect SMTP'}
+                </AdminButton>
+              </div>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeEmailDrawer === EMAIL_PROVIDER_DRAWER.SENDLAYER ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Setup status</h4>
+                <AdminStatusChip tone="warning">Coming soon</AdminStatusChip>
+              </div>
+              <p className={styles.statusText}>SendLayer runtime support is not active yet. Do not mark it active for checkout email sends.</p>
+              <p className={styles.providerMeta}>
+                <strong>Runtime source:</strong> not implemented
+              </p>
+            </AdminCard>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Future credential fields</h4>
+              </div>
+              <div className={styles.drawerFormGrid}>
+                <AdminField label="API key">
+                  <AdminInput defaultValue="" disabled placeholder="sendlayer api key (future)" type="password" />
+                </AdminField>
+                <AdminField label="Webhook secret">
+                  <AdminInput defaultValue="" disabled placeholder="sendlayer webhook secret (future)" type="password" />
+                </AdminField>
+              </div>
+              <p className={styles.setupFixText}>
+                Keep this provider inactive until runtime send, webhook verification, and delivery logging support exists.
               </p>
             </AdminCard>
           </div>
