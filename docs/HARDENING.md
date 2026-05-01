@@ -207,6 +207,7 @@ These invariants should not be broken by future work:
 - shipping setup wizard/status/test-rate admin routes must remain admin-authorized and must not expose provider credentials
 - shipping provider connect/disconnect/test routes must remain admin-authorized, store credentials only in encrypted `IntegrationSecret` rows, and never return credential values
 - owner-only provider settings gateway routes must remain masked-response only, never return raw credential values, and persist provider credentials in encrypted `IntegrationSecret` rows
+- provider verification failures should be represented as provider status `ERROR` (normal setup state) rather than treated as app-level exceptions
 - manual, EasyPost, and Shippo shipping quotes should flow through a normalized internal quote shape before checkout/admin consumers use rate data
 
 ## Refund And Return Invariants

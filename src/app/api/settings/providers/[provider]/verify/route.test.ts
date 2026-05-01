@@ -23,6 +23,24 @@ describe('settings providers verify route', () => {
     mocks.parseSupportedProvider.mockReturnValue('STRIPE')
   })
 
+  it('returns 401 json for unauthenticated users', async () => {
+    mocks.requireOwner.mockResolvedValue({
+      ok: false,
+      response: new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      }),
+    })
+
+    const response = await POST(new Request('http://localhost'), {
+      params: Promise.resolve({ provider: 'stripe' }),
+    })
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('content-type')).toContain('application/json')
+    expect(mocks.verifyProviderConnection).not.toHaveBeenCalled()
+  })
+
   it('returns 403 json for non-owner users', async () => {
     mocks.requireOwner.mockResolvedValue({
       ok: false,
@@ -37,10 +55,28 @@ describe('settings providers verify route', () => {
     })
 
     expect(response.status).toBe(403)
+    expect(response.headers.get('content-type')).toContain('application/json')
     expect(mocks.verifyProviderConnection).not.toHaveBeenCalled()
   })
 
-  it('surfaces verification failure as safe json error', async () => {
+  it('returns 404 for unsupported provider', async () => {
+    mocks.requireOwner.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+    mocks.parseSupportedProvider.mockReturnValue(null)
+
+    const response = await POST(new Request('http://localhost'), {
+      params: Promise.resolve({ provider: 'unknown-provider' }),
+    })
+
+    expect(response.status).toBe(404)
+    const payload = await response.json()
+    expect(payload).toMatchObject({ success: false, error: 'Unsupported provider' })
+    expect(mocks.verifyProviderConnection).not.toHaveBeenCalled()
+  })
+
+  it('returns 200 success payload with verification.ok false on failed verification', async () => {
     mocks.requireOwner.mockResolvedValue({
       ok: true,
       user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
@@ -55,9 +91,23 @@ describe('settings providers verify route', () => {
       params: Promise.resolve({ provider: 'stripe' }),
     })
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(200)
     const payload = await response.json()
-    expect(payload).toMatchObject({ success: false, error: 'invalid api key' })
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        provider: 'STRIPE',
+        status: {
+          state: 'ERROR',
+          lastError: 'invalid api key',
+        },
+        verification: {
+          ok: false,
+          message: 'invalid api key',
+        },
+      },
+    })
+    expect(JSON.stringify(payload)).not.toContain('sk_test_')
   })
 })
 

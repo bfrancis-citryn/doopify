@@ -12,7 +12,8 @@ export async function GET(req: Request) {
     const providers = await listProviderStatuses()
     return ok({ providers })
   } catch (error) {
-    console.error('[GET /api/settings/providers]', error)
+    const message = error instanceof Error ? error.message : 'Failed to load provider statuses'
+    console.error('[GET /api/settings/providers]', message)
     return err('Failed to load provider statuses', 500)
   }
 }

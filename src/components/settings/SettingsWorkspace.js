@@ -1003,18 +1003,37 @@ export default function SettingsWorkspace() {
     }));
   }
 
+  function applyProviderStatus(provider, status) {
+    if (!provider || !status) return;
+    setProviderStatusMap((current) => ({
+      ...current,
+      [provider]: status,
+    }));
+    setProviderStatusLoaded(true);
+  }
+
+  function resetProviderForm(provider) {
+    const nextDefaults = EMPTY_PROVIDER_FORMS[provider];
+    if (!nextDefaults) return;
+    setProviderForms((current) => ({
+      ...current,
+      [provider]: { ...nextDefaults },
+    }));
+  }
+
   async function handleSaveProviderCredentials(provider, payload) {
     setProviderActionById((current) => ({ ...current, [provider]: 'saving' }));
     setProviderNotice('');
     setProviderStatusError('');
     try {
-      await fetch(`/api/settings/providers/${provider}/credentials`, {
+      const data = await fetch(`/api/settings/providers/${provider}/credentials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }).then(parseApiJson);
+      applyProviderStatus(data?.provider || provider, data?.status);
+      resetProviderForm(provider);
       setProviderNotice(`${provider} credentials saved. Run verification to confirm connectivity.`);
-      await refreshProviderStatuses();
     } catch (saveError) {
       setProviderStatusError(saveError instanceof Error ? saveError.message : 'Failed to save provider credentials');
     } finally {
@@ -1027,14 +1046,17 @@ export default function SettingsWorkspace() {
     setProviderNotice('');
     setProviderStatusError('');
     try {
-      await fetch(`/api/settings/providers/${provider}/verify`, {
+      const data = await fetch(`/api/settings/providers/${provider}/verify`, {
         method: 'POST',
       }).then(parseApiJson);
-      setProviderNotice(`${provider} verification succeeded.`);
-      await refreshProviderStatuses();
+      applyProviderStatus(data?.provider || provider, data?.status);
+      if (data?.verification?.ok) {
+        setProviderNotice(`${provider} verification succeeded.`);
+      } else {
+        setProviderStatusError(data?.verification?.message || `${provider} verification failed.`);
+      }
     } catch (verifyError) {
       setProviderStatusError(verifyError instanceof Error ? verifyError.message : 'Provider verification failed');
-      await refreshProviderStatuses();
     } finally {
       setProviderActionById((current) => ({ ...current, [provider]: '' }));
     }
@@ -1045,11 +1067,12 @@ export default function SettingsWorkspace() {
     setProviderNotice('');
     setProviderStatusError('');
     try {
-      await fetch(`/api/settings/providers/${provider}`, {
+      const data = await fetch(`/api/settings/providers/${provider}`, {
         method: 'DELETE',
       }).then(parseApiJson);
+      applyProviderStatus(data?.provider || provider, data?.status);
+      resetProviderForm(provider);
       setProviderNotice(`${provider} credentials disconnected.`);
-      await refreshProviderStatuses();
     } catch (disconnectError) {
       setProviderStatusError(
         disconnectError instanceof Error ? disconnectError.message : 'Failed to disconnect provider credentials'

@@ -23,18 +23,14 @@ export async function POST(req: Request, context: RouteContext) {
 
   try {
     const result = await verifyProviderConnection(provider)
-    if (!result.verification.ok) {
-      return err(result.verification.message, 400)
-    }
-
     return ok({
       provider,
       status: result.status,
       verification: result.verification,
     })
   } catch (error) {
-    console.error('[POST /api/settings/providers/[provider]/verify]', error)
     const message = error instanceof Error ? error.message : 'Failed to verify provider connection'
+    console.error('[POST /api/settings/providers/[provider]/verify]', message)
     return err(message, 400)
   }
 }

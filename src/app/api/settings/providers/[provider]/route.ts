@@ -26,7 +26,8 @@ export async function GET(req: Request, context: RouteContext) {
     const status = await getProviderStatus(provider)
     return ok({ provider, status })
   } catch (error) {
-    console.error('[GET /api/settings/providers/[provider]]', error)
+    const message = error instanceof Error ? error.message : 'Failed to load provider status'
+    console.error('[GET /api/settings/providers/[provider]]', message)
     return err('Failed to load provider status', 500)
   }
 }
@@ -45,8 +46,8 @@ export async function DELETE(req: Request, context: RouteContext) {
     const status = await disconnectProvider(provider)
     return ok({ provider, status })
   } catch (error) {
-    console.error('[DELETE /api/settings/providers/[provider]]', error)
     const message = error instanceof Error ? error.message : 'Failed to disconnect provider'
+    console.error('[DELETE /api/settings/providers/[provider]]', message)
     return err(message, 400)
   }
 }

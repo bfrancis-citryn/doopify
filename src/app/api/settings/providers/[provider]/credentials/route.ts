@@ -68,8 +68,8 @@ export async function POST(req: Request, context: RouteContext) {
     const status = await saveProviderCredentials(provider, parsed.data)
     return ok({ provider, status })
   } catch (error) {
-    console.error('[POST /api/settings/providers/[provider]/credentials]', error)
     const message = error instanceof Error ? error.message : 'Failed to save provider credentials'
+    console.error('[POST /api/settings/providers/[provider]/credentials]', message)
     return err(message, 400)
   }
 }
