@@ -1239,11 +1239,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
           <AdminInput value={locationForm.phone} onChange={(event) => setLocationForm((current) => ({ ...current, phone: event.target.value }))} />
         </AdminField>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(locationForm.isDefault)} onChange={(event) => setLocationForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(locationForm.isDefault)} onChange={(event) => setLocationForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
           <span>Default location</span>
         </label>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(locationForm.isActive)} onChange={(event) => setLocationForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(locationForm.isActive)} onChange={(event) => setLocationForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
           <span>Active</span>
         </label>
         <div className={styles.actionRow}>
@@ -1310,11 +1310,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
           />
         </AdminField>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(packageForm.isDefault)} onChange={(event) => setPackageForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(packageForm.isDefault)} onChange={(event) => setPackageForm((current) => ({ ...current, isDefault: event.target.checked }))} type="checkbox" />
           <span>Default package</span>
         </label>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(packageForm.isActive)} onChange={(event) => setPackageForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(packageForm.isActive)} onChange={(event) => setPackageForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
           <span>Active</span>
         </label>
         <div className={styles.actionRow}>
@@ -1373,7 +1373,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
           <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} />
         </AdminField>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
           <span>Active</span>
         </label>
         <div className={styles.actionRow}>
@@ -1405,7 +1405,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
           <AdminInput value={fallbackForm.estimatedDeliveryText} onChange={(event) => setFallbackForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} />
         </AdminField>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(fallbackForm.isActive)} onChange={(event) => setFallbackForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(fallbackForm.isActive)} onChange={(event) => setFallbackForm((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
           <span>Active</span>
         </label>
         <div className={styles.actionRow}>
@@ -1441,7 +1441,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         subtitle="ZIP/radius pricing and delivery instructions."
       >
         <label className={styles.checkboxField}>
-          <input checked={Boolean(localDeliveryForm.localDeliveryEnabled)} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryEnabled: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(localDeliveryForm.localDeliveryEnabled)} onChange={(event) => setLocalDeliveryForm((current) => ({ ...current, localDeliveryEnabled: event.target.checked }))} type="checkbox" />
           <span>Enable local delivery</span>
         </label>
         <AdminField label="Delivery price">
@@ -1470,7 +1470,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         subtitle="Pickup location, instructions, and estimate."
       >
         <label className={styles.checkboxField}>
-          <input checked={Boolean(pickupForm.pickupEnabled)} onChange={(event) => setPickupForm((current) => ({ ...current, pickupEnabled: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(pickupForm.pickupEnabled)} onChange={(event) => setPickupForm((current) => ({ ...current, pickupEnabled: event.target.checked }))} type="checkbox" />
           <span>Enable pickup</span>
         </label>
         <AdminField label="Pickup location">
@@ -1496,15 +1496,15 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         subtitle="Logo, SKU, images, footer, and preview settings."
       >
         <label className={styles.checkboxField}>
-          <input checked={Boolean(packingSlipForm.packingSlipUseLogo)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipUseLogo: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(packingSlipForm.packingSlipUseLogo)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipUseLogo: event.target.checked }))} type="checkbox" />
           <span>Use store logo</span>
         </label>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(packingSlipForm.packingSlipShowSku)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipShowSku: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(packingSlipForm.packingSlipShowSku)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipShowSku: event.target.checked }))} type="checkbox" />
           <span>Show SKU</span>
         </label>
         <label className={styles.checkboxField}>
-          <input checked={Boolean(packingSlipForm.packingSlipShowProductImages)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipShowProductImages: event.target.checked }))} type="checkbox" />
+          <AdminInput checked={Boolean(packingSlipForm.packingSlipShowProductImages)} onChange={(event) => setPackingSlipForm((current) => ({ ...current, packingSlipShowProductImages: event.target.checked }))} type="checkbox" />
           <span>Show product images (if available)</span>
         </label>
         <AdminField label="Footer note">
@@ -1526,3 +1526,4 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
 
   return <AppShell>{content}</AppShell>;
 }
+

@@ -26,6 +26,28 @@ describe('settings compact flow', () => {
     expect(workspace).toContain("activeSection === 'taxes'")
   })
 
+  it('keeps Taxes & duties tax-only and excludes shipping setup UI', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+    const taxesStart = workspace.indexOf("activeSection === 'taxes' ? (")
+    const paymentsStart = workspace.indexOf("activeSection === 'payments' ? (")
+    const taxesBlock =
+      taxesStart >= 0 && paymentsStart > taxesStart ? workspace.slice(taxesStart, paymentsStart) : ''
+
+    expect(taxesBlock).toContain('Tax collection')
+    expect(taxesBlock).toContain('Tax regions')
+    expect(taxesBlock).toContain('Duties & import taxes')
+    expect(taxesBlock).toContain('Customs information')
+    expect(taxesBlock).toContain('Tax preview')
+
+    expect(taxesBlock).not.toContain('Shipping provider setup')
+    expect(taxesBlock).not.toContain('Shippo')
+    expect(taxesBlock).not.toContain('EasyPost')
+    expect(taxesBlock).not.toContain('Manual rates')
+    expect(taxesBlock).not.toContain('Live rates mode')
+    expect(taxesBlock).not.toContain('Shipping zones')
+    expect(taxesBlock).not.toContain('Shipping rate')
+  })
+
   it('renames Storefront / brand to Brand & appearance and explains scope clearly', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 

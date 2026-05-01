@@ -438,7 +438,7 @@ export default function IntegrationsPanel() {
                 {WEBHOOK_EVENT_GROUPS.map((group) => (
                   <label className={styles.groupOption} key={group.id}>
                     <div className={styles.providerTitleLine}>
-                      <input
+                      <AdminInput
                         checked={(draft.eventGroupIds || []).includes(group.id)}
                         disabled={Boolean(group.comingSoon)}
                         onChange={() => toggleGroup(group.id)}
@@ -471,7 +471,7 @@ export default function IntegrationsPanel() {
                 </AdminField>
                 {drawerMode === 'manage' ? (
                   <label className={styles.checkboxField}>
-                    <input
+                    <AdminInput
                       checked={Boolean(draft.clearWebhookSecret)}
                       onChange={(event) => setDraft((current) => ({ ...current, clearWebhookSecret: event.target.checked }))}
                       type="checkbox"

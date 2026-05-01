@@ -9,6 +9,7 @@ function buildClassName(parts) {
 
 export default function AdminSelect({
   className = "",
+  disabled = false,
   onChange,
   options = [],
   placeholder = "Select",
@@ -109,6 +110,7 @@ export default function AdminSelect({
   }
 
   function handleTriggerKeyDown(event) {
+    if (disabled) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       setOpen(true);
@@ -143,7 +145,11 @@ export default function AdminSelect({
       <button
         aria-expanded={open}
         className="admin-select__trigger"
-        onClick={() => setOpen((current) => !current)}
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((current) => !current);
+        }}
         onKeyDown={handleTriggerKeyDown}
         ref={triggerRef}
         type="button"

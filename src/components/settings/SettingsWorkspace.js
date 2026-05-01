@@ -248,6 +248,27 @@ const EMPTY_SHIPPING_TAX_PREVIEW = {
   selectedRateId: '',
 };
 
+const LEGACY_SHIPPING_MODE_OPTIONS = [
+  { value: 'MANUAL', label: 'Manual only' },
+  { value: 'LIVE_RATES', label: 'Live rates only' },
+  { value: 'HYBRID', label: 'Hybrid: live + manual fallback' },
+];
+
+const LEGACY_RATE_METHOD_OPTIONS = [
+  { value: 'FLAT', label: 'Flat' },
+  { value: 'SUBTOTAL_TIER', label: 'Subtotal tier' },
+];
+
+const TAX_STRATEGY_OPTIONS = [
+  { value: 'NONE', label: 'No tax' },
+  { value: 'MANUAL', label: 'Manual' },
+];
+
+const STRIPE_MODE_OPTIONS = [
+  { value: 'test', label: 'test' },
+  { value: 'live', label: 'live' },
+];
+
 function parseNumberOrUndefined(value) {
   if (value == null || value === '') return undefined;
   const parsed = Number(value);
@@ -2350,454 +2371,15 @@ export default function SettingsWorkspace() {
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
-                    <h3>Shipping provider setup</h3>
+                    <h3>Tax collection</h3>
                     <p className={styles.cardSubtext}>
-                      Manage manual rates and live carrier providers. Hybrid mode can fall back to manual rates when live quotes fail.
+                      Configure whether tax is collected, how it is applied, and whether catalog prices include tax.
                     </p>
-                  </div>
-                </section>
-                {providerStatusError ? (
-                  <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Provider action error</p>
-                    <p className={styles.statusText}>{providerStatusError}</p>
-                  </div>
-                ) : null}
-                {providerNotice ? (
-                  <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Provider update</p>
-                    <p className={styles.statusText}>{providerNotice}</p>
-                  </div>
-                ) : null}
-
-                <section className={styles.setupGrid}>
-                  <AdminCard as="article" className={styles.setupCard} variant="card">
-                    <div className={styles.setupCardHeader}>
-                      <h4>
-                        Manual rates{' '}
-                        <AdminTooltip content="Manual rates are fixed shipping rules you control by zone, subtotal tiers, and fallback values." />
-                      </h4>
-                      <AdminStatusChip tone={shippingSetupStatus?.hasManualRates ? 'success' : 'warning'}>
-                        {shippingSetupStatus?.hasManualRates ? 'Configured' : 'Needs setup'}
-                      </AdminStatusChip>
-                    </div>
-                    <p className={styles.statusText}>
-                      Manual-only mode uses your configured rates without provider API calls.
-                    </p>
-                    <div className={styles.actionRow}>
-                      <AdminButton onClick={() => handleUpdateShippingMode('MANUAL')} size="sm" variant="secondary" disabled={shippingModeSaving}>
-                        {shippingMode === 'MANUAL' ? 'Manual mode active' : 'Switch to manual only'}
-                      </AdminButton>
-                    </div>
-                  </AdminCard>
-
-                  <AdminCard as="article" className={styles.setupCard} variant="card">
-                    <div className={styles.setupCardHeader}>
-                      <h4>
-                        Shippo{' '}
-                        <AdminTooltip content="Live Shippo rates come from Shippo APIs. Credentials are stored encrypted and can be tested from shipping setup." />
-                      </h4>
-                      <AdminStatusChip tone={shippoStatus.tone}>{shippoStatus.label}</AdminStatusChip>
-                    </div>
-                    <p className={styles.statusText}>{shippoStatus.detail}</p>
-                    <label className={styles.field}>
-                      <span>Shippo API key</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) => patchProviderForm('SHIPPO', { apiKey: event.target.value })}
-                        placeholder="shippo_test_..."
-                        type="password"
-                        value={providerForms.SHIPPO.apiKey}
-                      />
-                    </label>
-                    <div className={styles.actionRow}>
-                      <AdminButton onClick={() => handleSelectLiveProvider('SHIPPO')} size="sm" variant="secondary" disabled={shippingModeSaving}>
-                        Use Shippo
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.SHIPPO === 'saving' || !providerForms.SHIPPO.apiKey.trim()}
-                        onClick={() => handleSaveProviderCredentials('SHIPPO', { apiKey: providerForms.SHIPPO.apiKey })}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        {providerActionById.SHIPPO === 'saving' ? 'Saving...' : 'Connect Shippo'}
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.SHIPPO === 'verifying'}
-                        onClick={() => handleVerifyProvider('SHIPPO')}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {providerActionById.SHIPPO === 'verifying' ? 'Verifying...' : 'Verify'}
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.SHIPPO === 'disconnecting'}
-                        onClick={() => handleDisconnectProvider('SHIPPO')}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {providerActionById.SHIPPO === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
-                      </AdminButton>
-                    </div>
-                  </AdminCard>
-
-                  <AdminCard as="article" className={styles.setupCard} variant="card">
-                    <div className={styles.setupCardHeader}>
-                      <h4>
-                        EasyPost{' '}
-                        <AdminTooltip content="Live EasyPost rates come from EasyPost APIs. Hybrid mode can use manual fallback when live calls fail." />
-                      </h4>
-                      <AdminStatusChip tone={easypostStatus.tone}>{easypostStatus.label}</AdminStatusChip>
-                    </div>
-                    <p className={styles.statusText}>{easypostStatus.detail}</p>
-                    <label className={styles.field}>
-                      <span>EasyPost API key</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) => patchProviderForm('EASYPOST', { apiKey: event.target.value })}
-                        placeholder="ep_test_..."
-                        type="password"
-                        value={providerForms.EASYPOST.apiKey}
-                      />
-                    </label>
-                    <div className={styles.actionRow}>
-                      <AdminButton onClick={() => handleSelectLiveProvider('EASYPOST')} size="sm" variant="secondary" disabled={shippingModeSaving}>
-                        Use EasyPost
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.EASYPOST === 'saving' || !providerForms.EASYPOST.apiKey.trim()}
-                        onClick={() => handleSaveProviderCredentials('EASYPOST', { apiKey: providerForms.EASYPOST.apiKey })}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        {providerActionById.EASYPOST === 'saving' ? 'Saving...' : 'Connect EasyPost'}
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.EASYPOST === 'verifying'}
-                        onClick={() => handleVerifyProvider('EASYPOST')}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {providerActionById.EASYPOST === 'verifying' ? 'Verifying...' : 'Verify'}
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.EASYPOST === 'disconnecting'}
-                        onClick={() => handleDisconnectProvider('EASYPOST')}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {providerActionById.EASYPOST === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
-                      </AdminButton>
-                    </div>
-                  </AdminCard>
-                </section>
-
-                <section className={styles.configSection}>
-                  <div className={styles.sectionHeading}>
-                    <h3>Live rates mode</h3>
-                  </div>
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span>
-                        Shipping mode{' '}
-                        <AdminTooltip content="Manual only uses fixed rules. Live rates only uses provider API quotes. Hybrid tries live first and falls back to manual rates." />
-                      </span>
-                      <select className={styles.input} value={shippingMode} onChange={(event) => handleUpdateShippingMode(event.target.value)} disabled={shippingModeSaving}>
-                        <option value="MANUAL">Manual only</option>
-                        <option value="LIVE_RATES">Live rates only</option>
-                        <option value="HYBRID">Hybrid: live + manual fallback</option>
-                      </select>
-                    </label>
-                    <div className={styles.statusBlock}>
-                      <p className={styles.statusText}>
-                        Current provider: {shippingProvider || 'none selected'}
-                      </p>
-                      {shippingSetupStatus?.warnings?.length ? (
-                        <ul className={styles.setupList}>
-                          {shippingSetupStatus.warnings.map((warning) => (
-                            <li key={warning}>{warning}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className={styles.statusText}>No shipping setup warnings right now.</p>
-                      )}
-                    </div>
-                  </div>
-                </section>
-
-                <div className={styles.formGrid}>
-                  <label className={styles.field}>
-                    <span>Free shipping threshold</span>
-                    <input className={styles.input} onChange={(event) => updateSettings({ freeShippingThreshold: event.target.value })} value={settings.freeShippingThreshold} />
-                  </label>
-                  <label className={styles.field}>
-                    <span>Domestic shipping rate</span>
-                    <input className={styles.input} onChange={(event) => updateSettings({ domesticShippingRate: event.target.value })} value={settings.domesticShippingRate} />
-                  </label>
-                  <label className={styles.field}>
-                    <span>International shipping rate</span>
-                    <input className={styles.input} onChange={(event) => updateSettings({ internationalShippingRate: event.target.value })} value={settings.internationalShippingRate} />
-                  </label>
-                </div>
-
-                {shippingConfigLoading ? (
-                  <p className={styles.statusText}>Loading shipping zones and tax rules...</p>
-                ) : null}
-
-                {shippingConfigError ? (
-                  <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Shipping configuration error</p>
-                    <p className={styles.statusText}>{shippingConfigError}</p>
-                    <AdminButton onClick={() => refreshShippingConfig()} size="sm" variant="secondary">
-                      Retry
-                    </AdminButton>
-                  </div>
-                ) : null}
-
-                <section className={styles.configSection}>
-                  <div className={styles.sectionHeading}>
-                    <h3>Shipping zones</h3>
-                  </div>
-
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span>Zone name</span>
-                      <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, name: event.target.value }))} value={newZone.name} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Country code</span>
-                      <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, countryCode: event.target.value }))} value={newZone.countryCode} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Province code</span>
-                      <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, provinceCode: event.target.value }))} value={newZone.provinceCode} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Priority</span>
-                      <input className={styles.input} onChange={(event) => setNewZone((current) => ({ ...current, priority: event.target.value }))} value={newZone.priority} />
-                    </label>
-                    <label className={styles.checkboxField}>
-                      <input checked={newZone.isActive} onChange={(event) => setNewZone((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
-                      <span>Active</span>
-                    </label>
-                    <AdminButton onClick={handleCreateZone} size="sm" variant="secondary">
-                      Add zone
-                    </AdminButton>
-                  </div>
-
-                  {shippingZones.map((zone) => (
-                    <div className={styles.configRow} key={zone.id}>
-                      <div className={styles.inlineGrid}>
-                        <label className={styles.field}>
-                          <span>Name</span>
-                          <input className={styles.input} onChange={(event) => updateZoneDraft(zone.id, { name: event.target.value })} value={zone.name} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Country</span>
-                          <input className={styles.input} onChange={(event) => updateZoneDraft(zone.id, { countryCode: event.target.value })} value={zone.countryCode} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Province</span>
-                          <input className={styles.input} onChange={(event) => updateZoneDraft(zone.id, { provinceCode: event.target.value })} value={zone.provinceCode} />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Priority</span>
-                          <input className={styles.input} onChange={(event) => updateZoneDraft(zone.id, { priority: event.target.value })} value={zone.priority} />
-                        </label>
-                        <label className={styles.checkboxField}>
-                          <input checked={zone.isActive} onChange={(event) => updateZoneDraft(zone.id, { isActive: event.target.checked })} type="checkbox" />
-                          <span>Active</span>
-                        </label>
-                      </div>
-
-                      <div className={styles.actionRow}>
-                        <AdminButton onClick={() => handleSaveZone(zone)} size="sm" variant="secondary">
-                          Save zone
-                        </AdminButton>
-                        <AdminButton onClick={() => handleDeleteZone(zone.id)} size="sm" variant="danger">
-                          Delete zone
-                        </AdminButton>
-                      </div>
-
-                      <div className={styles.rateList}>
-                        {zone.rates.map((rate) => (
-                          <div className={styles.rateRow} key={rate.id}>
-                            <div className={styles.inlineGrid}>
-                              <label className={styles.field}>
-                                <span>Rate name</span>
-                                <input className={styles.input} onChange={(event) => updateRateDraft(zone.id, rate.id, { name: event.target.value })} value={rate.name} />
-                              </label>
-                              <label className={styles.field}>
-                                <span>Method</span>
-                                <select className={styles.input} onChange={(event) => updateRateDraft(zone.id, rate.id, { method: event.target.value })} value={rate.method}>
-                                  <option value="FLAT">Flat</option>
-                                  <option value="SUBTOTAL_TIER">Subtotal tier</option>
-                                </select>
-                              </label>
-                              <label className={styles.field}>
-                                <span>Amount</span>
-                                <input className={styles.input} onChange={(event) => updateRateDraft(zone.id, rate.id, { amount: event.target.value })} value={rate.amount} />
-                              </label>
-                              <label className={styles.field}>
-                                <span>Min subtotal</span>
-                                <input className={styles.input} onChange={(event) => updateRateDraft(zone.id, rate.id, { minSubtotal: event.target.value })} value={rate.minSubtotal} />
-                              </label>
-                              <label className={styles.field}>
-                                <span>Max subtotal</span>
-                                <input className={styles.input} onChange={(event) => updateRateDraft(zone.id, rate.id, { maxSubtotal: event.target.value })} value={rate.maxSubtotal} />
-                              </label>
-                              <label className={styles.field}>
-                                <span>Priority</span>
-                                <input className={styles.input} onChange={(event) => updateRateDraft(zone.id, rate.id, { priority: event.target.value })} value={rate.priority} />
-                              </label>
-                              <label className={styles.checkboxField}>
-                                <input checked={rate.isActive} onChange={(event) => updateRateDraft(zone.id, rate.id, { isActive: event.target.checked })} type="checkbox" />
-                                <span>Active</span>
-                              </label>
-                            </div>
-                            <div className={styles.actionRow}>
-                              <AdminButton onClick={() => handleSaveRate(zone.id, rate)} size="sm" variant="secondary">
-                                Save rate
-                              </AdminButton>
-                              <AdminButton onClick={() => handleDeleteRate(zone.id, rate.id)} size="sm" variant="danger">
-                                Delete rate
-                              </AdminButton>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className={styles.inlineGrid}>
-                        <label className={styles.field}>
-                          <span>New rate name</span>
-                          <input
-                            className={styles.input}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  name: event.target.value,
-                                },
-                              }))
-                            }
-                            value={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).name}
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Method</span>
-                          <select
-                            className={styles.input}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  method: event.target.value,
-                                },
-                              }))
-                            }
-                            value={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).method}
-                          >
-                            <option value="FLAT">Flat</option>
-                            <option value="SUBTOTAL_TIER">Subtotal tier</option>
-                          </select>
-                        </label>
-                        <label className={styles.field}>
-                          <span>Amount</span>
-                          <input
-                            className={styles.input}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  amount: event.target.value,
-                                },
-                              }))
-                            }
-                            value={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).amount}
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Min subtotal</span>
-                          <input
-                            className={styles.input}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  minSubtotal: event.target.value,
-                                },
-                              }))
-                            }
-                            value={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).minSubtotal}
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Max subtotal</span>
-                          <input
-                            className={styles.input}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  maxSubtotal: event.target.value,
-                                },
-                              }))
-                            }
-                            value={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).maxSubtotal}
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          <span>Priority</span>
-                          <input
-                            className={styles.input}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  priority: event.target.value,
-                                },
-                              }))
-                            }
-                            value={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).priority}
-                          />
-                        </label>
-                        <label className={styles.checkboxField}>
-                          <input
-                            checked={(newRateByZoneId[zone.id] || EMPTY_RATE_FORM).isActive}
-                            onChange={(event) =>
-                              setNewRateByZoneId((current) => ({
-                                ...current,
-                                [zone.id]: {
-                                  ...(current[zone.id] || EMPTY_RATE_FORM),
-                                  isActive: event.target.checked,
-                                },
-                              }))
-                            }
-                            type="checkbox"
-                          />
-                          <span>Active</span>
-                        </label>
-                        <AdminButton onClick={() => handleCreateRate(zone.id)} size="sm" variant="secondary">
-                          Add rate
-                        </AdminButton>
-                      </div>
-                    </div>
-                  ))}
-                </section>
-
-                <section className={styles.configSection}>
-                  <div className={styles.sectionHeading}>
-                    <h3>Tax settings (manual)</h3>
                   </div>
 
                   <div className={styles.inlineGrid}>
                     <label className={styles.checkboxField}>
-                      <input
+                      <AdminInput
                         checked={taxSettings.enabled}
                         onChange={(event) =>
                           setTaxSettings((current) => ({ ...current, enabled: event.target.checked }))
@@ -2808,20 +2390,18 @@ export default function SettingsWorkspace() {
                     </label>
                     <label className={styles.field}>
                       <span>Strategy</span>
-                      <select
+                      <AdminSelect
                         className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, strategy: event.target.value }))
+                        onChange={(nextValue) =>
+                          setTaxSettings((current) => ({ ...current, strategy: nextValue }))
                         }
+                        options={TAX_STRATEGY_OPTIONS}
                         value={taxSettings.strategy}
-                      >
-                        <option value="NONE">No tax</option>
-                        <option value="MANUAL">Manual</option>
-                      </select>
+                      />
                     </label>
                     <label className={styles.field}>
                       <span>Manual tax rate (%)</span>
-                      <input
+                      <AdminInput
                         className={styles.input}
                         onChange={(event) =>
                           setTaxSettings((current) => ({
@@ -2833,7 +2413,7 @@ export default function SettingsWorkspace() {
                       />
                     </label>
                     <label className={styles.checkboxField}>
-                      <input
+                      <AdminInput
                         checked={taxSettings.taxShipping}
                         onChange={(event) =>
                           setTaxSettings((current) => ({ ...current, taxShipping: event.target.checked }))
@@ -2843,7 +2423,7 @@ export default function SettingsWorkspace() {
                       <span>Tax shipping</span>
                     </label>
                     <label className={styles.checkboxField}>
-                      <input
+                      <AdminInput
                         checked={taxSettings.pricesIncludeTax}
                         onChange={(event) =>
                           setTaxSettings((current) => ({ ...current, pricesIncludeTax: event.target.checked }))
@@ -2852,70 +2432,54 @@ export default function SettingsWorkspace() {
                       />
                       <span>Prices include tax</span>
                     </label>
-                    <label className={styles.field}>
-                      <span>Origin country</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, originCountry: event.target.value }))
-                        }
-                        value={taxSettings.originCountry}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Origin state</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, originState: event.target.value }))
-                        }
-                        value={taxSettings.originState}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Origin postal code</span>
-                      <input
-                        className={styles.input}
-                        onChange={(event) =>
-                          setTaxSettings((current) => ({ ...current, originPostalCode: event.target.value }))
-                        }
-                        value={taxSettings.originPostalCode}
-                      />
-                    </label>
                     <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
-                      {taxSettingsSaving ? 'Saving tax settings...' : 'Save tax settings'}
+                      {taxSettingsSaving ? 'Saving tax settings...' : 'Save tax collection'}
                     </AdminButton>
                   </div>
                 </section>
 
+                {shippingConfigLoading ? (
+                  <p className={styles.statusText}>Loading tax regions and settings...</p>
+                ) : null}
+
+                {shippingConfigError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Tax configuration error</p>
+                    <p className={styles.statusText}>{shippingConfigError}</p>
+                    <AdminButton onClick={() => refreshShippingConfig()} size="sm" variant="secondary">
+                      Retry
+                    </AdminButton>
+                  </div>
+                ) : null}
+
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
-                    <h3>Tax rules</h3>
+                    <h3>Tax regions</h3>
                   </div>
 
                   <div className={styles.inlineGrid}>
                     <label className={styles.field}>
                       <span>Rule name</span>
-                      <input className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, name: event.target.value }))} value={newTaxRule.name} />
+                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, name: event.target.value }))} value={newTaxRule.name} />
                     </label>
                     <label className={styles.field}>
                       <span>Country code</span>
-                      <input className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, countryCode: event.target.value }))} value={newTaxRule.countryCode} />
+                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, countryCode: event.target.value }))} value={newTaxRule.countryCode} />
                     </label>
                     <label className={styles.field}>
                       <span>Province code</span>
-                      <input className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, provinceCode: event.target.value }))} value={newTaxRule.provinceCode} />
+                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, provinceCode: event.target.value }))} value={newTaxRule.provinceCode} />
                     </label>
                     <label className={styles.field}>
                       <span>Tax rate (%)</span>
-                      <input className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, ratePercent: event.target.value }))} value={newTaxRule.ratePercent} />
+                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, ratePercent: event.target.value }))} value={newTaxRule.ratePercent} />
                     </label>
                     <label className={styles.field}>
                       <span>Priority</span>
-                      <input className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, priority: event.target.value }))} value={newTaxRule.priority} />
+                      <AdminInput className={styles.input} onChange={(event) => setNewTaxRule((current) => ({ ...current, priority: event.target.value }))} value={newTaxRule.priority} />
                     </label>
                     <label className={styles.checkboxField}>
-                      <input checked={newTaxRule.isActive} onChange={(event) => setNewTaxRule((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
+                      <AdminInput checked={newTaxRule.isActive} onChange={(event) => setNewTaxRule((current) => ({ ...current, isActive: event.target.checked }))} type="checkbox" />
                       <span>Active</span>
                     </label>
                     <AdminButton onClick={handleCreateTaxRule} size="sm" variant="secondary">
@@ -2928,26 +2492,26 @@ export default function SettingsWorkspace() {
                       <div className={styles.inlineGrid}>
                         <label className={styles.field}>
                           <span>Name</span>
-                          <input className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { name: event.target.value })} value={rule.name} />
+                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { name: event.target.value })} value={rule.name} />
                         </label>
                         <label className={styles.field}>
                           <span>Country</span>
-                          <input className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { countryCode: event.target.value })} value={rule.countryCode} />
+                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { countryCode: event.target.value })} value={rule.countryCode} />
                         </label>
                         <label className={styles.field}>
                           <span>Province</span>
-                          <input className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { provinceCode: event.target.value })} value={rule.provinceCode} />
+                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { provinceCode: event.target.value })} value={rule.provinceCode} />
                         </label>
                         <label className={styles.field}>
                           <span>Tax rate (%)</span>
-                          <input className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { ratePercent: event.target.value })} value={rule.ratePercent} />
+                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { ratePercent: event.target.value })} value={rule.ratePercent} />
                         </label>
                         <label className={styles.field}>
                           <span>Priority</span>
-                          <input className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { priority: event.target.value })} value={rule.priority} />
+                          <AdminInput className={styles.input} onChange={(event) => updateTaxRuleDraft(rule.id, { priority: event.target.value })} value={rule.priority} />
                         </label>
                         <label className={styles.checkboxField}>
-                          <input checked={rule.isActive} onChange={(event) => updateTaxRuleDraft(rule.id, { isActive: event.target.checked })} type="checkbox" />
+                          <AdminInput checked={rule.isActive} onChange={(event) => updateTaxRuleDraft(rule.id, { isActive: event.target.checked })} type="checkbox" />
                           <span>Active</span>
                         </label>
                       </div>
@@ -2965,13 +2529,69 @@ export default function SettingsWorkspace() {
 
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
-                    <h3>Calculation preview</h3>
+                    <h3>Duties & import taxes</h3>
+                  </div>
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusText}>
+                      Duties and import-tax automation is configured per destination policy and can be expanded as provider support is finalized.
+                    </p>
+                  </div>
+                </section>
+
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Customs information</h3>
+                    <p className={styles.cardSubtext}>
+                      Use origin details to improve tax and customs decisioning for international destinations.
+                    </p>
+                  </div>
+
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.field}>
+                      <span>Origin country</span>
+                      <AdminInput
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, originCountry: event.target.value }))
+                        }
+                        value={taxSettings.originCountry}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Origin state</span>
+                      <AdminInput
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, originState: event.target.value }))
+                        }
+                        value={taxSettings.originState}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Origin postal code</span>
+                      <AdminInput
+                        className={styles.input}
+                        onChange={(event) =>
+                          setTaxSettings((current) => ({ ...current, originPostalCode: event.target.value }))
+                        }
+                        value={taxSettings.originPostalCode}
+                      />
+                    </label>
+                    <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
+                      {taxSettingsSaving ? 'Saving tax settings...' : 'Save customs information'}
+                    </AdminButton>
+                  </div>
+                </section>
+
+                <section className={styles.configSection}>
+                  <div className={styles.sectionHeading}>
+                    <h3>Tax preview</h3>
                   </div>
 
                   <div className={styles.inlineGrid}>
                     <label className={styles.field}>
                       <span>Subtotal (USD)</span>
-                      <input
+                      <AdminInput
                         className={styles.input}
                         onChange={(event) =>
                           setShippingTaxPreview((current) => ({ ...current, subtotal: event.target.value }))
@@ -2981,7 +2601,7 @@ export default function SettingsWorkspace() {
                     </label>
                     <label className={styles.field}>
                       <span>Destination country</span>
-                      <input
+                      <AdminInput
                         className={styles.input}
                         onChange={(event) =>
                           setShippingTaxPreview((current) => ({ ...current, country: event.target.value }))
@@ -2991,7 +2611,7 @@ export default function SettingsWorkspace() {
                     </label>
                     <label className={styles.field}>
                       <span>Destination state/province</span>
-                      <input
+                      <AdminInput
                         className={styles.input}
                         onChange={(event) =>
                           setShippingTaxPreview((current) => ({ ...current, province: event.target.value }))
@@ -2999,43 +2619,22 @@ export default function SettingsWorkspace() {
                         value={shippingTaxPreview.province}
                       />
                     </label>
-                    <label className={styles.field}>
-                      <span>Shipping rate</span>
-                      <select
-                        className={styles.input}
-                        onChange={(event) =>
-                          setShippingTaxPreview((current) => ({
-                            ...current,
-                            selectedRateId: event.target.value,
-                          }))
-                        }
-                        value={shippingTaxPreview.selectedRateId}
-                      >
-                        <option value="">Auto-select best rate</option>
-                        {(shippingTaxPreviewPricing.shippingDecision?.availableRates || []).map((rate) => (
-                          <option key={rate.id} value={rate.id}>
-                            {rate.label} (${(rate.amountCents / 100).toFixed(2)})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                   </div>
 
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>
-                      Subtotal ${((shippingTaxPreviewPricing.subtotalCents || 0) / 100).toFixed(2)} • Shipping $
-                      {((shippingTaxPreviewPricing.shippingAmountCents || 0) / 100).toFixed(2)} • Tax $
+                      Subtotal ${((shippingTaxPreviewPricing.subtotalCents || 0) / 100).toFixed(2)} • Tax $
                       {((shippingTaxPreviewPricing.taxAmountCents || 0) / 100).toFixed(2)}
                     </p>
                     <p className={styles.statusText}>
-                      Total: ${((shippingTaxPreviewPricing.totalCents || 0) / 100).toFixed(2)}
+                      Total (tax only): $
+                      {(((shippingTaxPreviewPricing.subtotalCents || 0) + (shippingTaxPreviewPricing.taxAmountCents || 0)) / 100).toFixed(2)}
                     </p>
                     <p className={styles.statusText}>
-                      Shipping source: {shippingTaxPreviewPricing.shippingDecision?.source || 'none'} | Tax source:{' '}
-                      {shippingTaxPreviewPricing.taxDecision?.source || 'none'}
+                      Tax source: {shippingTaxPreviewPricing.taxDecision?.source || 'none'}
                     </p>
-                    {shippingTaxPreviewPricing.shippingDecision?.warning ? (
-                      <p className={styles.statusText}>{shippingTaxPreviewPricing.shippingDecision.warning}</p>
+                    {shippingTaxPreviewPricing.taxDecision?.warning ? (
+                      <p className={styles.statusText}>{shippingTaxPreviewPricing.taxDecision.warning}</p>
                     ) : null}
                   </div>
                 </section>
@@ -3267,7 +2866,7 @@ export default function SettingsWorkspace() {
                     <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                       <label className={styles.field}>
                         <span>From email</span>
-                        <input
+                        <AdminInput
                           className={styles.input}
                           onChange={(event) => handleSettingsPatch({ senderEmail: event.target.value })}
                           placeholder="store@example.com"
@@ -3276,7 +2875,7 @@ export default function SettingsWorkspace() {
                       </label>
                       <label className={styles.field}>
                         <span>Support email</span>
-                        <input
+                        <AdminInput
                           className={styles.input}
                           onChange={(event) => handleSettingsPatch({ supportEmail: event.target.value })}
                           placeholder="support@example.com"
@@ -3392,22 +2991,22 @@ export default function SettingsWorkspace() {
                     <div className={styles.inlineGrid}>
                       <label className={styles.field}>
                         <span>Host</span>
-                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { host: event.target.value })} value={providerForms.SMTP.host} />
+                        <AdminInput className={styles.input} onChange={(event) => patchProviderForm('SMTP', { host: event.target.value })} value={providerForms.SMTP.host} />
                       </label>
                       <label className={styles.field}>
                         <span>Port</span>
-                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { port: event.target.value })} value={providerForms.SMTP.port} />
+                        <AdminInput className={styles.input} onChange={(event) => patchProviderForm('SMTP', { port: event.target.value })} value={providerForms.SMTP.port} />
                       </label>
                       <label className={styles.field}>
                         <span>Username</span>
-                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { username: event.target.value })} value={providerForms.SMTP.username} />
+                        <AdminInput className={styles.input} onChange={(event) => patchProviderForm('SMTP', { username: event.target.value })} value={providerForms.SMTP.username} />
                       </label>
                       <label className={styles.field}>
                         <span>Password</span>
-                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { password: event.target.value })} type="password" value={providerForms.SMTP.password} />
+                        <AdminInput className={styles.input} onChange={(event) => patchProviderForm('SMTP', { password: event.target.value })} type="password" value={providerForms.SMTP.password} />
                       </label>
                       <label className={styles.checkboxField}>
-                        <input
+                        <AdminInput
                           checked={Boolean(providerForms.SMTP.secure)}
                           onChange={(event) => patchProviderForm('SMTP', { secure: event.target.checked })}
                           type="checkbox"
@@ -3416,7 +3015,7 @@ export default function SettingsWorkspace() {
                       </label>
                       <label className={styles.field}>
                         <span>From email (optional)</span>
-                        <input className={styles.input} onChange={(event) => patchProviderForm('SMTP', { fromEmail: event.target.value })} value={providerForms.SMTP.fromEmail} />
+                        <AdminInput className={styles.input} onChange={(event) => patchProviderForm('SMTP', { fromEmail: event.target.value })} value={providerForms.SMTP.fromEmail} />
                       </label>
                     </div>
                     <div className={styles.actionRow}>
@@ -3478,7 +3077,7 @@ export default function SettingsWorkspace() {
                     <div className={styles.inlineGrid}>
                       <label className={styles.field}>
                         <span>Resend API key</span>
-                        <input
+                        <AdminInput
                           className={styles.input}
                           onChange={(event) => patchProviderForm('RESEND', { apiKey: event.target.value })}
                           placeholder="re_..."
@@ -3488,7 +3087,7 @@ export default function SettingsWorkspace() {
                       </label>
                       <label className={styles.field}>
                         <span>Webhook secret (optional)</span>
-                        <input
+                        <AdminInput
                           className={styles.input}
                           onChange={(event) => patchProviderForm('RESEND', { webhookSecret: event.target.value })}
                           placeholder="whsec_..."
@@ -3498,7 +3097,7 @@ export default function SettingsWorkspace() {
                       </label>
                       <label className={styles.field}>
                         <span>From email (optional)</span>
-                        <input
+                        <AdminInput
                           className={styles.input}
                           onChange={(event) => patchProviderForm('RESEND', { fromEmail: event.target.value })}
                           placeholder="store@example.com"
@@ -3567,7 +3166,7 @@ export default function SettingsWorkspace() {
                   <div className={styles.rowInputs}>
                     <label className={styles.field}>
                       <span>Sender email</span>
-                      <input className={styles.input} onChange={(event) => handleSettingsPatch({ senderEmail: event.target.value })} value={settings.senderEmail} />
+                      <AdminInput className={styles.input} onChange={(event) => handleSettingsPatch({ senderEmail: event.target.value })} value={settings.senderEmail} />
                     </label>
                   </div>
                 </AdminCard>
@@ -3860,14 +3459,12 @@ export default function SettingsWorkspace() {
                 </AdminField>
                 <label className={styles.field}>
                   <span>Mode</span>
-                  <select
+                  <AdminSelect
                     className={styles.input}
-                    onChange={(event) => patchProviderForm('STRIPE', { mode: event.target.value })}
+                    onChange={(nextValue) => patchProviderForm('STRIPE', { mode: nextValue })}
+                    options={STRIPE_MODE_OPTIONS}
                     value={providerForms.STRIPE.mode}
-                  >
-                    <option value="test">test</option>
-                    <option value="live">live</option>
-                  </select>
+                  />
                 </label>
               </div>
               <div className={styles.compactActionRow}>
@@ -4219,7 +3816,7 @@ export default function SettingsWorkspace() {
                   />
                 </AdminField>
                 <label className={styles.checkboxField}>
-                  <input
+                  <AdminInput
                     checked={Boolean(providerForms.SMTP.secure)}
                     onChange={(event) => patchProviderForm('SMTP', { secure: event.target.checked })}
                     type="checkbox"
@@ -4382,11 +3979,11 @@ export default function SettingsWorkspace() {
               <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <label className={styles.field}>
                   <span>Brand name</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ name: event.target.value })} value={brandKit?.name || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ name: event.target.value })} value={brandKit?.name || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Support email</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
                 </label>
               </div>
               <p className={styles.compactMeta}>Store logo: Used in Storefront, packing slips, default email branding.</p>
@@ -4406,11 +4003,11 @@ export default function SettingsWorkspace() {
                 <div className={styles.brandFieldGrid}>
                   <label className={styles.field}>
                     <span>Store logo URL</span>
-                    <input className={styles.input} onChange={(event) => handleBrandKitPatch({ logoUrl: event.target.value })} value={brandKit?.logoUrl || ''} />
+                    <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ logoUrl: event.target.value })} value={brandKit?.logoUrl || ''} />
                   </label>
                   <label className={styles.field}>
                     <span>Favicon URL</span>
-                    <input className={styles.input} onChange={(event) => handleBrandKitPatch({ faviconUrl: event.target.value })} value={brandKit?.faviconUrl || ''} />
+                    <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ faviconUrl: event.target.value })} value={brandKit?.faviconUrl || ''} />
                   </label>
                 </div>
               ) : null}
@@ -4427,19 +4024,19 @@ export default function SettingsWorkspace() {
               <div className={styles.brandFieldGrid}>
                 <label className={styles.field}>
                   <span>Primary color</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ primaryColor: event.target.value })} value={brandKit?.primaryColor || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ primaryColor: event.target.value })} value={brandKit?.primaryColor || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Secondary color</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ secondaryColor: event.target.value })} value={brandKit?.secondaryColor || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ secondaryColor: event.target.value })} value={brandKit?.secondaryColor || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Accent color</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ accentColor: event.target.value })} value={brandKit?.accentColor || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ accentColor: event.target.value })} value={brandKit?.accentColor || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Text color</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ textColor: event.target.value })} value={brandKit?.textColor || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ textColor: event.target.value })} value={brandKit?.textColor || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Heading font</span>
@@ -4503,11 +4100,11 @@ export default function SettingsWorkspace() {
                 {renderAssetUploadField({ field: 'emailLogoUrl', label: 'Email logo', refObject: emailLogoUploadRef })}
                 <label className={styles.field}>
                   <span>Email header color</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailHeaderColor: event.target.value })} value={brandKit?.emailHeaderColor || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ emailHeaderColor: event.target.value })} value={brandKit?.emailHeaderColor || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Email footer text</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailFooterText: event.target.value })} value={brandKit?.emailFooterText || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ emailFooterText: event.target.value })} value={brandKit?.emailFooterText || ''} />
                 </label>
               </div>
               <p className={styles.compactMeta}>Email logo: Used in customer emails only.</p>
@@ -4530,19 +4127,19 @@ export default function SettingsWorkspace() {
               <div className={styles.brandFieldGrid}>
                 <label className={styles.field}>
                   <span>Instagram URL</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ instagramUrl: event.target.value })} value={brandKit?.instagramUrl || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ instagramUrl: event.target.value })} value={brandKit?.instagramUrl || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>Facebook URL</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ facebookUrl: event.target.value })} value={brandKit?.facebookUrl || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ facebookUrl: event.target.value })} value={brandKit?.facebookUrl || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>TikTok URL</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ tiktokUrl: event.target.value })} value={brandKit?.tiktokUrl || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ tiktokUrl: event.target.value })} value={brandKit?.tiktokUrl || ''} />
                 </label>
                 <label className={styles.field}>
                   <span>YouTube URL</span>
-                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ youtubeUrl: event.target.value })} value={brandKit?.youtubeUrl || ''} />
+                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ youtubeUrl: event.target.value })} value={brandKit?.youtubeUrl || ''} />
                 </label>
               </div>
               <p className={styles.compactMeta}>Social links: Used in storefront footer and email footer where supported.</p>
@@ -4574,3 +4171,4 @@ export default function SettingsWorkspace() {
     </AppShell>
   );
 }
+
