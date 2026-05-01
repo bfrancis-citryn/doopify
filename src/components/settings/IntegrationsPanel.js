@@ -1,45 +1,30 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AdminButton from '../admin/ui/AdminButton';
+import AdminCard from '../admin/ui/AdminCard';
+import AdminDrawer from '../admin/ui/AdminDrawer';
+import AdminField from '../admin/ui/AdminField';
+import AdminInput from '../admin/ui/AdminInput';
+import AdminStatusChip from '../admin/ui/AdminStatusChip';
+import {
+  WEBHOOK_EVENT_GROUPS,
+  uniqueStrings,
+  webhookEventsFromGroups,
+  webhookGroupLabelsFromEvents,
+  webhookGroupsFromEvents,
+} from './webhooks-settings.helpers';
 import styles from './SettingsWorkspace.module.css';
 
-const AVAILABLE_EVENTS = [
-  'order.created',
-  'order.paid',
-  'order.refunded',
-  'order.return_requested',
-  'order.return_updated',
-  'fulfillment.created',
-  'checkout.failed',
-  'checkout.abandoned',
-  'checkout.recovery_email_sent',
-  'checkout.recovered',
-  'product.created',
-  'product.updated',
-];
-
-const EMPTY_FORM = {
+const EMPTY_DRAFT = {
   name: '',
   type: 'CUSTOM',
   webhookUrl: '',
   webhookSecret: '',
   clearWebhookSecret: false,
   status: 'ACTIVE',
+  eventGroupIds: ['paid_orders'],
   events: [],
   secrets: [],
 };
-
-function integrationToDraft(integration) {
-  return {
-    name: integration.name || '',
-    type: integration.type || 'CUSTOM',
-    webhookUrl: integration.webhookUrl || '',
-    webhookSecret: '',
-    clearWebhookSecret: false,
-    status: integration.status || 'ACTIVE',
-    events: (integration.events || []).map((event) => event.event),
-    secrets: (integration.secrets || []).map((secret) => ({ key: secret.key, value: '' })),
-  };
-}
 
 function parseApiJson(response) {
   return response.json().then((payload) => {
@@ -50,278 +35,500 @@ function parseApiJson(response) {
   });
 }
 
-function EventCheckboxes({ selectedEvents, onChange }) {
-  function toggle(eventName) {
-    onChange(
-      selectedEvents.includes(eventName)
-        ? selectedEvents.filter((event) => event !== eventName)
-        : [...selectedEvents, eventName]
-    );
-  }
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-      {AVAILABLE_EVENTS.map((eventName) => (
-        <label className={styles.checkboxField} key={eventName}>
-          <input checked={selectedEvents.includes(eventName)} onChange={() => toggle(eventName)} type="checkbox" />
-          <span>{eventName}</span>
-        </label>
-      ))}
-    </div>
-  );
+function formatStatusTone(status) {
+  if (status === 'ACTIVE') return 'success';
+  if (status === 'INACTIVE') return 'warning';
+  return 'neutral';
 }
 
-function SecretRows({ secrets, onChange }) {
-  function updateSecret(index, patch) {
-    onChange(secrets.map((secret, entryIndex) => (entryIndex === index ? { ...secret, ...patch } : secret)));
+function maskDestination(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.host;
+    const shortPath = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+    return `${host}${shortPath}`;
+  } catch {
+    return url || 'No destination URL';
   }
-
-  return (
-    <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-      <span>Custom headers / secrets</span>
-      <p className={styles.cardSubtext}>Use keys like HEADER_X-API-Key to send encrypted custom headers with outbound deliveries. Existing values are preserved when the value field is blank.</p>
-      {secrets.map((secret, index) => (
-        <div key={`${secret.key}-${index}`} style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <input className={styles.input} value={secret.key} onChange={(event) => updateSecret(index, { key: event.target.value })} placeholder="HEADER_X-API-Key" />
-          <input className={styles.input} type="password" value={secret.value} onChange={(event) => updateSecret(index, { value: event.target.value })} placeholder="Leave blank to keep existing" />
-          <AdminButton onClick={() => onChange(secrets.filter((_, entryIndex) => entryIndex !== index))} size="sm" variant="danger">Remove</AdminButton>
-        </div>
-      ))}
-      <AdminButton onClick={() => onChange([...secrets, { key: '', value: '' }])} size="sm" style={{ marginTop: 8 }} variant="ghost">+ Add secret/header</AdminButton>
-    </div>
-  );
 }
 
-function IntegrationEditor({ integration, onSaved, onCancel }) {
-  const [draft, setDraft] = useState(() => integrationToDraft(integration));
-  const [saving, setSaving] = useState(false);
+function generateSigningSecret() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return `whsec_${Array.from(bytes).map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  return `whsec_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+}
+
+function getEventNames(integration) {
+  return (integration?.events || []).map((event) => event?.event).filter(Boolean);
+}
+
+function toDraft(integration) {
+  const eventNames = getEventNames(integration);
+  const eventGroupIds = webhookGroupsFromEvents(eventNames);
+  const groupedEvents = new Set(webhookEventsFromGroups(eventGroupIds));
+  return {
+    name: integration?.name || '',
+    type: integration?.type || 'CUSTOM',
+    webhookUrl: integration?.webhookUrl || '',
+    webhookSecret: '',
+    clearWebhookSecret: false,
+    status: integration?.status || 'ACTIVE',
+    eventGroupIds,
+    events: eventNames.filter((eventName) => !groupedEvents.has(eventName)),
+    secrets: (integration?.secrets || []).map((secret) => ({ key: secret.key, value: '' })),
+  };
+}
+
+function buildCreatePayload(draft) {
+  const groupedEvents = webhookEventsFromGroups(draft.eventGroupIds);
+  const mergedEvents = uniqueStrings([...groupedEvents, ...(draft.events || [])]);
+  const generatedSecret = draft.webhookSecret.trim() || generateSigningSecret();
+
+  return {
+    name: draft.name.trim(),
+    type: draft.type,
+    webhookUrl: draft.webhookUrl.trim(),
+    webhookSecret: generatedSecret,
+    status: draft.status,
+    events: mergedEvents,
+    secrets: (draft.secrets || []).filter((secret) => secret.key?.trim() && secret.value?.trim()),
+  };
+}
+
+function buildUpdatePayload(draft) {
+  const groupedEvents = webhookEventsFromGroups(draft.eventGroupIds);
+  const mergedEvents = uniqueStrings([...groupedEvents, ...(draft.events || [])]);
+
+  return {
+    name: draft.name.trim(),
+    type: draft.type,
+    webhookUrl: draft.webhookUrl.trim(),
+    webhookSecret: draft.webhookSecret.trim() || undefined,
+    clearWebhookSecret: Boolean(draft.clearWebhookSecret),
+    status: draft.status,
+    events: mergedEvents,
+    secrets: (draft.secrets || []).filter((secret) => secret.key?.trim()),
+  };
+}
+
+function sortByCreatedAtDesc(items) {
+  return [...(items || [])].sort((left, right) => {
+    const leftTime = left?.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right?.createdAt ? new Date(right.createdAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
+}
+
+export default function IntegrationsPanel() {
+  const [integrations, setIntegrations] = useState([]);
+  const [attentionDeliveries, setAttentionDeliveries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [attentionLoading, setAttentionLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [drawerMode, setDrawerMode] = useState(null);
+  const [editingIntegrationId, setEditingIntegrationId] = useState(null);
+  const [draft, setDraft] = useState({ ...EMPTY_DRAFT });
+  const [saving, setSaving] = useState(false);
+
+  const editingIntegration = useMemo(
+    () => integrations.find((integration) => integration.id === editingIntegrationId) || null,
+    [editingIntegrationId, integrations]
+  );
+
+  const activeCount = useMemo(
+    () => integrations.filter((integration) => integration.status === 'ACTIVE').length,
+    [integrations]
+  );
+
+  const needsAttentionCount = useMemo(
+    () => attentionDeliveries.filter((delivery) => delivery.status === 'FAILED' || delivery.status === 'RETRYING' || delivery.status === 'EXHAUSTED').length,
+    [attentionDeliveries]
+  );
+
+  useEffect(() => {
+    void refreshAll();
+  }, []);
+
+  async function refreshAll() {
+    setLoading(true);
+    setAttentionLoading(true);
+    setError('');
+
+    try {
+      const [integrationData, failedData, retryingData] = await Promise.all([
+        fetch('/api/settings/integrations', { cache: 'no-store' }).then(parseApiJson),
+        fetch('/api/outbound-webhook-deliveries?status=FAILED&page=1&pageSize=8', { cache: 'no-store' }).then(parseApiJson),
+        fetch('/api/outbound-webhook-deliveries?status=RETRYING&page=1&pageSize=8', { cache: 'no-store' }).then(parseApiJson),
+      ]);
+
+      setIntegrations(integrationData || []);
+      const mergedAttention = sortByCreatedAtDesc([...(failedData?.deliveries || []), ...(retryingData?.deliveries || [])]);
+      setAttentionDeliveries(mergedAttention.slice(0, 8));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load outbound webhooks');
+    } finally {
+      setLoading(false);
+      setAttentionLoading(false);
+    }
+  }
+
+  function openCreateDrawer() {
+    setError('');
+    setNotice('');
+    setEditingIntegrationId(null);
+    setDraft({ ...EMPTY_DRAFT });
+    setDrawerMode('create');
+  }
+
+  function openManageDrawer(integration) {
+    setError('');
+    setNotice('');
+    setEditingIntegrationId(integration.id);
+    setDraft(toDraft(integration));
+    setDrawerMode('manage');
+  }
+
+  function closeDrawer() {
+    setDrawerMode(null);
+    setEditingIntegrationId(null);
+    setDraft({ ...EMPTY_DRAFT });
+    setSaving(false);
+  }
 
   async function handleSave() {
     setSaving(true);
     setError('');
+    setNotice('');
+
     try {
-      const updated = await fetch(`/api/settings/integrations/${integration.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...draft,
-          secrets: draft.secrets.filter((secret) => secret.key.trim()),
-        }),
-      }).then(parseApiJson);
-      onSaved(updated);
+      if (!draft.name.trim()) {
+        throw new Error('Endpoint name is required');
+      }
+      if (!draft.webhookUrl.trim()) {
+        throw new Error('Destination URL is required');
+      }
+
+      if (drawerMode === 'create') {
+        const created = await fetch('/api/settings/integrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildCreatePayload(draft)),
+        }).then(parseApiJson);
+
+        setIntegrations((current) => [created, ...current]);
+        setNotice('Endpoint created. Signing secret is stored encrypted and hidden.');
+      }
+
+      if (drawerMode === 'manage' && editingIntegrationId) {
+        const updated = await fetch(`/api/settings/integrations/${editingIntegrationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildUpdatePayload(draft)),
+        }).then(parseApiJson);
+
+        setIntegrations((current) => current.map((integration) => (integration.id === updated.id ? updated : integration)));
+        setNotice('Endpoint updated. Secret values remain hidden.');
+      }
+
+      setDraft((current) => ({ ...current, webhookSecret: '', clearWebhookSecret: false }));
+      await refreshAll();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save integration');
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save endpoint');
     } finally {
       setSaving(false);
     }
   }
 
-  return (
-    <div className={styles.configRow}>
-      {error ? <p className={styles.statusTitle} style={{ color: 'red' }}>{error}</p> : null}
-      <div className={styles.inlineGrid}>
-        <label className={styles.field}>
-          <span>Name</span>
-          <input className={styles.input} value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
-        </label>
-        <label className={styles.field}>
-          <span>Type</span>
-          <input className={styles.input} value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value }))} />
-        </label>
-        <label className={styles.field}>
-          <span>Status</span>
-          <select className={styles.input} value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>Webhook URL</span>
-          <input className={styles.input} value={draft.webhookUrl} onChange={(event) => setDraft((current) => ({ ...current, webhookUrl: event.target.value }))} placeholder="https://example.com/webhooks/doopify" />
-        </label>
-        <label className={styles.field}>
-          <span>Signing secret</span>
-          <input
-            className={styles.input}
-            disabled={draft.clearWebhookSecret}
-            type="password"
-            value={draft.webhookSecret}
-            onChange={(event) => setDraft((current) => ({ ...current, webhookSecret: event.target.value }))}
-            placeholder="Leave blank to keep existing"
-          />
-        </label>
-        <label className={styles.checkboxField}>
-          <input checked={draft.clearWebhookSecret} onChange={(event) => setDraft((current) => ({ ...current, clearWebhookSecret: event.target.checked, webhookSecret: event.target.checked ? '' : current.webhookSecret }))} type="checkbox" />
-          <span>Clear existing signing secret</span>
-        </label>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <span>Subscribed events</span>
-          <EventCheckboxes selectedEvents={draft.events} onChange={(events) => setDraft((current) => ({ ...current, events }))} />
-        </div>
-        <SecretRows secrets={draft.secrets} onChange={(secrets) => setDraft((current) => ({ ...current, secrets }))} />
-      </div>
-      <div className={styles.actionRow}>
-        <AdminButton disabled={saving} onClick={handleSave} size="sm" variant="secondary">{saving ? 'Saving...' : 'Save integration'}</AdminButton>
-        <AdminButton disabled={saving} onClick={onCancel} size="sm" variant="ghost">Cancel</AdminButton>
-      </div>
-    </div>
-  );
-}
+  async function handleDelete() {
+    if (!editingIntegrationId) return;
+    if (!confirm('Delete this endpoint and its queued deliveries?')) return;
 
-export default function IntegrationsPanel() {
-  const [integrations, setIntegrations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [draft, setDraft] = useState({ ...EMPTY_FORM });
-  const [editingId, setEditingId] = useState(null);
-
-  const activeCount = useMemo(() => integrations.filter((integration) => integration.status === 'ACTIVE').length, [integrations]);
-
-  useEffect(() => {
-    fetchIntegrations();
-  }, []);
-
-  async function fetchIntegrations() {
-    setLoading(true);
-    setError('');
     try {
-      const data = await fetch('/api/settings/integrations').then(parseApiJson);
-      setIntegrations(data || []);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Failed to load integrations');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreate() {
-    try {
-      setError('');
-      const created = await fetch('/api/settings/integrations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...draft,
-          secrets: draft.secrets.filter((secret) => secret.key.trim() && secret.value.trim()),
-        }),
-      }).then(parseApiJson);
-      setIntegrations((current) => [created, ...current]);
-      setDraft({ ...EMPTY_FORM });
-    } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Failed to create integration');
-    }
-  }
-
-  async function handleDelete(id) {
-    if (!confirm('Delete this integration and its queued deliveries?')) return;
-    try {
-      await fetch(`/api/settings/integrations/${id}`, { method: 'DELETE' }).then(parseApiJson);
-      setIntegrations((current) => current.filter((integration) => integration.id !== id));
+      await fetch(`/api/settings/integrations/${editingIntegrationId}`, { method: 'DELETE' }).then(parseApiJson);
+      setIntegrations((current) => current.filter((integration) => integration.id !== editingIntegrationId));
+      closeDrawer();
+      setNotice('Endpoint deleted.');
+      await refreshAll();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete integration');
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete endpoint');
     }
   }
 
-  function handleSaved(updated) {
-    setIntegrations((current) => current.map((integration) => (integration.id === updated.id ? updated : integration)));
-    setEditingId(null);
+  async function handleStatusPatch(nextStatus) {
+    if (!editingIntegrationId) return;
+
+    try {
+      const updated = await fetch(`/api/settings/integrations/${editingIntegrationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      }).then(parseApiJson);
+
+      setIntegrations((current) => current.map((integration) => (integration.id === updated.id ? updated : integration)));
+      setNotice(nextStatus === 'ACTIVE' ? 'Endpoint enabled.' : 'Endpoint disabled.');
+      await refreshAll();
+    } catch (statusError) {
+      setError(statusError instanceof Error ? statusError.message : 'Failed to update endpoint status');
+    }
   }
 
-  if (loading) return <p className={styles.statusText}>Loading integrations...</p>;
+  function toggleGroup(groupId) {
+    const group = WEBHOOK_EVENT_GROUPS.find((entry) => entry.id === groupId);
+    if (!group || group.comingSoon) return;
+
+    setDraft((current) => {
+      const selected = new Set(current.eventGroupIds || []);
+      if (selected.has(groupId)) {
+        selected.delete(groupId);
+      } else {
+        selected.add(groupId);
+      }
+
+      return {
+        ...current,
+        eventGroupIds: Array.from(selected),
+      };
+    });
+  }
 
   return (
     <div className={styles.configStack}>
-      {error ? <p className={styles.statusTitle} style={{ color: 'red' }}>{error}</p> : null}
-
-      <section className={styles.configSection}>
-        <div className={styles.sectionHeading}>
-          <h3>Webhook subscriptions</h3>
-          <p className={styles.cardSubtext}>{integrations.length} configured, {activeCount} active.</p>
+      {error ? (
+        <div className={styles.statusBlock}>
+          <p className={styles.statusTitle}>Webhook settings error</p>
+          <p className={styles.statusText}>{error}</p>
         </div>
-        <p className={styles.cardSubtext}>Outbound webhooks are queued from typed internal events and delivered with timestamped HMAC signatures when a signing secret is set.</p>
+      ) : null}
+      {notice ? (
+        <div className={styles.statusBlock}>
+          <p className={styles.statusText}>{notice}</p>
+        </div>
+      ) : null}
+
+      <section className={styles.compactInfoStrip}>
+        <p className={styles.compactInfoStripTitle}>Doopify sends store updates to external apps.</p>
+        <p>
+          Webhooks do not require SMTP setup. Configure Stripe, email provider, and shipping callbacks in their own settings tabs.
+        </p>
+        <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
+          <span className={styles.methodChip}>Doopify -&gt; external app</span>
+          <span className={styles.methodChip}>Requires destination URL</span>
+          <span className={styles.methodChip}>Signed requests</span>
+        </div>
       </section>
 
-      <section className={styles.configSection}>
-        <div className={styles.sectionHeading}>
-          <h3>Add integration</h3>
-        </div>
-        <div className={styles.inlineGrid}>
-          <label className={styles.field}>
-            <span>Name</span>
-            <input className={styles.input} value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            <span>Type</span>
-            <input className={styles.input} value={draft.type} onChange={(event) => setDraft((current) => ({ ...current, type: event.target.value }))} />
-          </label>
-          <label className={styles.field}>
-            <span>Status</span>
-            <select className={styles.input} value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-          </label>
-          <label className={styles.field}>
-            <span>Webhook URL</span>
-            <input className={styles.input} value={draft.webhookUrl} onChange={(event) => setDraft((current) => ({ ...current, webhookUrl: event.target.value }))} placeholder="https://example.com/webhooks/doopify" />
-          </label>
-          <label className={styles.field}>
-            <span>Signing secret</span>
-            <input className={styles.input} type="password" value={draft.webhookSecret} onChange={(event) => setDraft((current) => ({ ...current, webhookSecret: event.target.value }))} placeholder="Encrypted at rest" />
-          </label>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <span>Subscribed events</span>
-            <EventCheckboxes selectedEvents={draft.events} onChange={(events) => setDraft((current) => ({ ...current, events }))} />
-          </div>
-          <SecretRows secrets={draft.secrets} onChange={(secrets) => setDraft((current) => ({ ...current, secrets }))} />
-          <AdminButton onClick={handleCreate} size="sm" style={{ gridColumn: '1 / -1', marginTop: 16, justifySelf: 'start' }} variant="secondary">
-            Add integration
+      <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+          <h4>Connected endpoints</h4>
+          <AdminButton onClick={openCreateDrawer} size="sm" variant="secondary">
+            Create endpoint
           </AdminButton>
         </div>
-      </section>
+        <p className={styles.cardSubtext}>{integrations.length} configured, {activeCount} active.</p>
+        {loading ? <p className={styles.statusText}>Loading endpoints...</p> : null}
+        {!loading && integrations.length === 0 ? (
+          <p className={styles.statusText}>No outbound endpoints yet. Create one to start sending updates.</p>
+        ) : null}
+        {!loading && integrations.length ? (
+          <div className={styles.compactList}>
+            {integrations.map((integration) => {
+              const events = getEventNames(integration);
+              const chips = webhookGroupLabelsFromEvents(events);
+              return (
+                <article className={styles.endpointRow} key={integration.id}>
+                  <div className={styles.endpointMain}>
+                    <p className={styles.endpointTitle}>{integration.name || 'Unnamed endpoint'}</p>
+                    <p className={styles.endpointMeta}>{maskDestination(integration.webhookUrl || '')}</p>
+                    <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
+                      {chips.length
+                        ? chips.map((chip) => (
+                            <span className={styles.methodChip} key={`${integration.id}-${chip}`}>
+                              {chip}
+                            </span>
+                          ))
+                        : <span className={styles.methodChip}>No event groups selected</span>}
+                    </div>
+                  </div>
+                  <div className={styles.endpointMain}>
+                    <AdminStatusChip tone={formatStatusTone(integration.status)}>{integration.status === 'ACTIVE' ? 'Active' : 'Inactive'}</AdminStatusChip>
+                    <p className={styles.endpointMeta}>{integration.updatedAt ? `Updated ${new Date(integration.updatedAt).toLocaleString()}` : 'No recent updates'}</p>
+                  </div>
+                  <AdminButton onClick={() => openManageDrawer(integration)} size="sm" variant="secondary">
+                    Manage
+                  </AdminButton>
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
+      </AdminCard>
 
-      <section className={styles.configSection}>
-        <div className={styles.sectionHeading}>
-          <h3>Configured integrations</h3>
+      <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+          <h4>Needs attention</h4>
+          <AdminStatusChip tone={needsAttentionCount ? 'warning' : 'neutral'}>{needsAttentionCount} issues</AdminStatusChip>
         </div>
-        {integrations.length === 0 && <p className={styles.cardSubtext}>No integrations configured.</p>}
-        {integrations.map((integration) => (
-          editingId === integration.id ? (
-            <IntegrationEditor
-              integration={integration}
-              key={integration.id}
-              onCancel={() => setEditingId(null)}
-              onSaved={handleSaved}
-            />
-          ) : (
-            <div className={styles.configRow} key={integration.id}>
-              <div className={styles.inlineGrid}>
-                <label className={styles.field}>
-                  <span>Name</span>
-                  <input className={styles.input} value={integration.name} disabled />
-                </label>
-                <label className={styles.field}>
-                  <span>Status</span>
-                  <input className={styles.input} value={integration.status} disabled />
-                </label>
-                <label className={styles.field}>
-                  <span>Webhook URL</span>
-                  <input className={styles.input} value={integration.webhookUrl || ''} disabled />
-                </label>
+        {attentionLoading ? <p className={styles.statusText}>Checking retries and failures...</p> : null}
+        {!attentionLoading && attentionDeliveries.length === 0 ? (
+          <p className={styles.statusText}>No failed or retrying deliveries right now.</p>
+        ) : null}
+        {!attentionLoading && attentionDeliveries.length ? (
+          <div className={styles.compactList}>
+            {attentionDeliveries.map((delivery) => (
+              <div className={styles.attentionRow} key={delivery.id}>
+                <div>
+                  <p className={styles.compactInfoStripTitle}>{delivery.integration?.name || 'Outbound endpoint'} {delivery.status.toLowerCase()}</p>
+                  <p className={styles.attentionText}>
+                    {delivery.lastError || (delivery.statusCode ? `HTTP ${delivery.statusCode}` : 'Delivery needs review')}
+                  </p>
+                </div>
+                <AdminButton onClick={() => window.location.assign('/admin/webhooks')} size="sm" variant="ghost">
+                  View logs
+                </AdminButton>
               </div>
-              <div style={{ padding: '0 16px' }}>
-                <p style={{ fontSize: '0.85rem', color: '#666' }}>Events: {(integration.events || []).map((event) => event.event).join(', ') || 'None'}</p>
-                <p style={{ fontSize: '0.85rem', color: '#666' }}>Stored secrets/headers: {(integration.secrets || []).map((secret) => secret.key).join(', ') || 'None'}</p>
+            ))}
+          </div>
+        ) : null}
+      </AdminCard>
+
+      <AdminDrawer
+        onClose={closeDrawer}
+        open={Boolean(drawerMode)}
+        subtitle={
+          drawerMode === 'create'
+            ? 'Paste a destination URL, choose updates to send, and save an encrypted signing secret.'
+            : 'Update destination, event groups, and endpoint security without exposing stored secrets.'
+        }
+        title={drawerMode === 'create' ? 'Connect another app' : (editingIntegration?.name || 'Manage endpoint')}
+      >
+        {drawerMode ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>1. Destination</h4>
               </div>
-              <div className={styles.actionRow}>
-                <AdminButton onClick={() => setEditingId(integration.id)} size="sm" variant="secondary">Edit</AdminButton>
-                <AdminButton onClick={() => handleDelete(integration.id)} size="sm" variant="danger">Delete</AdminButton>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <AdminField label="Endpoint name">
+                  <AdminInput
+                    onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Warehouse sync"
+                    value={draft.name}
+                  />
+                </AdminField>
+                <AdminField label="Destination URL">
+                  <AdminInput
+                    onChange={(event) => setDraft((current) => ({ ...current, webhookUrl: event.target.value }))}
+                    placeholder="https://example.com/doopify/webhooks"
+                    value={draft.webhookUrl}
+                  />
+                </AdminField>
               </div>
-            </div>
-          )
-        ))}
-      </section>
+            </AdminCard>
+
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>2. Updates to send</h4>
+              </div>
+              <div className={styles.groupGrid}>
+                {WEBHOOK_EVENT_GROUPS.map((group) => (
+                  <label className={styles.groupOption} key={group.id}>
+                    <div className={styles.providerTitleLine}>
+                      <input
+                        checked={(draft.eventGroupIds || []).includes(group.id)}
+                        disabled={Boolean(group.comingSoon)}
+                        onChange={() => toggleGroup(group.id)}
+                        type="checkbox"
+                      />
+                      <span className={styles.groupOptionTitle}>{group.label}</span>
+                      {group.comingSoon ? <AdminStatusChip tone="warning">Coming soon</AdminStatusChip> : null}
+                    </div>
+                    <p className={styles.groupOptionMeta}>{group.description}</p>
+                  </label>
+                ))}
+              </div>
+            </AdminCard>
+
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>3. Security</h4>
+              </div>
+              <p className={styles.compactMeta}>
+                Doopify signs outbound requests. Secret values are encrypted and never shown after save.
+              </p>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <AdminField hint={drawerMode === 'create' ? 'Leave blank to auto-generate.' : 'Set a new value to rotate the secret.'} label="Signing secret">
+                  <AdminInput
+                    onChange={(event) => setDraft((current) => ({ ...current, webhookSecret: event.target.value }))}
+                    placeholder="whsec_..."
+                    type="password"
+                    value={draft.webhookSecret}
+                  />
+                </AdminField>
+                {drawerMode === 'manage' ? (
+                  <label className={styles.checkboxField}>
+                    <input
+                      checked={Boolean(draft.clearWebhookSecret)}
+                      onChange={(event) => setDraft((current) => ({ ...current, clearWebhookSecret: event.target.checked }))}
+                      type="checkbox"
+                    />
+                    <span>Clear existing signing secret</span>
+                  </label>
+                ) : null}
+              </div>
+            </AdminCard>
+
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>4. Test and save</h4>
+              </div>
+              <p className={styles.compactMeta}>Test send from this drawer is not wired yet. Save first, then validate from Delivery logs.</p>
+              <div className={styles.compactActionRow}>
+                <AdminButton disabled size="sm" variant="ghost">
+                  Send test (coming soon)
+                </AdminButton>
+                <AdminButton disabled={saving} onClick={handleSave} size="sm" variant="secondary">
+                  {saving ? 'Saving...' : (drawerMode === 'create' ? 'Save endpoint' : 'Save changes')}
+                </AdminButton>
+              </div>
+            </AdminCard>
+
+            {drawerMode === 'manage' && editingIntegration ? (
+              <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+                <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                  <h4>Advanced</h4>
+                </div>
+                <p className={styles.compactMeta}>
+                  <strong>Exact events:</strong> {uniqueStrings([...webhookEventsFromGroups(draft.eventGroupIds), ...draft.events]).join(', ') || 'None'}
+                </p>
+                <p className={styles.compactMeta}><strong>Destination:</strong> {editingIntegration.webhookUrl || 'Not set'}</p>
+                <p className={styles.compactMeta}><strong>Secret:</strong> masked and encrypted</p>
+                <div className={styles.compactActionRow}>
+                  <AdminButton onClick={() => window.location.assign('/admin/webhooks')} size="sm" variant="ghost">
+                    Open delivery logs
+                  </AdminButton>
+                  {editingIntegration.status === 'ACTIVE' ? (
+                    <AdminButton onClick={() => handleStatusPatch('INACTIVE')} size="sm" variant="ghost">
+                      Disable endpoint
+                    </AdminButton>
+                  ) : (
+                    <AdminButton onClick={() => handleStatusPatch('ACTIVE')} size="sm" variant="secondary">
+                      Enable endpoint
+                    </AdminButton>
+                  )}
+                  <AdminButton onClick={handleDelete} size="sm" variant="danger">
+                    Delete endpoint
+                  </AdminButton>
+                </div>
+              </AdminCard>
+            ) : null}
+          </div>
+        ) : null}
+      </AdminDrawer>
     </div>
   );
 }

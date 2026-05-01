@@ -53,6 +53,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - owner-only provider setup gateways for Payments/Shipping/Email with encrypted credential persistence and explicit verify/disconnect actions (`/api/settings/providers/*`)
 - verified DB-backed Stripe runtime selection for checkout/webhook paths with env fallback, plus owner-safe runtime status (`/api/settings/payments/stripe/runtime-status`) and public publishable-key config (`/api/checkout/stripe-config`)
 - Payments settings UX rebuilt to compact provider rows with provider-specific drawers (Stripe/PayPal/Manual) so secrets remain hidden from the main page while setup actions stay in Settings -> Payments
+- Settings -> Webhooks UX rebuilt to a compact outbound endpoint manager with drawer-based create/manage flows, friendly event groups, and encrypted signing-secret handling
+- Settings -> Email UX shifted to customer-message-first sections with provider credentials hidden behind Manage drawers
+- Settings now defaults to a General tab; Brand Kit is no longer the first/default settings tab
 - Checkout pricing snapshots that persist shipping/tax resolution decisions into checkout payloads
 - Durable inbound Stripe webhook delivery logging with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified stored payloads, retry metadata, local-payload replay, diagnostics, cron-compatible retry tooling, and admin visibility
 - Internal typed event dispatcher plus a static integration registry

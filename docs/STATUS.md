@@ -56,6 +56,9 @@ The repo currently includes:
 - Stripe runtime now resolves verified DB credentials first with env fallback for checkout payment-intent creation; webhook signature verification now prefers verified DB webhook secret and falls back to env when DB webhook secret is unavailable
 - Stripe runtime visibility endpoints now exist at owner-only `GET /api/settings/payments/stripe/runtime-status` and public `GET /api/checkout/stripe-config` (publishable key only, source/mode labeled)
 - Settings -> Payments now uses compact provider rows plus per-provider slide-over drawers so credential fields are not always visible on the main settings page
+- Settings -> Webhooks now uses a compact outbound endpoint manager with drawer-based create/manage flow, friendly event groups mapped to real typed events, and encrypted secret handling without raw secret rendering
+- Settings -> Email now emphasizes customer-message workflow sections (providers, sender identity, branding, templates, activity) with provider credentials kept behind Manage drawers
+- Settings default tab now opens on **General**; Brand Kit is no longer the first settings experience
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - System sidebar now labels `/admin/webhooks` as **Delivery logs** (monitoring/debugging); outbound endpoint configuration remains in `Settings -> Webhooks`

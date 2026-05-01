@@ -24,11 +24,12 @@ import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TE
 import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
 
 const SETTINGS_SECTIONS = [
-  { id: 'brand-kit', label: 'Brand kit' },
+  { id: 'general', label: 'General' },
   { id: 'payments', label: 'Payments' },
   { id: 'shipping', label: 'Shipping & tax' },
   { id: 'webhooks', label: 'Webhooks' },
   { id: 'email', label: 'Email' },
+  { id: 'brand-kit', label: 'Storefront / brand' },
   { id: 'setup', label: 'Setup' },
 ];
 
@@ -602,7 +603,7 @@ function extractEnvVariableHints(checks) {
 }
 
 export default function SettingsWorkspace() {
-  const [activeSection, setActiveSection] = useState('brand-kit');
+  const [activeSection, setActiveSection] = useState('general');
   const { settings, updateSettings, loading, error } = useSettings();
   const [shippingConfigLoading, setShippingConfigLoading] = useState(false);
   const [shippingConfigError, setShippingConfigError] = useState('');
@@ -1943,7 +1944,7 @@ export default function SettingsWorkspace() {
         <div className={`${styles.navPanel} glass-card refraction-edge admin-spotlight`}>
           <div className={styles.navHeader}>
             <p className={styles.eyebrow}>Settings</p>
-            <h2 className={styles.title}>Brand controls</h2>
+            <h2 className={styles.title}>Store settings</h2>
           </div>
           <div className={styles.sectionList}>
             {SETTINGS_SECTIONS.map((section) => (
@@ -1976,12 +1977,17 @@ export default function SettingsWorkspace() {
                 <div className={styles.headerActions}>
                   <AdminSavedState savedAgoText={savedAgoText} state={savedState} />
                   <AdminButton
-                    disabled={loading || Boolean(error) || (activeSection === 'brand-kit' && (brandKitLoading || !brandKit))}
+                    disabled={
+                      activeSection !== 'brand-kit' ||
+                      loading ||
+                      Boolean(error) ||
+                      (activeSection === 'brand-kit' && (brandKitLoading || !brandKit))
+                    }
                     onClick={activeSection === 'brand-kit' ? handleBrandKitSave : undefined}
                     size="sm"
                     variant="primary"
                   >
-                    Save changes
+                    {activeSection === 'brand-kit' ? 'Save changes' : 'Auto-saved'}
                   </AdminButton>
                 </div>
               )}
@@ -2000,6 +2006,81 @@ export default function SettingsWorkspace() {
               <div className={styles.statusBlock}>
                 <p className={styles.statusTitle}>Settings could not be loaded.</p>
                 <p className={styles.statusText}>{error}</p>
+              </div>
+            ) : null}
+
+            {!loading && !error && activeSection === 'general' ? (
+              <div className={styles.configStack}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                    <h4>Store identity</h4>
+                  </div>
+                  <p className={styles.cardSubtext}>Core store details used across admin and customer messages.</p>
+                  <div className={styles.drawerFormGrid}>
+                    <AdminField label="Store name">
+                      <AdminInput
+                        onChange={(event) => handleSettingsPatch({ storeName: event.target.value })}
+                        placeholder="Doopify Store"
+                        value={settings.storeName || ''}
+                      />
+                    </AdminField>
+                    <AdminField label="Support email">
+                      <AdminInput
+                        onChange={(event) => handleSettingsPatch({ supportEmail: event.target.value })}
+                        placeholder="support@example.com"
+                        value={settings.supportEmail || ''}
+                      />
+                    </AdminField>
+                    <AdminField label="Phone">
+                      <AdminInput
+                        onChange={(event) => handleSettingsPatch({ phone: event.target.value })}
+                        placeholder="+1 555 555 5555"
+                        value={settings.phone || ''}
+                      />
+                    </AdminField>
+                    <AdminField label="Timezone">
+                      <AdminInput onChange={(event) => handleSettingsPatch({ timezone: event.target.value })} value={settings.timezone || ''} />
+                    </AdminField>
+                    <AdminField label="Currency">
+                      <AdminInput onChange={(event) => handleSettingsPatch({ currency: event.target.value })} value={settings.currency || 'USD'} />
+                    </AdminField>
+                  </div>
+                </AdminCard>
+
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                    <h4>Store address</h4>
+                  </div>
+                  <p className={styles.cardSubtext}>Address editing will be expanded here. Current store address is shown below.</p>
+                  <div className={styles.drawerFormGrid}>
+                    <AdminField label="Current address">
+                      <AdminInput disabled value={settings.address || 'No address configured yet'} />
+                    </AdminField>
+                    <AdminField label="Address editor">
+                      <AdminInput disabled value="Coming soon" />
+                    </AdminField>
+                  </div>
+                </AdminCard>
+
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                    <h4>Operational defaults</h4>
+                  </div>
+                  <p className={styles.cardSubtext}>
+                    Payment, shipping, and email providers are configured in their dedicated tabs.
+                  </p>
+                  <div className={styles.compactActionRow}>
+                    <AdminButton onClick={() => setActiveSection('payments')} size="sm" variant="secondary">
+                      Open payments
+                    </AdminButton>
+                    <AdminButton onClick={() => setActiveSection('shipping')} size="sm" variant="secondary">
+                      Open shipping
+                    </AdminButton>
+                    <AdminButton onClick={() => setActiveSection('email')} size="sm" variant="secondary">
+                      Open email
+                    </AdminButton>
+                  </div>
+                </AdminCard>
               </div>
             ) : null}
 
@@ -2859,19 +2940,19 @@ export default function SettingsWorkspace() {
                   </div>
                 ) : null}
 
-                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
-                  <div className={styles.setupCardHeader}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Payment providers</h4>
                     <AdminTooltip content="Provider credentials are managed in drawers to keep this page compact and secret-safe." />
                   </div>
                   <p className={styles.cardSubtext}>Connect gateways and manage payment runtime status by provider.</p>
                   <div className={styles.providerList}>
                     {paymentProviderRows.map((providerRow) => (
-                      <article className={styles.providerRow} key={providerRow.id}>
+                      <article className={`${styles.providerRow} ${styles.compactProviderRow}`} key={providerRow.id}>
                         <div className={`${styles.providerIcon} ${styles[providerRow.iconClassName] || ''}`}>{providerRow.iconText}</div>
-                        <div className={styles.providerMain}>
+                        <div className={`${styles.providerMain} ${styles.compactRowMain}`}>
                           <div className={styles.providerTitleLine}>
-                            <h4>{providerRow.name}</h4>
+                            <h4 className={styles.compactRowTitle}>{providerRow.name}</h4>
                             <AdminStatusChip tone={providerRow.status.tone}>{providerRow.status.label}</AdminStatusChip>
                             {providerRow.badges.map((badge) => (
                               <AdminStatusChip key={`${providerRow.id}-${badge.label}`} tone={badge.tone}>
@@ -2879,10 +2960,10 @@ export default function SettingsWorkspace() {
                               </AdminStatusChip>
                             ))}
                           </div>
-                          <p className={styles.statusText}>{providerRow.description}</p>
-                          <p className={styles.providerMeta}>{providerRow.sourceMeta}</p>
-                          <p className={styles.providerMeta}>{providerRow.statusMeta}</p>
-                          <div className={styles.methodChipRow}>
+                          <p className={styles.compactRowDescription}>{providerRow.description}</p>
+                          <p className={styles.compactMeta}>{providerRow.sourceMeta}</p>
+                          <p className={styles.compactMeta}>{providerRow.statusMeta}</p>
+                          <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
                             {providerRow.chips.map((chip) => (
                               <span className={styles.methodChip} key={`${providerRow.id}-${chip}`}>
                                 {chip}
@@ -2890,7 +2971,7 @@ export default function SettingsWorkspace() {
                             ))}
                           </div>
                         </div>
-                        <div className={styles.providerActions}>
+                        <div className={`${styles.providerActions} ${styles.compactActionRow}`}>
                           <AdminButton
                             aria-label={`Manage ${providerRow.name}`}
                             onClick={() => openPaymentDrawer(providerRow.id)}
@@ -2910,8 +2991,8 @@ export default function SettingsWorkspace() {
                   </div>
                 </AdminCard>
 
-                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
-                  <div className={styles.setupCardHeader}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Customer checkout methods</h4>
                     <AdminTooltip content="Method labels are derived from real runtime status and never claim unsupported behavior." />
                   </div>
@@ -2920,17 +3001,17 @@ export default function SettingsWorkspace() {
                     {checkoutMethodStatuses.map((entry) => (
                       <article className={styles.checkoutMethodCard} key={entry.id}>
                         <div className={styles.providerTitleLine}>
-                          <h4>{entry.title}</h4>
+                          <h4 className={styles.compactRowTitle}>{entry.title}</h4>
                           <AdminStatusChip tone={entry.statusTone}>{entry.statusLabel}</AdminStatusChip>
                         </div>
-                        <p className={styles.statusText}>{entry.detail}</p>
+                        <p className={styles.compactRowDescription}>{entry.detail}</p>
                       </article>
                     ))}
                   </div>
                 </AdminCard>
 
-                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
-                  <div className={styles.setupCardHeader}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Payment activity</h4>
                     <AdminTooltip content="Rows currently come from order payment records. Refund timeline enrichment will follow with a dedicated activity API." />
                   </div>
@@ -2976,45 +3057,45 @@ export default function SettingsWorkspace() {
                   </div>
                 ) : null}
 
-                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
-                  <div className={styles.setupCardHeader}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Setup checklist</h4>
                   </div>
                   <div className={styles.checkoutMethodGrid}>
                     <article className={styles.checkoutMethodCard}>
                       <div className={styles.providerTitleLine}>
-                        <h4>Provider connected</h4>
+                        <h4 className={styles.compactRowTitle}>Provider connected</h4>
                         <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
                       </div>
-                      <p className={styles.statusText}>{resendSetupStatus.detail}</p>
+                      <p className={styles.compactRowDescription}>{resendSetupStatus.detail}</p>
                     </article>
                     <article className={styles.checkoutMethodCard}>
                       <div className={styles.providerTitleLine}>
-                        <h4>Sender identity</h4>
+                        <h4 className={styles.compactRowTitle}>Sender identity</h4>
                         <AdminStatusChip tone={settings.senderEmail ? 'success' : 'warning'}>
                           {settings.senderEmail ? 'Configured' : 'Setup needed'}
                         </AdminStatusChip>
                       </div>
-                      <p className={styles.statusText}>
+                      <p className={styles.compactRowDescription}>
                         {settings.senderEmail ? `Using ${settings.senderEmail}` : 'Add a sender email so customer messages use your store identity.'}
                       </p>
                     </article>
                   </div>
                 </AdminCard>
 
-                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
-                  <div className={styles.setupCardHeader}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Email providers</h4>
                     <AdminTooltip content="Credentials and secret fields are managed inside the provider drawer." />
                   </div>
                   <p className={styles.cardSubtext}>Choose a provider and manage credentials without exposing secret inputs on this page.</p>
                   <div className={styles.providerList}>
                     {emailProviderRows.map((providerRow) => (
-                      <article className={styles.providerRow} key={providerRow.id}>
+                      <article className={`${styles.providerRow} ${styles.compactProviderRow}`} key={providerRow.id}>
                         <div className={`${styles.providerIcon} ${styles[providerRow.iconClassName]}`}>{providerRow.iconText}</div>
-                        <div className={styles.providerMain}>
+                        <div className={`${styles.providerMain} ${styles.compactRowMain}`}>
                           <div className={styles.providerTitleLine}>
-                            <h4>{providerRow.name}</h4>
+                            <h4 className={styles.compactRowTitle}>{providerRow.name}</h4>
                             <AdminStatusChip tone={providerRow.status.tone}>{providerRow.status.label}</AdminStatusChip>
                             {providerRow.badges.map((badge) => (
                               <AdminStatusChip key={`${providerRow.id}-${badge.label}`} tone={badge.tone}>
@@ -3022,14 +3103,14 @@ export default function SettingsWorkspace() {
                               </AdminStatusChip>
                             ))}
                           </div>
-                          <p className={styles.statusText}>{providerRow.description}</p>
-                          <p className={styles.providerMeta}>
+                          <p className={styles.compactRowDescription}>{providerRow.description}</p>
+                          <p className={styles.compactMeta}>
                             <strong>Active source:</strong> {providerRow.status.sourceLabel || 'Not active'}
                           </p>
-                          <p className={styles.providerMeta}>
+                          <p className={styles.compactMeta}>
                             <strong>Last verified:</strong> {formatDateTime(providerRow.status.lastVerifiedAt)}
                           </p>
-                          <div className={styles.methodChipRow}>
+                          <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
                             {providerRow.chips.map((chip) => (
                               <span className={styles.methodChip} key={`${providerRow.id}-${chip}`}>
                                 {chip}
@@ -3048,12 +3129,12 @@ export default function SettingsWorkspace() {
                 </AdminCard>
 
                 <section className={styles.setupColumns}>
-                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
-                    <div className={styles.setupCardHeader}>
+                  <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                    <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                       <h4>Sender identity</h4>
                     </div>
                     <p className={styles.statusText}>Use verified sender details before enabling customer templates at scale.</p>
-                    <div className={styles.drawerFormGrid}>
+                    <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                       <label className={styles.field}>
                         <span>From email</span>
                         <input
@@ -3075,22 +3156,22 @@ export default function SettingsWorkspace() {
                     </div>
                   </AdminCard>
 
-                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
-                    <div className={styles.setupCardHeader}>
+                  <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                    <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                       <h4>Email branding</h4>
                     </div>
-                    <p className={styles.statusText}>Logo and styling controls are tied to Brand kit and will be expanded in the Email tab next.</p>
-                    <div className={styles.actionRow}>
+                    <p className={styles.compactRowDescription}>Email branding controls are not fully wired yet. Use Storefront / brand for active logo and color tokens.</p>
+                    <div className={styles.compactActionRow}>
                       <AdminButton onClick={() => setActiveSection('brand-kit')} size="sm" variant="secondary">
-                        Open Brand kit
+                        Open Storefront / brand
                       </AdminButton>
                     </div>
                   </AdminCard>
                 </section>
 
                 <section className={styles.setupColumns}>
-                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
-                    <div className={styles.setupCardHeader}>
+                  <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                    <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                       <h4>Customer email templates</h4>
                     </div>
                     <div className={styles.rateList}>
@@ -3105,8 +3186,8 @@ export default function SettingsWorkspace() {
                     </div>
                   </AdminCard>
 
-                  <AdminCard as="section" className={styles.setupColumnCard} variant="card">
-                    <div className={styles.setupCardHeader}>
+                  <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                    <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                       <h4>Recent email activity</h4>
                     </div>
                     <p className={styles.cardSubtext}>Track customer email delivery outcomes here. Use Delivery logs for deeper observability and retries.</p>
@@ -3354,12 +3435,20 @@ export default function SettingsWorkspace() {
             ) : null}
 
             {!loading && !error && activeSection === 'webhooks' ? (
-              <div className={styles.brandKitLayout}>
-                <div className={styles.brandKitHeading}>
-                  <h3>Webhooks</h3>
+              <div className={styles.configStack}>
+                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                  <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                    <h4>Outbound webhooks</h4>
+                    <AdminTooltip content="Settings -> Webhooks is for outbound endpoint setup. Monitoring and retries live in Delivery logs." />
+                  </div>
+                  <p className={styles.cardSubtext}>
+                    Send store updates to another app using a destination URL from that app.
+                  </p>
+                </AdminCard>
+                <div className={styles.compactInfoStrip}>
+                  <p className={styles.compactInfoStripTitle}>Looking to monitor deliveries?</p>
                   <p>
-                    These are outbound merchant/developer webhooks for sending Doopify events to other systems.{' '}
-                    <AdminTooltip content="Payment provider webhooks (Stripe) belong in Payments. Email provider webhooks belong in Email. Outbound merchant webhooks are configured here." />
+                    Use System -&gt; Delivery logs to inspect failures, retries, and provider responses.
                   </p>
                 </div>
                 <IntegrationsPanel />
@@ -3567,23 +3656,23 @@ export default function SettingsWorkspace() {
       >
         {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE ? (
           <div className={styles.drawerStack}>
-            <AdminCard as="section" variant="card">
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={styles.setupCardHeader}>
                 <h4>Connection status</h4>
                 <AdminStatusChip tone={stripeSetupStatus.tone}>{stripeSetupStatus.label}</AdminStatusChip>
               </div>
               <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
               <div className={styles.drawerStatusGrid}>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Runtime source:</strong> {stripeCheckoutSourceLabel}
                 </p>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Mode:</strong> {stripeRuntimeModeLabel}
                 </p>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Webhook source:</strong> {stripeWebhookSourceLabel}
                 </p>
-                <p className={styles.providerMeta}>
+                <p className={styles.compactMeta}>
                   <strong>Verified at:</strong>{' '}
                   {stripeSetupStatus.lastVerifiedAt ? new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString() : 'Not verified yet'}
                 </p>
@@ -3595,12 +3684,12 @@ export default function SettingsWorkspace() {
               ) : null}
             </AdminCard>
 
-            <AdminCard as="section" variant="card">
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={styles.setupCardHeader}>
                 <h4>Stripe credentials</h4>
                 <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
               </div>
-              <div className={styles.drawerFormGrid}>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField hint="pk_test_... or pk_live_..." label="Publishable key">
                   <AdminInput
                     onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
@@ -3672,7 +3761,7 @@ export default function SettingsWorkspace() {
               {stripeSavedCredentialMeta.length ? (
                 <div className={styles.maskedSecretList}>
                   {stripeSavedCredentialMeta.map((entry) => (
-                    <p className={styles.providerMeta} key={entry.key}>
+                    <p className={styles.compactMeta} key={entry.key}>
                       <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
                     </p>
                   ))}
@@ -3682,18 +3771,18 @@ export default function SettingsWorkspace() {
               )}
             </AdminCard>
 
-            <AdminCard as="section" variant="card">
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={styles.setupCardHeader}>
                 <h4>Checkout methods through Stripe</h4>
               </div>
-              <div className={styles.methodChipRow}>
+              <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
                 {stripeMethodChips.map((chip) => (
                   <span className={styles.methodChip} key={`stripe-drawer-${chip}`}>
                     {chip}
                   </span>
                 ))}
               </div>
-              <p className={styles.providerMeta}>
+              <p className={styles.compactMeta}>
                 Cards can be active once Stripe runtime source is DB or env. Wallet methods still depend on eligibility, HTTPS, live mode, and domain checks.
               </p>
             </AdminCard>
@@ -3705,7 +3794,7 @@ export default function SettingsWorkspace() {
               <p className={styles.statusText}>
                 Disconnecting Stripe removes DB-backed credentials. Env fallback may remain active if env keys still exist.
               </p>
-              <div className={styles.actionRow}>
+              <div className={styles.compactActionRow}>
                 <AdminButton
                   disabled={providerActionById.STRIPE === 'disconnecting'}
                   onClick={() => handleDisconnectProvider('STRIPE')}
@@ -3825,7 +3914,7 @@ export default function SettingsWorkspace() {
                 <AdminStatusChip tone={resendSetupStatus.tone}>{resendSetupStatus.label}</AdminStatusChip>
               </div>
               <p className={styles.statusText}>{resendSetupStatus.detail}</p>
-              <div className={styles.drawerStatusGrid}>
+              <div className={`${styles.drawerStatusGrid} ${styles.compactDrawerGrid}`}>
                 <p className={styles.providerMeta}>
                   <strong>Active source:</strong> {resendSetupStatus.sourceLabel || 'Not active'}
                 </p>
@@ -3874,7 +3963,7 @@ export default function SettingsWorkspace() {
                   />
                 </AdminField>
               </div>
-              <div className={styles.actionRow}>
+              <div className={styles.compactActionRow}>
                 <AdminButton
                   disabled={providerActionById.RESEND === 'saving' || !providerForms.RESEND.apiKey.trim()}
                   onClick={() =>
@@ -3915,10 +4004,10 @@ export default function SettingsWorkspace() {
                   ))}
                 </div>
               ) : (
-                <p className={styles.providerMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
+                <p className={styles.compactMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
               )}
             </AdminCard>
-            <AdminCard as="section" variant="card">
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={styles.setupCardHeader}>
                 <h4>Danger zone</h4>
               </div>
