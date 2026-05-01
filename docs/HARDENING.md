@@ -46,6 +46,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - persisted money fields now store integer minor units at rest to eliminate floating-point drift in database truth
 - checkout pricing flows through `src/server/checkout/pricing.ts`
 - checkout validates live variant pricing and inventory before creating the payment intent
+- checkout Stripe runtime now prefers verified DB credentials and safely falls back to env credentials when no verified DB Stripe connection exists
 - orders are created only from verified Stripe webhook success
 - duplicate webhook deliveries are handled idempotently through the payment-intent path
 - checkout failure state is persisted and surfaced on the success-page polling flow
@@ -60,6 +61,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - fulfillment lifecycle jobs now run through the shared job system: `SYNC_SHIPPING_TRACKING` for safe tracking-field sync plus provider polling-driven `deliveredAt` updates, and `SEND_FULFILLMENT_EMAIL` for tracked shipping-update delivery attempts
 - shipping provider webhook ingestion now supports `POST /api/webhooks/shipping-provider?provider=EASYPOST|SHIPPO` with signature verification and tracked fulfillment/shipping-label updates
 - inbound Stripe webhook deliveries are durably logged with provider event id, type, status, attempts, processed timestamp, last error, payload hash, verified local payload storage, and retry metadata
+- inbound Stripe webhook signature verification now prefers verified DB webhook secret and falls back to env webhook secret only when verified DB webhook secret is unavailable
 - inbound webhook replay uses verified local payloads instead of refetching from Stripe
 - inbound webhook retry/support diagnostics are available through admin API/UI
 - fast automated tests cover checkout pricing, discount-code math and invalid states, checkout creation, checkout payload validation failures, checkout inventory-exhaustion rejection, duplicate payment-intent completion, invalid webhook signature rejection, verified webhook payload capture, retry scheduling/exhaustion, cron retry authorization, local-payload replay, and support diagnostics
@@ -207,6 +209,7 @@ These invariants should not be broken by future work:
 - shipping setup wizard/status/test-rate admin routes must remain admin-authorized and must not expose provider credentials
 - shipping provider connect/disconnect/test routes must remain admin-authorized, store credentials only in encrypted `IntegrationSecret` rows, and never return credential values
 - owner-only provider settings gateway routes must remain masked-response only, never return raw credential values, and persist provider credentials in encrypted `IntegrationSecret` rows
+- Stripe runtime status and checkout config routes must never expose raw Stripe secret key or webhook secret; publishable key exposure must remain explicit and source-labeled
 - provider verification failures should be represented as provider status `ERROR` (normal setup state) rather than treated as app-level exceptions
 - manual, EasyPost, and Shippo shipping quotes should flow through a normalized internal quote shape before checkout/admin consumers use rate data
 

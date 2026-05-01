@@ -55,6 +55,7 @@ Provider onboarding belongs in dedicated settings tabs:
 - `Settings -> Email` for Resend/SMTP/send-provider setup and webhook verification
 - `Settings -> Webhooks` for outbound merchant/developer webhook subscriptions and delivery observability
 - provider credential save/verify/disconnect flows should run through owner-only provider APIs and encrypted `IntegrationSecret` storage
+- owner/runtime visibility should stay server-safe: owner-only Stripe runtime status (`/api/settings/payments/stripe/runtime-status`) may expose source/mode/health flags, while public checkout config (`/api/checkout/stripe-config`) may expose publishable key + source/mode only
 
 The app should not ask for broad provider tokens unless the storage, encryption, scope, and lifecycle are explicitly designed.
 

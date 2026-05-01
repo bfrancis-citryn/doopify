@@ -106,6 +106,18 @@ const PROVIDER_SOURCE_LABEL = {
   none: 'Not active',
 };
 
+const STRIPE_CHECKOUT_SOURCE_LABEL = {
+  db: 'DB verified connection',
+  env: '.env fallback',
+  none: 'Not configured',
+};
+
+const STRIPE_WEBHOOK_SOURCE_LABEL = {
+  db: 'DB verified webhook secret',
+  env: '.env webhook secret',
+  none: 'missing',
+};
+
 const EMPTY_PROVIDER_FORMS = {
   STRIPE: { publishableKey: '', secretKey: '', webhookSecret: '', mode: 'test' },
   RESEND: { apiKey: '', webhookSecret: '', fromEmail: '' },
@@ -361,6 +373,7 @@ export default function SettingsWorkspace() {
   const [providerStatusLoaded, setProviderStatusLoaded] = useState(false);
   const [providerStatusError, setProviderStatusError] = useState('');
   const [providerNotice, setProviderNotice] = useState('');
+  const [stripeRuntimeStatus, setStripeRuntimeStatus] = useState(null);
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
@@ -526,13 +539,17 @@ export default function SettingsWorkspace() {
       setProviderStatusLoading(true);
       setProviderStatusError('');
       try {
-        const payload = await fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson);
+        const [payload, runtimeStatus] = await Promise.all([
+          fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson),
+          fetch('/api/settings/payments/stripe/runtime-status', { cache: 'no-store' }).then(parseApiJson),
+        ]);
         if (cancelled) return;
         const nextMap = {};
         for (const entry of payload?.providers || []) {
           nextMap[entry.provider] = entry;
         }
         setProviderStatusMap(nextMap);
+        setStripeRuntimeStatus(runtimeStatus || null);
         setProviderStatusLoaded(true);
       } catch (loadError) {
         if (cancelled) return;
@@ -608,6 +625,13 @@ export default function SettingsWorkspace() {
     () => describeProviderGatewayStatus(stripeProviderStatus, describeStripeSetup(setupCheckById)),
     [stripeProviderStatus, setupCheckById]
   );
+  const stripeCheckoutSourceLabel =
+    STRIPE_CHECKOUT_SOURCE_LABEL[stripeRuntimeStatus?.source] || STRIPE_CHECKOUT_SOURCE_LABEL.none;
+  const stripeWebhookSourceLabel =
+    STRIPE_WEBHOOK_SOURCE_LABEL[stripeRuntimeStatus?.webhookSource] || STRIPE_WEBHOOK_SOURCE_LABEL.none;
+  const stripeRuntimeModeLabel = stripeRuntimeStatus?.mode || 'unknown';
+  const showStripeRuntimeMismatchWarning =
+    stripeProviderStatus?.state === 'VERIFIED' && stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'db';
   const resendSetupStatus = useMemo(
     () => describeProviderGatewayStatus(resendProviderStatus, describeResendSetup(setupCheckById)),
     [resendProviderStatus, setupCheckById]
@@ -979,12 +1003,16 @@ export default function SettingsWorkspace() {
     setProviderStatusLoading(true);
     setProviderStatusError('');
     try {
-      const payload = await fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson);
+      const [payload, runtimeStatus] = await Promise.all([
+        fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson),
+        fetch('/api/settings/payments/stripe/runtime-status', { cache: 'no-store' }).then(parseApiJson),
+      ]);
       const nextMap = {};
       for (const entry of payload?.providers || []) {
         nextMap[entry.provider] = entry;
       }
       setProviderStatusMap(nextMap);
+      setStripeRuntimeStatus(runtimeStatus || null);
       setProviderStatusLoaded(true);
     } catch (refreshError) {
       setProviderStatusError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh provider statuses');
@@ -1032,6 +1060,9 @@ export default function SettingsWorkspace() {
         body: JSON.stringify(payload),
       }).then(parseApiJson);
       applyProviderStatus(data?.provider || provider, data?.status);
+      if (provider === 'STRIPE') {
+        await refreshProviderStatuses();
+      }
       resetProviderForm(provider);
       setProviderNotice(`${provider} credentials saved. Run verification to confirm connectivity.`);
     } catch (saveError) {
@@ -1050,6 +1081,9 @@ export default function SettingsWorkspace() {
         method: 'POST',
       }).then(parseApiJson);
       applyProviderStatus(data?.provider || provider, data?.status);
+      if (provider === 'STRIPE') {
+        await refreshProviderStatuses();
+      }
       if (data?.verification?.ok) {
         setProviderNotice(`${provider} verification succeeded.`);
       } else {
@@ -1071,6 +1105,9 @@ export default function SettingsWorkspace() {
         method: 'DELETE',
       }).then(parseApiJson);
       applyProviderStatus(data?.provider || provider, data?.status);
+      if (provider === 'STRIPE') {
+        await refreshProviderStatuses();
+      }
       resetProviderForm(provider);
       setProviderNotice(`${provider} credentials disconnected.`);
     } catch (disconnectError) {
@@ -2270,17 +2307,17 @@ export default function SettingsWorkspace() {
                     </div>
                     <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
                     <p className={styles.statusText}>
-                      <strong>Active source:</strong> {stripeSetupStatus.sourceLabel || 'Not active'}
+                      <strong>Checkout active source:</strong> {stripeCheckoutSourceLabel}
                       {stripeSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
                     </p>
                     <p className={styles.statusText}>
-                      <strong>Stripe keys</strong>{' '}
-                      <AdminTooltip content="Secret + publishable keys authorize Stripe API operations for checkout flows." /> and{' '}
-                      <strong>webhook secret</strong>{' '}
-                      <AdminTooltip content="Webhook secret validates Stripe event signatures for paid-order finalization." /> are tracked separately.
+                      <strong>Mode:</strong> {stripeRuntimeModeLabel}
                     </p>
                     <p className={styles.statusText}>
-                      <strong>Mode:</strong> Detection from runtime secrets is not shown in this UI for safety.
+                      <strong>Webhook source:</strong> {stripeWebhookSourceLabel}
+                    </p>
+                    <p className={styles.statusText}>
+                      <strong>Verified</strong> means Stripe API verification passed. <strong>Checkout active</strong> means checkout runtime will use this connection.
                     </p>
                     <div className={styles.inlineGrid}>
                       <label className={styles.field}>
@@ -2366,9 +2403,10 @@ export default function SettingsWorkspace() {
                       </AdminButton>
                     </div>
                     <p className={styles.setupFixText}>
-                      Verified credentials can be stored here now. Stripe checkout runtime still reads env keys until the payment runtime DB switch is completed.
+                      {showStripeRuntimeMismatchWarning
+                        ? `Stripe is verified, but checkout is currently using ${stripeCheckoutSourceLabel}. Re-run Stripe verify and confirm runtime status.`
+                        : stripeRuntimeStatus?.message || 'Credentials found does not mean connected. Verification is still pending until a server-side check is run.'}
                     </p>
-                    <p className={styles.setupFixText}>Credentials found does not mean connected. Verification is still pending until a server-side check is run.</p>
                   </AdminCard>
 
                   <AdminCard as="article" className={styles.setupCard} variant="card">

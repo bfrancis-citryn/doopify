@@ -364,7 +364,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setDiscountError('');
 
     if (!publishableKey) {
-      setError('Stripe is not configured yet. Add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to continue.');
+      setError('Stripe is not configured yet. Verify Stripe in Settings -> Payments or set env fallback keys.');
       return;
     }
 

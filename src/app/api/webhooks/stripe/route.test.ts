@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   storeVerifiedWebhookPayload: vi.fn(),
   markWebhookDeliveryProcessed: vi.fn(),
   markWebhookDeliveryFailed: vi.fn(),
+  getStripeRuntimeConnection: vi.fn(),
+  getStripeWebhookSecretSelection: vi.fn(),
 }))
 
 vi.mock('@/lib/stripe', () => ({
@@ -35,12 +37,32 @@ vi.mock('@/server/services/webhook-delivery.service', () => ({
   markWebhookDeliveryFailed: mocks.markWebhookDeliveryFailed,
 }))
 
+vi.mock('@/server/payments/stripe-runtime.service', () => ({
+  getStripeRuntimeConnection: mocks.getStripeRuntimeConnection,
+  getStripeWebhookSecretSelection: mocks.getStripeWebhookSecretSelection,
+}))
+
 import { POST } from './route'
 
 describe('Stripe webhook route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.verifyStripeWebhookSignature.mockImplementation(() => undefined)
+    mocks.getStripeRuntimeConnection.mockResolvedValue({
+      source: 'env',
+      verified: false,
+      mode: 'test',
+      publishableKey: 'pk_test_public',
+      secretKey: 'sk_test_hidden',
+      webhookSecret: 'whsec_env_runtime',
+      accountId: null,
+      chargesEnabled: null,
+      payoutsEnabled: null,
+    })
+    mocks.getStripeWebhookSecretSelection.mockResolvedValue({
+      source: 'env',
+      webhookSecret: 'whsec_env_runtime',
+    })
     mocks.recordWebhookDeliveryAttempt.mockResolvedValue({
       provider: 'stripe',
       providerEventId: 'evt_test',
@@ -72,6 +94,11 @@ describe('Stripe webhook route', () => {
 
     expect(response.status).toBe(400)
     expect(await response.text()).toBe('Stripe webhook signature verification failed')
+    expect(mocks.verifyStripeWebhookSignature).toHaveBeenCalledWith(
+      expect.any(String),
+      'bad-signature',
+      'whsec_env_runtime'
+    )
     expect(mocks.processStripeWebhookEvent).not.toHaveBeenCalled()
     expect(mocks.recordWebhookDeliveryAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -88,6 +115,84 @@ describe('Stripe webhook route', () => {
     })
     expect(mocks.storeVerifiedWebhookPayload).not.toHaveBeenCalled()
     expect(mocks.markWebhookDeliveryProcessed).not.toHaveBeenCalled()
+  })
+
+  it('verifies signatures with DB webhook secret when verified DB runtime exists', async () => {
+    mocks.getStripeRuntimeConnection.mockResolvedValueOnce({
+      source: 'db',
+      verified: true,
+      mode: 'live',
+      publishableKey: 'pk_live_public',
+      secretKey: 'sk_live_hidden',
+      webhookSecret: 'whsec_db_runtime',
+      accountId: 'acct_live_123',
+      chargesEnabled: true,
+      payoutsEnabled: true,
+    })
+    mocks.getStripeWebhookSecretSelection.mockResolvedValueOnce({
+      source: 'db',
+      webhookSecret: 'whsec_db_runtime',
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/webhooks/stripe', {
+        method: 'POST',
+        headers: {
+          'stripe-signature': 'good-signature',
+        },
+        body: JSON.stringify({
+          id: 'evt_db',
+          type: 'payment_intent.succeeded',
+          data: {
+            object: {
+              id: 'pi_db',
+            },
+          },
+        }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.verifyStripeWebhookSignature).toHaveBeenCalledWith(
+      expect.any(String),
+      'good-signature',
+      'whsec_db_runtime'
+    )
+  })
+
+  it('returns a setup error when no webhook secret is configured', async () => {
+    mocks.getStripeWebhookSecretSelection.mockResolvedValueOnce({
+      source: 'none',
+      webhookSecret: null,
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/webhooks/stripe', {
+        method: 'POST',
+        headers: {
+          'stripe-signature': 'good-signature',
+        },
+        body: JSON.stringify({
+          id: 'evt_missing_secret',
+          type: 'payment_intent.succeeded',
+          data: {
+            object: {
+              id: 'pi_missing_secret',
+            },
+          },
+        }),
+      })
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.text()).toContain('Stripe webhook signing secret is not configured')
+    expect(mocks.verifyStripeWebhookSignature).not.toHaveBeenCalled()
+    expect(mocks.markWebhookDeliveryFailed).toHaveBeenCalledWith({
+      provider: 'stripe',
+      providerEventId: 'evt_test',
+      error: expect.stringContaining('Stripe webhook signing secret is not configured'),
+      retryable: false,
+    })
   })
 
   it('rejects malformed payloads without storing a verified payload or scheduling retry', async () => {
@@ -135,6 +240,11 @@ describe('Stripe webhook route', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(mocks.verifyStripeWebhookSignature).toHaveBeenCalledWith(
+      expect.any(String),
+      'good-signature',
+      'whsec_env_runtime'
+    )
     expect(mocks.processStripeWebhookEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'evt_ok',

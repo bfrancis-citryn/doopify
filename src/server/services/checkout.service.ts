@@ -10,6 +10,7 @@ import {
   type CheckoutPricingTaxDecision,
 } from '@/server/checkout/pricing'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import { getStripeRuntimeConnection } from '@/server/payments/stripe-runtime.service'
 import {
   getShippingRatesForCheckout,
 } from '@/server/shipping/shipping-rate.service'
@@ -405,6 +406,16 @@ export async function createCheckoutPaymentIntent(input: {
     : null
 
   const customer = await getCustomerByEmail(normalizedEmail)
+  const stripeRuntime = await getStripeRuntimeConnection()
+  if (!stripeRuntime.secretKey) {
+    throw new Error(
+      'Stripe checkout is not configured. Save and verify Stripe credentials in Settings -> Payments or set STRIPE_SECRET_KEY.'
+    )
+  }
+
+  console.info(
+    `[checkout] Stripe runtime source: ${stripeRuntime.source}; mode: ${stripeRuntime.mode ?? 'unknown'}`
+  )
 
   const paymentIntent = await createStripePaymentIntent({
     amount: totalCents,
@@ -413,6 +424,7 @@ export async function createCheckoutPaymentIntent(input: {
     metadata: {
       checkoutEmail: normalizedEmail,
     },
+    secretKey: stripeRuntime.secretKey,
   })
 
   if (!paymentIntent.client_secret) {

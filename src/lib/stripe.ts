@@ -23,7 +23,16 @@ export type StripeWebhookEvent<T = unknown> = {
   }
 }
 
-function getStripeSecretKey() {
+function normalizeSecretKey(value: string | null | undefined) {
+  if (!value) return null
+  const normalized = value.trim()
+  return normalized || null
+}
+
+function getStripeSecretKey(secretKeyOverride?: string | null) {
+  const override = normalizeSecretKey(secretKeyOverride)
+  if (override) return override
+
   if (!env.STRIPE_SECRET_KEY) {
     throw new Error('STRIPE_SECRET_KEY is not configured')
   }
@@ -42,10 +51,10 @@ export function getStripePublishableKey() {
 async function stripeRequest<T>(
   path: string,
   body: URLSearchParams,
-  options: { idempotencyKey?: string } = {}
+  options: { idempotencyKey?: string; secretKey?: string | null } = {}
 ) {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${getStripeSecretKey()}`,
+    Authorization: `Bearer ${getStripeSecretKey(options.secretKey)}`,
     'Content-Type': 'application/x-www-form-urlencoded',
   }
 
@@ -76,6 +85,7 @@ export async function createStripePaymentIntent(input: {
   currency: string
   email?: string
   metadata?: Record<string, string | undefined>
+  secretKey?: string | null
 }) {
   const body = new URLSearchParams()
   body.set('amount', String(input.amount))
@@ -93,7 +103,9 @@ export async function createStripePaymentIntent(input: {
     }
   }
 
-  return stripeRequest<StripePaymentIntent>('/payment_intents', body)
+  return stripeRequest<StripePaymentIntent>('/payment_intents', body, {
+    secretKey: input.secretKey,
+  })
 }
 
 export type StripeRefund = {
@@ -112,6 +124,7 @@ export async function createStripeRefund(input: {
   amount?: number
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
   idempotencyKey?: string
+  secretKey?: string | null
 }) {
   const body = new URLSearchParams()
 
@@ -133,14 +146,15 @@ export async function createStripeRefund(input: {
 
   return stripeRequest<StripeRefund>('/refunds', body, {
     idempotencyKey: input.idempotencyKey,
+    secretKey: input.secretKey,
   })
 }
 
-export async function getStripeEvent(eventId: string) {
+export async function getStripeEvent(eventId: string, secretKey?: string | null) {
   const response = await fetch(`https://api.stripe.com/v1/events/${encodeURIComponent(eventId)}`, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${getStripeSecretKey()}`,
+      Authorization: `Bearer ${getStripeSecretKey(secretKey)}`,
     },
     cache: 'no-store',
   })

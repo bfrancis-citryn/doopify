@@ -5,9 +5,9 @@ const mocks = vi.hoisted(() => ({
     DATABASE_URL: 'postgresql://localhost/test',
     JWT_SECRET: 'test_jwt_secret_for_tests_only_123456',
     NODE_ENV: 'test',
-    STRIPE_SECRET_KEY: undefined,
-    STRIPE_WEBHOOK_SECRET: undefined,
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: undefined,
+    STRIPE_SECRET_KEY: undefined as string | undefined,
+    STRIPE_WEBHOOK_SECRET: undefined as string | undefined,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: undefined as string | undefined,
     RESEND_API_KEY: 're_env_key',
     RESEND_WEBHOOK_SECRET: undefined,
     SMTP_HOST: undefined,
@@ -139,6 +139,68 @@ describe('provider connection service', () => {
       })
     )
     expect(status.state).toBe('CREDENTIALS_SAVED')
+  })
+
+  it('prefers verified Stripe DB credentials over env fallback', async () => {
+    mocks.env.STRIPE_SECRET_KEY = 'sk_test_env_runtime'
+    mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_env_runtime'
+    mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_env_runtime'
+    mocks.prisma.integration.findFirst.mockResolvedValue({
+      id: 'int_stripe_1',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-04-30T03:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_runtime' },
+        { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_runtime' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:live' },
+        { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_live_db_runtime' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-04-30T03:05:00.000Z' },
+      ],
+    })
+
+    const runtime = await getRuntimeProviderConnection('STRIPE')
+
+    expect(runtime).toMatchObject({
+      source: 'db',
+      verified: true,
+      credentials: {
+        SECRET_KEY: 'sk_live_db_runtime',
+        PUBLISHABLE_KEY: 'pk_live_db_runtime',
+        MODE: 'live',
+        WEBHOOK_SECRET: 'whsec_live_db_runtime',
+      },
+    })
+  })
+
+  it('ignores unverified Stripe DB credentials and falls back to env', async () => {
+    mocks.env.STRIPE_SECRET_KEY = 'sk_test_env_runtime'
+    mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_env_runtime'
+    mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_env_runtime'
+    mocks.prisma.integration.findFirst.mockResolvedValue({
+      id: 'int_stripe_2',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-04-30T03:10:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_unverified' },
+        { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_unverified' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:live' },
+      ],
+    })
+
+    const runtime = await getRuntimeProviderConnection('STRIPE')
+
+    expect(runtime).toMatchObject({
+      source: 'env',
+      verified: false,
+      credentials: {
+        SECRET_KEY: 'sk_test_env_runtime',
+        PUBLISHABLE_KEY: 'pk_test_env_runtime',
+        WEBHOOK_SECRET: 'whsec_env_runtime',
+        MODE: 'test',
+      },
+    })
   })
 })
 
