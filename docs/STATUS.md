@@ -55,6 +55,7 @@ The repo currently includes:
 - owner-only provider connection gateway APIs for settings (`GET /api/settings/providers`, `GET /api/settings/providers/[provider]`, `POST /api/settings/providers/[provider]/credentials`, `POST /api/settings/providers/[provider]/verify`, `DELETE /api/settings/providers/[provider]`) with encrypted credential storage and masked status payloads
 - Stripe runtime now resolves verified DB credentials first with env fallback for checkout payment-intent creation; webhook signature verification now prefers verified DB webhook secret and falls back to env when DB webhook secret is unavailable
 - Stripe runtime visibility endpoints now exist at owner-only `GET /api/settings/payments/stripe/runtime-status` and public `GET /api/checkout/stripe-config` (publishable key only, source/mode labeled)
+- Settings -> Payments now uses compact provider rows plus per-provider slide-over drawers so credential fields are not always visible on the main settings page
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - typed internal event dispatcher and static integration registry

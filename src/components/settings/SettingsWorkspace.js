@@ -7,11 +7,17 @@ import styles from './SettingsWorkspace.module.css';
 import IntegrationsPanel from './IntegrationsPanel';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
+import AdminDrawer from '../admin/ui/AdminDrawer';
+import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminField from '../admin/ui/AdminField';
 import AdminFormSection from '../admin/ui/AdminFormSection';
+import AdminInput from '../admin/ui/AdminInput';
 import AdminLiveStatus from '../admin/ui/AdminLiveStatus';
 import AdminSelect from '../admin/ui/AdminSelect';
 import AdminSavedState from '../admin/ui/AdminSavedState';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
+import AdminTable from '../admin/ui/AdminTable';
+import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminTooltip from '../admin/ui/AdminTooltip';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
 import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
@@ -116,6 +122,12 @@ const STRIPE_WEBHOOK_SOURCE_LABEL = {
   db: 'DB verified webhook secret',
   env: '.env webhook secret',
   none: 'missing',
+};
+
+const PAYMENT_PROVIDER_DRAWER = {
+  STRIPE: 'STRIPE',
+  PAYPAL: 'PAYPAL',
+  MANUAL: 'MANUAL',
 };
 
 const EMPTY_PROVIDER_FORMS = {
@@ -331,6 +343,220 @@ function describeProviderGatewayStatus(providerStatus, fallbackStatus) {
   };
 }
 
+function normalizeStatusLabel(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .trim();
+}
+
+function statusToneFromLabel(value) {
+  const normalized = normalizeStatusLabel(value);
+  if (['active', 'verified', 'paid', 'succeeded', 'issued'].includes(normalized)) return 'success';
+  if (['error', 'failed', 'refunded', 'declined', 'missing'].includes(normalized)) return 'danger';
+  if (['coming soon', 'setup needed', 'needs stripe', 'requires live mode', 'requires domain'].includes(normalized)) {
+    return 'warning';
+  }
+  return 'neutral';
+}
+
+function formatDisplayCurrency(cents, currency = 'USD') {
+  const normalizedCurrency = String(currency || 'USD').toUpperCase();
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: normalizedCurrency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format((Number(cents) || 0) / 100);
+}
+
+function formatProviderLabel(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'Unknown';
+  if (normalized === 'stripe') return 'Stripe';
+  if (normalized === 'paypal') return 'PayPal';
+  if (normalized === 'manual') return 'Manual';
+  return `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1)}`;
+}
+
+function getStripeMethodChips(stripeRuntimeStatus) {
+  const runtimeReady = stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'none';
+  if (!runtimeReady) {
+    return ['Cards', 'Apple Pay', 'Google Pay', 'Link', 'Cash App'];
+  }
+
+  const chips = ['Cards', 'Google Pay', 'Link'];
+  chips.push(stripeRuntimeStatus?.mode === 'live' ? 'Apple Pay' : 'Apple Pay (needs live + domain)');
+  chips.push(stripeRuntimeStatus?.mode === 'live' ? 'Cash App' : 'Cash App (live mode)');
+  return chips;
+}
+
+export function buildCheckoutMethodStatuses(stripeRuntimeStatus) {
+  const runtimeReady = stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'none';
+  const liveMode = stripeRuntimeStatus?.mode === 'live';
+
+  return [
+    {
+      id: 'cards',
+      title: 'Credit & debit cards',
+      statusLabel: runtimeReady ? 'Active' : 'Needs Stripe',
+      statusTone: runtimeReady ? 'success' : 'warning',
+      detail: runtimeReady
+        ? 'Enabled through Stripe checkout runtime.'
+        : 'Available once Stripe checkout has an active runtime source.',
+    },
+    {
+      id: 'apple-pay',
+      title: 'Apple Pay',
+      statusLabel: !runtimeReady ? 'Needs Stripe' : !liveMode ? 'Requires live mode' : 'Requires domain',
+      statusTone: !runtimeReady ? 'warning' : !liveMode ? 'warning' : 'neutral',
+      detail: 'Requires Stripe, HTTPS, and payment domain verification.',
+    },
+    {
+      id: 'google-pay',
+      title: 'Google Pay',
+      statusLabel: runtimeReady ? 'Through Stripe' : 'Needs Stripe',
+      statusTone: runtimeReady ? 'neutral' : 'warning',
+      detail: 'Appears through Stripe when account and browser eligibility checks pass.',
+    },
+    {
+      id: 'link',
+      title: 'Link',
+      statusLabel: runtimeReady ? 'Through Stripe' : 'Needs Stripe',
+      statusTone: runtimeReady ? 'neutral' : 'warning',
+      detail: 'Stripe Link support depends on account eligibility.',
+    },
+    {
+      id: 'cash-app',
+      title: 'Cash App Pay',
+      statusLabel: !runtimeReady ? 'Needs Stripe' : !liveMode ? 'Requires live mode' : 'Through Stripe',
+      statusTone: !runtimeReady || !liveMode ? 'warning' : 'neutral',
+      detail: 'Requires eligible Stripe account and live-mode configuration.',
+    },
+    {
+      id: 'paypal',
+      title: 'PayPal',
+      statusLabel: 'Coming soon',
+      statusTone: 'warning',
+      detail: 'PayPal checkout remains hidden until runtime payment, webhook, refund, and order finalization support is shipped.',
+    },
+    {
+      id: 'manual-invoice',
+      title: 'Manual invoice',
+      statusLabel: 'Draft orders',
+      statusTone: 'neutral',
+      detail: 'Manual payment workflows are currently intended for draft order and invoice collection paths.',
+    },
+  ];
+}
+
+export function buildPaymentProviderRows(input) {
+  const {
+    stripeSetupStatus,
+    stripeCheckoutSourceLabel,
+    stripeRuntimeModeLabel,
+    stripeWebhookSourceLabel,
+    stripeRuntimeReady,
+    stripeMethodChips,
+  } = input;
+
+  return [
+    {
+      id: PAYMENT_PROVIDER_DRAWER.STRIPE,
+      iconText: 'S',
+      iconClassName: 'providerIconStripe',
+      name: 'Stripe',
+      description:
+        'Accept cards and eligible Stripe wallet methods like Apple Pay, Google Pay, Link, and Cash App Pay.',
+      status: {
+        label: stripeSetupStatus.label,
+        tone: stripeSetupStatus.tone,
+      },
+      sourceMeta: `Checkout active source: ${stripeCheckoutSourceLabel}`,
+      statusMeta: `Mode: ${stripeRuntimeModeLabel} • Webhook: ${stripeWebhookSourceLabel}`,
+      chips: stripeMethodChips,
+      badges: [
+        { label: 'Official', tone: 'neutral' },
+        stripeRuntimeReady ? { label: 'Checkout active', tone: 'success' } : { label: 'Setup needed', tone: 'warning' },
+      ],
+    },
+    {
+      id: PAYMENT_PROVIDER_DRAWER.PAYPAL,
+      iconText: 'P',
+      iconClassName: 'providerIconPayPal',
+      name: 'PayPal',
+      description: 'Let customers pay with PayPal, Pay Later, and Venmo where eligible.',
+      status: {
+        label: 'Setup needed',
+        tone: 'warning',
+      },
+      sourceMeta: 'Runtime support: not implemented',
+      statusMeta:
+        'Do not enable checkout visibility until payment creation, webhook verification, refund support, and order finalization are shipped.',
+      chips: ['PayPal', 'Pay Later', 'Venmo'],
+      badges: [
+        { label: 'Official', tone: 'neutral' },
+        { label: 'Coming soon', tone: 'warning' },
+      ],
+    },
+    {
+      id: PAYMENT_PROVIDER_DRAWER.MANUAL,
+      iconText: 'M',
+      iconClassName: 'providerIconManual',
+      name: 'Manual payments',
+      description: 'Support offline payment collection for draft orders, invoices, and phone-order workflows.',
+      status: {
+        label: 'Built-in',
+        tone: 'neutral',
+      },
+      sourceMeta: 'Checkout runtime: draft orders and invoices',
+      statusMeta: 'Storefront manual checkout should remain disabled unless a server-owned manual flow is implemented.',
+      chips: ['Cash', 'Bank transfer', 'Invoice'],
+      badges: [{ label: 'Future-ready', tone: 'neutral' }],
+    },
+  ];
+}
+
+export function buildPaymentActivityRowsFromOrders(orders) {
+  const rows = [];
+  for (const order of orders || []) {
+    const orderPayments = Array.isArray(order?.payments) ? order.payments : [];
+    for (const payment of orderPayments) {
+      const eventLabel = (() => {
+        const normalized = normalizeStatusLabel(payment.status);
+        if (normalized === 'paid') return 'Payment captured';
+        if (normalized === 'pending') return 'Payment pending';
+        if (normalized === 'refunded') return 'Payment refunded';
+        if (normalized === 'partially refunded') return 'Payment partially refunded';
+        if (normalized === 'failed') return 'Payment failed';
+        return 'Payment updated';
+      })();
+
+      rows.push({
+        id: payment.id || `${order.id || order.orderNumber}-${payment.stripePaymentIntentId || 'payment'}`,
+        dateValue: payment.createdAt || order.createdAt || null,
+        dateText: payment.createdAt
+          ? new Date(payment.createdAt).toLocaleString()
+          : order.createdAt
+            ? new Date(order.createdAt).toLocaleString()
+            : 'Unknown',
+        orderText: order.orderNumber ? `#${String(order.orderNumber).replace(/^#/, '')}` : 'Unknown',
+        providerText: formatProviderLabel(payment.provider),
+        eventText: eventLabel,
+        statusText: normalizeStatusLabel(payment.status) || 'unknown',
+        amountText: formatDisplayCurrency(payment.amountCents, payment.currency || order.currency || 'USD'),
+        referenceText: payment.stripePaymentIntentId || payment.stripeChargeId || payment.id || 'N/A',
+      });
+    }
+  }
+
+  return rows.sort((left, right) => {
+    const leftTime = left.dateValue ? new Date(left.dateValue).getTime() : 0;
+    const rightTime = right.dateValue ? new Date(right.dateValue).getTime() : 0;
+    return rightTime - leftTime;
+  });
+}
+
 function extractEnvVariableHints(checks) {
   const envNames = new Set();
   const envPattern = /\b[A-Z][A-Z0-9_]{2,}\b/g;
@@ -374,8 +600,13 @@ export default function SettingsWorkspace() {
   const [providerStatusError, setProviderStatusError] = useState('');
   const [providerNotice, setProviderNotice] = useState('');
   const [stripeRuntimeStatus, setStripeRuntimeStatus] = useState(null);
+  const [activePaymentDrawer, setActivePaymentDrawer] = useState(null);
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
+  const [paymentActivityRows, setPaymentActivityRows] = useState([]);
+  const [paymentActivityLoading, setPaymentActivityLoading] = useState(false);
+  const [paymentActivityLoaded, setPaymentActivityLoaded] = useState(false);
+  const [paymentActivityError, setPaymentActivityError] = useState('');
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
@@ -568,6 +799,41 @@ export default function SettingsWorkspace() {
     };
   }, [activeSection, providerStatusLoaded, providerStatusLoading]);
 
+  useEffect(() => {
+    if (activeSection !== 'payments' || paymentActivityLoaded || paymentActivityLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadPaymentActivity() {
+      setPaymentActivityLoading(true);
+      setPaymentActivityError('');
+      try {
+        // TODO(phase4): Replace this with a dedicated payment/refund activity endpoint when available.
+        const payload = await fetch('/api/orders?page=1&pageSize=25', { cache: 'no-store' }).then(parseApiJson);
+        if (cancelled) return;
+        const rows = buildPaymentActivityRowsFromOrders(payload?.orders || []);
+        setPaymentActivityRows(rows);
+        setPaymentActivityLoaded(true);
+      } catch (loadError) {
+        if (cancelled) return;
+        setPaymentActivityRows([]);
+        setPaymentActivityError(loadError instanceof Error ? loadError.message : 'Failed to load payment activity');
+      } finally {
+        if (!cancelled) {
+          setPaymentActivityLoading(false);
+        }
+      }
+    }
+
+    loadPaymentActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection, paymentActivityLoaded, paymentActivityLoading]);
+
   const setupChecks = useMemo(() => {
     if (!setupStatus) return [];
     return [...(setupStatus.requiredChecks || []), ...(setupStatus.recommendedChecks || [])];
@@ -630,8 +896,75 @@ export default function SettingsWorkspace() {
   const stripeWebhookSourceLabel =
     STRIPE_WEBHOOK_SOURCE_LABEL[stripeRuntimeStatus?.webhookSource] || STRIPE_WEBHOOK_SOURCE_LABEL.none;
   const stripeRuntimeModeLabel = stripeRuntimeStatus?.mode || 'unknown';
+  const stripeRuntimeReady = Boolean(stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'none');
+  const stripeMethodChips = useMemo(() => getStripeMethodChips(stripeRuntimeStatus), [stripeRuntimeStatus]);
   const showStripeRuntimeMismatchWarning =
     stripeProviderStatus?.state === 'VERIFIED' && stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'db';
+  const checkoutMethodStatuses = useMemo(
+    () => buildCheckoutMethodStatuses(stripeRuntimeStatus),
+    [stripeRuntimeStatus]
+  );
+  const paymentProviderRows = useMemo(
+    () =>
+      buildPaymentProviderRows({
+        stripeSetupStatus,
+        stripeCheckoutSourceLabel,
+        stripeRuntimeModeLabel,
+        stripeWebhookSourceLabel,
+        stripeRuntimeReady,
+        stripeMethodChips,
+      }),
+    [
+      stripeCheckoutSourceLabel,
+      stripeMethodChips,
+      stripeRuntimeModeLabel,
+      stripeRuntimeReady,
+      stripeSetupStatus,
+      stripeWebhookSourceLabel,
+    ]
+  );
+  const paymentActivityColumns = useMemo(
+    () => [
+      {
+        key: 'date',
+        header: 'Date',
+        render: (row) => row.dateText,
+      },
+      {
+        key: 'order',
+        header: 'Order',
+        render: (row) => row.orderText,
+      },
+      {
+        key: 'provider',
+        header: 'Provider',
+        render: (row) => row.providerText,
+      },
+      {
+        key: 'event',
+        header: 'Event',
+        render: (row) => row.eventText,
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        render: (row) => <AdminStatusChip tone={statusToneFromLabel(row.statusText)}>{row.statusText}</AdminStatusChip>,
+      },
+      {
+        key: 'amount',
+        header: 'Amount',
+        render: (row) => row.amountText,
+      },
+      {
+        key: 'reference',
+        header: 'Reference',
+        render: (row) => <span className={styles.referenceCell}>{row.referenceText}</span>,
+      },
+    ],
+    []
+  );
+  const stripeCredentialMeta = stripeProviderStatus?.credentialMeta || [];
+  const stripeSavedCredentialMeta = stripeCredentialMeta.filter((entry) => entry.present);
   const resendSetupStatus = useMemo(
     () => describeProviderGatewayStatus(resendProviderStatus, describeResendSetup(setupCheckById)),
     [resendProviderStatus, setupCheckById]
@@ -997,6 +1330,22 @@ export default function SettingsWorkspace() {
     } catch {
       setSetupCopiedCommandId('');
     }
+  }
+
+  function openPaymentDrawer(providerId) {
+    setProviderStatusError('');
+    setProviderNotice('');
+    setActivePaymentDrawer(providerId);
+  }
+
+  function closePaymentDrawer() {
+    setActivePaymentDrawer(null);
+  }
+
+  async function handleCopyStripeWebhookEndpoint() {
+    if (typeof window === 'undefined') return;
+    const endpoint = `${window.location.origin}/api/webhooks/stripe`;
+    await handleCopyCommand('stripe-webhook-endpoint', endpoint);
   }
 
   async function refreshProviderStatuses() {
@@ -2274,8 +2623,10 @@ export default function SettingsWorkspace() {
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
-                    <h3>Payment provider setup</h3>
-                    <p className={styles.cardSubtext}>Connect and verify payment providers. This area replaces provider setup from the general Setup tab.</p>
+                    <h3>Payments</h3>
+                    <p className={styles.cardSubtext}>
+                      Manage processors, checkout methods, and payment visibility without exposing private credentials on the main page.
+                    </p>
                   </div>
                 </section>
                 {providerStatusError ? (
@@ -2296,147 +2647,97 @@ export default function SettingsWorkspace() {
                   </div>
                 ) : null}
 
-                <section className={styles.setupGrid}>
-                  <AdminCard as="article" className={styles.setupCard} variant="card">
-                    <div className={styles.setupCardHeader}>
-                      <h4>
-                        Stripe{' '}
-                        <AdminTooltip content="Stripe powers checkout payments and refunds. Env keys can be detected here, but API verification must be run explicitly." />
-                      </h4>
-                      <AdminStatusChip tone={stripeSetupStatus.tone}>{stripeSetupStatus.label}</AdminStatusChip>
-                    </div>
-                    <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
-                    <p className={styles.statusText}>
-                      <strong>Checkout active source:</strong> {stripeCheckoutSourceLabel}
-                      {stripeSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
-                    </p>
-                    <p className={styles.statusText}>
-                      <strong>Mode:</strong> {stripeRuntimeModeLabel}
-                    </p>
-                    <p className={styles.statusText}>
-                      <strong>Webhook source:</strong> {stripeWebhookSourceLabel}
-                    </p>
-                    <p className={styles.statusText}>
-                      <strong>Verified</strong> means Stripe API verification passed. <strong>Checkout active</strong> means checkout runtime will use this connection.
-                    </p>
-                    <div className={styles.inlineGrid}>
-                      <label className={styles.field}>
-                        <span>Publishable key</span>
-                        <input
-                          className={styles.input}
-                          onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
-                          placeholder="pk_test_..."
-                          type="password"
-                          value={providerForms.STRIPE.publishableKey}
-                        />
-                      </label>
-                      <label className={styles.field}>
-                        <span>Secret key</span>
-                        <input
-                          className={styles.input}
-                          onChange={(event) => patchProviderForm('STRIPE', { secretKey: event.target.value })}
-                          placeholder="sk_test_..."
-                          type="password"
-                          value={providerForms.STRIPE.secretKey}
-                        />
-                      </label>
-                      <label className={styles.field}>
-                        <span>Webhook secret (optional)</span>
-                        <input
-                          className={styles.input}
-                          onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
-                          placeholder="whsec_..."
-                          type="password"
-                          value={providerForms.STRIPE.webhookSecret}
-                        />
-                      </label>
-                      <label className={styles.field}>
-                        <span>Mode</span>
-                        <select
-                          className={styles.input}
-                          onChange={(event) => patchProviderForm('STRIPE', { mode: event.target.value })}
-                          value={providerForms.STRIPE.mode}
-                        >
-                          <option value="test">test</option>
-                          <option value="live">live</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div className={styles.actionRow}>
-                      <AdminButton
-                        disabled={
-                          providerActionById.STRIPE === 'saving' ||
-                          !providerForms.STRIPE.publishableKey.trim() ||
-                          !providerForms.STRIPE.secretKey.trim()
-                        }
-                        onClick={() =>
-                          handleSaveProviderCredentials('STRIPE', {
-                            publishableKey: providerForms.STRIPE.publishableKey,
-                            secretKey: providerForms.STRIPE.secretKey,
-                            webhookSecret: providerForms.STRIPE.webhookSecret || undefined,
-                            mode: providerForms.STRIPE.mode,
-                          })
-                        }
-                        size="sm"
-                        variant="secondary"
-                      >
-                        {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Connect Stripe'}
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.STRIPE === 'verifying'}
-                        onClick={() => handleVerifyProvider('STRIPE')}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        {providerActionById.STRIPE === 'verifying' ? 'Verifying...' : 'Verify Stripe API connection'}
-                      </AdminButton>
-                      <AdminButton
-                        disabled={providerActionById.STRIPE === 'disconnecting'}
-                        onClick={() => handleDisconnectProvider('STRIPE')}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        {providerActionById.STRIPE === 'disconnecting' ? 'Disconnecting...' : 'Disconnect'}
-                      </AdminButton>
-                      <AdminButton onClick={() => handleCopyCommand('stripe-webhook-cli', 'npm run doopify:stripe:webhook')} size="sm" variant="ghost">
-                        {setupCopiedCommandId === 'stripe-webhook-cli' ? 'Copied' : 'Copy webhook CLI command'}
-                      </AdminButton>
-                    </div>
-                    <p className={styles.setupFixText}>
-                      {showStripeRuntimeMismatchWarning
-                        ? `Stripe is verified, but checkout is currently using ${stripeCheckoutSourceLabel}. Re-run Stripe verify and confirm runtime status.`
-                        : stripeRuntimeStatus?.message || 'Credentials found does not mean connected. Verification is still pending until a server-side check is run.'}
-                    </p>
-                  </AdminCard>
+                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
+                  <div className={styles.setupCardHeader}>
+                    <h4>Payment providers</h4>
+                    <AdminTooltip content="Provider credentials are managed in drawers to keep this page compact and secret-safe." />
+                  </div>
+                  <p className={styles.cardSubtext}>Connect gateways and manage payment runtime status by provider.</p>
+                  <div className={styles.providerList}>
+                    {paymentProviderRows.map((providerRow) => (
+                      <article className={styles.providerRow} key={providerRow.id}>
+                        <div className={`${styles.providerIcon} ${styles[providerRow.iconClassName] || ''}`}>{providerRow.iconText}</div>
+                        <div className={styles.providerMain}>
+                          <div className={styles.providerTitleLine}>
+                            <h4>{providerRow.name}</h4>
+                            <AdminStatusChip tone={providerRow.status.tone}>{providerRow.status.label}</AdminStatusChip>
+                            {providerRow.badges.map((badge) => (
+                              <AdminStatusChip key={`${providerRow.id}-${badge.label}`} tone={badge.tone}>
+                                {badge.label}
+                              </AdminStatusChip>
+                            ))}
+                          </div>
+                          <p className={styles.statusText}>{providerRow.description}</p>
+                          <p className={styles.providerMeta}>{providerRow.sourceMeta}</p>
+                          <p className={styles.providerMeta}>{providerRow.statusMeta}</p>
+                          <div className={styles.methodChipRow}>
+                            {providerRow.chips.map((chip) => (
+                              <span className={styles.methodChip} key={`${providerRow.id}-${chip}`}>
+                                {chip}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className={styles.providerActions}>
+                          <AdminButton
+                            aria-label={`Manage ${providerRow.name}`}
+                            onClick={() => openPaymentDrawer(providerRow.id)}
+                            size="sm"
+                            variant="secondary"
+                          >
+                            Manage
+                          </AdminButton>
+                          <AdminButton aria-label={`More ${providerRow.name} actions`} size="sm" variant="icon">
+                            <span className="material-symbols-outlined" aria-hidden="true">
+                              more_horiz
+                            </span>
+                          </AdminButton>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </AdminCard>
 
-                  <AdminCard as="article" className={styles.setupCard} variant="card">
-                    <div className={styles.setupCardHeader}>
-                      <h4>
-                        PayPal{' '}
-                        <AdminTooltip content="PayPal provider onboarding is planned. Use Stripe for current payment flows." />
-                      </h4>
-                      <AdminStatusChip tone="neutral">Coming soon</AdminStatusChip>
-                    </div>
-                    <p className={styles.statusText}>PayPal onboarding is not active in runtime yet.</p>
-                    <div className={styles.actionRow}>
-                      <AdminButton disabled size="sm" variant="secondary">Set up PayPal</AdminButton>
-                    </div>
-                  </AdminCard>
+                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
+                  <div className={styles.setupCardHeader}>
+                    <h4>Customer checkout methods</h4>
+                    <AdminTooltip content="Method labels are derived from real runtime status and never claim unsupported behavior." />
+                  </div>
+                  <p className={styles.cardSubtext}>These are the payment options customers can see during checkout.</p>
+                  <div className={styles.checkoutMethodGrid}>
+                    {checkoutMethodStatuses.map((entry) => (
+                      <article className={styles.checkoutMethodCard} key={entry.id}>
+                        <div className={styles.providerTitleLine}>
+                          <h4>{entry.title}</h4>
+                          <AdminStatusChip tone={entry.statusTone}>{entry.statusLabel}</AdminStatusChip>
+                        </div>
+                        <p className={styles.statusText}>{entry.detail}</p>
+                      </article>
+                    ))}
+                  </div>
+                </AdminCard>
 
-                  <AdminCard as="article" className={styles.setupCard} variant="card">
-                    <div className={styles.setupCardHeader}>
-                      <h4>
-                        Apple Pay{' '}
-                        <AdminTooltip content="Apple Pay is usually enabled through Stripe. It requires HTTPS and Stripe domain verification." />
-                      </h4>
-                      <AdminStatusChip tone="neutral">Stripe-dependent</AdminStatusChip>
-                    </div>
-                    <p className={styles.statusText}>Apple Pay setup depends on Stripe domain verification and HTTPS storefront hosting.</p>
-                    <div className={styles.actionRow}>
-                      <AdminButton disabled size="sm" variant="secondary">Apple Pay setup coming soon</AdminButton>
-                    </div>
-                  </AdminCard>
-                </section>
+                <AdminCard as="section" className={styles.paymentSectionCard} variant="card">
+                  <div className={styles.setupCardHeader}>
+                    <h4>Payment activity</h4>
+                    <AdminTooltip content="Rows currently come from order payment records. Refund timeline enrichment will follow with a dedicated activity API." />
+                  </div>
+                  <p className={styles.cardSubtext}>
+                    Track payment outcomes and provider references. This does not represent payout reconciliation.
+                  </p>
+                  {paymentActivityError ? <p className={styles.statusText}>{paymentActivityError}</p> : null}
+                  {paymentActivityRows.length ? (
+                    <AdminTable columns={paymentActivityColumns} isLoading={paymentActivityLoading} rows={paymentActivityRows} />
+                  ) : paymentActivityLoading ? (
+                    <AdminTable columns={paymentActivityColumns} isLoading rows={[]} />
+                  ) : (
+                    <AdminEmptyState
+                      description="No payment records are available yet. Activity appears after checkout payments are created."
+                      icon="payments"
+                      title="No payment activity yet"
+                    />
+                  )}
+                </AdminCard>
               </div>
             ) : null}
 
@@ -2851,6 +3152,258 @@ export default function SettingsWorkspace() {
           </div>
         </div>
       </div>
+      <AdminDrawer
+        onClose={closePaymentDrawer}
+        open={Boolean(activePaymentDrawer)}
+        subtitle={
+          activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE
+            ? 'Manage Stripe credentials, verification, webhook setup, and checkout method readiness.'
+            : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.PAYPAL
+              ? 'PayPal setup is future-ready in UI, but checkout runtime support is not active yet.'
+              : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.MANUAL
+                ? 'Configure offline/manual payment guidance for draft and invoice workflows.'
+                : ''
+        }
+        title={
+          activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE
+            ? 'Stripe'
+            : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.PAYPAL
+              ? 'PayPal'
+              : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.MANUAL
+                ? 'Manual payments'
+                : 'Provider setup'
+        }
+      >
+        {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Connection status</h4>
+                <AdminStatusChip tone={stripeSetupStatus.tone}>{stripeSetupStatus.label}</AdminStatusChip>
+              </div>
+              <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
+              <div className={styles.drawerStatusGrid}>
+                <p className={styles.providerMeta}>
+                  <strong>Runtime source:</strong> {stripeCheckoutSourceLabel}
+                </p>
+                <p className={styles.providerMeta}>
+                  <strong>Mode:</strong> {stripeRuntimeModeLabel}
+                </p>
+                <p className={styles.providerMeta}>
+                  <strong>Webhook source:</strong> {stripeWebhookSourceLabel}
+                </p>
+                <p className={styles.providerMeta}>
+                  <strong>Verified at:</strong>{' '}
+                  {stripeSetupStatus.lastVerifiedAt ? new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString() : 'Not verified yet'}
+                </p>
+              </div>
+              {showStripeRuntimeMismatchWarning ? (
+                <p className={styles.setupFixText}>
+                  Stripe is verified but checkout is currently using {stripeCheckoutSourceLabel}. Re-run Stripe verification and confirm runtime status.
+                </p>
+              ) : null}
+            </AdminCard>
+
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Stripe credentials</h4>
+                <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
+              </div>
+              <div className={styles.drawerFormGrid}>
+                <AdminField hint="pk_test_... or pk_live_..." label="Publishable key">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
+                    placeholder="pk_test_..."
+                    type="password"
+                    value={providerForms.STRIPE.publishableKey}
+                  />
+                </AdminField>
+                <AdminField hint="sk_test_... or sk_live_..." label="Secret key">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('STRIPE', { secretKey: event.target.value })}
+                    placeholder="sk_test_..."
+                    type="password"
+                    value={providerForms.STRIPE.secretKey}
+                  />
+                </AdminField>
+                <AdminField hint="Optional but recommended for DB runtime verification." label="Webhook secret">
+                  <AdminInput
+                    onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
+                    placeholder="whsec_..."
+                    type="password"
+                    value={providerForms.STRIPE.webhookSecret}
+                  />
+                </AdminField>
+                <label className={styles.field}>
+                  <span>Mode</span>
+                  <select
+                    className={styles.input}
+                    onChange={(event) => patchProviderForm('STRIPE', { mode: event.target.value })}
+                    value={providerForms.STRIPE.mode}
+                  >
+                    <option value="test">test</option>
+                    <option value="live">live</option>
+                  </select>
+                </label>
+              </div>
+              <div className={styles.actionRow}>
+                <AdminButton
+                  disabled={
+                    providerActionById.STRIPE === 'saving' ||
+                    !providerForms.STRIPE.publishableKey.trim() ||
+                    !providerForms.STRIPE.secretKey.trim()
+                  }
+                  onClick={() =>
+                    handleSaveProviderCredentials('STRIPE', {
+                      publishableKey: providerForms.STRIPE.publishableKey,
+                      secretKey: providerForms.STRIPE.secretKey,
+                      webhookSecret: providerForms.STRIPE.webhookSecret || undefined,
+                      mode: providerForms.STRIPE.mode,
+                    })
+                  }
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save credentials'}
+                </AdminButton>
+                <AdminButton
+                  disabled={providerActionById.STRIPE === 'verifying'}
+                  onClick={() => handleVerifyProvider('STRIPE')}
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.STRIPE === 'verifying' ? 'Verifying...' : 'Verify Stripe API'}
+                </AdminButton>
+                <AdminButton onClick={handleCopyStripeWebhookEndpoint} size="sm" variant="ghost">
+                  {setupCopiedCommandId === 'stripe-webhook-endpoint' ? 'Copied endpoint' : 'Copy webhook endpoint'}
+                </AdminButton>
+              </div>
+              {stripeSavedCredentialMeta.length ? (
+                <div className={styles.maskedSecretList}>
+                  {stripeSavedCredentialMeta.map((entry) => (
+                    <p className={styles.providerMeta} key={entry.key}>
+                      <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.providerMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
+              )}
+            </AdminCard>
+
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Checkout methods through Stripe</h4>
+              </div>
+              <div className={styles.methodChipRow}>
+                {stripeMethodChips.map((chip) => (
+                  <span className={styles.methodChip} key={`stripe-drawer-${chip}`}>
+                    {chip}
+                  </span>
+                ))}
+              </div>
+              <p className={styles.providerMeta}>
+                Cards can be active once Stripe runtime source is DB or env. Wallet methods still depend on eligibility, HTTPS, live mode, and domain checks.
+              </p>
+            </AdminCard>
+
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Danger zone</h4>
+              </div>
+              <p className={styles.statusText}>
+                Disconnecting Stripe removes DB-backed credentials. Env fallback may remain active if env keys still exist.
+              </p>
+              <div className={styles.actionRow}>
+                <AdminButton
+                  disabled={providerActionById.STRIPE === 'disconnecting'}
+                  onClick={() => handleDisconnectProvider('STRIPE')}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {providerActionById.STRIPE === 'disconnecting' ? 'Disconnecting...' : 'Disconnect Stripe'}
+                </AdminButton>
+                <AdminButton onClick={() => handleCopyCommand('stripe-webhook-cli', 'npm run doopify:stripe:webhook')} size="sm" variant="ghost">
+                  {setupCopiedCommandId === 'stripe-webhook-cli' ? 'Copied CLI command' : 'Copy webhook CLI command'}
+                </AdminButton>
+              </div>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.PAYPAL ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>PayPal status</h4>
+                <AdminStatusChip tone="warning">Setup needed</AdminStatusChip>
+              </div>
+              <p className={styles.statusText}>
+                PayPal runtime support is not active. Checkout remains hidden until payment creation, webhook verification, refund support, and order finalization are implemented.
+              </p>
+              <p className={styles.providerMeta}>
+                <strong>Runtime source:</strong> not implemented
+              </p>
+            </AdminCard>
+
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Future credential fields</h4>
+              </div>
+              <div className={styles.drawerFormGrid}>
+                <AdminField label="Client ID">
+                  <AdminInput defaultValue="" disabled placeholder="PayPal client id (future)" />
+                </AdminField>
+                <AdminField label="Client secret">
+                  <AdminInput defaultValue="" disabled placeholder="PayPal client secret (future)" type="password" />
+                </AdminField>
+                <AdminField label="Webhook ID">
+                  <AdminInput defaultValue="" disabled placeholder="PayPal webhook id (future)" />
+                </AdminField>
+                <AdminField label="Mode">
+                  <AdminInput defaultValue="sandbox/live (future)" disabled />
+                </AdminField>
+              </div>
+              <p className={styles.setupFixText}>
+                Keep this provider disabled until the runtime implementation exists and has tests for create-payment, webhook verification, refunds, and order finalization.
+              </p>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.MANUAL ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Manual payment usage</h4>
+                <AdminStatusChip tone="neutral">Built-in</AdminStatusChip>
+              </div>
+              <p className={styles.statusText}>
+                Manual payments are currently intended for draft-order and invoice-style workflows, not storefront checkout finalization.
+              </p>
+            </AdminCard>
+            <AdminCard as="section" variant="card">
+              <div className={styles.setupCardHeader}>
+                <h4>Offline instructions</h4>
+              </div>
+              <div className={styles.drawerFormGrid}>
+                <AdminField hint="Shown internally to staff during draft order collection." label="Cash instructions">
+                  <AdminTextarea placeholder="Example: Collect cash on pickup and mark payment received after handoff." rows={3} />
+                </AdminField>
+                <AdminField hint="Reference details for manual reconciliation." label="Bank transfer instructions">
+                  <AdminTextarea placeholder="Example: Include routing/account notes and expected settlement window." rows={3} />
+                </AdminField>
+              </div>
+              <AdminField hint="Optional merchant-facing reminder for invoice flows." label="Manual payment notes">
+                <AdminTextarea placeholder="Example: Payment due within 7 days. Include order number in transfer memo." rows={3} />
+              </AdminField>
+              <p className={styles.setupFixText}>
+                Do not mark manual storefront checkout active unless a server-owned manual-payment finalization flow is implemented.
+              </p>
+            </AdminCard>
+          </div>
+        ) : null}
+      </AdminDrawer>
     </AppShell>
   );
 }
