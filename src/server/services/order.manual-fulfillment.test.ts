@@ -88,11 +88,59 @@ describe('createManualFulfillment', () => {
         data: { fulfillmentStatus: 'PARTIALLY_FULFILLED' },
       })
     )
+    expect(mocks.prisma.orderEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          orderId: ORDER_ID,
+          type: 'MANUAL_FULFILLMENT_CREATED',
+          title: 'Manual fulfillment created with tracking TRACK123',
+        }),
+      })
+    )
     expect(mocks.emitInternalEvent).toHaveBeenCalledWith(
       'fulfillment.created',
-      expect.objectContaining({ fulfillmentId: 'ful_1', orderId: ORDER_ID, trackingNumber: 'TRACK123' })
+      expect.objectContaining({
+        fulfillmentId: 'ful_1',
+        orderId: ORDER_ID,
+        trackingNumber: 'TRACK123',
+        sendTrackingEmail: false,
+      })
     )
     expect(result.id).toBe('ful_1')
+  })
+
+  it('emits fulfillment event with tracking-email intent when manual tracking email is requested', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.prisma.fulfillment.create.mockResolvedValue({
+      id: 'ful_2',
+      orderId: ORDER_ID,
+      trackingNumber: 'TRACK200',
+      items: [{ id: 'fi_2', orderItemId: ORDER_ITEM_A, quantity: 1 }],
+    })
+
+    await createManualFulfillment({
+      orderId: ORDER_ID,
+      items: [{ orderItemId: ORDER_ITEM_A, variantId: 'var_a', quantity: 1 }],
+      trackingNumber: 'TRACK200',
+      sendTrackingEmail: true,
+    })
+
+    expect(mocks.prisma.orderEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          detail: 'Tracking email requested from manual fulfillment.',
+        }),
+      })
+    )
+    expect(mocks.emitInternalEvent).toHaveBeenCalledWith(
+      'fulfillment.created',
+      expect.objectContaining({
+        fulfillmentId: 'ful_2',
+        orderId: ORDER_ID,
+        trackingNumber: 'TRACK200',
+        sendTrackingEmail: true,
+      })
+    )
   })
 
   it('rejects over-fulfillment attempts when requested quantity exceeds remaining quantity', async () => {
@@ -131,4 +179,3 @@ describe('createManualFulfillment', () => {
     ).rejects.toThrow('only available for paid orders')
   })
 })
-

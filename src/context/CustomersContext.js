@@ -66,9 +66,56 @@ export function CustomersProvider({ children }) {
     );
   }, []);
 
+  const createCustomer = useCallback(async (input) => {
+    const normalizedEmail = String(input?.email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Email is required');
+    }
+
+    const existing = customers.find(
+      (customer) => String(customer.email || '').trim().toLowerCase() === normalizedEmail
+    );
+    if (existing) {
+      return { customer: existing, created: false, duplicate: true };
+    }
+
+    const response = await fetch('/api/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        firstName: String(input?.firstName || '').trim() || undefined,
+        lastName: String(input?.lastName || '').trim() || undefined,
+        phone: String(input?.phone || '').trim() || undefined,
+        note: String(input?.note || '').trim() || undefined,
+        shippingAddress:
+          String(input?.shippingAddress || '').trim() || undefined,
+        billingAddress:
+          String(input?.billingAddress || '').trim() || undefined,
+      }),
+    });
+
+    const json = await response.json();
+    if (!json?.success) {
+      throw new Error(json?.error || 'Failed to create customer');
+    }
+
+    const created = transformCustomer(json.data);
+    setCustomers((current) => [created, ...current]);
+    return { customer: created, created: true, duplicate: false };
+  }, [customers]);
+
   const value = useMemo(
-    () => ({ customers, setCustomers, updateCustomer, loading, error, refetch: fetchCustomers }),
-    [customers, loading, error, updateCustomer, fetchCustomers]
+    () => ({
+      customers,
+      setCustomers,
+      updateCustomer,
+      createCustomer,
+      loading,
+      error,
+      refetch: fetchCustomers,
+    }),
+    [customers, loading, error, updateCustomer, createCustomer, fetchCustomers]
   );
 
   return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;

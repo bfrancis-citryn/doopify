@@ -111,7 +111,7 @@ function buildReturnDraftItems(orderItems) {
   }));
 }
 
-export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paymentStatus = "" }) {
+export default function OrderAdjustmentsCard({ onOrderRefresh, orderId, orderNumber, paymentStatus = "" }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -135,6 +135,10 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paym
   const [returnError, setReturnError] = useState("");
 
   const normalizedOrderNumber = useMemo(() => normalizeOrderNumber(orderNumber), [orderNumber]);
+  const orderIdentifier = useMemo(
+    () => String(orderId || normalizedOrderNumber || "").trim(),
+    [orderId, normalizedOrderNumber]
+  );
   const orderItems = summary?.orderItems || [];
   const refunds = summary?.refunds || [];
   const returns = summary?.returns || [];
@@ -151,11 +155,11 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paym
   );
 
   const refreshSummary = useCallback(async () => {
-    if (!normalizedOrderNumber) return;
+    if (!orderIdentifier) return;
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/orders/${normalizedOrderNumber}/adjustments`, { cache: "no-store" });
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderIdentifier)}/adjustments`, { cache: "no-store" });
       const json = await response.json();
       if (!json?.success) {
         throw new Error(json?.error || "Failed to load order adjustments");
@@ -166,7 +170,7 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paym
     } finally {
       setLoading(false);
     }
-  }, [normalizedOrderNumber]);
+  }, [orderIdentifier]);
 
   useEffect(() => {
     refreshSummary();
@@ -257,7 +261,7 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paym
     setPendingReturnAction(`${returnId}:${status}`);
     setNotice({ tone: "", message: "" });
     try {
-      const response = await fetch(`/api/orders/${normalizedOrderNumber}/returns/${returnId}`, {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderIdentifier)}/returns/${returnId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -388,7 +392,7 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paym
     setNotice({ tone: "", message: "" });
 
     try {
-      const response = await fetch(`/api/orders/${normalizedOrderNumber}/refund-records`, {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderIdentifier)}/refund-records`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -455,7 +459,7 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderNumber, paym
     setNotice({ tone: "", message: "" });
 
     try {
-      const response = await fetch(`/api/orders/${normalizedOrderNumber}/returns`, {
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderIdentifier)}/returns`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

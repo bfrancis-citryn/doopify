@@ -1,0 +1,264 @@
+.page {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+}
+
+.inlineLinkButton {
+  color: var(--on-surface-variant);
+  text-decoration: none;
+  font-size: 0.8rem;
+}
+
+.inlineLinkButton:hover {
+  color: var(--on-surface);
+}
+
+.headerCard {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.headerTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.title {
+  margin: 0;
+  color: var(--on-surface);
+  font-size: 1.2rem;
+}
+
+.meta {
+  margin: 0.22rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.chipsRow {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  align-items: start;
+}
+
+.mainColumn,
+.sideColumn {
+  display: grid;
+  gap: 0.72rem;
+  align-content: start;
+}
+
+.cardHeader h3 {
+  margin: 0;
+  color: var(--on-surface);
+  font-size: 0.96rem;
+}
+
+.lineItemList,
+.fulfillmentList,
+.timelineList {
+  display: grid;
+  gap: 0.56rem;
+}
+
+.lineItemRow,
+.fulfillmentRow,
+.timelineRow {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.7rem;
+  padding: 0.58rem 0.62rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+}
+
+.lineItemRow,
+.fulfillmentRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  align-items: flex-start;
+}
+
+.lineItemRow strong,
+.fulfillmentRow strong,
+.timelineRow strong {
+  color: var(--on-surface);
+}
+
+.lineItemRow p,
+.fulfillmentRow p,
+.timelineRow p {
+  margin: 0.16rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.77rem;
+}
+
+.timelineRow small {
+  color: var(--on-surface-variant);
+  font-size: 0.72rem;
+}
+
+.lineItemMeta {
+  display: grid;
+  justify-items: end;
+  gap: 0.08rem;
+  color: var(--on-surface);
+}
+
+.summaryRows {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--on-surface);
+}
+
+.summaryStrong {
+  font-size: 1rem;
+}
+
+.infoBlock,
+.noteText {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.successText,
+.errorText,
+.metaText {
+  margin: 0;
+  font-size: 0.76rem;
+}
+
+.successText {
+  color: var(--success-700, #0f766e);
+}
+
+.errorText {
+  color: var(--error-700, #b91c1c);
+}
+
+.metaText {
+  color: var(--on-surface-variant);
+}
+
+.divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 0.25rem 0;
+}
+
+.selectorList,
+.rateList,
+.labelList,
+.discountList,
+.noteStack {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.selectorRow,
+.rateRow,
+.labelRow,
+.discountRow {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.7rem;
+  padding: 0.56rem 0.62rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+}
+
+.selectorRow,
+.rateRow,
+.labelRow,
+.discountRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.selectorRow span,
+.rateRow span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.selectorRow small,
+.rateRow small {
+  color: var(--on-surface-variant);
+  font-size: 0.73rem;
+}
+
+.quantityInput {
+  width: 74px;
+  min-height: 32px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  color: var(--on-surface);
+  padding: 0.2rem 0.45rem;
+}
+
+.formGrid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.actionRow {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.discountRow p {
+  margin: 0.12rem 0 0;
+  font-size: 0.73rem;
+  color: var(--on-surface-variant);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--on-surface-variant);
+  font-size: 0.76rem;
+}
+
+@media (max-width: 1080px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}

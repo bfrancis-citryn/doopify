@@ -10,26 +10,48 @@ function toDollars(cents) {
   return Number((Math.max(0, Number(cents || 0)) / 100).toFixed(2));
 }
 
+function toMoneyNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return parsed;
+}
+
+function resolveVariantForProduct(product, variantId) {
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  if (!variants.length) return null;
+  return variants.find((entry) => entry.id === variantId) || variants[0];
+}
+
+function resolveImageSnapshot(product, variant) {
+  const images = Array.isArray(product?.images) ? product.images : [];
+  const preferredImageId = variant?.imageId || product?.featuredImageId || null;
+  const matchedImage = preferredImageId
+    ? images.find((image) => image.id === preferredImageId)
+    : null;
+  const image = matchedImage || images[0] || null;
+  return {
+    imageUrl: image?.url || image?.src || null,
+    imageAlt: image?.altText || image?.alt || product?.title || '',
+  };
+}
+
 export function createDraftOrderSeed(products, customers, discounts) {
   const firstProduct = products[0];
-  const firstVariant = firstProduct?.variants?.[0];
+  const firstLineItem = firstProduct ? createDraftLineItemFromProduct(firstProduct) : null;
 
   return {
     id: `draft_${Date.now()}`,
+    customerMode: customers.length ? 'existing' : 'guest',
     customerId: customers[0]?.id || '',
-    lineItems: firstProduct
-      ? [
-          {
-            id: `draft_item_1`,
-            productId: firstProduct.id,
-            variantId: firstVariant?.id || null,
-            title: firstProduct.title,
-            variantTitle: firstVariant?.title || 'Default',
-            quantity: 1,
-            price: Number(firstVariant?.price ?? firstProduct.basePrice ?? 0),
-          },
-        ]
-      : [],
+    manualCustomer: {
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      shippingAddress: '',
+      billingAddress: '',
+    },
+    lineItems: firstLineItem ? [{ ...firstLineItem, id: 'draft_item_1' }] : [],
     discountId: discounts[0]?.id || '',
     customDiscountAmount: 0,
     shippingAmount: '',
@@ -41,16 +63,92 @@ export function createDraftOrderSeed(products, customers, discounts) {
 }
 
 export function createDraftLineItemFromProduct(product, variantId) {
-  const variant = product?.variants?.find(entry => entry.id === variantId) || product?.variants?.[0] || null;
+  const variant = resolveVariantForProduct(product, variantId);
+  const { imageUrl, imageAlt } = resolveImageSnapshot(product, variant);
 
   return {
     id: `draft_item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    productId: product.id,
+    productId: product?.id || null,
     variantId: variant?.id || null,
-    title: product.title,
+    title: product?.title || 'Untitled product',
     variantTitle: variant?.title || 'Default',
+    sku: variant?.sku || '',
+    imageUrl,
+    imageAlt,
     quantity: 1,
-    price: Number(variant?.price ?? product.basePrice ?? 0),
+    price: toMoneyNumber(variant?.price, toMoneyNumber(product?.basePrice, 0)),
+    compareAtPrice:
+      variant?.compareAtPrice != null
+        ? toMoneyNumber(variant.compareAtPrice, 0)
+        : product?.compareAtPrice != null
+          ? toMoneyNumber(product.compareAtPrice, 0)
+          : null,
+    taxable: variant?.taxable ?? product?.taxable ?? true,
+    shippable: variant?.shippable ?? product?.shippable ?? true,
+  };
+}
+
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeEmail(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+export function validateManualDraftCustomer(manualCustomer) {
+  const normalized = {
+    firstName: normalizeText(manualCustomer?.firstName),
+    lastName: normalizeText(manualCustomer?.lastName),
+    email: normalizeEmail(manualCustomer?.email),
+    phone: normalizeText(manualCustomer?.phone),
+    shippingAddress: normalizeText(manualCustomer?.shippingAddress),
+    billingAddress: normalizeText(manualCustomer?.billingAddress),
+  };
+
+  const errors = {};
+
+  if (!normalized.email) {
+    errors.email = 'Email is required.';
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email)) {
+    errors.email = 'Enter a valid email address.';
+  }
+
+  return {
+    normalized,
+    errors,
+    isValid: Object.keys(errors).length === 0,
+  };
+}
+
+export function resolveDraftLineItemDisplay(item, products = []) {
+  const product = (products || []).find((entry) => entry.id === item?.productId) || null;
+  const variant = resolveVariantForProduct(product, item?.variantId);
+  const catalogSnapshot = product ? createDraftLineItemFromProduct(product, variant?.id || null) : null;
+
+  return {
+    product,
+    variant,
+    productMissing: !product,
+    variantMissing: Boolean(product) && !variant,
+    productId: item?.productId || catalogSnapshot?.productId || null,
+    variantId: item?.variantId || catalogSnapshot?.variantId || null,
+    title: item?.title || catalogSnapshot?.title || 'Untitled product',
+    variantTitle: item?.variantTitle || catalogSnapshot?.variantTitle || 'Default',
+    sku: item?.sku || catalogSnapshot?.sku || '',
+    imageUrl: item?.imageUrl || catalogSnapshot?.imageUrl || null,
+    imageAlt: item?.imageAlt || catalogSnapshot?.imageAlt || '',
+    price:
+      item?.price == null
+        ? toMoneyNumber(catalogSnapshot?.price, 0)
+        : toMoneyNumber(item.price, 0),
+    compareAtPrice:
+      item?.compareAtPrice == null
+        ? catalogSnapshot?.compareAtPrice ?? null
+        : toMoneyNumber(item.compareAtPrice, 0),
+    quantity: Math.max(1, Number(item?.quantity || 1)),
+    taxable: item?.taxable ?? catalogSnapshot?.taxable ?? true,
+    shippable: item?.shippable ?? catalogSnapshot?.shippable ?? true,
   };
 }
 
@@ -178,10 +276,18 @@ export function convertDraftOrderToOrder(draftOrder, customer, discounts, existi
     ],
     lineItems: draftOrder.lineItems.map(item => ({
       id: item.id,
+      productId: item.productId || null,
+      variantId: item.variantId || null,
       title: item.title,
       variant: item.variantTitle,
+      variantTitle: item.variantTitle,
+      sku: item.sku || '',
+      imageUrl: item.imageUrl || null,
       quantity: item.quantity,
       price: item.price,
+      compareAtPrice: item.compareAtPrice ?? null,
+      taxable: item.taxable ?? true,
+      shippable: item.shippable ?? true,
     })),
   };
 }

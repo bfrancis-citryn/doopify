@@ -80,6 +80,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - received returns can close with a linked refund
 - close-with-refund validates refund quantities and variants against actual return items
 - admin order detail now exposes refund, return creation, return workflow, and close-with-refund controls
+- admin order detail notes now flow through a dedicated admin route (`PATCH /api/orders/[orderNumber]/notes`) with timeline event writes and optional tracked customer-note email sends that remain isolated from payment/inventory/refund/return durability
 - fast and gated integration coverage exists for representative refund/return lifecycle behavior
 
 ### Outbound Merchant Webhook Hardening

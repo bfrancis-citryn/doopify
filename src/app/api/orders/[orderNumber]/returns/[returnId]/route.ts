@@ -2,7 +2,10 @@ import { z } from 'zod'
 
 import { err, ok, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
-import { prisma } from '@/lib/prisma'
+import {
+  OrderIdentifierResolutionError,
+  resolveOrderIdentifier,
+} from '@/server/services/order-identifier.service'
 import { createPaymentRefundRecord, updateReturnRecord } from '@/server/services/order-adjustments.service'
 
 interface Params { params: Promise<{ orderNumber: string; returnId: string }> }
@@ -36,10 +39,6 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response
 
   const { returnId, orderNumber } = await params
-  const parsedOrderNumber = parseInt(orderNumber, 10)
-  if (Number.isNaN(parsedOrderNumber)) {
-    return err('Invalid order number', 400)
-  }
 
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
@@ -48,17 +47,10 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
+    const resolvedOrder = await resolveOrderIdentifier(orderNumber)
+
     if (parsed.data.refund) {
-      const order = await prisma.order.findUnique({
-        where: { orderNumber: parsedOrderNumber },
-        select: { id: true },
-      })
-
-      if (!order) {
-        return err('Order not found', 404)
-      }
-
-      const refund = await createPaymentRefundRecord(order.id, {
+      const refund = await createPaymentRefundRecord(resolvedOrder.orderId, {
         paymentId: parsed.data.refund.paymentId,
         amountCents: parsed.data.refund.amountCents,
         reason: parsed.data.refund.reason,
@@ -87,6 +79,9 @@ export async function PATCH(req: Request, { params }: Params) {
     })
     return ok(updated)
   } catch (e) {
+    if (e instanceof OrderIdentifierResolutionError) {
+      return err(e.message, e.code === 'INVALID_IDENTIFIER' ? 400 : 404)
+    }
     const message = e instanceof Error ? e.message : 'Failed to update return'
     console.error('[PATCH /api/orders/[orderNumber]/returns/[returnId]]', e)
     return err(message, 400)

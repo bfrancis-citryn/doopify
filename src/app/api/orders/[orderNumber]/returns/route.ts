@@ -2,7 +2,10 @@ import { z } from 'zod'
 
 import { err, ok, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
-import { prisma } from '@/lib/prisma'
+import {
+  OrderIdentifierResolutionError,
+  resolveOrderIdentifier,
+} from '@/server/services/order-identifier.service'
 import { createReturnRecord, getOrderAdjustmentSummary } from '@/server/services/order-adjustments.service'
 
 interface Params { params: Promise<{ orderNumber: string }> }
@@ -27,19 +30,15 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response
 
   const { orderNumber } = await params
-  const num = parseInt(orderNumber, 10)
-  if (isNaN(num)) return err('Invalid order number', 400)
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { orderNumber: num },
-      select: { id: true },
-    })
-    if (!order) return err('Order not found', 404)
-
-    const summary = await getOrderAdjustmentSummary(order.id)
+    const resolvedOrder = await resolveOrderIdentifier(orderNumber)
+    const summary = await getOrderAdjustmentSummary(resolvedOrder.orderId)
     return ok(summary.returns)
   } catch (e) {
+    if (e instanceof OrderIdentifierResolutionError) {
+      return err(e.message, e.code === 'INVALID_IDENTIFIER' ? 400 : 404)
+    }
     console.error('[GET /api/orders/[orderNumber]/returns]', e)
     return err('Failed to fetch returns', 500)
   }
@@ -50,8 +49,6 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response
 
   const { orderNumber } = await params
-  const num = parseInt(orderNumber, 10)
-  if (isNaN(num)) return err('Invalid order number', 400)
 
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
@@ -60,15 +57,13 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return err(parsed.error.errors[0].message)
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { orderNumber: num },
-      select: { id: true },
-    })
-    if (!order) return err('Order not found', 404)
-
-    const returnRecord = await createReturnRecord(order.id, parsed.data)
+    const resolvedOrder = await resolveOrderIdentifier(orderNumber)
+    const returnRecord = await createReturnRecord(resolvedOrder.orderId, parsed.data)
     return ok(returnRecord, 201)
   } catch (e) {
+    if (e instanceof OrderIdentifierResolutionError) {
+      return err(e.message, e.code === 'INVALID_IDENTIFIER' ? 400 : 404)
+    }
     const message = e instanceof Error ? e.message : 'Failed to create return'
     console.error('[POST /api/orders/[orderNumber]/returns]', e)
     return err(message, 400)

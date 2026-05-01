@@ -2,50 +2,33 @@
 
 import { useEffect, useState } from 'react';
 import AppShell from '../AppShell';
-import { useOrders } from '../../context/OrdersContext';
 import OrderDetailView from './OrderDetailView';
 
 export default function OrderDetailClientPage({ orderNumber }) {
-  const { orders, updateOrder } = useOrders();
-  const normalizedOrderNumber = `#${String(orderNumber).replace(/^#/, '')}`;
-  // Fallback to context order if fetch hasn't completed
-  const summaryOrder = orders.find(entry => entry.orderNumber === normalizedOrderNumber);
-  
+  const normalizedOrderNumber = String(orderNumber).replace(/^#/, '');
   const [detailedOrder, setDetailedOrder] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const fetchDetailedOrder = async () => {
     try {
-      const num = String(orderNumber).replace(/^#/, '');
-      const res = await fetch(`/api/orders/${num}`);
+      const res = await fetch(`/api/orders/${normalizedOrderNumber}/detail`, { cache: 'no-store' });
       const json = await res.json();
       if (json.success) {
-        // We set the raw order to extract payments, refunds, returns.
         setDetailedOrder(json.data);
+      } else {
+        setDetailedOrder(null);
       }
     } catch (e) {
       console.error('Failed to fetch detailed order', e);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchDetailedOrder();
-  }, [orderNumber]);
+  }, [normalizedOrderNumber]);
 
-  const handleUpdateOrder = (orderId, updater) => {
-    updateOrder(orderId, updater);
+  const handleUpdateOrder = (_orderId, updater) => {
+    setDetailedOrder((current) => (current ? updater(current) : current));
   };
-
-  // Combine the transformed UI order with the raw detailed payload
-  const combinedOrder = summaryOrder ? {
-    ...summaryOrder,
-    payments: detailedOrder?.payments || [],
-    refunds: detailedOrder?.refunds || [],
-    returns: detailedOrder?.returns || [],
-    rawItems: detailedOrder?.items || [],
-  } : null;
   
   return (
     <AppShell
@@ -56,7 +39,7 @@ export default function OrderDetailClientPage({ orderNumber }) {
     >
       <OrderDetailView 
         onUpdateOrder={handleUpdateOrder} 
-        order={combinedOrder}
+        order={detailedOrder}
       />
     </AppShell>
   );

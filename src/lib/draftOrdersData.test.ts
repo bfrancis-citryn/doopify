@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { calculateDraftTotals } from './draftOrdersData'
+import {
+  calculateDraftTotals,
+  createDraftLineItemFromProduct,
+  createDraftOrderSeed,
+  resolveDraftLineItemDisplay,
+  validateManualDraftCustomer,
+} from './draftOrdersData'
 
 const baseDraft = {
   id: 'draft_1',
@@ -86,5 +92,140 @@ describe('calculateDraftTotals', () => {
 
     expect(totals.tax).toBe(0)
     expect(totals.total).toBe(110)
+  })
+})
+
+describe('draft line item snapshots', () => {
+  const productFixture = {
+    id: 'prod_1',
+    title: 'Performance Hoodie',
+    basePrice: 78,
+    compareAtPrice: 92,
+    images: [{ id: 'img_1', url: 'https://cdn.test/hoodie.jpg', altText: 'Hoodie image' }],
+    variants: [
+      {
+        id: 'var_1',
+        title: 'Large / Black',
+        sku: 'HD-L-BLK',
+        price: 82,
+        compareAtPrice: 95,
+      },
+    ],
+  }
+
+  it('creates line item snapshots from real variant data', () => {
+    const lineItem = createDraftLineItemFromProduct(productFixture, 'var_1')
+
+    expect(lineItem).toMatchObject({
+      productId: 'prod_1',
+      variantId: 'var_1',
+      title: 'Performance Hoodie',
+      variantTitle: 'Large / Black',
+      sku: 'HD-L-BLK',
+      imageUrl: 'https://cdn.test/hoodie.jpg',
+      imageAlt: 'Hoodie image',
+      price: 82,
+      compareAtPrice: 95,
+      quantity: 1,
+      taxable: true,
+      shippable: true,
+    })
+  })
+
+  it('preserves snapshot display when product is no longer available', () => {
+    const lineItem = {
+      id: 'line_2',
+      productId: 'deleted_product',
+      variantId: 'deleted_variant',
+      title: 'Legacy Sneaker',
+      variantTitle: 'Size 10 / White',
+      sku: 'LEG-10-WHT',
+      imageUrl: 'https://cdn.test/legacy.jpg',
+      imageAlt: 'Legacy sneaker',
+      price: 110,
+      compareAtPrice: 140,
+      quantity: 2,
+      taxable: true,
+      shippable: true,
+    }
+
+    const display = resolveDraftLineItemDisplay(lineItem, [productFixture])
+
+    expect(display.productMissing).toBe(true)
+    expect(display.title).toBe('Legacy Sneaker')
+    expect(display.variantTitle).toBe('Size 10 / White')
+    expect(display.sku).toBe('LEG-10-WHT')
+    expect(display.imageUrl).toBe('https://cdn.test/legacy.jpg')
+    expect(display.price).toBe(110)
+    expect(display.compareAtPrice).toBe(140)
+    expect(display.quantity).toBe(2)
+  })
+
+  it('prefers stored snapshot fields when catalog product changed', () => {
+    const lineItem = {
+      id: 'line_3',
+      productId: 'prod_1',
+      variantId: 'var_1',
+      title: 'Performance Hoodie (Snapshot)',
+      variantTitle: 'Large / Graphite',
+      sku: 'HD-L-GRP-OLD',
+      imageUrl: 'https://cdn.test/snapshot.jpg',
+      imageAlt: 'Snapshot image',
+      price: 79,
+      compareAtPrice: 91,
+      quantity: 1,
+      taxable: true,
+      shippable: true,
+    }
+
+    const display = resolveDraftLineItemDisplay(lineItem, [productFixture])
+
+    expect(display.productMissing).toBe(false)
+    expect(display.title).toBe('Performance Hoodie (Snapshot)')
+    expect(display.variantTitle).toBe('Large / Graphite')
+    expect(display.sku).toBe('HD-L-GRP-OLD')
+    expect(display.imageUrl).toBe('https://cdn.test/snapshot.jpg')
+    expect(display.price).toBe(79)
+    expect(display.compareAtPrice).toBe(91)
+  })
+})
+
+describe('draft customer modes', () => {
+  it('seeds existing mode when customers exist', () => {
+    const draft = createDraftOrderSeed([], [{ id: 'cust_1' }], [])
+    expect(draft.customerMode).toBe('existing')
+    expect(draft.customerId).toBe('cust_1')
+    expect(draft.manualCustomer).toMatchObject({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      shippingAddress: '',
+      billingAddress: '',
+    })
+  })
+
+  it('seeds guest mode when no customers exist', () => {
+    const draft = createDraftOrderSeed([], [], [])
+    expect(draft.customerMode).toBe('guest')
+    expect(draft.customerId).toBe('')
+  })
+
+  it('validates manual customer email', () => {
+    const invalid = validateManualDraftCustomer({ email: 'bad-email' })
+    expect(invalid.isValid).toBe(false)
+    expect(invalid.errors.email).toBe('Enter a valid email address.')
+
+    const valid = validateManualDraftCustomer({
+      firstName: '  Sam ',
+      lastName: ' Harper ',
+      email: '  Sam@Example.com ',
+    })
+    expect(valid.isValid).toBe(true)
+    expect(valid.normalized).toMatchObject({
+      firstName: 'Sam',
+      lastName: 'Harper',
+      email: 'sam@example.com',
+    })
   })
 })

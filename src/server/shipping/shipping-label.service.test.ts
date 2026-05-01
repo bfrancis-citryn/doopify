@@ -167,7 +167,17 @@ describe('buyOrderShippingLabel', () => {
           orderId: 'order_1',
           provider: 'EASYPOST',
           providerRateId: 'rate_1',
+          trackingNumber: 'TRACK123',
+          trackingUrl: 'https://track.example.com/TRACK123',
           labelAmountCents: 642,
+        }),
+      })
+    )
+    expect(mocks.prisma.fulfillment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          trackingNumber: 'TRACK123',
+          trackingUrl: 'https://track.example.com/TRACK123',
         }),
       })
     )
@@ -175,6 +185,14 @@ describe('buyOrderShippingLabel', () => {
       expect.objectContaining({
         where: { id: 'order_1' },
         data: { fulfillmentStatus: 'PARTIALLY_FULFILLED' },
+      })
+    )
+    expect(mocks.prisma.orderEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          orderId: 'order_1',
+          type: 'SHIPPING_LABEL_PURCHASED',
+        }),
       })
     )
     expect(mocks.prisma.order.update).not.toHaveBeenCalledWith(
@@ -243,10 +261,10 @@ describe('buyOrderShippingLabel', () => {
     })
 
     expect(mocks.purchaseShippingProviderLabel).not.toHaveBeenCalled()
+    expect(mocks.prisma.fulfillment.create).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       duplicate: true,
       shippingLabel: { id: 'label_existing' },
     })
   })
 })
-

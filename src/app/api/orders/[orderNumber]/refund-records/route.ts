@@ -1,8 +1,11 @@
 import { z } from 'zod'
 
 import { err, ok, parseBody } from '@/lib/api'
-import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import {
+  OrderIdentifierResolutionError,
+  resolveOrderIdentifier,
+} from '@/server/services/order-identifier.service'
 import { createPaymentRefundRecord } from '@/server/services/order-adjustments.service'
 
 interface Params {
@@ -33,11 +36,6 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response
 
   const { orderNumber } = await params
-  const parsedOrderNumber = parseInt(orderNumber, 10)
-  if (Number.isNaN(parsedOrderNumber)) {
-    return err('Invalid order number', 400)
-  }
-
   const body = await parseBody(req)
   if (!body) {
     return err('Invalid request body')
@@ -49,18 +47,13 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { orderNumber: parsedOrderNumber },
-      select: { id: true },
-    })
-
-    if (!order) {
-      return err('Order not found', 404)
-    }
-
-    const refundRecord = await createPaymentRefundRecord(order.id, parsed.data)
+    const resolvedOrder = await resolveOrderIdentifier(orderNumber)
+    const refundRecord = await createPaymentRefundRecord(resolvedOrder.orderId, parsed.data)
     return ok(refundRecord, 201)
   } catch (error) {
+    if (error instanceof OrderIdentifierResolutionError) {
+      return err(error.message, error.code === 'INVALID_IDENTIFIER' ? 400 : 404)
+    }
     const message = error instanceof Error ? error.message : 'Failed to create refund record'
     console.error('[POST /api/orders/[orderNumber]/refund-records]', error)
     return err(message, 400)
