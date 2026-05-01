@@ -11,7 +11,6 @@ import AdminCard from '../admin/ui/AdminCard';
 import AdminDrawer from '../admin/ui/AdminDrawer';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import AdminField from '../admin/ui/AdminField';
-import AdminFormSection from '../admin/ui/AdminFormSection';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminLiveStatus from '../admin/ui/AdminLiveStatus';
 import AdminSelect from '../admin/ui/AdminSelect';
@@ -31,7 +30,7 @@ const SETTINGS_SECTIONS = [
   { id: 'taxes', label: 'Taxes & duties' },
   { id: 'webhooks', label: 'Webhooks' },
   { id: 'email', label: 'Email' },
-  { id: 'brand-kit', label: 'Storefront / brand' },
+  { id: 'brand-kit', label: 'Brand & appearance' },
   { id: 'setup', label: 'Setup' },
 ];
 
@@ -140,12 +139,55 @@ const EMAIL_PROVIDER_DRAWER = {
   SENDLAYER: 'SENDLAYER',
 };
 
+const BRAND_DRAWER = {
+  GLOBAL_ASSETS: 'GLOBAL_ASSETS',
+  STOREFRONT_THEME: 'STOREFRONT_THEME',
+  CHECKOUT_BRANDING: 'CHECKOUT_BRANDING',
+  EMAIL_BRANDING: 'EMAIL_BRANDING',
+  SOCIAL_LINKS: 'SOCIAL_LINKS',
+};
+
 const EMAIL_TEMPLATE_SUMMARY = [
-  { id: 'order_confirmation', label: 'Order confirmation', statusLabel: 'Enabled', statusTone: 'success' },
-  { id: 'fulfillment_tracking', label: 'Shipping confirmation', statusLabel: 'Enabled', statusTone: 'success' },
-  { id: 'refund_confirmation', label: 'Refund confirmation', statusLabel: 'Coming soon', statusTone: 'warning' },
-  { id: 'draft_invoice', label: 'Draft order invoice', statusLabel: 'Coming soon', statusTone: 'warning' },
-  { id: 'customer_note', label: 'Customer note / order update', statusLabel: 'Coming soon', statusTone: 'warning' },
+  {
+    id: 'order_confirmation',
+    label: 'Order confirmation',
+    statusLabel: 'Enabled',
+    statusTone: 'success',
+    triggerLabel: 'Sent after an order is paid or finalized.',
+    editorStateLabel: 'Template editor coming soon',
+  },
+  {
+    id: 'fulfillment_tracking',
+    label: 'Shipping confirmation',
+    statusLabel: 'Enabled',
+    statusTone: 'success',
+    triggerLabel: 'Sent when fulfillment tracking is created.',
+    editorStateLabel: 'Template editor coming soon',
+  },
+  {
+    id: 'refund_confirmation',
+    label: 'Refund confirmation',
+    statusLabel: 'Coming soon',
+    statusTone: 'warning',
+    triggerLabel: 'Will send after a refund is issued.',
+    editorStateLabel: 'Template editor coming soon',
+  },
+  {
+    id: 'draft_invoice',
+    label: 'Draft order invoice',
+    statusLabel: 'Coming soon',
+    statusTone: 'warning',
+    triggerLabel: 'Will send when a draft order invoice is created.',
+    editorStateLabel: 'Template editor coming soon',
+  },
+  {
+    id: 'customer_note',
+    label: 'Customer note / order update',
+    statusLabel: 'Coming soon',
+    statusTone: 'warning',
+    triggerLabel: 'Will send when staff adds a customer-visible order note.',
+    editorStateLabel: 'Template editor coming soon',
+  },
 ];
 
 const EMPTY_PROVIDER_FORMS = {
@@ -633,6 +675,8 @@ export default function SettingsWorkspace() {
   const [stripeRuntimeStatus, setStripeRuntimeStatus] = useState(null);
   const [activePaymentDrawer, setActivePaymentDrawer] = useState(null);
   const [activeEmailDrawer, setActiveEmailDrawer] = useState(null);
+  const [activeBrandDrawer, setActiveBrandDrawer] = useState(null);
+  const [activeEmailTemplateId, setActiveEmailTemplateId] = useState('');
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
   const [providerTestEmailById, setProviderTestEmailById] = useState({
@@ -1156,6 +1200,17 @@ export default function SettingsWorkspace() {
     ],
     [resendSetupStatus, smtpSetupStatus]
   );
+  const hasStoreAddress = Boolean(String(settings.address || '').trim());
+  const activeEmailTemplate = useMemo(
+    () => EMAIL_TEMPLATE_SUMMARY.find((template) => template.id === activeEmailTemplateId) || null,
+    [activeEmailTemplateId]
+  );
+  const brandDisplayName = String(brandKit?.name || settings.storeName || 'Your store').trim();
+  const storefrontPrimaryColor = brandKit?.primaryColor || settings.brandPrimary || '#0f172a';
+  const storefrontTextColor = brandKit?.textColor || '#0f172a';
+  const checkoutPreviewLogo = brandKit?.checkoutLogoUrl || brandKit?.logoUrl || '';
+  const emailPreviewLogo = brandKit?.emailLogoUrl || brandKit?.logoUrl || '';
+  const emailHeaderColor = brandKit?.emailHeaderColor || brandKit?.primaryColor || '#111827';
   const shippingMode = shippingSettingsProfile?.shippingMode || 'MANUAL';
   const shippingProvider = shippingSettingsProfile?.shippingLiveProvider || null;
 
@@ -1245,7 +1300,7 @@ export default function SettingsWorkspace() {
         throw new Error('Upload succeeded but no asset URL was returned.');
       }
       handleBrandKitPatch({ [field]: assetUrl });
-      setBrandKitNotice('Asset uploaded. Save changes to persist it in Brand Kit.');
+      setBrandKitNotice('Asset uploaded. Save changes to persist it in Brand & appearance.');
     } catch (uploadError) {
       setBrandKitError(uploadError instanceof Error ? uploadError.message : 'Brand asset upload failed.');
     } finally {
@@ -1528,6 +1583,22 @@ export default function SettingsWorkspace() {
 
   function closeEmailDrawer() {
     setActiveEmailDrawer(null);
+  }
+
+  function openBrandDrawer(drawerId) {
+    setActiveBrandDrawer(drawerId);
+  }
+
+  function closeBrandDrawer() {
+    setActiveBrandDrawer(null);
+  }
+
+  function openEmailTemplateDrawer(templateId) {
+    setActiveEmailTemplateId(templateId);
+  }
+
+  function closeEmailTemplateDrawer() {
+    setActiveEmailTemplateId('');
   }
 
   async function handleCopyStripeWebhookEndpoint() {
@@ -2053,14 +2124,23 @@ export default function SettingsWorkspace() {
                   <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Store address</h4>
                   </div>
-                  <p className={styles.cardSubtext}>Address editing will be expanded here. Current store address is shown below.</p>
-                  <div className={styles.drawerFormGrid}>
-                    <AdminField label="Current address">
-                      <AdminInput disabled value={settings.address || 'No address configured yet'} />
-                    </AdminField>
-                    <AdminField label="Address editor">
-                      <AdminInput disabled value="Coming soon" />
-                    </AdminField>
+                  <p className={styles.cardSubtext}>Used in shipping docs and customer-facing records.</p>
+                  <div className={styles.compactDrawerGrid}>
+                    <p className={styles.compactMeta}>
+                      <strong>Status:</strong> {hasStoreAddress ? 'Configured' : 'No store address configured'}
+                    </p>
+                    {hasStoreAddress ? (
+                      <p className={styles.compactMeta}>
+                        <strong>Address:</strong> {settings.address}
+                      </p>
+                    ) : (
+                      <p className={styles.compactMeta}>Add a default ship-from location in Shipping & delivery to complete address setup.</p>
+                    )}
+                  </div>
+                  <div className={styles.compactActionRow}>
+                    <AdminButton onClick={() => setActiveSection('shipping')} size="sm" variant="secondary">
+                      {hasStoreAddress ? 'Edit address' : 'Add address'}
+                    </AdminButton>
                   </div>
                 </AdminCard>
 
@@ -2089,129 +2169,175 @@ export default function SettingsWorkspace() {
             {!loading && !error && activeSection === 'brand-kit' ? (
               <div className={styles.brandKitLayout}>
                 <div className={styles.brandKitHeading}>
-                  <h3>Brand Kit</h3>
-                  <p>Manage branding used by storefront, checkout, and customer emails.</p>
+                  <h3>Brand & appearance</h3>
+                  <p>
+                    Brand settings control the default look of your storefront, checkout, customer emails, and printed documents.
+                    Email wording is edited in Settings -&gt; Email.
+                  </p>
                 </div>
 
-                <AdminFormSection
-                  description=""
-                  eyebrow="Identity"
-                  title={<span className={styles.sectionTitleWithHelp}>Brand identity<AdminTooltip content="Core brand values consumed by storefront pages, checkout, and emails." /></span>}
-                >
-                  <div className={styles.brandFieldGrid}>
-                    <label className={styles.field}>
-                      <span>Brand name</span>
-                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ name: event.target.value })} value={brandKit?.name || ''} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Support email</span>
-                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
-                    </label>
-                  </div>
-                  <div className={styles.brandFieldGrid}>
-                    {renderAssetUploadField({ field: 'logoUrl', label: 'Store logo', refObject: logoUploadRef })}
-                    {renderAssetUploadField({ field: 'faviconUrl', label: 'Favicon', refObject: faviconUploadRef })}
-                  </div>
-                  <AdminButton className={styles.advancedToggle} onClick={() => setShowAdvancedUrls((current) => !current)} size="sm" variant="secondary">
-                    {showAdvancedUrls ? 'Hide URL fallback' : 'Use URL fallback instead'}
-                  </AdminButton>
-                  {showAdvancedUrls ? (
-                    <div className={styles.brandFieldGrid}>
-                      <label className={styles.field}>
-                        <span>Store logo URL</span>
-                        <input className={styles.input} onChange={(event) => handleBrandKitPatch({ logoUrl: event.target.value })} value={brandKit?.logoUrl || ''} />
-                      </label>
-                      <label className={styles.field}>
-                        <span>Favicon URL</span>
-                        <input className={styles.input} onChange={(event) => handleBrandKitPatch({ faviconUrl: event.target.value })} value={brandKit?.faviconUrl || ''} />
-                      </label>
-                    </div>
-                  ) : null}
-                </AdminFormSection>
+                {brandKit ? (
+                  <>
+                    <section className={styles.brandPreviewGrid}>
+                      <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Storefront header preview</h4>
+                        </div>
+                        <div className={styles.brandPreviewFrame}>
+                          <div className={styles.brandPreviewHeader} style={{ backgroundColor: storefrontPrimaryColor, color: storefrontTextColor }}>
+                            <span className={styles.brandPreviewLabel}>{brandDisplayName}</span>
+                            <span className={styles.methodChip}>Storefront</span>
+                          </div>
+                        </div>
+                      </AdminCard>
+                      <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Checkout header preview</h4>
+                        </div>
+                        <div className={styles.brandPreviewFrame}>
+                          <div className={styles.brandPreviewHeader} style={{ backgroundColor: storefrontPrimaryColor, color: storefrontTextColor }}>
+                            <span className={styles.brandPreviewLabel}>{checkoutPreviewLogo ? 'Checkout logo set' : brandDisplayName}</span>
+                            <span className={styles.methodChip}>Checkout</span>
+                          </div>
+                        </div>
+                      </AdminCard>
+                      <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Email header preview</h4>
+                        </div>
+                        <div className={styles.brandPreviewFrame}>
+                          <div className={styles.brandPreviewHeader} style={{ backgroundColor: emailHeaderColor, color: '#ffffff' }}>
+                            <span className={styles.brandPreviewLabel}>{emailPreviewLogo ? 'Email logo set' : brandDisplayName}</span>
+                            <span className={styles.methodChip}>Email</span>
+                          </div>
+                        </div>
+                      </AdminCard>
+                    </section>
 
-                <AdminFormSection
-                  description=""
-                  eyebrow="Visual"
-                  title={<span className={styles.sectionTitleWithHelp}>Colors<AdminTooltip content="Storefront and checkout color tokens." /></span>}
-                >
-                  <div className={styles.brandFieldGrid}>
-                    <label className={styles.field}><span>Primary color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ primaryColor: event.target.value })} value={brandKit?.primaryColor || ''} /></label>
-                    <label className={styles.field}><span>Secondary color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ secondaryColor: event.target.value })} value={brandKit?.secondaryColor || ''} /></label>
-                    <label className={styles.field}><span>Accent color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ accentColor: event.target.value })} value={brandKit?.accentColor || ''} /></label>
-                    <label className={styles.field}><span>Text color</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ textColor: event.target.value })} value={brandKit?.textColor || ''} /></label>
-                  </div>
-                </AdminFormSection>
+                    <section className={styles.setupColumns}>
+                      <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Global brand assets</h4>
+                        </div>
+                        <p className={styles.compactRowDescription}>Identity assets used across storefront, checkout, and default documents.</p>
+                        <div className={styles.compactDrawerGrid}>
+                          <p className={styles.compactMeta}>
+                            <strong>Store logo:</strong> {brandKit.logoUrl ? 'Configured' : 'Not set'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in Storefront, packing slips, default email branding.</p>
+                          <p className={styles.compactMeta}>
+                            <strong>Favicon:</strong> {brandKit.faviconUrl ? 'Configured' : 'Not set'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in browser tabs and storefront metadata.</p>
+                        </div>
+                        <div className={styles.compactActionRow}>
+                          <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.GLOBAL_ASSETS)} size="sm" variant="secondary">
+                            Manage
+                          </AdminButton>
+                        </div>
+                      </AdminCard>
 
-                <AdminFormSection
-                  description=""
-                  eyebrow="Typography"
-                  title={<span className={styles.sectionTitleWithHelp}>Typography and buttons<AdminTooltip content="Used in storefront and checkout where these tokens are supported." /></span>}
-                >
-                  <div className={styles.brandFieldGrid}>
-                    <label className={styles.field}>
-                      <span>Heading font</span>
-                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ headingFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.headingFont || 'system'} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Body font</span>
-                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ bodyFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.bodyFont || 'system'} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Button radius</span>
-                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonRadius: nextValue })} options={BUTTON_RADIUS_OPTIONS} value={brandKit?.buttonRadius || 'md'} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Button style</span>
-                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonStyle: nextValue })} options={BUTTON_STYLE_OPTIONS} value={brandKit?.buttonStyle || 'solid'} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Button text transform</span>
-                      <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonTextTransform: nextValue })} options={BUTTON_TEXT_TRANSFORM_OPTIONS} value={brandKit?.buttonTextTransform || 'normal'} />
-                    </label>
-                  </div>
-                </AdminFormSection>
+                      <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Storefront theme</h4>
+                        </div>
+                        <p className={styles.compactRowDescription}>Default visual tokens for storefront pages.</p>
+                        <div className={styles.compactDrawerGrid}>
+                          <p className={styles.compactMeta}>
+                            <strong>Primary color:</strong> {brandKit.primaryColor || 'Not set'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in storefront theme.</p>
+                          <p className={styles.compactMeta}>
+                            <strong>Button style:</strong> {brandKit.buttonStyle || 'solid'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in storefront and checkout buttons where supported.</p>
+                        </div>
+                        <div className={styles.compactActionRow}>
+                          <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.STOREFRONT_THEME)} size="sm" variant="secondary">
+                            Edit
+                          </AdminButton>
+                        </div>
+                      </AdminCard>
+                    </section>
 
-                <AdminFormSection
-                  description=""
-                  eyebrow="Email"
-                  title={<span className={styles.sectionTitleWithHelp}>Email branding<AdminTooltip content="Used in transactional email templates for logo, header tint, and footer copy." /></span>}
-                >
-                  <div className={styles.brandFieldGrid}>
-                    {renderAssetUploadField({ field: 'emailLogoUrl', label: 'Email logo', refObject: emailLogoUploadRef })}
-                    {renderAssetUploadField({ field: 'checkoutLogoUrl', label: 'Checkout logo', refObject: checkoutLogoUploadRef })}
-                    <label className={styles.field}>
-                      <span>Email header color</span>
-                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailHeaderColor: event.target.value })} value={brandKit?.emailHeaderColor || ''} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Email footer text</span>
-                      <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailFooterText: event.target.value })} value={brandKit?.emailFooterText || ''} />
-                    </label>
-                  </div>
-                </AdminFormSection>
+                    <section className={styles.setupColumns}>
+                      <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Checkout branding</h4>
+                        </div>
+                        <p className={styles.compactRowDescription}>Settings that only affect checkout presentation.</p>
+                        <div className={styles.compactDrawerGrid}>
+                          <p className={styles.compactMeta}>
+                            <strong>Checkout logo:</strong> {brandKit.checkoutLogoUrl ? 'Configured' : 'Not set'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in checkout only.</p>
+                        </div>
+                        <div className={styles.compactActionRow}>
+                          <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.CHECKOUT_BRANDING)} size="sm" variant="secondary">
+                            Edit
+                          </AdminButton>
+                        </div>
+                      </AdminCard>
 
-                <AdminFormSection
-                  description=""
-                  eyebrow="Social"
-                  title={<span className={styles.sectionTitleWithHelp}>Social links<AdminTooltip content="Exposed by storefront settings for social destinations." /></span>}
-                >
-                  <div className={styles.brandFieldGrid}>
-                    <label className={styles.field}><span>Instagram URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ instagramUrl: event.target.value })} value={brandKit?.instagramUrl || ''} /></label>
-                    <label className={styles.field}><span>Facebook URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ facebookUrl: event.target.value })} value={brandKit?.facebookUrl || ''} /></label>
-                    <label className={styles.field}><span>TikTok URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ tiktokUrl: event.target.value })} value={brandKit?.tiktokUrl || ''} /></label>
-                    <label className={styles.field}><span>YouTube URL</span><input className={styles.input} onChange={(event) => handleBrandKitPatch({ youtubeUrl: event.target.value })} value={brandKit?.youtubeUrl || ''} /></label>
-                  </div>
-                </AdminFormSection>
+                      <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Email branding</h4>
+                        </div>
+                        <p className={styles.compactRowDescription}>Visual defaults for customer emails.</p>
+                        <div className={styles.compactDrawerGrid}>
+                          <p className={styles.compactMeta}>
+                            <strong>Email logo:</strong> {brandKit.emailLogoUrl ? 'Configured' : 'Not set'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in customer emails only.</p>
+                          <p className={styles.compactMeta}>
+                            <strong>Email header color:</strong> {brandKit.emailHeaderColor || 'Not set'}
+                          </p>
+                          <p className={styles.compactMeta}>Used in customer emails only.</p>
+                        </div>
+                        <p className={styles.compactMeta}>Want to change email wording? Manage customer email templates in Settings -&gt; Email.</p>
+                        <div className={styles.compactActionRow}>
+                          <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.EMAIL_BRANDING)} size="sm" variant="secondary">
+                            Edit
+                          </AdminButton>
+                          <AdminButton asChild size="sm" variant="ghost">
+                            <Link href="/admin/settings?section=email">Open email templates</Link>
+                          </AdminButton>
+                        </div>
+                      </AdminCard>
+                    </section>
+
+                    <section className={styles.setupColumns}>
+                      <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
+                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                          <h4>Social links</h4>
+                        </div>
+                        <p className={styles.compactRowDescription}>Social destinations for storefront and supported email footers.</p>
+                        <div className={styles.compactDrawerGrid}>
+                          <p className={styles.compactMeta}>
+                            <strong>Configured links:</strong>{' '}
+                            {[brandKit.instagramUrl, brandKit.facebookUrl, brandKit.tiktokUrl, brandKit.youtubeUrl].filter(Boolean).length}
+                          </p>
+                          <p className={styles.compactMeta}>Used in storefront footer and email footer where supported.</p>
+                        </div>
+                        <div className={styles.compactActionRow}>
+                          <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.SOCIAL_LINKS)} size="sm" variant="secondary">
+                            Manage
+                          </AdminButton>
+                        </div>
+                      </AdminCard>
+                    </section>
+                  </>
+                ) : null}
 
                 {brandKitNotice ? (
                   <div className={styles.statusBlock}>
                     <p className={styles.statusText}>{brandKitNotice}</p>
                   </div>
                 ) : null}
-                {brandKitLoading ? <p className={styles.statusText}>Loading Brand Kit...</p> : null}
+                {brandKitLoading ? <p className={styles.statusText}>Loading Brand & appearance...</p> : null}
                 {brandKitError ? (
                   <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>Brand Kit error</p>
+                    <p className={styles.statusTitle}>Brand & appearance error</p>
                     <p className={styles.statusText}>{brandKitError}</p>
                   </div>
                 ) : null}
@@ -3164,10 +3290,13 @@ export default function SettingsWorkspace() {
                     <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                       <h4>Email branding</h4>
                     </div>
-                    <p className={styles.compactRowDescription}>Email branding controls are not fully wired yet. Use Storefront / brand for active logo and color tokens.</p>
+                    <p className={styles.compactRowDescription}>Email colors and logo come from Brand & appearance.</p>
                     <div className={styles.compactActionRow}>
                       <AdminButton onClick={() => setActiveSection('brand-kit')} size="sm" variant="secondary">
-                        Open Storefront / brand
+                        Open Brand & appearance
+                      </AdminButton>
+                      <AdminButton asChild size="sm" variant="ghost">
+                        <Link href="/admin/settings?section=email">Open email templates</Link>
                       </AdminButton>
                     </div>
                   </AdminCard>
@@ -3184,6 +3313,14 @@ export default function SettingsWorkspace() {
                           <div className={styles.providerTitleLine}>
                             <h4>{template.label}</h4>
                             <AdminStatusChip tone={template.statusTone}>{template.statusLabel}</AdminStatusChip>
+                          </div>
+                          <p className={styles.compactMeta}>
+                            <strong>Trigger:</strong> {template.triggerLabel}
+                          </p>
+                          <div className={styles.compactActionRow}>
+                            <AdminButton onClick={() => openEmailTemplateDrawer(template.id)} size="sm" variant="secondary">
+                              Manage
+                            </AdminButton>
                           </div>
                         </div>
                       ))}
@@ -4202,6 +4339,234 @@ export default function SettingsWorkspace() {
               <p className={styles.compactMeta}>
                 Keep this provider hidden until runtime send, webhook verification, and delivery logging support exists.
               </p>
+            </AdminCard>
+          </div>
+        ) : null}
+      </AdminDrawer>
+      <AdminDrawer
+        onClose={closeBrandDrawer}
+        open={Boolean(activeBrandDrawer)}
+        subtitle={
+          activeBrandDrawer === BRAND_DRAWER.GLOBAL_ASSETS
+            ? 'Manage logo, favicon, and default brand identity fields.'
+            : activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME
+              ? 'Manage storefront visual tokens and button defaults.'
+              : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
+                ? 'Manage assets that apply only to checkout.'
+                : activeBrandDrawer === BRAND_DRAWER.EMAIL_BRANDING
+                  ? 'Manage logo and header/footer styling for customer emails.'
+                  : activeBrandDrawer === BRAND_DRAWER.SOCIAL_LINKS
+                    ? 'Manage social profile destinations used in supported surfaces.'
+                    : 'Brand settings details.'
+        }
+        title={
+          activeBrandDrawer === BRAND_DRAWER.GLOBAL_ASSETS
+            ? 'Global brand assets'
+            : activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME
+              ? 'Storefront theme'
+              : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
+                ? 'Checkout branding'
+                : activeBrandDrawer === BRAND_DRAWER.EMAIL_BRANDING
+                  ? 'Email branding'
+                  : activeBrandDrawer === BRAND_DRAWER.SOCIAL_LINKS
+                    ? 'Social links'
+                    : 'Brand details'
+        }
+      >
+        {activeBrandDrawer === BRAND_DRAWER.GLOBAL_ASSETS ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Identity</h4>
+              </div>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <label className={styles.field}>
+                  <span>Brand name</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ name: event.target.value })} value={brandKit?.name || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Support email</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
+                </label>
+              </div>
+              <p className={styles.compactMeta}>Store logo: Used in Storefront, packing slips, default email branding.</p>
+              <p className={styles.compactMeta}>Favicon: Used in browser tabs and storefront metadata.</p>
+            </AdminCard>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={styles.brandFieldGrid}>
+                {renderAssetUploadField({ field: 'logoUrl', label: 'Store logo', refObject: logoUploadRef })}
+                {renderAssetUploadField({ field: 'faviconUrl', label: 'Favicon', refObject: faviconUploadRef })}
+              </div>
+              <div className={styles.compactActionRow}>
+                <AdminButton className={styles.advancedToggle} onClick={() => setShowAdvancedUrls((current) => !current)} size="sm" variant="secondary">
+                  {showAdvancedUrls ? 'Hide URL fallback' : 'Use URL fallback instead'}
+                </AdminButton>
+              </div>
+              {showAdvancedUrls ? (
+                <div className={styles.brandFieldGrid}>
+                  <label className={styles.field}>
+                    <span>Store logo URL</span>
+                    <input className={styles.input} onChange={(event) => handleBrandKitPatch({ logoUrl: event.target.value })} value={brandKit?.logoUrl || ''} />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Favicon URL</span>
+                    <input className={styles.input} onChange={(event) => handleBrandKitPatch({ faviconUrl: event.target.value })} value={brandKit?.faviconUrl || ''} />
+                  </label>
+                </div>
+              ) : null}
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Storefront color and typography</h4>
+              </div>
+              <div className={styles.brandFieldGrid}>
+                <label className={styles.field}>
+                  <span>Primary color</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ primaryColor: event.target.value })} value={brandKit?.primaryColor || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Secondary color</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ secondaryColor: event.target.value })} value={brandKit?.secondaryColor || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Accent color</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ accentColor: event.target.value })} value={brandKit?.accentColor || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Text color</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ textColor: event.target.value })} value={brandKit?.textColor || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Heading font</span>
+                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ headingFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.headingFont || 'system'} />
+                </label>
+                <label className={styles.field}>
+                  <span>Body font</span>
+                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ bodyFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.bodyFont || 'system'} />
+                </label>
+              </div>
+              <p className={styles.compactMeta}>Primary color: Used in storefront theme.</p>
+            </AdminCard>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Buttons</h4>
+              </div>
+              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
+                <label className={styles.field}>
+                  <span>Button radius</span>
+                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonRadius: nextValue })} options={BUTTON_RADIUS_OPTIONS} value={brandKit?.buttonRadius || 'md'} />
+                </label>
+                <label className={styles.field}>
+                  <span>Button style</span>
+                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonStyle: nextValue })} options={BUTTON_STYLE_OPTIONS} value={brandKit?.buttonStyle || 'solid'} />
+                </label>
+                <label className={styles.field}>
+                  <span>Button text transform</span>
+                  <AdminSelect
+                    onChange={(nextValue) => handleBrandKitPatch({ buttonTextTransform: nextValue })}
+                    options={BUTTON_TEXT_TRANSFORM_OPTIONS}
+                    value={brandKit?.buttonTextTransform || 'normal'}
+                  />
+                </label>
+              </div>
+              <p className={styles.compactMeta}>Button style: Used in storefront and checkout buttons where supported.</p>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Checkout logo</h4>
+              </div>
+              <div className={styles.brandFieldGrid}>
+                {renderAssetUploadField({ field: 'checkoutLogoUrl', label: 'Checkout logo', refObject: checkoutLogoUploadRef })}
+              </div>
+              <p className={styles.compactMeta}>Checkout logo: Used in checkout only.</p>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeBrandDrawer === BRAND_DRAWER.EMAIL_BRANDING ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Email visual defaults</h4>
+              </div>
+              <div className={styles.brandFieldGrid}>
+                {renderAssetUploadField({ field: 'emailLogoUrl', label: 'Email logo', refObject: emailLogoUploadRef })}
+                <label className={styles.field}>
+                  <span>Email header color</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailHeaderColor: event.target.value })} value={brandKit?.emailHeaderColor || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Email footer text</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ emailFooterText: event.target.value })} value={brandKit?.emailFooterText || ''} />
+                </label>
+              </div>
+              <p className={styles.compactMeta}>Email logo: Used in customer emails only.</p>
+              <p className={styles.compactMeta}>Email header color: Used in customer emails only.</p>
+              <div className={styles.compactActionRow}>
+                <AdminButton asChild size="sm" variant="ghost">
+                  <Link href="/admin/settings?section=email">Open email templates</Link>
+                </AdminButton>
+              </div>
+            </AdminCard>
+          </div>
+        ) : null}
+
+        {activeBrandDrawer === BRAND_DRAWER.SOCIAL_LINKS ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Social links</h4>
+              </div>
+              <div className={styles.brandFieldGrid}>
+                <label className={styles.field}>
+                  <span>Instagram URL</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ instagramUrl: event.target.value })} value={brandKit?.instagramUrl || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>Facebook URL</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ facebookUrl: event.target.value })} value={brandKit?.facebookUrl || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>TikTok URL</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ tiktokUrl: event.target.value })} value={brandKit?.tiktokUrl || ''} />
+                </label>
+                <label className={styles.field}>
+                  <span>YouTube URL</span>
+                  <input className={styles.input} onChange={(event) => handleBrandKitPatch({ youtubeUrl: event.target.value })} value={brandKit?.youtubeUrl || ''} />
+                </label>
+              </div>
+              <p className={styles.compactMeta}>Social links: Used in storefront footer and email footer where supported.</p>
+            </AdminCard>
+          </div>
+        ) : null}
+      </AdminDrawer>
+      <AdminDrawer
+        onClose={closeEmailTemplateDrawer}
+        open={Boolean(activeEmailTemplate)}
+        subtitle="Template status, trigger, and editor readiness."
+        title={activeEmailTemplate ? `${activeEmailTemplate.label}` : 'Customer email template'}
+      >
+        {activeEmailTemplate ? (
+          <div className={styles.drawerStack}>
+            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                <h4>Template status</h4>
+                <AdminStatusChip tone={activeEmailTemplate.statusTone}>{activeEmailTemplate.statusLabel}</AdminStatusChip>
+              </div>
+              <p className={styles.compactMeta}>
+                <strong>Trigger:</strong> {activeEmailTemplate.triggerLabel}
+              </p>
+              <p className={styles.compactMeta}>{activeEmailTemplate.editorStateLabel}</p>
             </AdminCard>
           </div>
         ) : null}

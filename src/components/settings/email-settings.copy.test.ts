@@ -18,6 +18,15 @@ describe('email settings compact workspace copy', () => {
     expect(workspace).toContain('<h4>Recent email activity</h4>')
   })
 
+  it('shows template trigger context and manage actions with honest editor availability', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain('<strong>Trigger:</strong> {template.triggerLabel}')
+    expect(workspace).toContain('onClick={() => openEmailTemplateDrawer(template.id)}')
+    expect(workspace).toContain('Template editor coming soon')
+    expect(workspace).toContain('open={Boolean(activeEmailTemplate)}')
+  })
+
   it('disables the legacy inline-email-provider block and keeps drawer-based manage flows', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 
@@ -27,4 +36,3 @@ describe('email settings compact workspace copy', () => {
     expect(workspace).toContain('title={')
   })
 })
-
