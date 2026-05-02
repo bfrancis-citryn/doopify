@@ -1,7 +1,16 @@
 // @ts-nocheck
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { prisma } from '@/lib/prisma'
+
+const mocks = vi.hoisted(() => ({
+  sendTransactionalEmail: vi.fn(),
+}))
+
+vi.mock('@/server/email/provider', () => ({
+  sendTransactionalEmail: mocks.sendTransactionalEmail,
+}))
+
 import {
   applyEmailProviderWebhookEvent,
   resendEmailDelivery,
@@ -17,6 +26,9 @@ const originalResendApiKey = process.env.RESEND_API_KEY
 async function cleanTestData() {
   await prisma.analyticsEvent.deleteMany()
   await prisma.emailDelivery.deleteMany()
+  await prisma.integrationSecret.deleteMany()
+  await prisma.integrationEvent.deleteMany()
+  await prisma.integration.deleteMany()
   await prisma.discountApplication.deleteMany()
   await prisma.discount.deleteMany()
   await prisma.refund.deleteMany()
@@ -97,6 +109,8 @@ async function seedOrderForEmail(orderKey: string, recipientEmail: string) {
 runIntegration('email delivery integration', () => {
   beforeEach(async () => {
     process.env.RESEND_API_KEY = ''
+    mocks.sendTransactionalEmail.mockReset()
+    mocks.sendTransactionalEmail.mockResolvedValue({ provider: 'preview', providerMessageId: undefined })
     await cleanTestData()
   }, 60_000)
 
@@ -143,6 +157,7 @@ runIntegration('email delivery integration', () => {
 
     const resendResult = await resendEmailDelivery(originalDelivery.id)
     expect(resendResult.success).toBe(true)
+    expect(mocks.sendTransactionalEmail).toHaveBeenCalledTimes(1)
 
     const deliveries = await prisma.emailDelivery.findMany({
       where: { orderId: order.id },
