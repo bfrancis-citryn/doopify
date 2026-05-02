@@ -70,6 +70,31 @@ describe('security headers', () => {
     expect(csp).toContain('https://analytics.example.com')
   })
 
+  it('uses broad https media fallback when no exact media origin is configured', () => {
+    const csp = buildSecurityHeaders({ environment: 'production' }).get('Content-Security-Policy-Report-Only')
+
+    expect(csp).toContain("img-src 'self' data: blob: https:")
+  })
+
+  it('includes MEDIA_PUBLIC_BASE_URL as an exact media origin', () => {
+    vi.stubEnv('MEDIA_PUBLIC_BASE_URL', 'https://cdn.example.com/media')
+
+    const csp = buildSecurityHeaders({ environment: 'production' }).get('Content-Security-Policy-Report-Only')
+
+    expect(csp).toContain("img-src 'self' data: blob: https://cdn.example.com")
+    expect(csp).not.toContain("blob: https:")
+  })
+
+  it('uses CSP_MEDIA_ORIGINS as exact media origins without broad https fallback', () => {
+    vi.stubEnv('CSP_MEDIA_ORIGINS', 'https://media.example.com, assets.example.com')
+
+    const csp = buildSecurityHeaders({ environment: 'production' }).get('Content-Security-Policy-Report-Only')
+
+    expect(csp).toContain('https://media.example.com')
+    expect(csp).toContain('https://assets.example.com')
+    expect(csp).not.toContain("blob: https:")
+  })
+
   it('can disable all security headers for emergency rollback', () => {
     vi.stubEnv('SECURITY_HEADERS_ENABLED', 'false')
 
