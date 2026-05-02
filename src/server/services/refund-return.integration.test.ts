@@ -63,7 +63,6 @@ async function seedPaidOrder(input: {
   const quantity = input.quantity ?? 2
   const price = input.price ?? 50
   const priceCents = Math.round(price * 100)
-  const total = Number((quantity * price).toFixed(2))
   const totalCents = quantity * priceCents
 
   const product = await prisma.product.create({
@@ -90,9 +89,7 @@ async function seedPaidOrder(input: {
       status: 'OPEN',
       paymentStatus: 'PAID',
       fulfillmentStatus: 'FULFILLED',
-      subtotal: total,
       subtotalCents: totalCents,
-      total,
       totalCents,
       currency: 'USD',
       channel: 'integration-test',
@@ -103,17 +100,14 @@ async function seedPaidOrder(input: {
           title: product.title,
           variantTitle: variant.title,
           sku: variant.sku,
-          price,
           priceCents,
           quantity,
-          total,
           totalCents,
         },
       },
       payments: {
         create: {
           provider: 'stripe',
-          amount: total,
           amountCents: totalCents,
           currency: 'USD',
           status: 'PAID',
@@ -141,7 +135,7 @@ async function seedPaidOrder(input: {
     order,
     orderItem: order.items[0],
     payment: order.payments[0],
-    total,
+    totalCents,
   }
 }
 
@@ -198,9 +192,9 @@ runIntegration('refund and return integration', () => {
     expect(updatedPayment.status).toBe('PARTIALLY_REFUNDED')
     expect(updatedVariant.inventory).toBe(4)
     expect(persistedRefund.status).toBe('ISSUED')
-    expect(persistedRefund.amount).toBe(50)
+    expect(persistedRefund.amountCents).toBe(5000)
     expect(persistedRefund.items).toEqual([
-      expect.objectContaining({ orderItemId: orderItem.id, variantId: variant.id, quantity: 1, amount: 50 }),
+      expect.objectContaining({ orderItemId: orderItem.id, variantId: variant.id, quantity: 1, amountCents: 5000 }),
     ])
   })
 
@@ -241,7 +235,7 @@ runIntegration('refund and return integration', () => {
     const updatedPayment = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })
     const updatedVariant = await prisma.productVariant.findUniqueOrThrow({ where: { id: variant.id } })
 
-    expect(refunds).toEqual([expect.objectContaining({ status: 'FAILED', amount: 50 })])
+    expect(refunds).toEqual([expect.objectContaining({ status: 'FAILED', amountCents: 5000 })])
     expect(updatedOrder.paymentStatus).toBe('PAID')
     expect(updatedPayment.status).toBe('PAID')
     expect(updatedVariant.inventory).toBe(3)
@@ -277,7 +271,7 @@ runIntegration('refund and return integration', () => {
     expect(result.refund.status).toBe('ISSUED')
     expect(finalReturn.status).toBe('CLOSED')
     expect(finalReturn.refundId).toBe(result.refund.id)
-    expect(finalReturn.refund?.amount).toBe(50)
+    expect(finalReturn.refund?.amountCents).toBe(5000)
     expect(updatedVariant.inventory).toBe(4)
     expect(updatedOrder.paymentStatus).toBe('PARTIALLY_REFUNDED')
   })
