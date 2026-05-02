@@ -63,6 +63,7 @@ The repo currently includes:
 - Settings -> Email now emphasizes customer-message workflow sections (providers, sender identity, branding, templates, activity) with provider credentials kept behind Manage drawers
 - Settings default tab now opens on **General**; Brand Kit is no longer the first settings experience
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
+- media object storage foundation with adapter-based provider selection (`MEDIA_STORAGE_PROVIDER=postgres|s3`), S3-compatible object storage support (Cloudflare R2/AWS S3 envs), and Postgres binary fallback for local/dev
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - System sidebar now labels `/admin/webhooks` as **Delivery logs** (monitoring/debugging); outbound endpoint configuration remains in `Settings -> Webhooks`
 - typed internal event dispatcher and static integration registry
@@ -74,6 +75,7 @@ The repo currently includes:
 - Phase 4 transactional email observability foundation with `EmailDelivery` persistence, provider adapter seam, order-confirmation delivery tracking, and fast service tests
 - Phase 4 analytics event fan-out foundation with typed lifecycle events, `AnalyticsEvent` persistence, and side-effect-safe consumer handling
 - Phase 4 background side-effect job foundation with persisted `Job` records, claiming, retry/backoff/exhaustion lifecycle, secure runner route, and initial order-confirmation email job integration
+- Phase 4 background runner observability expansion with durable `JobRunnerHeartbeat` tracking (runner name, last start/success/failure, duration/error summary), admin-safe status API (`GET /api/jobs/runner-status`), and delivery-logs runner visibility compatible with Vercel Cron or external schedulers calling `POST /api/jobs/run`
 - Phase 4 abandoned checkout recovery foundation with persisted recovery metadata, admin review/send controls, safe tokenized recovery payload API, and secret-protected due-send processing
 - Brand Kit foundation with Store-backed branding fields, admin Brand Kit screen/API, safe public brand payloads, and branded checkout/email defaults
 - GitHub Actions CI workflow for push/PR verification plus optional integration workflow gated by `DATABASE_URL_TEST` secret
@@ -208,6 +210,27 @@ Shipped foundation:
 - credential audit snapshots avoid raw provider credential values and include redaction labels for API keys, passwords, and webhook secrets
 - fast credentials-route test verifies audit emission and raw value exclusion
 
+#### Refund Audit Logging
+
+Shipped foundation:
+
+- admin refund creation now plumbs the authenticated actor through to the refund service so audit emissions record actorId/actorEmail/actorRole when initiated from the admin route
+- successful refund issuance emits a `refund.issued` best-effort audit event with order id/number, payment id, refund id, amountCents, currency, status, reason, restockItems, item count, and resulting payment status
+- failed Stripe refund attempts after pending refund creation emit a `refund.attempt_failed` best-effort audit event with the same safe shape plus a truncated error message
+- refund audit snapshots exclude card data, Stripe response bodies, provider secrets, free-text refund notes, and Stripe identifiers (charge/payment-intent/refund) and carry explicit redaction labels
+- refund flow is decoupled from audit durability through a defensive wrapper so commerce truth (refund row, payment status, order status, restocking, return linkage) and downstream internal events still fire even if audit emission throws
+- fast refund-service tests verify successful audit emission, failed-refund audit emission, audit-failure isolation from the refund flow, and snapshot leakage protection for both success and failure paths
+
+#### Return Audit Logging
+
+Shipped foundation:
+
+- admin return creation/status routes now pass authenticated actor context into return lifecycle services so audits capture actor id/email/role when available
+- best-effort return lifecycle audit events now cover `return.created`, `return.approved`, `return.declined`, `return.marked_in_transit`, `return.marked_received`, `return.closed`, and `return.closed_with_refund`
+- return audit snapshots include return id, order id/number, previous/new status, reason/note summaries, item count, and refund linkage for close-with-refund without storing provider payloads or secrets
+- return flow durability is defended against audit-emission failures so return state transitions and refund-linkage behavior continue even if audit persistence fails
+- fast tests cover transition audit emission, close-with-refund linkage, audit-failure isolation, and leakage guards on return audit payloads
+
 ### Remaining Phase 4 Priorities
 
 1. Setup Wizard and CLI hardening: expand deployment automation with safer non-interactive/dry-run paths and deeper provider provisioning
@@ -327,7 +350,7 @@ Production readiness foundation now includes:
 
 ### Later
 
-- Move media binary storage off Postgres and into object storage
+- migrate legacy Postgres-backed media binaries to object storage and optionally null historical `MediaAsset.data` values after validation
 - Add customer-auth hardening when customer accounts exist
 - Tighten CSP origins after object-storage/media and any client analytics origins are finalized
 

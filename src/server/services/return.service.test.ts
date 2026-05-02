@@ -14,11 +14,13 @@ const mocks = vi.hoisted(() => ({
   },
   emitInternalEvent: vi.fn(),
   issueRefund: vi.fn(),
+  safeAuditReturnEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
 vi.mock('@/server/events/dispatcher', () => ({ emitInternalEvent: mocks.emitInternalEvent }))
 vi.mock('@/server/services/refund.service', () => ({ issueRefund: mocks.issueRefund }))
+vi.mock('@/server/services/return-audit.service', () => ({ safeAuditReturnEvent: mocks.safeAuditReturnEvent }))
 
 import { closeReturnWithRefund, createReturn, getOrderReturns, updateReturnStatus } from './return.service'
 
@@ -49,6 +51,7 @@ function setupTx() {
 beforeEach(() => {
   vi.clearAllMocks()
   setupTx()
+  mocks.safeAuditReturnEvent.mockResolvedValue(undefined)
 })
 
 describe('createReturn', () => {
@@ -105,6 +108,16 @@ describe('updateReturnStatus', () => {
 
     expect(result.status).toBe('APPROVED')
     expect(mocks.emitInternalEvent).toHaveBeenCalledWith('order.return_updated', expect.objectContaining({ returnId: RETURN_ID, status: 'APPROVED' }))
+    expect(mocks.safeAuditReturnEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'return.approved',
+        returnId: RETURN_ID,
+        orderId: ORDER_ID,
+        previousStatus: 'REQUESTED',
+        newStatus: 'APPROVED',
+        itemCount: 0,
+      })
+    )
   })
 
   it('rejects an invalid state transition', async () => {
@@ -122,6 +135,22 @@ describe('updateReturnStatus', () => {
     await updateReturnStatus(RETURN_ID, { status: 'RECEIVED' })
 
     expect(mocks.prisma.return.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ receivedAt: expect.any(Date) }) }))
+  })
+
+  it('does not fail the return flow when audit emission throws', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue({ ...baseReturn, order: { orderNumber: 1001 } })
+    mocks.prisma.return.update.mockResolvedValue({ ...baseReturn, status: 'APPROVED', items: [], refund: null })
+    mocks.prisma.orderEvent.create.mockResolvedValue({})
+    mocks.emitInternalEvent.mockResolvedValue(undefined)
+    mocks.safeAuditReturnEvent.mockRejectedValue(new Error('audit storage unavailable'))
+
+    const result = await updateReturnStatus(RETURN_ID, { status: 'APPROVED' })
+
+    expect(result.status).toBe('APPROVED')
+    expect(mocks.emitInternalEvent).toHaveBeenCalledWith(
+      'order.return_updated',
+      expect.objectContaining({ returnId: RETURN_ID, status: 'APPROVED' })
+    )
   })
 })
 
@@ -142,6 +171,16 @@ describe('closeReturnWithRefund', () => {
 
     expect(mocks.issueRefund).toHaveBeenCalledWith(expect.objectContaining({ orderId: ORDER_ID, returnId: RETURN_ID, restockItems: true }))
     expect(result.refund.id).toBe('refund-1')
+    expect(mocks.safeAuditReturnEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'return.closed_with_refund',
+        returnId: RETURN_ID,
+        orderId: ORDER_ID,
+        previousStatus: 'RECEIVED',
+        newStatus: 'CLOSED',
+        refundId: 'refund-1',
+      })
+    )
   })
 
   it('rejects refund quantities greater than the returned quantity', async () => {
@@ -157,6 +196,33 @@ describe('closeReturnWithRefund', () => {
     ).rejects.toThrow('Refund item quantity exceeds returned quantity')
 
     expect(mocks.issueRefund).not.toHaveBeenCalled()
+  })
+})
+
+describe('return audit payload safety', () => {
+  it('emits transition audit snapshots without provider/private payload fields', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue({ ...baseReturn, order: { orderNumber: 1001 } })
+    mocks.prisma.return.update.mockResolvedValue({
+      ...baseReturn,
+      status: 'APPROVED',
+      reason: 'Damaged packaging',
+      note: 'Customer said item was defective',
+      items: [{ id: 'return-item-1' }],
+      refund: null,
+    })
+    mocks.prisma.orderEvent.create.mockResolvedValue({})
+    mocks.emitInternalEvent.mockResolvedValue(undefined)
+
+    await updateReturnStatus(RETURN_ID, { status: 'APPROVED' })
+
+    const auditCalls = mocks.safeAuditReturnEvent.mock.calls as Array<[Record<string, unknown>]>
+    const serialized = JSON.stringify(auditCalls)
+
+    expect(serialized).not.toContain('stripe')
+    expect(serialized).not.toContain('secret')
+    expect(serialized).not.toContain('token')
+    expect(serialized).not.toContain('rawPayload')
+    expect(serialized).not.toContain('rawResponse')
   })
 })
 

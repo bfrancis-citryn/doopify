@@ -38,6 +38,8 @@ export const DELIVERY_LOGS_SETUP_COPY = 'Use Settings -> Webhooks to create outb
 export const DELIVERY_LOGS_EMPTY_TITLE = 'No delivery logs yet.';
 export const DELIVERY_LOGS_EMPTY_DESCRIPTION = 'Logs will appear here after provider webhooks, outbound webhooks, or customer emails are sent or received.';
 export const DELIVERY_LOG_METRIC_LABELS = ['Received', 'Processed', 'Retrying', 'Failed'];
+export const RUNNER_VISIBILITY_TITLE = 'Background runners';
+export const RUNNER_VISIBILITY_SUBTITLE = 'Track whether cron-triggered or external workers are alive. Compatible with Vercel Cron and any external scheduler that calls POST /api/jobs/run.';
 
 function formatTimestamp(value, fallback = 'Not scheduled') {
   if (!value) return fallback;
@@ -46,6 +48,18 @@ function formatTimestamp(value, fallback = 'Not scheduled') {
 
 function formatEventType(value) {
   return String(value || '').replaceAll('_', ' ').replaceAll('.', ' / ');
+}
+
+function formatDuration(durationMs) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return 'N/A';
+  if (durationMs < 1000) return `${durationMs}ms`;
+  return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`;
+}
+
+function getRunnerHealthDisplay(health) {
+  if (health === 'healthy') return { label: 'Healthy', tone: 'success' };
+  if (health === 'failing') return { label: 'Failing', tone: 'danger' };
+  return { label: 'Idle', tone: 'neutral' };
 }
 
 function getReplayDisabledReason(delivery) {
@@ -89,9 +103,12 @@ export default function WebhookDeliveriesWorkspace() {
   const [emailDiagnostics, setEmailDiagnostics] = useState(null);
 
   const [notice, setNotice] = useState('');
+  const [runnerNotice, setRunnerNotice] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [emailTemplate, setEmailTemplate] = useState('ALL');
+  const [runnerStatusRows, setRunnerStatusRows] = useState([]);
+  const [runnerStatusLoading, setRunnerStatusLoading] = useState(false);
 
   const loadDeliveries = useCallback(async (nextPage = 1) => {
     setLoading(true);
@@ -188,6 +205,30 @@ export default function WebhookDeliveriesWorkspace() {
     }
   }, [emailPagination.pageSize, statusFilter, emailTemplate]);
 
+  const loadRunnerStatus = useCallback(async () => {
+    setRunnerStatusLoading(true);
+
+    try {
+      const response = await fetch('/api/jobs/runner-status', { cache: 'no-store' });
+      const json = await response.json();
+
+      if (!json.success) {
+        setRunnerStatusRows([]);
+        setRunnerNotice(json.error || 'Runner status could not be loaded.');
+        return;
+      }
+
+      setRunnerStatusRows(json.data?.runners || []);
+      setRunnerNotice('');
+    } catch (error) {
+      console.error('[WebhookDeliveriesWorkspace] runner status load failed', error);
+      setRunnerStatusRows([]);
+      setRunnerNotice('Runner status could not be loaded.');
+    } finally {
+      setRunnerStatusLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (mode === 'inbound') loadDeliveries(1);
   }, [mode, loadDeliveries]);
@@ -199,6 +240,10 @@ export default function WebhookDeliveriesWorkspace() {
   useEffect(() => {
     if (mode === 'email') loadEmailDeliveries(1);
   }, [mode, loadEmailDeliveries]);
+
+  useEffect(() => {
+    loadRunnerStatus();
+  }, [loadRunnerStatus]);
 
   const stats = useMemo(
     () =>
@@ -628,6 +673,46 @@ export default function WebhookDeliveriesWorkspace() {
             <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=email">Email settings</Link>
             <Link className="admin-btn admin-btn--secondary admin-btn--sm" href="/settings?section=payments">Payment settings</Link>
           </div>
+        </AdminCard>
+
+        <AdminCard className={styles.runnerPanel} variant="card">
+          <div className={styles.runnerHeader}>
+            <div>
+              <h3>{RUNNER_VISIBILITY_TITLE}</h3>
+              <p>{RUNNER_VISIBILITY_SUBTITLE}</p>
+            </div>
+            <AdminButton disabled={runnerStatusLoading} onClick={loadRunnerStatus} size="sm" variant="secondary">
+              {runnerStatusLoading ? 'Refreshing...' : 'Refresh status'}
+            </AdminButton>
+          </div>
+
+          {runnerNotice ? <p className={styles.notice}>{runnerNotice}</p> : null}
+
+          {runnerStatusRows.length ? (
+            <div className={styles.runnerGrid}>
+              {runnerStatusRows.map((runner) => {
+                const health = getRunnerHealthDisplay(runner.health);
+
+                return (
+                  <div className={styles.runnerRow} key={runner.runnerName}>
+                    <div className={styles.runnerRowTop}>
+                      <strong>{runner.runnerName}</strong>
+                      <AdminStatusChip tone={health.tone}>{health.label}</AdminStatusChip>
+                    </div>
+                    <div className={styles.runnerRowMeta}>
+                      <span>Started: {formatTimestamp(runner.lastStartedAt, 'Never')}</span>
+                      <span>Succeeded: {formatTimestamp(runner.lastSucceededAt, 'Never')}</span>
+                      <span>Failed: {formatTimestamp(runner.lastFailedAt, 'Never')}</span>
+                      <span>Duration: {formatDuration(runner.lastDurationMs)}</span>
+                      {runner.lastErrorSummary ? <span>Error: {runner.lastErrorSummary}</span> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className={styles.runnerEmpty}>No runner heartbeats yet. Trigger POST /api/jobs/run from Vercel Cron or an external worker to start tracking.</p>
+          )}
         </AdminCard>
 
         <AdminStatsGrid>

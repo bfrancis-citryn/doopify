@@ -1,4 +1,4 @@
-export type MediaStorageProvider = 'postgres'
+export type MediaStorageProvider = 'postgres' | 's3'
 
 export type PutMediaObjectInput = {
   filename: string
@@ -22,7 +22,8 @@ export type PutMediaObjectResult = {
 }
 
 export type GetMediaObjectResult = {
-  body: Buffer
+  body?: Buffer
+  redirectUrl?: string
   mimeType: string
   filename: string
   size?: number | null

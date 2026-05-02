@@ -474,6 +474,17 @@ model Session {
   @@map("sessions")
 }
 
+model RateLimitWindow {
+  key       String   @id
+  count     Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@map("rate_limit_windows")
+}
+
 model Product {
   id          String        @id @default(cuid())
   title       String
@@ -550,10 +561,16 @@ model MediaAsset {
   size         Int?
   width        Int?
   height       Int?
-  data         Bytes
+  data         Bytes?
+  storageProvider String      @default("postgres")
+  storageKey    String?
+  storageBucket String?
+  publicUrl     String?
   createdAt    DateTime       @default(now())
   productMedia ProductMedia[]
 
+  @@index([storageProvider])
+  @@index([storageKey])
   @@map("media_assets")
 }
 
@@ -1036,6 +1053,20 @@ model Job {
   @@index([type, status])
   @@index([lockedAt])
   @@map("jobs")
+}
+
+model JobRunnerHeartbeat {
+  runnerName       String   @id
+  lastStartedAt    DateTime?
+  lastSucceededAt  DateTime?
+  lastFailedAt     DateTime?
+  lastErrorSummary String?  @db.Text
+  lastDurationMs   Int?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([updatedAt])
+  @@map("job_runner_heartbeats")
 }
 
 model AnalyticsEvent {

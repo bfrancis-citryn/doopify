@@ -13,6 +13,15 @@ export async function GET(_req: Request, { params }: Params) {
     const { assetId } = await params
     const asset = await getMediaStorageAdapter().get(assetId)
     if (!asset) return err('Asset not found', 404)
+    if (asset.redirectUrl) {
+      return NextResponse.redirect(asset.redirectUrl, {
+        status: 302,
+        headers: {
+          'Cache-Control': asset.cacheControl,
+        },
+      })
+    }
+    if (!asset.body) return err('Asset not found', 404)
 
     return new NextResponse(new Uint8Array(asset.body), {
       status: 200,

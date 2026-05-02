@@ -4,6 +4,8 @@ import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { createStripeRefund } from '@/lib/stripe'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import type { AuditActor } from '@/server/services/audit-log.service'
+import { safeAuditReturnEvent, type ReturnAuditAction } from '@/server/services/return-audit.service'
 
 const ACTIVE_RETURN_STATUSES: ReturnStatus[] = ['REQUESTED', 'APPROVED', 'IN_TRANSIT', 'RECEIVED', 'CLOSED']
 const PAID_PAYMENT_STATUSES: PaymentStatus[] = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED']
@@ -17,6 +19,20 @@ const ALLOWED_RETURN_TRANSITIONS: Record<ReturnStatus, ReturnStatus[]> = {
   DECLINED: [],
 }
 
+async function emitReturnAuditEventSafely(
+  input: Parameters<typeof safeAuditReturnEvent>[0]
+) {
+  try {
+    await safeAuditReturnEvent(input)
+  } catch (error) {
+    console.error('[order-adjustments] Return audit emission failed', {
+      action: input.action,
+      returnId: input.returnId,
+      error,
+    })
+  }
+}
+
 type OrderAdjustmentOrder = NonNullable<Awaited<ReturnType<typeof loadOrderAdjustmentOrder>>>
 
 export type CreateReturnRecordInput = {
@@ -28,12 +44,16 @@ export type CreateReturnRecordInput = {
     quantity: number
     reason?: string
   }>
+  actor?: AuditActor | null
 }
 
 export type UpdateReturnRecordInput = {
   status?: ReturnStatus
   reason?: string
   note?: string
+  actor?: AuditActor | null
+  refundId?: string | null
+  auditClosedWithRefund?: boolean
 }
 
 export type CreatePaymentRefundRecordInput = {
@@ -312,6 +332,19 @@ export async function createReturnRecord(orderId: string, payload: CreateReturnR
     returnId: createdReturn.id,
   })
 
+  await emitReturnAuditEventSafely({
+    action: 'return.created',
+    actor: payload.actor ?? null,
+    returnId: createdReturn.id,
+    orderId,
+    orderNumber: order.orderNumber,
+    previousStatus: null,
+    newStatus: 'REQUESTED',
+    reason: createdReturn.reason ?? reason,
+    note: createdReturn.note ?? payload.note ?? null,
+    itemCount: createdReturn.items.length,
+  })
+
   return createdReturn
 }
 
@@ -386,6 +419,47 @@ export async function updateReturnRecord(returnId: string, payload: UpdateReturn
         orderId: existing.orderId,
         orderNumber: existing.order.orderNumber,
         returnId: existing.id,
+      })
+    }
+
+    const statusToAction: Partial<Record<ReturnStatus, ReturnAuditAction>> = {
+      APPROVED: 'return.approved',
+      DECLINED: 'return.declined',
+      IN_TRANSIT: 'return.marked_in_transit',
+      RECEIVED: 'return.marked_received',
+      CLOSED: 'return.closed',
+    }
+
+    const action = statusToAction[payload.status]
+    if (action) {
+      await emitReturnAuditEventSafely({
+        action,
+        actor: payload.actor ?? null,
+        returnId: existing.id,
+        orderId: existing.orderId,
+        orderNumber: existing.order.orderNumber,
+        previousStatus: existing.status,
+        newStatus: updated.status,
+        reason: updated.reason ?? payload.reason ?? null,
+        note: updated.note ?? payload.note ?? null,
+        itemCount: updated.items.length,
+        refundId: payload.refundId ?? updated.refundId ?? null,
+      })
+    }
+
+    if (payload.auditClosedWithRefund && payload.status === 'CLOSED' && (payload.refundId ?? updated.refundId)) {
+      await emitReturnAuditEventSafely({
+        action: 'return.closed_with_refund',
+        actor: payload.actor ?? null,
+        returnId: existing.id,
+        orderId: existing.orderId,
+        orderNumber: existing.order.orderNumber,
+        previousStatus: existing.status,
+        newStatus: updated.status,
+        reason: updated.reason ?? payload.reason ?? null,
+        note: updated.note ?? payload.note ?? null,
+        itemCount: updated.items.length,
+        refundId: payload.refundId ?? updated.refundId ?? null,
       })
     }
   }

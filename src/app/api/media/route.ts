@@ -1,6 +1,7 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { getMediaPublicUrl } from '@/server/media/media-storage'
 
 export async function GET(req: Request) {
   const auth = await requireAdmin(req)
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
         createdAt: asset.createdAt,
         linkedProducts: asset._count.productMedia,
         products: asset.productMedia.map((media) => media.product),
-        url: `/api/media/${asset.id}`,
+        url: getMediaPublicUrl(asset.id),
       })),
     })
   } catch (e) {

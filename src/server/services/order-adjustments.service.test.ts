@@ -36,16 +36,21 @@ const mocks = vi.hoisted(() => ({
   },
   createStripeRefund: vi.fn(),
   emitInternalEvent: vi.fn(),
+  safeAuditReturnEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
 vi.mock('@/lib/stripe', () => ({ createStripeRefund: mocks.createStripeRefund }))
 vi.mock('@/server/events/dispatcher', () => ({ emitInternalEvent: mocks.emitInternalEvent }))
+vi.mock('@/server/services/return-audit.service', () => ({
+  safeAuditReturnEvent: mocks.safeAuditReturnEvent,
+}))
 
 import {
   createPaymentRefundRecord,
   createReturnRecord,
   getOrderAdjustmentSummary,
+  updateReturnRecord,
 } from './order-adjustments.service'
 
 function buildOrder(overrides: Record<string, unknown> = {}) {
@@ -87,6 +92,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   setupTx()
   mocks.emitInternalEvent.mockResolvedValue(undefined)
+  mocks.safeAuditReturnEvent.mockResolvedValue(undefined)
   mocks.prisma.order.update.mockResolvedValue({})
   mocks.prisma.payment.update.mockResolvedValue({})
   mocks.prisma.productVariant.update.mockResolvedValue({})
@@ -358,5 +364,117 @@ describe('createReturnRecord', () => {
         items: [{ orderItemId: ORDER_ITEM_ID, quantity: 1 }],
       })
     ).rejects.toThrow('remaining eligible quantity')
+  })
+})
+
+describe('updateReturnRecord audit logging', () => {
+  function buildExistingReturn(overrides: Record<string, unknown> = {}) {
+    return {
+      id: RETURN_ID,
+      orderId: ORDER_ID,
+      status: 'REQUESTED',
+      reason: 'Damaged',
+      note: null,
+      receivedAt: null,
+      refundId: null,
+      items: [{ id: 'return-item-1', orderItemId: ORDER_ITEM_ID, quantity: 1 }],
+      refund: null,
+      order: {
+        id: ORDER_ID,
+        orderNumber: ORDER_NUMBER,
+      },
+      ...overrides,
+    }
+  }
+
+  it('emits transition audit on successful status change', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue(buildExistingReturn())
+    mocks.prisma.return.update.mockResolvedValue(
+      buildExistingReturn({ status: 'APPROVED', items: [{ id: 'return-item-1' }] })
+    )
+
+    const result = await updateReturnRecord(RETURN_ID, {
+      status: 'APPROVED',
+      actor: {
+        actorType: 'STAFF',
+        actorId: 'admin-1',
+        actorEmail: 'admin@example.com',
+        actorRole: 'OWNER',
+      },
+    })
+
+    expect(result.status).toBe('APPROVED')
+    expect(mocks.safeAuditReturnEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'return.approved',
+        returnId: RETURN_ID,
+        orderId: ORDER_ID,
+        previousStatus: 'REQUESTED',
+        newStatus: 'APPROVED',
+        itemCount: 1,
+      })
+    )
+  })
+
+  it('emits closed_with_refund linkage audit when requested', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue(
+      buildExistingReturn({ status: 'RECEIVED', refundId: 'refund-1' })
+    )
+    mocks.prisma.return.update.mockResolvedValue(
+      buildExistingReturn({
+        status: 'CLOSED',
+        refundId: 'refund-1',
+        items: [{ id: 'return-item-1' }],
+      })
+    )
+
+    await updateReturnRecord(RETURN_ID, {
+      status: 'CLOSED',
+      refundId: 'refund-1',
+      auditClosedWithRefund: true,
+    })
+
+    expect(mocks.safeAuditReturnEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'return.closed_with_refund',
+        returnId: RETURN_ID,
+        orderId: ORDER_ID,
+        previousStatus: 'RECEIVED',
+        newStatus: 'CLOSED',
+        refundId: 'refund-1',
+      })
+    )
+  })
+
+  it('does not fail return update flow when audit logging throws', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue(buildExistingReturn())
+    mocks.prisma.return.update.mockResolvedValue(
+      buildExistingReturn({ status: 'APPROVED', items: [{ id: 'return-item-1' }] })
+    )
+    mocks.safeAuditReturnEvent.mockRejectedValue(new Error('audit unavailable'))
+
+    const updated = await updateReturnRecord(RETURN_ID, { status: 'APPROVED' })
+    expect(updated.status).toBe('APPROVED')
+  })
+
+  it('keeps audit payload free of provider/private keys', async () => {
+    mocks.prisma.return.findUnique.mockResolvedValue(buildExistingReturn())
+    mocks.prisma.return.update.mockResolvedValue(
+      buildExistingReturn({
+        status: 'APPROVED',
+        reason: 'Wrong item',
+        note: 'Customer selected wrong size',
+        items: [{ id: 'return-item-1' }],
+      })
+    )
+
+    await updateReturnRecord(RETURN_ID, { status: 'APPROVED' })
+
+    const serialized = JSON.stringify(mocks.safeAuditReturnEvent.mock.calls)
+    expect(serialized).not.toContain('stripe')
+    expect(serialized).not.toContain('secret')
+    expect(serialized).not.toContain('token')
+    expect(serialized).not.toContain('rawPayload')
+    expect(serialized).not.toContain('rawResponse')
   })
 })

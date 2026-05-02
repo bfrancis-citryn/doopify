@@ -5,7 +5,26 @@ Documentation date: May 1, 2026
 ## Goal
 Move production media binaries out of Postgres and into object storage without breaking local development, existing product media links, storefront image URLs, or the current admin media library workflow.
 
-This is a planning document only. No runtime behavior is implemented in this PR.
+## Implementation Status (May 2, 2026)
+
+Shipped in the current implementation slice:
+
+- adapter-based media storage provider selection with `MEDIA_STORAGE_PROVIDER=postgres|s3`
+- Postgres storage preserved as default/local fallback
+- S3-compatible storage adapter for Cloudflare R2 or AWS S3 using:
+  - `MEDIA_S3_ENDPOINT`
+  - `MEDIA_S3_REGION`
+  - `MEDIA_S3_BUCKET`
+  - `MEDIA_S3_ACCESS_KEY_ID`
+  - `MEDIA_S3_SECRET_ACCESS_KEY`
+  - optional `MEDIA_PUBLIC_BASE_URL`
+- Prisma media metadata additions for `storageProvider`, `storageKey`, `storageBucket`, and `publicUrl`, while keeping `MediaAsset.data` compatible for Postgres fallback
+- media upload/read/delete routes routed through the adapter boundary with existing API response shapes preserved
+
+Still pending from this plan:
+
+- background migration workflow for existing Postgres-backed media bytes
+- staged cleanup/nulling of historical `MediaAsset.data` after migration validation
 
 ## Current State Inspected
 

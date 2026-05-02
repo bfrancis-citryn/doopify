@@ -4,6 +4,49 @@ import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { createStripeRefund } from '@/lib/stripe'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import {
+  type AuditActor,
+  recordAuditLogBestEffort,
+} from '@/server/services/audit-log.service'
+
+const REFUND_AUDIT_REDACTIONS = [
+  'card data',
+  'Stripe response body',
+  'provider secrets',
+  'free-text refund note',
+] as const
+
+const REFUND_ERROR_MESSAGE_MAX_LENGTH = 500
+
+function truncateErrorMessage(value: unknown): string | null {
+  if (value == null) return null
+  const text = value instanceof Error ? value.message : String(value)
+  if (!text) return null
+  return text.length > REFUND_ERROR_MESSAGE_MAX_LENGTH
+    ? `${text.slice(0, REFUND_ERROR_MESSAGE_MAX_LENGTH)}...`
+    : text
+}
+
+/**
+ * Defensive wrapper around the best-effort audit emitter. The audit service
+ * already swallows persistence errors, but we wrap each call site so that a
+ * future refactor of the audit layer (or an unexpected throw at the call
+ * boundary itself) cannot stall the refund flow or skip downstream internal
+ * event emission.
+ */
+async function safeAuditRefundEvent(
+  input: Parameters<typeof recordAuditLogBestEffort>[0]
+): Promise<void> {
+  try {
+    await recordAuditLogBestEffort(input)
+  } catch (error) {
+    console.error('[refund-service] Audit emission failed', {
+      action: input.action,
+      resource: input.resource,
+      error,
+    })
+  }
+}
 
 function derivePaymentStatus(originalAmountCents: number, refundedAmountCents: number): PaymentStatus {
   return refundedAmountCents >= originalAmountCents ? 'REFUNDED' : 'PARTIALLY_REFUNDED'
@@ -23,6 +66,13 @@ export type IssueRefundInput = {
     quantity: number
     amountCents: number
   }>
+  /**
+   * Optional admin actor captured from the calling route. Plumbed through to
+   * audit logging so refund attempts can be traced to a specific staff/owner
+   * user when initiated from an authenticated admin surface. Audit emission
+   * defaults to the SYSTEM actor when this is omitted.
+   */
+  actor?: AuditActor | null
 }
 
 type ValidatedRefundItem = {
@@ -126,6 +176,7 @@ export async function issueRefund(input: IssueRefundInput) {
     restockItems = false,
     returnId,
     items = [],
+    actor = null,
   } = input
 
   if (amountCents <= 0) {
@@ -227,6 +278,29 @@ export async function issueRefund(input: IssueRefundInput) {
           : `Stripe refund failed before issuing: ${error instanceof Error ? error.message : 'Unknown Stripe error'}`,
       },
     })
+
+    await safeAuditRefundEvent({
+      action: 'refund.attempt_failed',
+      actor,
+      resource: { type: 'Refund', id: pendingRefund.id },
+      summary: `Stripe refund attempt failed for order ${order.orderNumber}`,
+      snapshot: {
+        outcome: 'failed',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        paymentId: payment.id,
+        refundId: pendingRefund.id,
+        amountCents,
+        currency: order.currency,
+        status: 'FAILED',
+        reason: reason ?? null,
+        restockItems,
+        itemCount: validatedItems.length,
+        errorMessage: truncateErrorMessage(error),
+      },
+      redactions: [...REFUND_AUDIT_REDACTIONS],
+    })
+
     throw new Error('Stripe refund failed before issuing')
   }
 
@@ -281,6 +355,28 @@ export async function issueRefund(input: IssueRefundInput) {
     })
 
     return issued
+  })
+
+  await safeAuditRefundEvent({
+    action: 'refund.issued',
+    actor,
+    resource: { type: 'Refund', id: refund.id },
+    summary: `Refund ${refund.id} issued for order ${order.orderNumber}`,
+    snapshot: {
+      outcome: 'issued',
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      paymentId: payment.id,
+      refundId: refund.id,
+      amountCents: refund.amountCents,
+      currency: order.currency,
+      status: 'ISSUED',
+      reason: reason ?? null,
+      restockItems,
+      itemCount: validatedItems.length,
+      paymentStatus: newPaymentStatus,
+    },
+    redactions: [...REFUND_AUDIT_REDACTIONS],
   })
 
   await emitInternalEvent('order.refunded', {

@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { err, ok, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser } from '@/server/services/audit-log.service'
 import {
   OrderIdentifierResolutionError,
   resolveOrderIdentifier,
@@ -48,6 +49,7 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const resolvedOrder = await resolveOrderIdentifier(orderNumber)
+    const actor = auditActorFromUser(auth.user)
 
     if (parsed.data.refund) {
       const refund = await createPaymentRefundRecord(resolvedOrder.orderId, {
@@ -65,6 +67,9 @@ export async function PATCH(req: Request, { params }: Params) {
           status: parsed.data.status,
           reason: parsed.data.reason,
           note: parsed.data.note,
+          actor,
+          refundId: refund.id,
+          auditClosedWithRefund: parsed.data.status === 'CLOSED',
         })
         return ok({ updated, refund })
       }
@@ -76,6 +81,7 @@ export async function PATCH(req: Request, { params }: Params) {
       status: parsed.data.status,
       reason: parsed.data.reason,
       note: parsed.data.note,
+      actor,
     })
     return ok(updated)
   } catch (e) {

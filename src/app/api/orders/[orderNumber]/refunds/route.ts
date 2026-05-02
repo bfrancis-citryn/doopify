@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { err, ok, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser } from '@/server/services/audit-log.service'
 import {
   OrderIdentifierResolutionError,
   resolveOrderIdentifier,
@@ -76,6 +77,7 @@ export async function POST(req: Request, { params }: Params) {
         quantity: item.quantity,
         amountCents: dollarsToCents(item.amount),
       })),
+      actor: auditActorFromUser(auth.user),
     })
     return ok(refund, 201)
   } catch (e) {

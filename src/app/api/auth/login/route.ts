@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const forwardedFor = req.headers.get('x-forwarded-for')
   const ip = forwardedFor?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'unknown'
   const emailKey = parsed.data.email.trim().toLowerCase()
-  const rateLimit = consumeRateLimit(`login:${ip}:${emailKey}`, {
+  const rateLimit = await consumeRateLimit(`login:${ip}:${emailKey}`, {
     limit: 5,
     windowMs: 15 * 60 * 1000,
   })

@@ -7,6 +7,7 @@ import {
   recordWebhookDeliveryAttempt,
 } from '@/server/services/webhook-delivery.service'
 import { parseStripeWebhookEventPayload, processStripeWebhookEvent } from '@/server/services/stripe-webhook.service'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 
 interface Params {
   params: Promise<{ id: string }>
@@ -17,6 +18,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response
 
   const { id } = await params
+  const actor = auditActorFromUser(auth.user)
 
   const delivery = await getWebhookDeliveryById(id)
   if (!delivery) {
@@ -46,6 +48,7 @@ export async function POST(req: Request, { params }: Params) {
     return err('Stored webhook payload is invalid', 400)
   }
 
+  const previousStatus = delivery.status
   const replayAttempt = await recordWebhookDeliveryAttempt({
     provider: delivery.provider,
     providerEventId: replayEvent.id,
@@ -62,6 +65,28 @@ export async function POST(req: Request, { params }: Params) {
       providerEventId: replayAttempt.providerEventId,
     })
 
+    try {
+      await recordAuditLogBestEffort({
+        action: 'inbound_webhook.manual_replay',
+        actor,
+        resource: { type: 'WebhookDelivery', id: replayAttempt.id },
+        summary: 'Manual replay succeeded for inbound delivery ' + replayAttempt.id + ' (' + replayAttempt.eventType + ')',
+        snapshot: {
+          deliveryId: replayAttempt.id,
+          provider: replayAttempt.provider,
+          providerEventId: replayAttempt.providerEventId,
+          eventType: replayAttempt.eventType,
+          direction: 'inbound',
+          previousStatus,
+          newStatus: 'PROCESSED',
+          attemptCount: replayAttempt.attempts,
+        },
+        redactions: ['raw payload', 'webhook signature', 'provider secrets'],
+      })
+    } catch (auditError) {
+      console.error('[replay-route] Audit emission failed', { deliveryId: replayAttempt.id, error: auditError })
+    }
+
     return ok({
       id: replayAttempt.id,
       provider: replayAttempt.provider,
@@ -77,6 +102,30 @@ export async function POST(req: Request, { params }: Params) {
       error: message,
       retryable: true,
     })
+
+    try {
+      await recordAuditLogBestEffort({
+        action: 'inbound_webhook.manual_replay_failed',
+        actor,
+        resource: { type: 'WebhookDelivery', id: replayAttempt.id },
+        summary: 'Manual replay failed for inbound delivery ' + replayAttempt.id + ' (' + replayAttempt.eventType + ')',
+        snapshot: {
+          deliveryId: replayAttempt.id,
+          provider: replayAttempt.provider,
+          providerEventId: replayAttempt.providerEventId,
+          eventType: replayAttempt.eventType,
+          direction: 'inbound',
+          previousStatus,
+          newStatus: 'RETRY_PENDING',
+          attemptCount: replayAttempt.attempts,
+          errorMessage: message,
+        },
+        redactions: ['raw payload', 'webhook signature', 'provider secrets'],
+      })
+    } catch (auditError) {
+      console.error('[replay-route] Audit emission failed on replay error', { deliveryId: replayAttempt.id, error: auditError })
+    }
+
     return err('Webhook replay failed', 500)
   }
 }

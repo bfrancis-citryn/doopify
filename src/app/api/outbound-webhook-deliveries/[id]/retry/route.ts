@@ -1,6 +1,7 @@
 import { err, ok } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
 import { retryOutboundWebhookDelivery } from '@/server/services/outbound-webhook.service'
+import { auditActorFromUser } from '@/server/services/audit-log.service'
 
 export const runtime = 'nodejs'
 
@@ -11,9 +12,10 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response
 
   const { id } = await params
+  const actor = auditActorFromUser(auth.user)
 
   try {
-    const delivery = await retryOutboundWebhookDelivery(id)
+    const delivery = await retryOutboundWebhookDelivery(id, actor)
     if (!delivery) return err('Outbound webhook delivery not found or not retryable', 404)
     return ok(delivery)
   } catch (error) {

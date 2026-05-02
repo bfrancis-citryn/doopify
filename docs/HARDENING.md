@@ -35,6 +35,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - SVG uploads are no longer accepted
 - upload MIME is verified from file bytes instead of trusting the browser-reported type
 - upload linking verifies the target product before attaching media
+- media storage now supports production-safe S3-compatible object storage (Cloudflare R2/AWS S3) with Postgres fallback preserved for local/dev defaults
 - storefront product APIs return explicit public DTOs instead of raw Prisma payloads
 - public storefront settings are exposed through a safe read-only endpoint
 - storefront collection APIs split summary and detail payloads so list surfaces avoid nested product overfetching
@@ -84,6 +85,9 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - close-with-refund validates refund quantities and variants against actual return items
 - admin order detail now exposes refund, return creation, return workflow, and close-with-refund controls
 - admin order detail notes now flow through a dedicated admin route (`PATCH /api/orders/[orderNumber]/notes`) with timeline event writes and optional tracked customer-note email sends that remain isolated from payment/inventory/refund/return durability
+- refund creation and failed Stripe refund attempts now emit best-effort audit events with actor, order id/number, payment id, refund id, amountCents, currency, status, reason, restockItems, and item count, while excluding card data, raw Stripe responses, provider secrets, free-text notes, and Stripe identifiers
+- return creation/status transitions now emit best-effort audit events with actor/resource context and safe transition snapshots for `created`, `approved`, `declined`, `in_transit`, `received`, `closed`, and `closed_with_refund`
+- refund flow durability is defended against audit-emission failures so commerce truth and downstream internal events still proceed when audit persistence misbehaves
 - fast and gated integration coverage exists for representative refund/return lifecycle behavior
 
 ### Outbound Merchant Webhook Hardening
@@ -117,6 +121,15 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - provider webhook ingestion now exists at `POST /api/webhooks/email-provider` with Svix signature verification and bounced/complained status transitions
 - fast tests now cover email delivery API routes, resend eligibility behavior, and provider webhook signature/path handling
 - `DATABASE_URL_TEST`-gated integration specs now cover safe resend audit-trail behavior and provider bounce/complaint state transitions
+
+### Background Runner Observability
+
+- runner executions now record durable heartbeat state in `JobRunnerHeartbeat`
+- tracked runner fields include runner name, last start, last success, last failure, last error summary, and last run duration
+- heartbeat status is exposed through admin-safe `GET /api/jobs/runner-status`
+- `/admin/webhooks` now surfaces runner heartbeat visibility alongside delivery monitoring
+- heartbeat writes are best-effort and must not block `POST /api/jobs/run` job processing when heartbeat persistence fails
+- runner visibility is scheduler-agnostic and supports Vercel Cron or external workers calling `POST /api/jobs/run`
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
@@ -177,12 +190,12 @@ npm run build
 
 - Extract the remaining business logic that still lives in route handlers, especially analytics, discounts, and media administration paths
 - Keep collection assignment and merchandising APIs admin-only while storefront collection reads stay public and read-only
-- Expand audit logging around integration changes, refund/return transitions, email resends, and webhook retries
+- Expand audit logging around integration changes, email resends, and webhook retries (refund creation/failed attempts and return lifecycle transitions now emit best-effort audit events; remaining gaps are email resends and webhook retries)
 - Keep Settings -> Setup guidance aligned with the shipped setup status service/API and `doopify doctor` as setup automation expands
 
 ### Later
 
-- Move media binary storage off Postgres and into object storage
+- migrate legacy Postgres-backed media bytes to object storage and optionally null historical `MediaAsset.data` after rollout validation
 - Add customer-auth hardening when the customer account system exists
 - Add broader CSP and response-header hardening once external integrations and asset origins are finalized
 
@@ -387,11 +400,12 @@ These ideas are intentionally rejected for this phase:
 
 - The correct public Stripe webhook endpoint is `POST /api/webhooks/stripe`
 - The retry runner endpoint is `POST /api/webhook-retries/run` and must be called with `Authorization: Bearer WEBHOOK_RETRY_SECRET` or `x-webhook-retry-secret`
+- The background jobs runner endpoint is `POST /api/jobs/run`; runner heartbeat visibility supports Vercel Cron and external worker schedulers through `GET /api/jobs/runner-status`
 - The browser may start checkout, but only Stripe webhook success finalizes order creation
 - Internal event handlers are allowed to fail without corrupting already-committed order or payment data
 - Outbound merchant webhook failures should become delivery records, not uncaught lifecycle errors
 - Setup automation should start with read-only diagnostics and status checks before mutating user environments
-- Media binary storage in Postgres is acceptable for local/current workflows but should move to object storage before heavier production usage
+- Postgres-backed media remains an intentional local/dev fallback, while production can use S3-compatible object storage via `MEDIA_STORAGE_PROVIDER=s3` and `MEDIA_S3_*` configuration
 
 ## Exit Criteria For The Next Hardening Pass
 

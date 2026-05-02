@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/server/utils/crypto'
 import type { DoopifyEventName, DoopifyEvents } from '@/server/events/types'
 import type { OutboundWebhookDelivery } from '@prisma/client'
+import type { AuditActor } from '@/server/services/audit-log.service'
+import { recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 
 const MAX_ATTEMPTS = 5
 const MAX_RESPONSE_BODY_LENGTH = 1000
@@ -252,15 +254,27 @@ export async function processDueOutboundDeliveries(limit = 50) {
   }
 }
 
-export async function retryOutboundWebhookDelivery(deliveryId: string) {
+export async function retryOutboundWebhookDelivery(
+  deliveryId: string,
+  actor?: AuditActor | null,
+) {
   const existing = await prisma.outboundWebhookDelivery.findUnique({
     where: { id: deliveryId },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      event: true,
+      attempts: true,
+      integrationId: true,
+      integration: { select: { webhookUrl: true } },
+    },
   })
 
   if (!existing || !RETRYABLE_STATUSES.includes(existing.status as typeof RETRYABLE_STATUSES[number])) {
     return null
   }
+
+  const previousStatus = existing.status
 
   const delivery = await prisma.outboundWebhookDelivery.update({
     where: { id: deliveryId },
@@ -272,7 +286,66 @@ export async function retryOutboundWebhookDelivery(deliveryId: string) {
     },
   })
 
-  return processOutboundWebhook(delivery.id)
+  const result = await processOutboundWebhook(delivery.id)
+
+  const targetUrlHost = safeTargetUrlHost(existing.integration?.webhookUrl)
+  await safeAuditOutboundRetryEvent({
+    actor,
+    deliveryId,
+    integrationId: existing.integrationId,
+    eventType: existing.event,
+    previousStatus,
+    newStatus: result?.status ?? 'PENDING',
+    attemptCount: result?.attempts ?? existing.attempts,
+    targetUrlHost,
+  })
+
+  return result
+}
+
+function safeTargetUrlHost(webhookUrl: string | null | undefined): string | null {
+  if (!webhookUrl) return null
+  try {
+    return new URL(webhookUrl).host
+  } catch {
+    return null
+  }
+}
+
+async function safeAuditOutboundRetryEvent(input: {
+  actor?: AuditActor | null
+  deliveryId: string
+  integrationId: string
+  eventType: string
+  previousStatus: string
+  newStatus: string
+  attemptCount: number
+  targetUrlHost: string | null
+}): Promise<void> {
+  try {
+    await recordAuditLogBestEffort({
+      action: 'outbound_webhook.manual_retry',
+      actor: input.actor ?? null,
+      resource: { type: 'OutboundWebhookDelivery', id: input.deliveryId },
+      summary: `Manual retry triggered for outbound delivery ${input.deliveryId} (${input.eventType})`,
+      snapshot: {
+        deliveryId: input.deliveryId,
+        integrationId: input.integrationId,
+        eventType: input.eventType,
+        direction: 'outbound',
+        previousStatus: input.previousStatus,
+        newStatus: input.newStatus,
+        attemptCount: input.attemptCount,
+        targetUrlHost: input.targetUrlHost,
+      },
+      redactions: ['signing secret', 'custom header secrets', 'raw payload', 'provider response body'],
+    })
+  } catch (error) {
+    console.error('[outbound-webhook-service] Audit emission failed for manual retry', {
+      deliveryId: input.deliveryId,
+      error,
+    })
+  }
 }
 
 export { uniqueEvents }

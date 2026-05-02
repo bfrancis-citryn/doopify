@@ -28,6 +28,10 @@ export const postgresMediaStorageAdapter: MediaStorageAdapter = {
         mimeType: input.mimeType,
         size: input.size,
         data: toPrismaBytes(input.buffer),
+        storageProvider: 'postgres',
+        storageKey: null,
+        storageBucket: null,
+        publicUrl: null,
         ...(input.productId && {
           productMedia: {
             create: {
@@ -64,6 +68,9 @@ export const postgresMediaStorageAdapter: MediaStorageAdapter = {
     })
 
     if (!asset) return null
+    if (!asset.data) {
+      throw new Error(`Postgres media asset ${assetId} is missing binary data`)
+    }
 
     return {
       body: Buffer.from(asset.data),

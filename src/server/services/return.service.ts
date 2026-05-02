@@ -2,7 +2,9 @@ import { type Prisma, type ReturnStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import type { AuditActor } from '@/server/services/audit-log.service'
 import { issueRefund } from '@/server/services/refund.service'
+import { safeAuditReturnEvent, type ReturnAuditAction } from '@/server/services/return-audit.service'
 
 const ALLOWED_TRANSITIONS: Record<ReturnStatus, ReturnStatus[]> = {
   REQUESTED: ['APPROVED', 'DECLINED'],
@@ -13,10 +15,25 @@ const ALLOWED_TRANSITIONS: Record<ReturnStatus, ReturnStatus[]> = {
   DECLINED: [],
 }
 
+async function emitReturnAuditEventSafely(
+  input: Parameters<typeof safeAuditReturnEvent>[0]
+) {
+  try {
+    await safeAuditReturnEvent(input)
+  } catch (error) {
+    console.error('[return-service] Audit emission failed', {
+      action: input.action,
+      returnId: input.returnId,
+      error,
+    })
+  }
+}
+
 export type CreateReturnInput = {
   orderId: string
   reason?: string
   note?: string
+  actor?: AuditActor | null
   items: Array<{
     orderItemId: string
     variantId?: string
@@ -26,7 +43,7 @@ export type CreateReturnInput = {
 }
 
 export async function createReturn(input: CreateReturnInput) {
-  const { orderId, reason, note, items } = input
+  const { orderId, reason, note, items, actor = null } = input
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -103,12 +120,30 @@ export async function createReturn(input: CreateReturnInput) {
     returnId: returnRecord.id,
   })
 
+  await emitReturnAuditEventSafely({
+    action: 'return.created',
+    actor,
+    returnId: returnRecord.id,
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    previousStatus: null,
+    newStatus: 'REQUESTED',
+    reason: returnRecord.reason ?? reason ?? null,
+    note: returnRecord.note ?? note ?? null,
+    itemCount: returnRecord.items.length,
+  })
+
   return returnRecord
 }
 
 export async function updateReturnStatus(
   returnId: string,
-  data: { status: ReturnStatus; note?: string }
+  data: {
+    status: ReturnStatus
+    note?: string
+    actor?: AuditActor | null
+    refundId?: string | null
+  }
 ) {
   const existing = await prisma.return.findUnique({
     where: { id: returnId },
@@ -176,6 +211,47 @@ export async function updateReturnStatus(
     })
   }
 
+  const statusToAction: Partial<Record<ReturnStatus, ReturnAuditAction>> = {
+    APPROVED: 'return.approved',
+    DECLINED: 'return.declined',
+    IN_TRANSIT: 'return.marked_in_transit',
+    RECEIVED: 'return.marked_received',
+    CLOSED: 'return.closed',
+  }
+
+  const action = statusToAction[data.status]
+  if (action) {
+    await emitReturnAuditEventSafely({
+      action,
+      actor: data.actor ?? null,
+      returnId: existing.id,
+      orderId: existing.orderId,
+      orderNumber: existing.order.orderNumber,
+      previousStatus: existing.status,
+      newStatus: updated.status,
+      reason: updated.reason ?? null,
+      note: updated.note ?? data.note ?? null,
+      itemCount: updated.items.length,
+      refundId: updated.refundId ?? data.refundId ?? null,
+    })
+  }
+
+  if (data.status === 'CLOSED' && (data.refundId ?? updated.refundId)) {
+    await emitReturnAuditEventSafely({
+      action: 'return.closed_with_refund',
+      actor: data.actor ?? null,
+      returnId: existing.id,
+      orderId: existing.orderId,
+      orderNumber: existing.order.orderNumber,
+      previousStatus: existing.status,
+      newStatus: updated.status,
+      reason: updated.reason ?? null,
+      note: updated.note ?? data.note ?? null,
+      itemCount: updated.items.length,
+      refundId: data.refundId ?? updated.refundId ?? null,
+    })
+  }
+
   return updated
 }
 
@@ -186,6 +262,7 @@ export async function closeReturnWithRefund(input: {
   reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
   note?: string
   restockItems?: boolean
+  actor?: AuditActor | null
   items: Array<{
     orderItemId: string
     variantId?: string
@@ -234,12 +311,15 @@ export async function closeReturnWithRefund(input: {
     note: input.note,
     restockItems: input.restockItems ?? true,
     returnId: input.returnId,
+    actor: input.actor ?? null,
     items: input.items,
   })
 
   await updateReturnStatus(input.returnId, {
     status: 'CLOSED',
     note: input.note ?? 'Return closed after refund was issued',
+    actor: input.actor ?? null,
+    refundId: refund.id,
   })
 
   return { refund, returnId: input.returnId }

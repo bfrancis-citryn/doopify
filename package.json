@@ -30,6 +30,7 @@
     "dotenv": "^17.2.3",
     "framer-motion": "^12.38.0",
     "jsonwebtoken": "^9.0.2",
+    "minio": "^8.0.7",
     "next": "16.2.2",
     "nodemailer": "^7.0.10",
     "pg": "^8.20.0",

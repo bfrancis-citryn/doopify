@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { err, ok, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser } from '@/server/services/audit-log.service'
 import {
   OrderIdentifierResolutionError,
   resolveOrderIdentifier,
@@ -58,7 +59,10 @@ export async function POST(req: Request, { params }: Params) {
 
   try {
     const resolvedOrder = await resolveOrderIdentifier(orderNumber)
-    const returnRecord = await createReturnRecord(resolvedOrder.orderId, parsed.data)
+    const returnRecord = await createReturnRecord(resolvedOrder.orderId, {
+      ...parsed.data,
+      actor: auditActorFromUser(auth.user),
+    })
     return ok(returnRecord, 201)
   } catch (e) {
     if (e instanceof OrderIdentifierResolutionError) {
