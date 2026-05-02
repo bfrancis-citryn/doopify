@@ -11,6 +11,12 @@ function mediaUrl(assetId: string) {
   return `/api/media/${assetId}`
 }
 
+function toPrismaBytes(buffer: Buffer): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(buffer.length)
+  bytes.set(buffer)
+  return bytes
+}
+
 export const postgresMediaStorageAdapter: MediaStorageAdapter = {
   provider: 'postgres',
 
@@ -21,7 +27,7 @@ export const postgresMediaStorageAdapter: MediaStorageAdapter = {
         altText: input.altText || undefined,
         mimeType: input.mimeType,
         size: input.size,
-        data: input.buffer,
+        data: toPrismaBytes(input.buffer),
         ...(input.productId && {
           productMedia: {
             create: {
