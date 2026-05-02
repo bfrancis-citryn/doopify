@@ -1,5 +1,6 @@
 ﻿import { err, ok } from '@/lib/api'
 import { requireOwner } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   disconnectProvider,
   getProviderStatus,
@@ -43,7 +44,24 @@ export async function DELETE(req: Request, context: RouteContext) {
   }
 
   try {
+    const before = await getProviderStatus(provider)
     const status = await disconnectProvider(provider)
+    await recordAuditLogBestEffort({
+      action: 'provider.disconnected',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'ProviderConnection', id: provider },
+      summary: `${provider} provider was disconnected`,
+      snapshot: {
+        outcome: 'disconnected',
+        provider,
+        previousState: before.state,
+        previousSource: before.source,
+        newState: status.state,
+        newSource: status.source,
+        category: status.category,
+      },
+      redactions: ['provider credential values', 'API keys', 'passwords', 'webhook secrets'],
+    })
     return ok({ provider, status })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to disconnect provider'
