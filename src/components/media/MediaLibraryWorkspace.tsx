@@ -2,19 +2,28 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import AppShell from '../AppShell';
+import {
+  ChangeEvent,
+  ComponentType,
+  InputHTMLAttributes,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import AppShellBase from '../AppShell';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
-import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminEmptyStateBase from '../admin/ui/AdminEmptyState';
 import AdminFormSection from '../admin/ui/AdminFormSection';
-import AdminInput from '../admin/ui/AdminInput';
+import AdminInputBase from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
-import AdminPageHeader from '../admin/ui/AdminPageHeader';
-import AdminSelectableTile from '../admin/ui/AdminSelectableTile';
+import AdminPageHeaderBase from '../admin/ui/AdminPageHeader';
+import AdminSelectableTileBase from '../admin/ui/AdminSelectableTile';
 import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminSplitPane from '../admin/ui/AdminSplitPane';
-import AdminToolbar from '../admin/ui/AdminToolbar';
+import AdminToolbarBase from '../admin/ui/AdminToolbar';
 import AdminUploadDropzone from '../admin/ui/AdminUploadDropzone';
 import styles from './MediaLibraryWorkspace.module.css';
 
@@ -51,6 +60,52 @@ type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 type MediaListResponse = {
   assets?: MediaAsset[];
 };
+
+type AppShellProps = {
+  children: ReactNode;
+};
+
+type AdminPageHeaderProps = {
+  actions?: ReactNode;
+  description?: string;
+  eyebrow?: string;
+  title?: string;
+};
+
+type AdminToolbarProps = {
+  actions?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+};
+
+type AdminSelectableTileProps = {
+  action?: ReactNode;
+  className?: string;
+  disabled?: boolean;
+  footer?: ReactNode;
+  media?: ReactNode;
+  onClick?: () => void;
+  selected?: boolean;
+  subtitle?: ReactNode;
+  title?: ReactNode;
+  type?: 'button' | 'submit' | 'reset';
+};
+
+type AdminEmptyStateProps = {
+  action?: ReactNode;
+  actionLabel?: string;
+  description?: string;
+  icon?: string;
+  onAction?: () => void;
+  title?: string;
+};
+
+const AppShell = AppShellBase as ComponentType<AppShellProps>;
+const AdminPageHeader = AdminPageHeaderBase as ComponentType<AdminPageHeaderProps>;
+const AdminToolbar = AdminToolbarBase as ComponentType<AdminToolbarProps>;
+const AdminSelectableTile = AdminSelectableTileBase as ComponentType<AdminSelectableTileProps>;
+const AdminEmptyState = AdminEmptyStateBase as ComponentType<AdminEmptyStateProps>;
+const AdminInput = AdminInputBase as ComponentType<InputHTMLAttributes<HTMLInputElement>>;
 
 function mergeAssets(currentAssets: MediaAsset[], incomingAssets: MediaAsset[]) {
   const assetMap = new Map(currentAssets.map((asset) => [asset.id, asset]));
@@ -276,7 +331,7 @@ export default function MediaLibraryWorkspace() {
                 />
 
                 <AdminToolbar>
-                  <AdminInput onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search filename or alt text..." type="search" value={searchQuery} />
+                  <AdminInput onChange={(event) => setSearchQuery(String(event.currentTarget.value))} placeholder="Search filename or alt text..." type="search" value={searchQuery} />
                   <span className={styles.meta}>{assets.length} shown</span>
                 </AdminToolbar>
               </>
@@ -346,7 +401,7 @@ export default function MediaLibraryWorkspace() {
                     <div><strong>Linked:</strong> {selectedAsset.linkedProducts}</div>
                   </div>
                   <AdminInput
-                    onChange={(event) => setAltDraft(event.target.value)}
+                    onChange={(event) => setAltDraft(String(event.currentTarget.value))}
                     placeholder="Describe the image for SEO and accessibility..."
                     value={altDraft}
                   />
