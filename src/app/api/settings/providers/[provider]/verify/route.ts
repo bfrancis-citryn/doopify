@@ -1,5 +1,6 @@
 ﻿import { err, ok } from '@/lib/api'
 import { requireOwner } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   parseSupportedProvider,
   verifyProviderConnection,
@@ -23,6 +24,26 @@ export async function POST(req: Request, context: RouteContext) {
 
   try {
     const result = await verifyProviderConnection(provider)
+    await recordAuditLogBestEffort({
+      action: 'provider.verification_attempted',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'ProviderConnection', id: provider },
+      summary: `${provider} provider verification ${result.verification.ok ? 'succeeded' : 'failed'}`,
+      snapshot: {
+        outcome: result.verification.ok ? 'verified' : 'failed',
+        provider,
+        state: result.status.state,
+        source: result.status.source,
+        category: result.status.category,
+        verificationOk: result.verification.ok,
+        message: result.verification.message,
+        metadataKeys: result.verification.metadata
+          ? Object.keys(result.verification.metadata).sort()
+          : [],
+      },
+      redactions: ['provider credential values', 'API keys', 'passwords', 'webhook secrets'],
+    })
+
     return ok({
       provider,
       status: result.status,
