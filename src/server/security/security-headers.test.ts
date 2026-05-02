@@ -82,7 +82,7 @@ describe('security headers', () => {
     const csp = buildSecurityHeaders({ environment: 'production' }).get('Content-Security-Policy-Report-Only')
 
     expect(csp).toContain("img-src 'self' data: blob: https://cdn.example.com")
-    expect(csp).not.toContain("blob: https:")
+    expect(csp).not.toMatch(/img-src[^;]*\shttps:(?:\s|;|$)/)
   })
 
   it('uses CSP_MEDIA_ORIGINS as exact media origins without broad https fallback', () => {
@@ -92,7 +92,7 @@ describe('security headers', () => {
 
     expect(csp).toContain('https://media.example.com')
     expect(csp).toContain('https://assets.example.com')
-    expect(csp).not.toContain("blob: https:")
+    expect(csp).not.toMatch(/img-src[^;]*\shttps:(?:\s|;|$)/)
   })
 
   it('can disable all security headers for emergency rollback', () => {
