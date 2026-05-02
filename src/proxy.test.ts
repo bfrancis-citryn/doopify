@@ -11,22 +11,34 @@ vi.mock('@/lib/auth', () => ({
 
 import { proxy } from './proxy'
 
-describe('proxy auth protection', () => {
+describe('proxy auth protection and security headers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('keeps storefront API routes public', async () => {
+  it('keeps storefront API routes public and adds security headers', async () => {
     const response = await proxy(new NextRequest('http://localhost/api/storefront/collections'))
 
     expect(response.status).toBe(200)
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin')
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY')
     expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
 
-  it('blocks private admin API routes when no auth cookie exists', async () => {
+  it('adds security headers to public storefront pages', async () => {
+    const response = await proxy(new NextRequest('http://localhost/shop'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+  })
+
+  it('blocks private admin API routes when no auth cookie exists and adds security headers', async () => {
     const response = await proxy(new NextRequest('http://localhost/api/collections'))
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(await response.json()).toEqual({
       success: false,
       error: 'Unauthorized',
@@ -34,7 +46,16 @@ describe('proxy auth protection', () => {
     expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
 
-  it('returns 401 when a private admin API token is invalid', async () => {
+  it('adds security headers to admin login redirects', async () => {
+    const response = await proxy(new NextRequest('http://localhost/admin'))
+
+    expect(response.status).toBeGreaterThanOrEqual(300)
+    expect(response.status).toBeLessThan(400)
+    expect(response.headers.get('location')).toContain('/login?next=%2Fadmin')
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+  })
+
+  it('returns 401 when a private admin API token is invalid and adds security headers', async () => {
     mocks.verifyToken.mockResolvedValue(null)
 
     const response = await proxy(
@@ -46,6 +67,7 @@ describe('proxy auth protection', () => {
     )
 
     expect(response.status).toBe(401)
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(await response.json()).toEqual({
       success: false,
       error: 'Invalid or expired session',
@@ -53,7 +75,7 @@ describe('proxy auth protection', () => {
     expect(mocks.verifyToken).toHaveBeenCalledWith('bad_token')
   })
 
-  it('allows private admin API routes when auth is valid and injects identity headers', async () => {
+  it('allows private admin API routes when auth is valid, injects identity headers, and adds security headers', async () => {
     mocks.verifyToken.mockResolvedValue({
       userId: 'user_1',
       email: 'admin@example.com',
@@ -73,5 +95,14 @@ describe('proxy auth protection', () => {
     expect(response.headers.get('x-user-id')).toBe('user_1')
     expect(response.headers.get('x-user-role')).toBe('OWNER')
     expect(response.headers.get('x-user-email')).toBe('admin@example.com')
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+  })
+
+  it('keeps webhook routes public while adding security headers', async () => {
+    const response = await proxy(new NextRequest('http://localhost/api/webhooks/stripe'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
 })
