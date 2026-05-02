@@ -248,17 +248,8 @@ describe('checkout pricing display wrappers', () => {
 })
 
 describe('shipping and tax helpers', () => {
-  const originalNodeEnv = process.env.NODE_ENV
-  const originalFallbackFlag = process.env.CHECKOUT_ALLOW_DEV_FALLBACKS
-
   afterEach(() => {
     vi.unstubAllEnvs()
-    process.env.NODE_ENV = originalNodeEnv
-    if (originalFallbackFlag == null) {
-      delete process.env.CHECKOUT_ALLOW_DEV_FALLBACKS
-    } else {
-      process.env.CHECKOUT_ALLOW_DEV_FALLBACKS = originalFallbackFlag
-    }
   })
 
   it('returns fallback warning when an explicit fallback shipping rate is provided and no active zone rate matches', () => {

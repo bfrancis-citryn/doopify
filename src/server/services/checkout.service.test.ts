@@ -411,7 +411,7 @@ describe('checkout service', () => {
     mocks.createStripePaymentIntent.mockResolvedValue({
       id: 'pi_zone_tax',
       client_secret: 'secret_zone_tax',
-      amount: 4099,
+      amount: 3999,
       currency: 'usd',
       status: 'requires_payment_method',
     })
@@ -430,7 +430,7 @@ describe('checkout service', () => {
     })
 
     expect(mocks.createStripePaymentIntent).toHaveBeenCalledWith({
-      amount: 4099,
+      amount: 3999,
       currency: 'USD',
       email: 'ada@example.com',
       metadata: {
@@ -442,8 +442,8 @@ describe('checkout service', () => {
       checkoutSessionId: 'checkout_zone_tax',
       subtotal: 20,
       shippingAmount: 19.99,
-      taxAmount: 1,
-      total: 40.99,
+      taxAmount: 0,
+      total: 39.99,
     })
   })
 

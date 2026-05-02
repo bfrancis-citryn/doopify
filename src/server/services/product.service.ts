@@ -17,6 +17,44 @@ const productInclude = {
   },
 } satisfies Prisma.ProductInclude
 
+// Lightweight select for product list — no options, only featured media, minimal variant fields.
+const productSummarySelect = {
+  id: true,
+  title: true,
+  handle: true,
+  status: true,
+  vendor: true,
+  productType: true,
+  tags: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+  variants: {
+    select: {
+      id: true,
+      priceCents: true,
+      compareAtPriceCents: true,
+      sku: true,
+      inventory: true,
+    },
+    orderBy: { position: 'asc' as const },
+  },
+  media: {
+    where: { isFeatured: true },
+    select: {
+      id: true,
+      isFeatured: true,
+      position: true,
+      assetId: true,
+      asset: {
+        select: { id: true, altText: true },
+      },
+    },
+    take: 1,
+    orderBy: { position: 'asc' as const },
+  },
+} satisfies Prisma.ProductSelect
+
 const storefrontProductInclude = {
   variants: { where: { inventory: { gt: 0 } }, orderBy: { position: 'asc' as const } },
   media: { include: { asset: true }, orderBy: { position: 'asc' as const }, take: 2 },
@@ -297,6 +335,92 @@ export async function getProducts(params: {
 
   return {
     products: attachMediaUrlsToList(products),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  }
+}
+
+// Maps the lightweight summary select result to the public API shape.
+// Variants have price in dollars, media is the single featured item only, options is always [].
+function toProductSummaryResponse(product: any) {
+  const featuredMedia = product.media?.[0] ?? null
+  return {
+    id: product.id,
+    title: product.title,
+    handle: product.handle,
+    status: product.status,
+    vendor: product.vendor ?? null,
+    productType: product.productType ?? null,
+    tags: product.tags ?? [],
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+    publishedAt: product.publishedAt ?? null,
+    variants: (product.variants || []).map((v: any) => ({
+      id: v.id,
+      price: centsToDollars(v.priceCents),
+      compareAtPrice: v.compareAtPriceCents == null ? null : centsToDollars(v.compareAtPriceCents),
+      sku: v.sku ?? null,
+      inventory: v.inventory ?? 0,
+    })),
+    media: featuredMedia
+      ? [
+          {
+            id: featuredMedia.id,
+            isFeatured: true,
+            position: featuredMedia.position ?? 0,
+            assetId: featuredMedia.assetId,
+            asset: featuredMedia.asset
+              ? {
+                  id: featuredMedia.asset.id,
+                  url: `/api/media/${featuredMedia.asset.id}`,
+                  altText: featuredMedia.asset.altText ?? null,
+                }
+              : null,
+          },
+        ]
+      : [],
+    options: [],
+  }
+}
+
+export async function getProductSummaries(params: {
+  status?: ProductStatus
+  search?: string
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortDir?: 'asc' | 'desc'
+}) {
+  const { status, search, page = 1, pageSize = 20, sortBy = 'createdAt', sortDir = 'desc' } = params
+
+  const where: Prisma.ProductWhereInput = {
+    ...(status && { status }),
+    ...(search && {
+      OR: [
+        { title: { contains: search, mode: 'insensitive' } },
+        { vendor: { contains: search, mode: 'insensitive' } },
+        { variants: { some: { sku: { contains: search, mode: 'insensitive' } } } },
+      ],
+    }),
+  }
+
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      select: productSummarySelect,
+      orderBy: { [sortBy]: sortDir },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ])
+
+  return {
+    products: products.map(toProductSummaryResponse),
     pagination: {
       page,
       pageSize,
@@ -597,6 +721,136 @@ export async function upsertOptions(
   productId: string,
   options: Array<{
     name: string
+    position?: number
+    values: Array<{ value: string; position?: number }>
+  }>
+) {
+  const product = await prisma.$transaction(async (tx) => {
+    await tx.productOption.deleteMany({ where: { productId } })
+
+    for (const [index, option] of options.entries()) {
+      await tx.productOption.create({
+        data: {
+          productId,
+          name: option.name,
+          position: option.position ?? index,
+          values: {
+            create: option.values.map((value, valueIndex) => ({
+              value: value.value,
+              position: value.position ?? valueIndex,
+            })),
+          },
+        },
+      })
+    }
+
+    return tx.product.findUnique({
+      where: { id: productId },
+      include: productInclude,
+    })
+  })
+
+  const hydratedProduct = product ? attachMediaUrls(product) : null
+
+  if (hydratedProduct) {
+    await emitInternalEvent('product.updated', {
+      productId: hydratedProduct.id,
+      handle: hydratedProduct.handle,
+      title: hydratedProduct.title,
+      status: hydratedProduct.status,
+    })
+  }
+
+  return hydratedProduct
+}
+
+export async function decrementInventory(variantId: string, quantity: number) {
+  const updated = await prisma.productVariant.updateMany({
+    where: { id: variantId, inventory: { gte: quantity } },
+    data: { inventory: { decrement: quantity } },
+  })
+
+  if (updated.count === 0) {
+    throw new Error(`Insufficient inventory for variant ${variantId}`)
+  }
+
+  return updated
+}
+
+export async function archiveProduct(id: string) {
+  const product = await prisma.product.update({
+    where: { id },
+    data: { status: 'ARCHIVED' },
+  })
+
+  await emitInternalEvent('product.updated', {
+    productId: product.id,
+    handle: product.handle,
+    title: product.title,
+    status: product.status,
+  })
+
+  return product
+}
+
+export async function getStorefrontProducts(params: {
+  collectionHandle?: string
+  search?: string
+  page?: number
+  pageSize?: number
+}) {
+  const { collectionHandle, search, page = 1, pageSize = 24 } = params
+  const now = new Date()
+  const searchFilter = search
+    ? {
+        OR: [
+          { title: { contains: search, mode: 'insensitive' as const } },
+          { description: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }
+    : null
+
+  const where: Prisma.ProductWhereInput = {
+    status: 'ACTIVE',
+    AND: [getStorefrontPublishWindowWhere(now), ...(searchFilter ? [searchFilter] : [])],
+    variants: { some: { inventory: { gt: 0 } } },
+    ...(collectionHandle && {
+      collections: {
+        some: {
+          collection: {
+            handle: collectionHandle,
+          },
+        },
+      },
+    }),
+  }
+
+  const [products, total] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      include: storefrontProductInclude,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.count({ where }),
+  ])
+
+  return {
+    products: attachMediaUrlsToList(products).map(toStorefrontProduct),
+    pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+  }
+}
+
+function slugify(text: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+
+  return slug || `product-${randomUUID().slice(0, 8)}`
+}
+ng
     position?: number
     values: Array<{ value: string; position?: number }>
   }>

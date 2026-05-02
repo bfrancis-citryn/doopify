@@ -19,6 +19,7 @@ import {
   reorderImage,
   sanitizeOptions,
   syncOptionsWithVariants,
+  transformApiProductSummary,
   validateProduct,
 } from '../lib/productUtils';
 
@@ -430,29 +431,25 @@ function productReducer(state, action) {
       };
     }
     case 'DELETE_PRODUCT': {
+      // Close the editor immediately. The fallback product will be opened
+      // via an explicit async fetch in confirmDialogAction to avoid opening
+      // a stale catalog summary in the editor.
       const nextProducts = state.products.filter(product => product.id !== action.productId);
-      const fallbackProduct = nextProducts[0] || null;
-
       return {
         ...state,
         products: nextProducts,
-        selectedProductId: fallbackProduct?.id || null,
-        editor: fallbackProduct
-          ? {
-              ...makeEditorState(fallbackProduct, 'existing'),
-              autosaveEnabled: state.editor.autosaveEnabled,
-            }
-          : {
-              ...state.editor,
-              isOpen: false,
-              mode: 'new',
-              draftProduct: null,
-              baselineProduct: null,
-              previewImageId: null,
-              validationErrors: {},
-              isSaving: false,
-              mediaUploadsInFlight: 0,
-            },
+        selectedProductId: null,
+        editor: {
+          ...state.editor,
+          isOpen: false,
+          mode: 'new',
+          draftProduct: null,
+          baselineProduct: null,
+          previewImageId: null,
+          validationErrors: {},
+          isSaving: false,
+          mediaUploadsInFlight: 0,
+        },
       };
     }
     case 'CLOSE_EDITOR':
@@ -498,17 +495,18 @@ export function ProductProvider({ children }) {
   const [state, dispatch] = useReducer(productReducer, initialState);
 
   // ── Fetch products from API on mount ────────────────────────────────────────
+  // Load lightweight summaries for the catalog list, then fetch full detail
+  // for the editor if a product id is present in the URL.
   useEffect(() => {
     let isActive = true;
 
-    fetch('/api/products?pageSize=100')
-      .then(r => r.json())
-      .then(json => {
-        if (!isActive || !json.success) {
-          return;
-        }
+    async function loadProducts() {
+      try {
+        const r = await fetch('/api/products?pageSize=100');
+        const json = await r.json();
+        if (!isActive || !json.success) return;
 
-        const products = (json.data.products || []).map(transformApiProduct);
+        const products = (json.data.products || []).map(transformApiProductSummary);
         dispatch({ type: 'LOAD_PRODUCTS', products });
 
         const locationState = getEditorLocationState();
@@ -525,23 +523,35 @@ export function ProductProvider({ children }) {
         }
 
         if (locationState.productId) {
-          const matchedProduct = products.find(product => product.id === locationState.productId);
-          if (matchedProduct) {
-            const preparedProduct = prepareProductForSave(matchedProduct);
-            dispatch({
-              type: 'OPEN_EDITOR',
-              product: preparedProduct,
-              mode: 'existing',
-              selectedProductId: preparedProduct.id,
-            });
-            syncEditorLocation({ productId: preparedProduct.id }, 'replace');
-            return;
+          // Fetch full detail before opening the editor — summaries lack options/all media/all variants.
+          try {
+            const detailRes = await fetch(`/api/products/${locationState.productId}`);
+            const detailJson = await detailRes.json();
+            if (!isActive) return;
+            if (detailJson.success && detailJson.data) {
+              const fullProduct = transformApiProduct(detailJson.data);
+              const preparedProduct = prepareProductForSave(fullProduct);
+              dispatch({
+                type: 'OPEN_EDITOR',
+                product: preparedProduct,
+                mode: 'existing',
+                selectedProductId: preparedProduct.id,
+              });
+              syncEditorLocation({ productId: preparedProduct.id }, 'replace');
+              return;
+            }
+          } catch (e) {
+            console.error('[ProductContext] failed to restore product from URL', e);
           }
         }
 
         syncEditorLocation({}, 'replace');
-      })
-      .catch(err => console.error('[ProductContext] fetch failed', err));
+      } catch (err) {
+        console.error('[ProductContext] fetch failed', err);
+      }
+    }
+
+    loadProducts();
 
     return () => {
       isActive = false;
@@ -614,22 +624,28 @@ export function ProductProvider({ children }) {
     }, 3200);
   };
 
-  const openExistingProduct = productId => {
-    const product = state.products.find(item => item.id === productId);
-    if (!product) {
+  // Fetches full product detail from the API before opening the editor so that
+  // the editor always has options, all media, and all variants — not a summary.
+  const openExistingProduct = async (productId) => {
+    try {
+      const res = await fetch(`/api/products/${productId}`);
+      const json = await res.json();
+      if (!json.success || !json.data) return false;
+
+      const fullProduct = transformApiProduct(json.data);
+      const preparedProduct = prepareProductForSave(fullProduct);
+
+      dispatch({
+        type: 'OPEN_EDITOR',
+        product: preparedProduct,
+        mode: 'existing',
+        selectedProductId: preparedProduct.id,
+      });
+      return true;
+    } catch (e) {
+      console.error('[ProductContext] failed to load product detail', e);
       return false;
     }
-
-    const preparedProduct = prepareProductForSave(product);
-
-    dispatch({
-      type: 'OPEN_EDITOR',
-      product: preparedProduct,
-      mode: 'existing',
-      selectedProductId: preparedProduct.id,
-    });
-
-    return true;
   };
 
   const openNewProduct = () => {
@@ -658,7 +674,10 @@ export function ProductProvider({ children }) {
         return;
       }
 
-      if (locationState.productId && openExistingProduct(locationState.productId)) {
+      if (locationState.productId) {
+        openExistingProduct(locationState.productId).then(opened => {
+          if (!opened) dispatch({ type: 'CLOSE_EDITOR' });
+        });
         return;
       }
 
@@ -801,8 +820,9 @@ export function ProductProvider({ children }) {
     return true;
   };
 
-  const requestSelectProduct = productId => {
-    if (openExistingProduct(productId)) {
+  const requestSelectProduct = async (productId) => {
+    const opened = await openExistingProduct(productId);
+    if (opened) {
       syncEditorLocation({ productId }, 'push');
     }
   };
@@ -1494,8 +1514,16 @@ export function ProductProvider({ children }) {
 
         const fallbackProduct = state.products.find(product => product.id !== dialog.productId) || null;
         dispatch({ type: 'DELETE_PRODUCT', productId: dialog.productId });
-        syncEditorLocation(fallbackProduct ? { productId: fallbackProduct.id } : {}, 'replace');
         pushToast('Product deleted', 'success');
+
+        // Open the fallback product via a fresh API fetch — state.products contains
+        // lightweight summaries, not full products safe to open in the editor.
+        if (fallbackProduct) {
+          await openExistingProduct(fallbackProduct.id);
+          syncEditorLocation({ productId: fallbackProduct.id }, 'replace');
+        } else {
+          syncEditorLocation({}, 'replace');
+        }
       } catch (e) {
         console.error('[ProductContext] delete failed', e);
         pushToast('Delete failed', 'error');

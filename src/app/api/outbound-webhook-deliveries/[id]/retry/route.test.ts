@@ -34,7 +34,12 @@ describe('POST /api/outbound-webhook-deliveries/[id]/retry', () => {
     expect(response.status).toBe(200)
     expect(json.success).toBe(true)
     expect(json.data).toEqual({ id: 'delivery-1', status: 'SUCCESS' })
-    expect(mocks.retryOutboundWebhookDelivery).toHaveBeenCalledWith('delivery-1')
+    expect(mocks.retryOutboundWebhookDelivery).toHaveBeenCalledWith('delivery-1', {
+      actorType: 'STAFF',
+      actorId: 'staff-1',
+      actorEmail: 'staff@example.com',
+      actorRole: 'STAFF',
+    })
   })
 
   it('returns 404 when the service cannot retry the delivery', async () => {

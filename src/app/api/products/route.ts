@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
 import { requireAdmin } from '@/server/auth/require-auth'
-import { getProducts, createProduct, upsertOptions } from '@/server/services/product.service'
+import { getProductSummaries, createProduct, upsertOptions } from '@/server/services/product.service'
 import type { ProductStatus } from '@prisma/client'
 
 const optionValueSchema = z.object({
@@ -63,7 +63,7 @@ function revalidateProductPaths(handle?: string) {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
-    const result = await getProducts({
+    const result = await getProductSummaries({
       status: (searchParams.get('status') as ProductStatus) || undefined,
       search: searchParams.get('search') || undefined,
       page: Number(searchParams.get('page') || 1),

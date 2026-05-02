@@ -993,3 +993,63 @@ export function prepareProductForSave(product) {
     updatedAt: new Date().toISOString(),
   });
 }
+
+// ── Transform lightweight API product summary → UI catalog shape ─────────────
+// Used by ProductContext on mount. The list endpoint returns summaries:
+// no options, only featured media, minimal variant fields (id/price/sku/inventory).
+// Editor always fetches full detail via GET /api/products/:id before opening.
+export function transformApiProductSummary(product) {
+  const images = (product.media || []).map(m => ({
+    id: m.id,
+    assetId: m.assetId || m.asset?.id || null,
+    src: m.asset?.url || '',
+    alt: m.asset?.altText || m.asset?.url || '',
+    isFeatured: m.isFeatured,
+    sortOrder: m.position ?? 0,
+  }));
+  const featuredImageId = images[0]?.id || null;
+
+  // Summary variants carry: id, price (dollars), compareAtPrice, sku, inventory.
+  // No title or optionValues — safe defaults for catalog display and SKU dedup.
+  const variants = (product.variants || []).map((v, i) => ({
+    id: v.id,
+    title: 'Default',
+    sku: v.sku || '',
+    price: String(v.price ?? '0.00'),
+    compareAtPrice: v.compareAtPrice != null ? String(v.compareAtPrice) : '',
+    inventoryQty: v.inventory ?? 0,
+    weight: null,
+    weightUnit: 'kg',
+    position: i,
+    optionValues: {},
+    imageId: featuredImageId,
+    isDefault: true,
+    isActive: true,
+  }));
+
+  const firstVariant = variants[0];
+  const inventorySummary = deriveInventorySummary(variants);
+
+  return {
+    id: product.id,
+    title: product.title,
+    handle: product.handle,
+    status: (product.status || 'DRAFT').toLowerCase(),
+    publishedAt: product.publishedAt || null,
+    description: product.description || '',
+    vendor: product.vendor || '',
+    productType: product.productType || '',
+    category: product.productType || '',
+    tags: product.tags || [],
+    options: [],
+    variants,
+    images,
+    featuredImageId,
+    basePrice: firstVariant?.price || '0.00',
+    compareAtPrice: firstVariant?.compareAtPrice || '',
+    sku: firstVariant?.sku || '',
+    inventorySummary,
+    createdAt: product.createdAt,
+    updatedAt: product.updatedAt,
+  };
+}
