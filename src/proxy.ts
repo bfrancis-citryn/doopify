@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 import { verifyToken } from '@/lib/auth'
+import { applySecurityHeaders } from '@/server/security/security-headers'
 
 const PUBLIC_PREFIXES = [
   '/login',
@@ -18,43 +19,55 @@ const PUBLIC_PREFIXES = [
   '/public',
 ]
 
+function nextWithSecurityHeaders() {
+  return applySecurityHeaders(NextResponse.next())
+}
+
+function jsonWithSecurityHeaders(body: unknown, init: ResponseInit) {
+  return applySecurityHeaders(NextResponse.json(body, init))
+}
+
+function redirectWithSecurityHeaders(url: URL) {
+  return applySecurityHeaders(NextResponse.redirect(url))
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
-  if (isPublic) return NextResponse.next()
+  if (isPublic) return nextWithSecurityHeaders()
 
   if (!pathname.startsWith('/api/') && !isAdminPage(pathname)) {
-    return NextResponse.next()
+    return nextWithSecurityHeaders()
   }
 
   const token = req.cookies.get('doopify_token')?.value
   if (!token) {
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
+      return jsonWithSecurityHeaders(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    return NextResponse.redirect(createLoginUrl(req))
+    return redirectWithSecurityHeaders(createLoginUrl(req))
   }
 
   const payload = await verifyToken(token)
   if (!payload) {
     if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
+      return jsonWithSecurityHeaders(
         { success: false, error: 'Invalid or expired session' },
         { status: 401 }
       )
     }
 
-    const res = NextResponse.redirect(createLoginUrl(req))
+    const res = redirectWithSecurityHeaders(createLoginUrl(req))
     res.cookies.delete('doopify_token')
     return res
   }
 
-  const res = NextResponse.next()
+  const res = nextWithSecurityHeaders()
   res.headers.set('x-user-id', payload.userId)
   res.headers.set('x-user-role', payload.role)
   res.headers.set('x-user-email', payload.email)
