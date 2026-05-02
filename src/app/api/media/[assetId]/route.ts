@@ -1,6 +1,7 @@
 import { err, ok, parseBody } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { getMediaStorageAdapter } from '@/server/media/media-storage'
 import { NextResponse } from 'next/server'
 
 interface Params {
@@ -10,18 +11,15 @@ interface Params {
 export async function GET(_req: Request, { params }: Params) {
   try {
     const { assetId } = await params
-    const asset = await prisma.mediaAsset.findUnique({
-      where: { id: assetId },
-      select: { data: true, mimeType: true, filename: true },
-    })
+    const asset = await getMediaStorageAdapter().get(assetId)
     if (!asset) return err('Asset not found', 404)
 
-    return new NextResponse(asset.data, {
+    return new NextResponse(asset.body, {
       status: 200,
       headers: {
         'Content-Type': asset.mimeType,
         'Content-Disposition': `inline; filename="${asset.filename}"`,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': asset.cacheControl,
       },
     })
   } catch (e) {
@@ -81,7 +79,7 @@ export async function PATCH(req: Request, { params }: Params) {
       createdAt: asset.createdAt,
       linkedProducts: asset._count.productMedia,
       products: asset.productMedia.map((media) => media.product),
-      url: `/api/media/${asset.id}`,
+      url: getMediaStorageAdapter().getPublicUrl(asset.id),
     })
   } catch (e) {
     console.error('[PATCH /api/media/[assetId]]', e)
@@ -95,7 +93,7 @@ export async function DELETE(_req: Request, { params }: Params) {
 
   try {
     const { assetId } = await params
-    await prisma.mediaAsset.delete({ where: { id: assetId } })
+    await getMediaStorageAdapter().delete(assetId)
     return new NextResponse(null, { status: 204 })
   } catch (e) {
     console.error('[DELETE /api/media/[assetId]]', e)
