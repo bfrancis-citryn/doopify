@@ -75,7 +75,6 @@ async function seedPaidOrder(input: {
         create: {
           title: 'Default',
           sku: `REFUND-${input.key}`,
-          price,
           priceCents,
           inventory: input.inventory ?? 3,
         },
@@ -283,4 +282,3 @@ runIntegration('refund and return integration', () => {
     expect(updatedOrder.paymentStatus).toBe('PARTIALLY_REFUNDED')
   })
 })
-
