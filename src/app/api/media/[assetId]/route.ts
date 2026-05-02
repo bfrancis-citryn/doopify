@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: Params) {
     const asset = await getMediaStorageAdapter().get(assetId)
     if (!asset) return err('Asset not found', 404)
 
-    return new NextResponse(asset.body, {
+    return new NextResponse(new Uint8Array(asset.body), {
       status: 200,
       headers: {
         'Content-Type': asset.mimeType,
