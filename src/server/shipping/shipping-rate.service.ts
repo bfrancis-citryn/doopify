@@ -35,6 +35,10 @@ export type GetShippingRatesForCheckoutInput = {
 
 const FALLBACK_PRIORITY = 10_000
 
+function allowLegacyShippingFallbacks() {
+  return process.env.NODE_ENV !== 'production' || process.env.CHECKOUT_ALLOW_DEV_FALLBACKS === 'true'
+}
+
 function normalizeCountry(value?: string | null) {
   const normalized = String(value ?? '')
     .trim()
@@ -420,6 +424,10 @@ function resolveLegacyManualQuotes(input: {
     if (quotes.length) return quotes
   }
 
+  if (!allowLegacyShippingFallbacks()) {
+    return []
+  }
+
   const originCountry = normalizeCountry(store.country)
   const isInternational = Boolean(destinationCountry && originCountry && destinationCountry !== originCountry)
   const amountCents = isInternational ? store.shippingInternationalRateCents : store.shippingDomesticRateCents
@@ -435,6 +443,7 @@ function resolveLegacyManualQuotes(input: {
       metadata: {
         fallback: true,
         priority: FALLBACK_PRIORITY,
+        devOnly: true,
       },
     },
   ]
@@ -576,7 +585,11 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
     })
 
   if (mode === 'MANUAL') {
-    return manualQuotes()
+    const manual = manualQuotes()
+    if (manual.length) return manual
+    throw new ShippingRateSetupError(
+      'Manual shipping mode requires an active manual rate, shipping zone rate, free-shipping threshold, or explicit fallback rate for this destination.'
+    )
   }
 
   if (!provider) {
