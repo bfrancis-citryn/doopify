@@ -124,6 +124,8 @@ export async function getStripeEvent(eventId: string, secretKey?: string | null)
   }
 }
 
+const webhookVerificationClient = new Stripe('doopify_webhook_signature_verifier')
+
 export function verifyStripeWebhookSignature(
   payload: string,
   signatureHeader: string | null,
@@ -139,7 +141,7 @@ export function verifyStripeWebhookSignature(
   }
 
   try {
-    Stripe.webhooks.constructEvent(
+    webhookVerificationClient.webhooks.constructEvent(
       payload,
       signatureHeader,
       endpointSecret,
