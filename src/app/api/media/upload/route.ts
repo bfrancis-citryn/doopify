@@ -1,6 +1,7 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { getMediaStorageAdapter } from '@/server/media/media-storage'
 
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
@@ -80,34 +81,24 @@ export async function POST(req: Request) {
       }
     }
 
-    const asset = await prisma.mediaAsset.create({
-      data: {
-        filename: file.name,
-        altText: altText || undefined,
-        mimeType: detectedMimeType,
-        size: file.size,
-        data: buffer,
-        ...(productId && {
-          productMedia: {
-            create: {
-              productId,
-              position: 0,
-            },
-          },
-        }),
-      },
+    const asset = await getMediaStorageAdapter().put({
+      filename: file.name,
+      altText,
+      mimeType: detectedMimeType,
+      size: file.size,
+      buffer,
+      productId,
     })
 
-    // Return asset shape with a URL the frontend can use to display the image
     return ok({
       id: asset.id,
-      url: `/api/media/${asset.id}`,
+      url: asset.url,
       filename: asset.filename,
       altText: asset.altText,
       mimeType: asset.mimeType,
       size: asset.size,
       createdAt: asset.createdAt,
-      linkedProducts: productId ? 1 : 0,
+      linkedProducts: asset.linkedProducts,
     }, 201)
   } catch (e) {
     console.error('[POST /api/media/upload]', e)
