@@ -1,0 +1,80 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { buildSecurityHeaders } from './security-headers'
+
+describe('security headers', () => {
+  const originalEnv = { ...process.env }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    process.env = { ...originalEnv }
+  })
+
+  it('sets baseline hardening headers', () => {
+    const headers = buildSecurityHeaders({ environment: 'production', cspMode: 'off' })
+
+    expect(headers.get('X-Frame-Options')).toBe('DENY')
+    expect(headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin')
+    expect(headers.get('Permissions-Policy')).toContain('camera=()')
+  })
+
+  it('adds HSTS only in production', () => {
+    expect(
+      buildSecurityHeaders({ environment: 'production', cspMode: 'off' }).get('Strict-Transport-Security')
+    ).toBe('max-age=31536000; includeSubDomains')
+
+    expect(
+      buildSecurityHeaders({ environment: 'development', cspMode: 'off' }).get('Strict-Transport-Security')
+    ).toBeNull()
+  })
+
+  it('uses report-only CSP by default in production', () => {
+    const headers = buildSecurityHeaders({ environment: 'production' })
+
+    expect(headers.get('Content-Security-Policy')).toBeNull()
+    expect(headers.get('Content-Security-Policy-Report-Only')).toContain("default-src 'self'")
+  })
+
+  it('can enforce CSP when explicitly configured', () => {
+    const headers = buildSecurityHeaders({ environment: 'production', cspMode: 'enforce' })
+
+    expect(headers.get('Content-Security-Policy')).toContain("default-src 'self'")
+    expect(headers.get('Content-Security-Policy-Report-Only')).toBeNull()
+  })
+
+  it('can disable CSP explicitly', () => {
+    const headers = buildSecurityHeaders({ environment: 'production', cspMode: 'off' })
+
+    expect(headers.get('Content-Security-Policy')).toBeNull()
+    expect(headers.get('Content-Security-Policy-Report-Only')).toBeNull()
+  })
+
+  it('includes Stripe origins required by checkout', () => {
+    const csp = buildSecurityHeaders({ environment: 'production' }).get('Content-Security-Policy-Report-Only')
+
+    expect(csp).toContain('https://js.stripe.com')
+    expect(csp).toContain('https://api.stripe.com')
+    expect(csp).toContain('https://*.stripe.com')
+    expect(csp).toContain('https://hooks.stripe.com')
+  })
+
+  it('supports explicit media and analytics origins', () => {
+    const csp = buildSecurityHeaders({
+      environment: 'production',
+      mediaOrigins: ['https://media.example.com'],
+      analyticsOrigins: ['https://analytics.example.com'],
+    }).get('Content-Security-Policy-Report-Only')
+
+    expect(csp).toContain('https://media.example.com')
+    expect(csp).toContain('https://analytics.example.com')
+  })
+
+  it('can disable all security headers for emergency rollback', () => {
+    vi.stubEnv('SECURITY_HEADERS_ENABLED', 'false')
+
+    const headers = buildSecurityHeaders({ environment: 'production' })
+
+    expect(Array.from(headers.entries())).toEqual([])
+  })
+})
