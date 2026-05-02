@@ -62,7 +62,9 @@ async function seedPaidOrder(input: {
 }) {
   const quantity = input.quantity ?? 2
   const price = input.price ?? 50
+  const priceCents = Math.round(price * 100)
   const total = Number((quantity * price).toFixed(2))
+  const totalCents = quantity * priceCents
 
   const product = await prisma.product.create({
     data: {
@@ -74,6 +76,7 @@ async function seedPaidOrder(input: {
           title: 'Default',
           sku: `REFUND-${input.key}`,
           price,
+          priceCents,
           inventory: input.inventory ?? 3,
         },
       },
@@ -89,7 +92,9 @@ async function seedPaidOrder(input: {
       paymentStatus: 'PAID',
       fulfillmentStatus: 'FULFILLED',
       subtotal: total,
+      subtotalCents: totalCents,
       total,
+      totalCents,
       currency: 'USD',
       channel: 'integration-test',
       items: {
@@ -100,14 +105,17 @@ async function seedPaidOrder(input: {
           variantTitle: variant.title,
           sku: variant.sku,
           price,
+          priceCents,
           quantity,
           total,
+          totalCents,
         },
       },
       payments: {
         create: {
           provider: 'stripe',
           amount: total,
+          amountCents: totalCents,
           currency: 'USD',
           status: 'PAID',
           stripePaymentIntentId: `pi_refund_${input.key}`,
