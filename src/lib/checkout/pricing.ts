@@ -149,12 +149,9 @@ const DEFAULT_SHIPPING_RATES: CheckoutPricingShippingRates = {
   internationalCents: 1999,
 }
 
-const DEFAULT_TAX_RULES: CheckoutPricingTaxRule[] = [
-  { countryCode: 'US', provinceCode: 'CA', rate: 0.0825, priority: 10, isActive: true },
-  { countryCode: 'US', provinceCode: 'NY', rate: 0.08875, priority: 10, isActive: true },
-  { countryCode: 'US', rate: 0.07, priority: 100, isActive: true },
-  { countryCode: 'CA', rate: 0.05, priority: 100, isActive: true },
-]
+function allowCheckoutFallbackDefaults() {
+  return process.env.NODE_ENV !== 'production' || process.env.CHECKOUT_ALLOW_DEV_FALLBACKS === 'true'
+}
 
 function normalizeCountry(value?: string | null) {
   const normalized = String(value || '')
@@ -278,7 +275,7 @@ export function calculateShipping(input: {
   shippingThresholdCents?: number | null
   shippingAddress?: CheckoutPricingAddress
   storeCountry?: string | null
-  shippingRates: CheckoutPricingShippingRates
+  shippingRates?: CheckoutPricingShippingRates | null
   shippingZones?: CheckoutPricingShippingZone[]
   selectedRateId?: string
 }): CheckoutPricingShippingDecision {
@@ -396,6 +393,17 @@ export function calculateShipping(input: {
     }
   }
 
+  if (!input.shippingRates) {
+    return {
+      source: 'none',
+      amountCents: 0,
+      destinationCountry,
+      destinationProvince,
+      availableRates: [],
+      warning: 'No configured shipping rate matched the destination.',
+    }
+  }
+
   const originCountry = normalizeCountry(input.storeCountry)
   const isInternational = destinationCountry && originCountry && destinationCountry !== originCountry
   const fallbackAmountCents = isInternational ? input.shippingRates.internationalCents : input.shippingRates.domesticCents
@@ -412,7 +420,7 @@ export function calculateShipping(input: {
         method: fallbackAmountCents <= 0 ? 'FREE' : 'FLAT',
       },
     ],
-    warning: 'No configured shipping rate matched the destination. Using fallback store rate.',
+    warning: 'No configured shipping rate matched the destination. Using explicit fallback store rate.',
   }
 }
 
@@ -437,7 +445,7 @@ export function calculateTax(input: {
       input.taxSettings.taxShipping !== undefined ||
       input.taxSettings.pricesIncludeTax !== undefined)
   const strategy = hasTaxSettings ? input.taxSettings?.strategy || 'NONE' : null
-  const taxEnabled = hasTaxSettings ? Boolean(input.taxSettings?.enabled) : true
+  const taxEnabled = hasTaxSettings ? Boolean(input.taxSettings?.enabled) : false
   const shouldTaxShipping = hasTaxSettings ? Boolean(input.taxSettings?.taxShipping) : false
   const taxableAmountCents = taxableSubtotalCents + (shouldTaxShipping ? shippingAmountCents : 0)
 
@@ -454,7 +462,7 @@ export function calculateTax(input: {
     }
   }
 
-  if (hasTaxSettings && (!taxEnabled || strategy === 'NONE')) {
+  if (!taxEnabled || strategy === 'NONE') {
     return {
       source: 'none',
       rate: 0,
@@ -467,7 +475,7 @@ export function calculateTax(input: {
     }
   }
 
-  if (hasTaxSettings && strategy === 'MANUAL') {
+  if (strategy === 'MANUAL') {
     const rateBps = Math.max(0, Math.round(Number(input.taxSettings?.defaultTaxRateBps || 0)))
     const rate = rateBps / 10_000
     const pricesIncludeTax = Boolean(input.taxSettings?.pricesIncludeTax)
@@ -538,7 +546,7 @@ export function calculateTax(input: {
     }
   }
 
-  if (input.taxRates) {
+  if (input.taxRates && allowCheckoutFallbackDefaults()) {
     const originCountry = normalizeCountry(input.storeCountry)
     const isInternational = destinationCountry && originCountry && destinationCountry !== originCountry
     const rate = isInternational ? Number(input.taxRates.international) : Number(input.taxRates.domestic)
@@ -550,41 +558,7 @@ export function calculateTax(input: {
       destinationCountry,
       destinationProvince,
       taxableAmountCents,
-      label: 'Fallback tax rate',
-    }
-  }
-
-  const matchedDefaultRules = DEFAULT_TAX_RULES
-    .filter((rule) => rule.isActive !== false)
-    .filter((rule) => getCountryCode(rule) === destinationCountry)
-    .filter((rule) => {
-      const province = getProvinceCode(rule)
-      return !province || province === destinationProvince
-    })
-    .sort((left, right) => {
-      const leftPriority = Number(left.priority ?? 100)
-      const rightPriority = Number(right.priority ?? 100)
-      if (leftPriority !== rightPriority) return leftPriority - rightPriority
-
-      const leftSpecificity = getProvinceCode(left) ? 1 : 0
-      const rightSpecificity = getProvinceCode(right) ? 1 : 0
-      if (leftSpecificity !== rightSpecificity) return rightSpecificity - leftSpecificity
-
-      return String(left.name || '').localeCompare(String(right.name || ''))
-    })
-
-  const selectedDefaultRule = matchedDefaultRules[0]
-  if (selectedDefaultRule) {
-    const rate = Number(selectedDefaultRule.rate)
-    return {
-      source: 'fallback',
-      rate,
-      rateBps: Math.round(rate * 10_000),
-      amountCents: Math.round(taxableAmountCents * rate),
-      destinationCountry,
-      destinationProvince,
-      taxableAmountCents,
-      label: 'Default tax table',
+      label: 'Development fallback tax rate',
     }
   }
 
@@ -606,7 +580,7 @@ export function buildCheckoutPricingWithDecisionsCents(
     discount?: CheckoutPricingDiscount | null
     shippingAddress?: CheckoutPricingAddress
     storeCountry?: string | null
-    shippingRates?: CheckoutPricingShippingRates
+    shippingRates?: CheckoutPricingShippingRates | null
     shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
@@ -621,7 +595,7 @@ export function buildCheckoutPricingWithDecisionsCents(
     assertIntegerCents(item.priceCents, 'Line price')
     return sum + item.priceCents * Number(item.quantity)
   }, 0)
-  const shippingRates = options.shippingRates ?? DEFAULT_SHIPPING_RATES
+  const shippingRates = options.shippingRates === undefined && allowCheckoutFallbackDefaults() ? DEFAULT_SHIPPING_RATES : options.shippingRates
   const shippingDecision = calculateShipping({
     subtotalCents,
     shippingThresholdCents,
@@ -721,7 +695,7 @@ export function buildCheckoutPricingWithDecisions(
     discount?: CheckoutPricingDiscount | null
     shippingAddress?: CheckoutPricingAddress
     storeCountry?: string | null
-    shippingRates?: CheckoutPricingShippingRates
+    shippingRates?: CheckoutPricingShippingRates | null
     shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
@@ -742,7 +716,7 @@ export function buildCheckoutPricing(
     discount?: CheckoutPricingDiscount | null
     shippingAddress?: CheckoutPricingAddress
     storeCountry?: string | null
-    shippingRates?: CheckoutPricingShippingRates
+    shippingRates?: CheckoutPricingShippingRates | null
     shippingZones?: CheckoutPricingShippingZone[]
     taxRates?: CheckoutPricingTaxRates
     taxRules?: CheckoutPricingTaxRule[]
