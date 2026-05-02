@@ -12,6 +12,17 @@ interface Params {
   params: Promise<{ id: string }>
 }
 
+type EmailDeliverySnapshot = Awaited<ReturnType<typeof getEmailDeliveryById>>
+
+async function getEmailDeliverySnapshot(id: string): Promise<EmailDeliverySnapshot | null> {
+  try {
+    return await getEmailDeliveryById(id)
+  } catch (error) {
+    console.error('[POST /api/email-deliveries/[id]/resend] Failed to load audit snapshot', error)
+    return null
+  }
+}
+
 export async function POST(req: Request, { params }: Params) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
@@ -20,7 +31,7 @@ export async function POST(req: Request, { params }: Params) {
   const actor = auditActorFromUser(auth.user)
 
   try {
-    const before = await getEmailDeliveryById(id)
+    const before = await getEmailDeliverySnapshot(id)
     const result = await resendEmailDelivery(id)
 
     if (!result.success) {
