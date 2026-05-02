@@ -17,8 +17,8 @@ export type AuditLogInput = {
     id: string
   }
   summary: string
-  diff?: Prisma.InputJsonValue | null
-  snapshot?: Prisma.InputJsonValue | null
+  diff?: unknown
+  snapshot?: unknown
   redactions?: string[]
   occurredAt?: Date
 }
@@ -38,7 +38,7 @@ export function auditActorFromUser(user: {
   role: UserRole | string
 }): AuditActor {
   return {
-    actorType: user.role === 'VIEWER' ? 'STAFF' : 'STAFF',
+    actorType: 'STAFF',
     actorId: user.id,
     actorEmail: user.email,
     actorRole: user.role,
@@ -71,8 +71,8 @@ export function redactAuditPayload<T>(value: T): T {
 export async function recordAuditLog(input: AuditLogInput) {
   const actor = input.actor ?? { actorType: 'SYSTEM' as const }
   const occurredAt = input.occurredAt ?? new Date()
-  const snapshot = redactAuditPayload(input.snapshot ?? null)
-  const diff = redactAuditPayload(input.diff ?? null)
+  const snapshot = redactAuditPayload(input.snapshot ?? null) as Prisma.InputJsonValue
+  const diff = redactAuditPayload(input.diff ?? null) as Prisma.InputJsonValue
 
   return auditEventClient().create({
     data: {
