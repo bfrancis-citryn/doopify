@@ -25,7 +25,46 @@ function parseOrigins(value: string | undefined) {
   return value
     .split(',')
     .map((origin) => origin.trim())
-    .filter(Boolean)
+    .map(toOriginSource)
+    .filter(Boolean) as string[]
+}
+
+function toOriginSource(value: string | undefined) {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  if (trimmed === 'https:' || trimmed === 'http:' || trimmed === 'data:' || trimmed === 'blob:') {
+    return trimmed
+  }
+
+  if (trimmed.startsWith('*.')) {
+    return `https://${trimmed}`
+  }
+
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`)
+    return url.origin
+  } catch {
+    return trimmed
+  }
+}
+
+function resolveMediaOrigins(explicitOrigins?: string[]) {
+  if (explicitOrigins) {
+    return unique(explicitOrigins.map(toOriginSource).filter(Boolean) as string[])
+  }
+
+  const configuredOrigins = [
+    ...parseOrigins(process.env.CSP_MEDIA_ORIGINS),
+    ...parseOrigins(process.env.MEDIA_PUBLIC_BASE_URL),
+  ]
+
+  if (configuredOrigins.length > 0) {
+    return unique(configuredOrigins)
+  }
+
+  return DEFAULT_MEDIA_ORIGINS
 }
 
 function resolveEnvironment(value = process.env.NODE_ENV): RuntimeEnvironment {
@@ -108,7 +147,7 @@ export function buildSecurityHeaders(options: SecurityHeaderOptions = {}) {
   if (cspMode !== 'off') {
     const csp = buildCsp({
       environment,
-      mediaOrigins: options.mediaOrigins ?? parseOrigins(process.env.CSP_MEDIA_ORIGINS) ?? DEFAULT_MEDIA_ORIGINS,
+      mediaOrigins: resolveMediaOrigins(options.mediaOrigins),
       analyticsOrigins: options.analyticsOrigins ?? parseOrigins(process.env.CSP_ANALYTICS_ORIGINS),
     })
     headers.set(
