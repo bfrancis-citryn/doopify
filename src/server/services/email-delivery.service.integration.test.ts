@@ -61,11 +61,11 @@ async function seedOrderForEmail(orderKey: string, recipientEmail: string) {
     data: {
       email: recipientEmail,
       paymentStatus: 'PAID',
-      subtotal: 50,
-      shippingAmount: 0,
-      taxAmount: 0,
-      discountAmount: 0,
-      total: 50,
+      subtotalCents: 5000,
+      shippingAmountCents: 0,
+      taxAmountCents: 0,
+      discountAmountCents: 0,
+      totalCents: 5000,
       currency: 'USD',
       items: {
         create: {
@@ -74,10 +74,8 @@ async function seedOrderForEmail(orderKey: string, recipientEmail: string) {
           title: product.title,
           variantTitle: product.variants[0].title,
           sku: product.variants[0].sku,
-          price: 25,
           priceCents: 2500,
           quantity: 2,
-          total: 50,
           totalCents: 5000,
         },
       },
@@ -252,4 +250,3 @@ runIntegration('email delivery integration', () => {
     expect(await prisma.emailDelivery.count()).toBe(3)
   })
 })
-
