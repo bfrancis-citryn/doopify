@@ -19,7 +19,142 @@ const EMPTY_ADDRESS = {
   phone: '',
 };
 
-function loadStripeJs() {
+type AddressForm = typeof EMPTY_ADDRESS
+
+type AddressPayload = {
+  firstName: string
+  lastName: string
+  company?: string
+  address1: string
+  address2?: string
+  city: string
+  province?: string
+  postalCode: string
+  country: string
+  phone?: string
+}
+
+type CartItem = {
+  variantId: string
+  productId?: string
+  title: string
+  variantTitle?: string
+  quantity: number
+  price: number
+  image?: string
+}
+
+type ShippingQuote = {
+  id: string
+  displayName: string
+  source?: string
+  carrier?: string
+  service?: string
+  amount: number
+  currency?: string
+  estimatedDays?: number | null
+  amountCents?: number
+}
+
+type CheckoutStoreSettings = {
+  name?: string
+  currency?: string
+  logoUrl?: string
+  checkoutLogoUrl?: string
+  buttonStyle?: 'solid' | 'outline' | 'soft' | string
+  buttonTextTransform?: 'uppercase' | 'none' | string
+  buttonRadius?: 'none' | 'sm' | 'md' | 'lg' | 'full' | string
+  accentColor?: string
+  primaryColor?: string
+}
+
+type DiscountApplication = {
+  code?: string
+}
+
+type CheckoutData = {
+  clientSecret: string
+  currency?: string
+  subtotal: number
+  shippingAmount?: number
+  taxAmount: number
+  total: number
+  discountAmount: number
+  discountApplications?: DiscountApplication[]
+  selectedShippingRate?: ShippingQuote
+  availableShippingRates?: ShippingQuote[]
+}
+
+type RecoverCheckoutData = {
+  email?: string
+  shippingAddress?: Partial<AddressForm>
+  billingAddress?: Partial<AddressForm>
+  items?: CartItem[]
+}
+
+type ApiSuccess<TData> = {
+  success: true
+  data: TData
+}
+
+type ApiFailure = {
+  success: false
+  error?: string
+}
+
+type ApiResponse<TData> = ApiSuccess<TData> | ApiFailure
+
+type StripePaymentResult = {
+  error?: { message?: string } | null
+  paymentIntent?: { id?: string } | null
+}
+
+type StripePaymentElement = {
+  mount: (selector: string) => void
+  unmount: () => void
+}
+
+type StripeElements = {
+  create: (type: 'payment', options: { layout: 'accordion' }) => StripePaymentElement
+}
+
+type StripeClient = {
+  elements: (options: {
+    clientSecret: string
+    appearance: {
+      theme: 'night'
+      variables: Record<string, string>
+    }
+  }) => StripeElements
+  confirmPayment: (options: {
+    elements: StripeElements
+    clientSecret: string
+    confirmParams: { return_url: string }
+    redirect: 'if_required'
+  }) => Promise<StripePaymentResult>
+}
+
+type StripeConstructor = (publishableKey: string) => StripeClient | null
+
+declare global {
+  interface Window {
+    Stripe?: StripeConstructor
+  }
+}
+
+type CartContextValue = {
+  items: CartItem[]
+  total: number
+  replaceItems: (items: CartItem[]) => void
+}
+
+type CheckoutClientPageProps = {
+  publishableKey: string
+  store: CheckoutStoreSettings | null
+  recoveryToken: string
+}
+
+function loadStripeJs(): Promise<StripeConstructor> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Stripe.js can only load in the browser'))
   }
@@ -31,7 +166,14 @@ function loadStripeJs() {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-stripe-js="true"]')
     if (existing) {
-      existing.addEventListener('load', () => resolve(window.Stripe))
+      existing.addEventListener('load', () => {
+        if (window.Stripe) {
+          resolve(window.Stripe)
+          return
+        }
+
+        reject(new Error('Failed to load Stripe.js'))
+      })
       existing.addEventListener('error', () => reject(new Error('Failed to load Stripe.js')))
       return
     }
@@ -40,20 +182,35 @@ function loadStripeJs() {
     script.src = 'https://js.stripe.com/v3/'
     script.async = true
     script.dataset.stripeJs = 'true'
-    script.onload = () => resolve(window.Stripe)
+    script.onload = () => {
+      if (window.Stripe) {
+        resolve(window.Stripe)
+        return
+      }
+
+      reject(new Error('Failed to load Stripe.js'))
+    }
     script.onerror = () => reject(new Error('Failed to load Stripe.js'))
     document.head.appendChild(script)
   })
 }
 
-function formatMoney(amount, currency = 'USD') {
+function getApiErrorMessage<TData>(payload: ApiResponse<TData> | null, fallback: string): string {
+  if (payload && !payload.success && payload.error) {
+    return payload.error
+  }
+
+  return fallback
+}
+
+function formatMoney(amount: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
   }).format(amount || 0)
 }
 
-function buildAddressPayload(address) {
+function buildAddressPayload(address: AddressForm): AddressPayload {
   return {
     firstName: address.firstName.trim(),
     lastName: address.lastName.trim(),
@@ -68,15 +225,15 @@ function buildAddressPayload(address) {
   }
 }
 
-function buildCheckoutItemsPayload(items) {
+function buildCheckoutItemsPayload(items: CartItem[]): Array<{ variantId: string; quantity: number }> {
   return items.map((item) => ({
     variantId: item.variantId,
     quantity: item.quantity,
   }));
 }
 
-function isAddressComplete(address) {
-  return (
+function isAddressComplete(address: AddressForm): boolean {
+  return Boolean(
     address.firstName.trim() &&
     address.lastName.trim() &&
     address.address1.trim() &&
@@ -86,11 +243,11 @@ function isAddressComplete(address) {
   )
 }
 
-function resolveCheckoutLogo(store) {
+function resolveCheckoutLogo(store: CheckoutStoreSettings | null): string {
   return store?.checkoutLogoUrl || store?.logoUrl || '';
 }
 
-function resolveButtonPresentation(store) {
+function resolveButtonPresentation(store: CheckoutStoreSettings | null) {
   const style = store?.buttonStyle || 'solid';
   const transform = store?.buttonTextTransform === 'uppercase' ? 'uppercase' : 'none';
   const radius = (() => {
@@ -134,14 +291,14 @@ function resolveButtonPresentation(store) {
   return { transform, radius, primaryStyle };
 }
 
-export default function CheckoutClientPage({ publishableKey, store, recoveryToken }) {
+export default function CheckoutClientPage({ publishableKey, store, recoveryToken }: CheckoutClientPageProps) {
   const router = useRouter();
-  const { items, total: cartSubtotal, replaceItems } = useCart();
+  const { items, total: cartSubtotal, replaceItems } = useCart() as CartContextValue;
   const [email, setEmail] = useState('');
   const [shippingAddress, setShippingAddress] = useState(EMPTY_ADDRESS);
   const [billingAddress, setBillingAddress] = useState(EMPTY_ADDRESS);
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
-  const [checkout, setCheckout] = useState(null);
+  const [checkout, setCheckout] = useState<CheckoutData | null>(null);
   const [creatingIntent, setCreatingIntent] = useState(false);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [error, setError] = useState('');
@@ -150,15 +307,15 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
   const [showDiscount, setShowDiscount] = useState(false);
   const [discountError, setDiscountError] = useState('');
   const [recoveryNotice, setRecoveryNotice] = useState('');
-  const [shippingQuotes, setShippingQuotes] = useState([]);
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
   const [selectedShippingQuoteId, setSelectedShippingQuoteId] = useState('');
   const [shippingRatesLoading, setShippingRatesLoading] = useState(false);
   const [shippingRatesError, setShippingRatesError] = useState('');
 
-  const stripeRef = useRef(null);
-  const elementsRef = useRef(null);
-  const paymentElementRef = useRef(null);
-  const lastRecoveredTokenRef = useRef(null);
+  const stripeRef = useRef<StripeClient | null>(null);
+  const elementsRef = useRef<StripeElements | null>(null);
+  const paymentElementRef = useRef<StripePaymentElement | null>(null);
+  const lastRecoveredTokenRef = useRef<string | null>(null);
 
   const currency = checkout?.currency || store?.currency || 'USD';
   const checkoutLogo = resolveCheckoutLogo(store);
@@ -198,9 +355,9 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         const response = await fetch(`/api/checkout/recover?token=${encodeURIComponent(recoveryToken)}`, {
           cache: 'no-store',
         });
-        const payload = await response.json().catch(() => null);
+        const payload = (await response.json().catch(() => null)) as ApiResponse<RecoverCheckoutData> | null;
         if (!response.ok || !payload?.success) {
-          throw new Error(payload?.error || 'Checkout recovery link is invalid or expired');
+          throw new Error(getApiErrorMessage(payload, 'Checkout recovery link is invalid or expired'));
         }
 
         if (isCancelled) return;
@@ -255,7 +412,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setShippingRatesError('');
   }
 
-  function updateShippingField(field, value) {
+  function updateShippingField(field: keyof AddressForm, value: string) {
     if (checkout) resetPaymentStep();
     if (shippingQuotes.length || selectedShippingQuoteId || shippingRatesError) {
       resetShippingSelection();
@@ -263,7 +420,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setShippingAddress((current) => ({ ...current, [field]: value }));
   }
 
-  function updateBillingField(field, value) {
+  function updateBillingField(field: keyof AddressForm, value: string) {
     if (checkout) resetPaymentStep();
     setBillingAddress((current) => ({ ...current, [field]: value }));
   }
@@ -296,9 +453,9 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         }),
       });
 
-      const payload = await response.json().catch(() => null);
+      const payload = (await response.json().catch(() => null)) as ApiResponse<{ quotes?: ShippingQuote[] }> | null;
       if (!response.ok || !payload?.success) {
-        throw new Error(payload?.error || 'Failed to load shipping options');
+        throw new Error(getApiErrorMessage(payload, 'Failed to load shipping options'));
       }
 
       const quotes = Array.isArray(payload?.data?.quotes) ? payload.data.quotes : [];
@@ -322,7 +479,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     }
   }
 
-  async function initializePaymentElement(clientSecret) {
+  async function initializePaymentElement(clientSecret: string) {
     const StripeConstructor = await loadStripeJs();
     if (!StripeConstructor) {
       throw new Error('Stripe.js was not available after loading')
@@ -358,7 +515,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setPaymentReady(true);
   }
 
-  async function handleCreateIntent(event) {
+  async function handleCreateIntent(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     setDiscountError('');
@@ -411,9 +568,9 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         }),
       });
 
-      const payload = await response.json().catch(() => null);
+      const payload = (await response.json().catch(() => null)) as ApiResponse<CheckoutData> | null;
       if (!response.ok || !payload?.success) {
-        throw new Error(payload?.error || 'Failed to start checkout');
+        throw new Error(getApiErrorMessage(payload, 'Failed to start checkout'));
       }
 
       setCheckout(payload.data);
@@ -442,7 +599,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     }
   }
 
-  async function handlePlaceOrder(event) {
+  async function handlePlaceOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
 

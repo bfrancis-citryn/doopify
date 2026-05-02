@@ -2,7 +2,7 @@
 
 > Runtime and CLI environment variable reference for production operations.
 >
-> Last updated: April 29, 2026
+> Last updated: May 1, 2026
 
 ## Runtime Core
 
@@ -11,8 +11,11 @@
 | `DATABASE_URL` | Yes | Primary Postgres connection string used by Prisma/runtime. |
 | `DIRECT_URL` | Recommended | Direct Postgres URL used by Prisma tooling/migrations. |
 | `JWT_SECRET` | Yes | Auth JWT signing secret. Use high-entropy value. |
+| `ENCRYPTION_KEY` | Strongly recommended (required in production) | Secret used by integration secret encryption helpers. |
 | `NEXT_PUBLIC_STORE_URL` | Yes | Public base URL used for setup/deployment checks and links. |
 | `WEBHOOK_RETRY_SECRET` | Yes | Auth secret for `POST /api/webhook-retries/run`. |
+| `JOB_RUNNER_SECRET` | Optional override | Auth secret for `POST /api/jobs/run` (falls back to `WEBHOOK_RETRY_SECRET` when unset). |
+| `ABANDONED_CHECKOUT_SECRET` | Optional override | Auth secret for `POST /api/abandoned-checkouts/send-due` (falls back to `WEBHOOK_RETRY_SECRET` when unset). |
 
 ## Stripe
 
@@ -28,6 +31,24 @@
 | --- | --- | --- |
 | `RESEND_API_KEY` | Optional (required for live sends) | Enables live transactional email sends. |
 | `RESEND_WEBHOOK_SECRET` | Required when email provider webhooks enabled | Svix signing secret for `/api/webhooks/email-provider`. |
+
+## SMTP Email Provider (Alternative)
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SMTP_HOST` | Required when SMTP is used | SMTP host for runtime provider connection fallback. |
+| `SMTP_PORT` | Required when SMTP is used | SMTP port for runtime provider connection fallback. |
+| `SMTP_SECURE` | Required when SMTP is used | `true`/`false` secure transport toggle for SMTP. |
+| `SMTP_USERNAME` | Required when SMTP is used | SMTP username. |
+| `SMTP_PASSWORD` | Required when SMTP is used | SMTP password. |
+| `SMTP_FROM_EMAIL` | Optional | Default sender used by SMTP delivery wiring. |
+
+## Shipping Provider Credentials
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SHIPPO_API_KEY` | Required when Shippo env fallback is used | Shippo API key for shipping rate/provider fallback paths. |
+| `EASYPOST_API_KEY` | Required when EasyPost env fallback is used | EasyPost API key for shipping rate/provider fallback paths. |
 
 ## Shipping Provider Webhooks
 
@@ -63,5 +84,6 @@
 
 - Keep database URLs in `.env`.
 - Keep app/runtime secrets in `.env.local`.
+- Keep `.env` and `.env.local` local-only; use host-managed secrets for production.
 - Never commit real credentials.
 - Rotate production secrets after incident response or compromise suspicion.

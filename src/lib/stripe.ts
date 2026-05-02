@@ -1,6 +1,7 @@
-import crypto from 'node:crypto'
+import { Stripe } from 'stripe'
 
 import { env } from '@/lib/env'
+import { getStripeSdkClient } from '@/lib/stripe-client'
 
 export type StripePaymentIntent = {
   id: string
@@ -23,61 +24,12 @@ export type StripeWebhookEvent<T = unknown> = {
   }
 }
 
-function normalizeSecretKey(value: string | null | undefined) {
-  if (!value) return null
-  const normalized = value.trim()
-  return normalized || null
-}
-
-function getStripeSecretKey(secretKeyOverride?: string | null) {
-  const override = normalizeSecretKey(secretKeyOverride)
-  if (override) return override
-
-  if (!env.STRIPE_SECRET_KEY) {
-    throw new Error('STRIPE_SECRET_KEY is not configured')
-  }
-
-  return env.STRIPE_SECRET_KEY
-}
-
 export function getStripePublishableKey() {
   if (!env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
     throw new Error('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not configured')
   }
 
   return env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-}
-
-async function stripeRequest<T>(
-  path: string,
-  body: URLSearchParams,
-  options: { idempotencyKey?: string; secretKey?: string | null } = {}
-) {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${getStripeSecretKey(options.secretKey)}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  }
-
-  if (options.idempotencyKey) {
-    headers['Idempotency-Key'] = options.idempotencyKey
-  }
-
-  const response = await fetch(`https://api.stripe.com/v1${path}`, {
-    method: 'POST',
-    headers,
-    body,
-    cache: 'no-store',
-  })
-
-  const payload = await response.json()
-
-  if (!response.ok) {
-    const message =
-      payload?.error?.message || payload?.error?.code || `Stripe request failed with status ${response.status}`
-    throw new Error(message)
-  }
-
-  return payload as T
 }
 
 export async function createStripePaymentIntent(input: {
@@ -87,25 +39,44 @@ export async function createStripePaymentIntent(input: {
   metadata?: Record<string, string | undefined>
   secretKey?: string | null
 }) {
-  const body = new URLSearchParams()
-  body.set('amount', String(input.amount))
-  body.set('currency', input.currency.toLowerCase())
-  body.set('automatic_payment_methods[enabled]', 'true')
-  body.set('automatic_payment_methods[allow_redirects]', 'never')
+  const stripeClient = getStripeSdkClient(input.secretKey)
+  const metadata = Object.fromEntries(
+    Object.entries(input.metadata ?? {}).filter(([, value]) => Boolean(value))
+  ) as Record<string, string>
 
-  if (input.email) {
-    body.set('receipt_email', input.email)
+  try {
+    const paymentIntent = await stripeClient.paymentIntents.create({
+      amount: input.amount,
+      currency: input.currency.toLowerCase(),
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never',
+      },
+      ...(input.email ? { receipt_email: input.email } : {}),
+      ...(Object.keys(metadata).length ? { metadata } : {}),
+    })
+
+    return {
+      id: paymentIntent.id,
+      client_secret: paymentIntent.client_secret,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      latest_charge:
+        typeof paymentIntent.latest_charge === 'string' || paymentIntent.latest_charge == null
+          ? paymentIntent.latest_charge
+          : { id: paymentIntent.latest_charge.id },
+      status: paymentIntent.status,
+      metadata: paymentIntent.metadata as Record<string, string>,
+      last_payment_error: paymentIntent.last_payment_error
+        ? {
+            message: paymentIntent.last_payment_error.message,
+          }
+        : null,
+    } satisfies StripePaymentIntent
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Stripe request failed'
+    throw new Error(message)
   }
-
-  for (const [key, value] of Object.entries(input.metadata ?? {})) {
-    if (value) {
-      body.set(`metadata[${key}]`, value)
-    }
-  }
-
-  return stripeRequest<StripePaymentIntent>('/payment_intents', body, {
-    secretKey: input.secretKey,
-  })
 }
 
 export type StripeRefund = {
@@ -126,59 +97,66 @@ export async function createStripeRefund(input: {
   idempotencyKey?: string
   secretKey?: string | null
 }) {
-  const body = new URLSearchParams()
+  const stripeClient = getStripeSdkClient(input.secretKey)
+  const createPayload: {
+    charge?: string
+    payment_intent?: string
+    amount?: number
+    reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
+  } = {}
 
   if (input.chargeId) {
-    body.set('charge', input.chargeId)
+    createPayload.charge = input.chargeId
   } else if (input.paymentIntentId) {
-    body.set('payment_intent', input.paymentIntentId)
+    createPayload.payment_intent = input.paymentIntentId
   } else {
     throw new Error('createStripeRefund requires chargeId or paymentIntentId')
   }
 
   if (input.amount != null) {
-    body.set('amount', String(Math.round(input.amount)))
+    createPayload.amount = Math.round(input.amount)
   }
 
   if (input.reason) {
-    body.set('reason', input.reason)
+    createPayload.reason = input.reason
   }
 
-  return stripeRequest<StripeRefund>('/refunds', body, {
-    idempotencyKey: input.idempotencyKey,
-    secretKey: input.secretKey,
-  })
+  try {
+    const refund = await stripeClient.refunds.create(
+      createPayload,
+      input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
+    )
+
+    return {
+      id: refund.id,
+      amount: refund.amount,
+      currency: refund.currency,
+      status: refund.status ?? 'unknown',
+      charge: typeof refund.charge === 'string' ? refund.charge : refund.charge?.id ?? null,
+      payment_intent:
+        typeof refund.payment_intent === 'string'
+          ? refund.payment_intent
+          : refund.payment_intent?.id ?? null,
+      reason: refund.reason,
+    } satisfies StripeRefund
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Stripe request failed'
+    throw new Error(message)
+  }
 }
 
 export async function getStripeEvent(eventId: string, secretKey?: string | null) {
-  const response = await fetch(`https://api.stripe.com/v1/events/${encodeURIComponent(eventId)}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${getStripeSecretKey(secretKey)}`,
-    },
-    cache: 'no-store',
-  })
-
-  const payload = await response.json()
-  if (!response.ok) {
-    const message =
-      payload?.error?.message || payload?.error?.code || `Stripe request failed with status ${response.status}`
+  const stripeClient = getStripeSdkClient(secretKey)
+  try {
+    const event = await stripeClient.events.retrieve(eventId)
+    return event as StripeWebhookEvent<StripePaymentIntent>
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Stripe request failed'
     throw new Error(message)
   }
-
-  return payload as StripeWebhookEvent<StripePaymentIntent>
 }
 
-function secureCompare(left: string, right: string) {
-  const leftBuffer = Buffer.from(left, 'utf8')
-  const rightBuffer = Buffer.from(right, 'utf8')
-
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false
-  }
-
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer)
-}
+const webhookVerificationClient: Stripe = getStripeSdkClient('sk_test_webhook_signature_only')
 
 export function verifyStripeWebhookSignature(
   payload: string,
@@ -194,29 +172,31 @@ export function verifyStripeWebhookSignature(
     throw new Error('Missing Stripe-Signature header')
   }
 
-  const pairs = signatureHeader.split(',').map((segment) => segment.trim())
-  const timestamp = pairs.find((pair) => pair.startsWith('t='))?.slice(2)
-  const signatures = pairs
-    .filter((pair) => pair.startsWith('v1='))
-    .map((pair) => pair.slice(3))
-    .filter(Boolean)
+  try {
+    webhookVerificationClient.webhooks.constructEvent(
+      payload,
+      signatureHeader,
+      endpointSecret,
+      toleranceSeconds
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Webhook signature verification failed'
 
-  if (!timestamp || !signatures.length) {
-    throw new Error('Malformed Stripe-Signature header')
-  }
+    if (
+      message.includes('Unable to extract timestamp and signatures from header') ||
+      message.includes('No signatures found with expected scheme')
+    ) {
+      throw new Error('Malformed Stripe-Signature header')
+    }
 
-  const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp))
-  if (!Number.isFinite(age) || age > toleranceSeconds) {
-    throw new Error('Stripe webhook timestamp is outside the allowed tolerance')
-  }
+    if (message.includes('Timestamp outside the tolerance zone')) {
+      throw new Error('Stripe webhook timestamp is outside the allowed tolerance')
+    }
 
-  const expectedSignature = crypto
-    .createHmac('sha256', endpointSecret)
-    .update(`${timestamp}.${payload}`, 'utf8')
-    .digest('hex')
+    if (message.includes('No signatures found matching the expected signature for payload')) {
+      throw new Error('Stripe webhook signature verification failed')
+    }
 
-  const matches = signatures.some((signature) => secureCompare(signature, expectedSignature))
-  if (!matches) {
-    throw new Error('Stripe webhook signature verification failed')
+    throw error
   }
 }

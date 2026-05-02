@@ -191,6 +191,10 @@ describe('issueRefund', () => {
     expect(mocks.prisma.refund.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: REFUND_ID }, data: expect.objectContaining({ status: 'FAILED' }) })
     )
+    expect(mocks.prisma.$transaction).not.toHaveBeenCalled()
+    expect(mocks.prisma.payment.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.order.update).not.toHaveBeenCalled()
+    expect(mocks.prisma.productVariant.update).not.toHaveBeenCalled()
   })
 
   it('throws when refund amount exceeds refundable amount', async () => {

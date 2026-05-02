@@ -6,17 +6,49 @@ import { useEffect, useState } from 'react';
 
 import { useCart } from '@/context/CartContext';
 
+type CheckoutStatus = 'processing' | 'paid' | 'failed'
+
+type CheckoutStatusResponseData = {
+  status: CheckoutStatus
+  orderNumber?: number | string | null
+  reason?: string
+}
+
+type ApiSuccess<TData> = {
+  success: true
+  data: TData
+}
+
+type ApiFailure = {
+  success: false
+  error?: string
+}
+
+type ApiResponse<TData> = ApiSuccess<TData> | ApiFailure
+
+type CartContextValue = {
+  clearCart: () => void
+}
+
+function getApiErrorMessage<TData>(payload: ApiResponse<TData> | null, fallback: string): string {
+  if (payload && !payload.success && payload.error) {
+    return payload.error
+  }
+
+  return fallback
+}
+
 export default function CheckoutSuccessClientPage() {
   const searchParams = useSearchParams();
   const paymentIntentId = searchParams.get('payment_intent');
-  const { clearCart } = useCart();
-  const [status, setStatus] = useState('processing');
-  const [orderNumber, setOrderNumber] = useState(null);
+  const { clearCart } = useCart() as CartContextValue;
+  const [status, setStatus] = useState<CheckoutStatus>('processing');
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    let timer = null;
+    let timer: number | null = null;
 
     async function poll() {
       if (!paymentIntentId) {
@@ -28,10 +60,10 @@ export default function CheckoutSuccessClientPage() {
         const response = await fetch(`/api/checkout/status?payment_intent=${encodeURIComponent(paymentIntentId)}`, {
           cache: 'no-store',
         });
-        const payload = await response.json().catch(() => null);
+        const payload = (await response.json().catch(() => null)) as ApiResponse<CheckoutStatusResponseData> | null;
 
         if (!response.ok || !payload?.success) {
-          throw new Error(payload?.error || 'Unable to fetch order status');
+          throw new Error(getApiErrorMessage(payload, 'Unable to fetch order status'));
         }
 
         if (cancelled) {
@@ -42,7 +74,7 @@ export default function CheckoutSuccessClientPage() {
         setStatus(nextStatus);
 
         if (nextStatus === 'paid') {
-          setOrderNumber(payload.data.orderNumber || null);
+          setOrderNumber(payload.data.orderNumber ? String(payload.data.orderNumber) : null);
           clearCart();
           return;
         }
