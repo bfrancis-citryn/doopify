@@ -1,4 +1,10 @@
 import { spawnSync } from 'node:child_process'
+import { config as loadEnv } from 'dotenv'
+
+// Next.js auto-loads .env / .env.local at runtime, but a plain `node` script
+// does not. Load them here so `npm run test:integration` works out of the box.
+loadEnv({ path: '.env' })
+loadEnv({ path: '.env.local', override: true })
 
 if (!process.env.DATABASE_URL_TEST) {
   console.log('Skipping integration tests: DATABASE_URL_TEST is not configured.')

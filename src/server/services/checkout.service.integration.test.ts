@@ -102,7 +102,7 @@ async function seedVariant(input: {
       name: 'Integration Store',
       email: 'orders@example.com',
       currency: 'USD',
-      shippingThreshold: 75,
+      shippingThresholdCents: 7500,
     },
   })
 
@@ -115,7 +115,7 @@ async function seedVariant(input: {
         create: {
           title: 'Default',
           sku: `SKU-${input.paymentIntentId}`,
-          price: input.price ?? 25,
+          priceCents: Math.round((input.price ?? 25) * 100),
           inventory: input.inventory,
         },
       },
@@ -139,21 +139,21 @@ async function createCheckoutSession(input: {
   title: string
   variantTitle: string
   sku: string
-  price: number
+  priceCents: number
   quantity: number
   discountApplication?: {
     discountId: string
     code?: string | null
     title: string
     method: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING' | 'BUY_X_GET_Y'
-    amount: number
+    amountCents: number
   }
   status?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'EXPIRED'
 }) {
-  const subtotal = input.price * input.quantity
-  const shippingAmount = subtotal >= 75 ? 0 : 9.99
-  const discountAmount = input.discountApplication?.amount ?? 0
-  const total = Number((subtotal + shippingAmount - discountAmount).toFixed(2))
+  const subtotalCents = input.priceCents * input.quantity
+  const shippingAmountCents = subtotalCents >= 7500 ? 0 : 999
+  const discountAmountCents = input.discountApplication?.amountCents ?? 0
+  const totalCents = subtotalCents + shippingAmountCents - discountAmountCents
 
   return prisma.checkoutSession.create({
     data: {
@@ -161,11 +161,11 @@ async function createCheckoutSession(input: {
       email: input.email,
       currency: 'USD',
       status: input.status ?? 'PENDING',
-      subtotal,
-      shippingAmount,
-      taxAmount: 0,
-      discountAmount,
-      total,
+      subtotalCents,
+      shippingAmountCents,
+      taxAmountCents: 0,
+      discountAmountCents,
+      totalCents,
       payload: {
         email: input.email,
         shippingAddress: address,
@@ -177,7 +177,7 @@ async function createCheckoutSession(input: {
             title: input.title,
             variantTitle: input.variantTitle,
             sku: input.sku,
-            price: input.price,
+            priceCents: input.priceCents,
             quantity: input.quantity,
           },
         ],
@@ -207,7 +207,7 @@ async function seedCheckout({
       name: 'Integration Store',
       email: 'orders@example.com',
       currency: 'USD',
-      shippingThreshold: 75,
+      shippingThresholdCents: 7500,
     },
   })
 
@@ -220,7 +220,7 @@ async function seedCheckout({
         create: {
           title: 'Default',
           sku: `SKU-${paymentIntentId}`,
-          price: 25,
+          priceCents: 2500,
           inventory,
         },
       },
@@ -231,8 +231,8 @@ async function seedCheckout({
   })
 
   const variant = product.variants[0]
-  const subtotal = 25 * quantity
-  const shippingAmount = subtotal >= 75 ? 0 : 9.99
+  const subtotalCents = 2500 * quantity
+  const shippingAmountCents = subtotalCents >= 7500 ? 0 : 999
   const discount = discountCode
     ? await prisma.discount.create({
         data: {
@@ -245,19 +245,19 @@ async function seedCheckout({
         },
       })
     : null
-  const discountAmount = discount ? Number((subtotal * 0.1).toFixed(2)) : 0
-  const total = Number((subtotal + shippingAmount - discountAmount).toFixed(2))
+  const discountAmountCents = discount ? Math.round(subtotalCents * 0.1) : 0
+  const totalCents = subtotalCents + shippingAmountCents - discountAmountCents
 
   await prisma.checkoutSession.create({
     data: {
       paymentIntentId,
       email: 'ada@example.com',
       currency: 'USD',
-      subtotal,
-      shippingAmount,
-      taxAmount: 0,
-      discountAmount,
-      total,
+      subtotalCents,
+      shippingAmountCents,
+      taxAmountCents: 0,
+      discountAmountCents,
+      totalCents,
       payload: {
         email: 'ada@example.com',
         shippingAddress: address,
@@ -269,7 +269,7 @@ async function seedCheckout({
             title: product.title,
             variantTitle: variant.title,
             sku: variant.sku,
-            price: variant.price,
+            priceCents: variant.priceCents,
             quantity,
           },
         ],
@@ -281,7 +281,7 @@ async function seedCheckout({
                   code: discount.code,
                   title: discount.title,
                   method: discount.method,
-                  amount: discountAmount,
+                  amountCents: discountAmountCents,
                 },
               ],
             }
@@ -294,8 +294,8 @@ async function seedCheckout({
     product,
     variant,
     discount,
-    discountAmount,
-    total,
+    discountAmountCents,
+    totalCents,
   }
 }
 
@@ -496,12 +496,12 @@ runIntegration('checkout service integration', () => {
     })
 
     expect(secondOrder.id).toBe(firstOrder.id)
-    expect(paidOrder.discountAmount).toBe(5)
-    expect(paidOrder.total).toBe(54.99)
+    expect(paidOrder.discountAmountCents).toBe(500)
+    expect(paidOrder.totalCents).toBe(5499)
     expect(paidOrder.discountApplications).toEqual([
       expect.objectContaining({
         discountId: discount!.id,
-        amount: 5,
+        amountCents: 500,
       }),
     ])
     expect(await prisma.order.count()).toBe(1)
@@ -726,14 +726,14 @@ runIntegration('checkout service integration', () => {
       title: product.title,
       variantTitle: variant.title,
       sku: variant.sku ?? 'SKU-1',
-      price: variant.price,
+      priceCents: variant.priceCents,
       quantity: 1,
       discountApplication: {
         discountId: discount.id,
         code: discount.code,
         title: discount.title,
         method: discount.method,
-        amount: 5,
+        amountCents: 500,
       },
     })
     await createCheckoutSession({
@@ -744,14 +744,14 @@ runIntegration('checkout service integration', () => {
       title: product.title,
       variantTitle: variant.title,
       sku: variant.sku ?? 'SKU-1',
-      price: variant.price,
+      priceCents: variant.priceCents,
       quantity: 1,
       discountApplication: {
         discountId: discount.id,
         code: discount.code,
         title: discount.title,
         method: discount.method,
-        amount: 5,
+        amountCents: 500,
       },
     })
 
