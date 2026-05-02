@@ -2,7 +2,7 @@
 
 ## Scope and constraints
 - Inventory source: `rg --files src -g "*.js" -g "*.jsx"`
-- Current JS/JSX count under src: 106 (down from 112 after core-server and checkout client conversion batches)
+- Current JS/JSX count under src: 104 (down from 106 after the media workspace conversion batch)
 - `tsconfig.json` currently uses `allowJs: true`.
 - `jsconfig.json` was removed after confirming `tsconfig.json` fully covers the `@/*` alias.
 - This document is planning only; no runtime behavior changes.
@@ -45,7 +45,7 @@
 - `src/app/(dashboard)/draft-orders/page.js`
 - `src/app/(dashboard)/layout.js`
 - `src/app/(dashboard)/login/page.js`
-- `src/app/(dashboard)/media/page.js`
+- `src/app/(dashboard)/media/page.tsx` (converted)
 - `src/app/(dashboard)/products/page.js`
 - `src/app/(dashboard)/settings/page.js`
 - `src/app/_shared/fonts.js`
@@ -88,7 +88,7 @@
 - `src/components/discounts/DiscountsWorkspace.js`
 - `src/components/draft-orders/DraftOrdersWorkspace.js`
 - `src/components/Header/Header.js`
-- `src/components/media/MediaLibraryWorkspace.js`
+- `src/components/media/MediaLibraryWorkspace.tsx` (converted)
 - `src/components/products/ConfirmDialog.js`
 - `src/components/products/ProductCatalog.js`
 - `src/components/products/ProductEditorDrawer.js`
@@ -157,6 +157,9 @@
 - April 2026 conversion batch (checkout UI client pages):
   - `src/app/(storefront)/checkout/CheckoutClientPage.js` -> `src/app/(storefront)/checkout/CheckoutClientPage.tsx`
   - `src/app/(storefront)/checkout/success/CheckoutSuccessClientPage.js` -> `src/app/(storefront)/checkout/success/CheckoutSuccessClientPage.tsx`
+- May 2026 conversion batch (media admin slice):
+  - `src/components/media/MediaLibraryWorkspace.js` -> `src/components/media/MediaLibraryWorkspace.tsx`
+  - `src/app/(dashboard)/media/page.js` -> `src/app/(dashboard)/media/page.tsx`
 
 ## Risk notes and guardrails
 - Keep `allowJs: true` until late phases to avoid blocking mixed TS/JS imports.
