@@ -48,6 +48,7 @@ async function seedOrderForEmail(orderKey: string, recipientEmail: string) {
           title: 'Default',
           sku: `EMAIL-${orderKey}`,
           price: 25,
+          priceCents: 2500,
           inventory: 100,
         },
       },
@@ -75,8 +76,10 @@ async function seedOrderForEmail(orderKey: string, recipientEmail: string) {
           variantTitle: product.variants[0].title,
           sku: product.variants[0].sku,
           price: 25,
+          priceCents: 2500,
           quantity: 2,
           total: 50,
+          totalCents: 5000,
         },
       },
       addresses: {
