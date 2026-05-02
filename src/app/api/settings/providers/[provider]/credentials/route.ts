@@ -2,6 +2,7 @@
 
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
 import { requireOwner } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   parseSupportedProvider,
   saveProviderCredentials,
@@ -46,6 +47,21 @@ function validatePayload(provider: string, body: unknown) {
   return shippingSchema.safeParse(body)
 }
 
+function credentialAuditSnapshot(provider: string, payload: Record<string, unknown>) {
+  return {
+    provider,
+    submittedFields: Object.keys(payload).sort(),
+    mode: typeof payload.mode === 'string' ? payload.mode : null,
+    fromEmail: typeof payload.fromEmail === 'string' ? payload.fromEmail : null,
+    host: typeof payload.host === 'string' ? payload.host : null,
+    port: typeof payload.port === 'number' ? payload.port : null,
+    secure: typeof payload.secure === 'boolean' ? payload.secure : null,
+    containsSecretFields: Object.keys(payload).some((key) =>
+      /secret|password|apiKey|publishableKey|secretKey|webhookSecret/i.test(key)
+    ),
+  }
+}
+
 export async function POST(req: Request, context: RouteContext) {
   const auth = await requireOwner(req)
   if (!auth.ok) return auth.response
@@ -66,6 +82,21 @@ export async function POST(req: Request, context: RouteContext) {
 
   try {
     const status = await saveProviderCredentials(provider, parsed.data)
+    await recordAuditLogBestEffort({
+      action: 'provider.credentials_saved',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'ProviderConnection', id: provider },
+      summary: `${provider} provider credentials were saved`,
+      snapshot: {
+        outcome: 'saved',
+        provider,
+        state: status.state,
+        source: status.source,
+        category: status.category,
+        fields: credentialAuditSnapshot(provider, parsed.data),
+      },
+      redactions: ['provider credential values', 'API keys', 'passwords', 'webhook secrets'],
+    })
     return ok({ provider, status })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to save provider credentials'
