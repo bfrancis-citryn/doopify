@@ -166,7 +166,7 @@ runIntegration('refund and return integration', () => {
     const refund = await issueRefund({
       orderId: order.id,
       paymentId: payment.id,
-      amount: 50,
+      amountCents: 5000,
       reason: 'requested_by_customer',
       restockItems: true,
       items: [
@@ -174,7 +174,7 @@ runIntegration('refund and return integration', () => {
           orderItemId: orderItem.id,
           variantId: variant.id,
           quantity: 1,
-          amount: 50,
+          amountCents: 5000,
         },
       ],
     })
@@ -204,7 +204,7 @@ runIntegration('refund and return integration', () => {
     await issueRefund({
       orderId: order.id,
       paymentId: payment.id,
-      amount: 100,
+      amountCents: 10000,
       reason: 'requested_by_customer',
     })
 
@@ -224,9 +224,9 @@ runIntegration('refund and return integration', () => {
       issueRefund({
         orderId: order.id,
         paymentId: payment.id,
-        amount: 50,
+        amountCents: 5000,
         restockItems: true,
-        items: [{ orderItemId: orderItem.id, variantId: variant.id, quantity: 1, amount: 50 }],
+        items: [{ orderItemId: orderItem.id, variantId: variant.id, quantity: 1, amountCents: 5000 }],
       })
     ).rejects.toThrow('Stripe refund failed before issuing')
 
@@ -257,8 +257,8 @@ runIntegration('refund and return integration', () => {
     const result = await closeReturnWithRefund({
       returnId: returnRecord.id,
       paymentId: payment.id,
-      amount: 50,
-      items: [{ orderItemId: orderItem.id, variantId: variant.id, quantity: 1, amount: 50 }],
+      amountCents: 5000,
+      items: [{ orderItemId: orderItem.id, variantId: variant.id, quantity: 1, amountCents: 5000 }],
     })
 
     const finalReturn = await prisma.return.findUniqueOrThrow({
