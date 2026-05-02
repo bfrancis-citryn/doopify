@@ -78,6 +78,10 @@ type CheckoutPayload = {
   }
 }
 
+function allowCheckoutFallbackDefaults() {
+  return process.env.NODE_ENV !== 'production' || process.env.CHECKOUT_ALLOW_DEV_FALLBACKS === 'true'
+}
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
@@ -354,6 +358,7 @@ export async function createCheckoutPaymentIntent(input: {
     selectedShippingQuoteId: input.selectedShippingQuoteId,
   })
 
+  const allowFallbacks = allowCheckoutFallbackDefaults()
   const pricingOptions = {
     discount: discount
       ? {
@@ -364,10 +369,14 @@ export async function createCheckoutPaymentIntent(input: {
     shippingAddress,
     storeCountry: store?.country,
     currency,
-    shippingRates: {
-      domesticCents: Number(store?.shippingDomesticRateCents ?? 999),
-      internationalCents: Number(store?.shippingInternationalRateCents ?? 1999),
-    },
+    ...(allowFallbacks
+      ? {
+          shippingRates: {
+            domesticCents: Number(store?.shippingDomesticRateCents ?? 999),
+            internationalCents: Number(store?.shippingInternationalRateCents ?? 1999),
+          },
+        }
+      : {}),
     shippingZones: store?.shippingZones?.map((zone) => ({
       id: zone.id,
       name: zone.name,
@@ -402,7 +411,7 @@ export async function createCheckoutPaymentIntent(input: {
       taxShipping: store?.taxShipping,
       pricesIncludeTax: store?.pricesIncludeTax,
     },
-    ...(store?.country
+    ...(allowFallbacks && store?.country
       ? {
           taxRates: {
             domestic: Number(store?.domesticTaxRate ?? 0.07),
