@@ -47,7 +47,6 @@ async function seedOrderForEmail(orderKey: string, recipientEmail: string) {
         create: {
           title: 'Default',
           sku: `EMAIL-${orderKey}`,
-          price: 25,
           priceCents: 2500,
           inventory: 100,
         },
