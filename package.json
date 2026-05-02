@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:integration": "node scripts/run-integration-tests.mjs",
+    "media:migrate-object-storage": "node scripts/migrate-media-to-object-storage.mjs",
     "doopify:doctor": "node scripts/doopify-cli.mjs doctor",
     "doopify:setup": "node scripts/doopify-cli.mjs setup",
     "doopify:env:push": "node scripts/doopify-cli.mjs env push",
