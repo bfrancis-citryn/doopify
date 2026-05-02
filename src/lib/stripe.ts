@@ -1,4 +1,4 @@
-import { Stripe } from 'stripe'
+import Stripe from 'stripe'
 
 import { env } from '@/lib/env'
 import { getStripeSdkClient } from '@/lib/stripe-client'
@@ -56,23 +56,7 @@ export async function createStripePaymentIntent(input: {
       ...(Object.keys(metadata).length ? { metadata } : {}),
     })
 
-    return {
-      id: paymentIntent.id,
-      client_secret: paymentIntent.client_secret,
-      amount: paymentIntent.amount,
-      currency: paymentIntent.currency,
-      latest_charge:
-        typeof paymentIntent.latest_charge === 'string' || paymentIntent.latest_charge == null
-          ? paymentIntent.latest_charge
-          : { id: paymentIntent.latest_charge.id },
-      status: paymentIntent.status,
-      metadata: paymentIntent.metadata as Record<string, string>,
-      last_payment_error: paymentIntent.last_payment_error
-        ? {
-            message: paymentIntent.last_payment_error.message,
-          }
-        : null,
-    } satisfies StripePaymentIntent
+    return normalizeStripePaymentIntent(paymentIntent)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Stripe request failed'
     throw new Error(message)
@@ -98,12 +82,7 @@ export async function createStripeRefund(input: {
   secretKey?: string | null
 }) {
   const stripeClient = getStripeSdkClient(input.secretKey)
-  const createPayload: {
-    charge?: string
-    payment_intent?: string
-    amount?: number
-    reason?: 'duplicate' | 'fraudulent' | 'requested_by_customer'
-  } = {}
+  const createPayload: Stripe.RefundCreateParams = {}
 
   if (input.chargeId) {
     createPayload.charge = input.chargeId
@@ -127,18 +106,7 @@ export async function createStripeRefund(input: {
       input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined
     )
 
-    return {
-      id: refund.id,
-      amount: refund.amount,
-      currency: refund.currency,
-      status: refund.status ?? 'unknown',
-      charge: typeof refund.charge === 'string' ? refund.charge : refund.charge?.id ?? null,
-      payment_intent:
-        typeof refund.payment_intent === 'string'
-          ? refund.payment_intent
-          : refund.payment_intent?.id ?? null,
-      reason: refund.reason,
-    } satisfies StripeRefund
+    return normalizeStripeRefund(refund)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Stripe request failed'
     throw new Error(message)
@@ -156,8 +124,6 @@ export async function getStripeEvent(eventId: string, secretKey?: string | null)
   }
 }
 
-const webhookVerificationClient: Stripe = getStripeSdkClient('sk_test_webhook_signature_only')
-
 export function verifyStripeWebhookSignature(
   payload: string,
   signatureHeader: string | null,
@@ -173,7 +139,7 @@ export function verifyStripeWebhookSignature(
   }
 
   try {
-    webhookVerificationClient.webhooks.constructEvent(
+    Stripe.webhooks.constructEvent(
       payload,
       signatureHeader,
       endpointSecret,
@@ -198,5 +164,40 @@ export function verifyStripeWebhookSignature(
     }
 
     throw error
+  }
+}
+
+function normalizeStripePaymentIntent(paymentIntent: Stripe.PaymentIntent): StripePaymentIntent {
+  return {
+    id: paymentIntent.id,
+    client_secret: paymentIntent.client_secret,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    latest_charge:
+      typeof paymentIntent.latest_charge === 'string' || paymentIntent.latest_charge == null
+        ? paymentIntent.latest_charge
+        : { id: paymentIntent.latest_charge.id },
+    status: paymentIntent.status,
+    metadata: paymentIntent.metadata as Record<string, string>,
+    last_payment_error: paymentIntent.last_payment_error
+      ? {
+          message: paymentIntent.last_payment_error.message,
+        }
+      : null,
+  }
+}
+
+function normalizeStripeRefund(refund: Stripe.Refund): StripeRefund {
+  return {
+    id: refund.id,
+    amount: refund.amount,
+    currency: refund.currency,
+    status: refund.status ?? 'unknown',
+    charge: typeof refund.charge === 'string' ? refund.charge : refund.charge?.id ?? null,
+    payment_intent:
+      typeof refund.payment_intent === 'string'
+        ? refund.payment_intent
+        : refund.payment_intent?.id ?? null,
+    reason: refund.reason,
   }
 }
