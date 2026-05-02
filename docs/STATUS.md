@@ -36,6 +36,7 @@ The repo currently includes:
 - Next.js App Router admin, storefront, and API surface
 - protected admin auth with session-backed JWT validation
 - private route protection through `src/proxy.ts`
+- production security-header foundation with shared header builder, proxy-applied baseline headers, production-only HSTS, Permissions-Policy, and production CSP report-only mode with Stripe-safe origins
 - route-level authorization helpers (`requireAuth`, `requireAdmin`, `requireOwner`, `requireRole`) applied across sensitive admin mutation and observability APIs as an inner authorization guard
 - public storefront routes for homepage, shop, product detail, collections, and collection detail
 - Stripe checkout creation, Stripe webhook processing, checkout status polling, checkout session persistence, and idempotent paid-order finalization
@@ -184,6 +185,18 @@ Shipped foundation:
 - token-protected checkout recovery API with server-side repricing and safe payload shaping
 - checkout completion now marks recovery success only after verified paid completion when recovery outreach occurred
 
+#### Production Security Headers
+
+Shipped foundation:
+
+- shared security-header builder in `src/server/security/security-headers.ts`
+- proxy-applied headers for public, protected, redirect, and API JSON response paths
+- baseline `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and `Permissions-Policy`
+- production-only `Strict-Transport-Security`
+- production default CSP report-only mode with Stripe-safe script/connect/frame origins
+- environment rollback via `SECURITY_HEADERS_ENABLED=false` and CSP mode control through `CSP_MODE=off|report-only|enforce`
+- fast tests for header construction and proxy response coverage
+
 ### Remaining Phase 4 Priorities
 
 1. Setup Wizard and CLI hardening: expand deployment automation with safer non-interactive/dry-run paths and deeper provider provisioning
@@ -251,6 +264,7 @@ Production readiness foundation now includes:
 
 - CI verification on every push/PR via `.github/workflows/ci.yml`
 - optional integration workflow in `.github/workflows/integration.yml` (runs when `DATABASE_URL_TEST` secret is configured)
+- security-header foundation with proxy-applied baseline headers, production HSTS, and CSP report-only mode
 - production runbook docs:
   - `PRODUCTION_DEPLOYMENT_CHECKLIST.md`
   - `ENVIRONMENT_VARIABLE_REFERENCE.md`
@@ -298,12 +312,13 @@ Production readiness foundation now includes:
 - Extract remaining route-level business logic, especially analytics, discounts, and media administration paths
 - Keep storefront reads public/read-only and admin mutation paths private
 - Expand audit logging around lifecycle operations
+- Monitor CSP report-only behavior in production and tighten to enforced CSP after admin, checkout, media, and provider flows are verified
 
 ### Later
 
 - Move media binary storage off Postgres and into object storage
 - Add customer-auth hardening when customer accounts exist
-- Add broader CSP and response-header hardening once integration and asset origins are finalized
+- Tighten CSP origins after object-storage/media and any client analytics origins are finalized
 
 ## Explicit Non-Goals Right Now
 
