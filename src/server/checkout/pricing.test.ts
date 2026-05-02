@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildCheckoutPricing,
@@ -35,9 +35,12 @@ describe('buildCheckoutPricingWithDecisionsCents', () => {
     expect(pricing).toMatchObject({
       subtotalCents: 2409,
       shippingAmountCents: 999,
-      taxAmountCents: 199,
+      taxAmountCents: 0,
       discountAmountCents: 0,
-      totalCents: 3607,
+      totalCents: 3408,
+      taxDecision: {
+        source: 'none',
+      },
     })
   })
 
@@ -96,7 +99,7 @@ describe('buildCheckoutPricingWithDecisionsCents', () => {
     ).toThrow('Minimum order of $50.00 required')
   })
 
-  it('uses configured shipping-zone tiers and jurisdiction tax overrides in cents', () => {
+  it('uses configured shipping-zone tiers and manual tax settings in cents', () => {
     const pricing = buildCheckoutPricingWithDecisionsCents([{ priceCents: 6000, quantity: 2 }], 50000, {
       shippingAddress: { country: 'US', province: 'CA' },
       storeCountry: 'US',
@@ -165,6 +168,11 @@ describe('buildCheckoutPricingWithDecisionsCents', () => {
           priority: 10,
         },
       ],
+      taxSettings: {
+        enabled: true,
+        strategy: 'MANUAL',
+        defaultTaxRateBps: 825,
+      },
     })
 
     expect(pricing).toMatchObject({
@@ -183,7 +191,6 @@ describe('buildCheckoutPricingWithDecisionsCents', () => {
         source: 'rule',
         rate: 0.0825,
         amountCents: 990,
-        ruleId: 'tax_us_ca',
       },
     })
   })
@@ -215,7 +222,11 @@ describe('checkout pricing display wrappers', () => {
         shippingAddress: { country: 'US', province: 'CA' },
         storeCountry: 'US',
         shippingRates: { domesticCents: 1200, internationalCents: 2500 },
-        taxRules: [{ countryCode: 'US', provinceCode: 'CA', rate: 0.0825 }],
+        taxSettings: {
+          enabled: true,
+          strategy: 'MANUAL',
+          defaultTaxRateBps: 825,
+        },
       })
     ).toMatchObject({
       subtotalCents: 10000,
@@ -237,7 +248,20 @@ describe('checkout pricing display wrappers', () => {
 })
 
 describe('shipping and tax helpers', () => {
-  it('returns fallback warning when no active zone rate matches', () => {
+  const originalNodeEnv = process.env.NODE_ENV
+  const originalFallbackFlag = process.env.CHECKOUT_ALLOW_DEV_FALLBACKS
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    process.env.NODE_ENV = originalNodeEnv
+    if (originalFallbackFlag == null) {
+      delete process.env.CHECKOUT_ALLOW_DEV_FALLBACKS
+    } else {
+      process.env.CHECKOUT_ALLOW_DEV_FALLBACKS = originalFallbackFlag
+    }
+  })
+
+  it('returns fallback warning when an explicit fallback shipping rate is provided and no active zone rate matches', () => {
     const shipping = calculateShipping({
       subtotalCents: 5000,
       shippingAddress: { country: 'US', province: 'CA' },
@@ -265,6 +289,39 @@ describe('shipping and tax helpers', () => {
     expect(shipping).toMatchObject({
       source: 'fallback',
       amountCents: 900,
+    })
+    expect(shipping.warning).toContain('No configured shipping rate matched')
+  })
+
+  it('does not silently invent fallback shipping when no explicit fallback rate is provided', () => {
+    const shipping = calculateShipping({
+      subtotalCents: 5000,
+      shippingAddress: { country: 'US', province: 'CA' },
+      storeCountry: 'US',
+      shippingRates: null,
+      shippingZones: [
+        {
+          id: 'zone_1',
+          name: 'California',
+          countryCode: 'US',
+          provinceCode: 'CA',
+          rates: [
+            {
+              id: 'rate_1',
+              name: 'Inactive',
+              method: 'FLAT',
+              amountCents: 500,
+              isActive: false,
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(shipping).toMatchObject({
+      source: 'none',
+      amountCents: 0,
+      availableRates: [],
     })
     expect(shipping.warning).toContain('No configured shipping rate matched')
   })
@@ -324,6 +381,41 @@ describe('shipping and tax helpers', () => {
     expect(tax).toMatchObject({
       source: 'none',
       amountCents: 0,
+    })
+  })
+
+  it('does not silently apply tax when tax settings are absent', () => {
+    const tax = calculateTax({
+      taxableSubtotalCents: 10000,
+      shippingAddress: { country: 'US', province: 'CA' },
+    })
+
+    expect(tax).toMatchObject({
+      source: 'none',
+      amountCents: 0,
+      label: 'Tax disabled',
+    })
+  })
+
+  it('does not use legacy tax rates in production unless dev fallbacks are explicitly allowed', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+
+    const tax = calculateTax({
+      taxableSubtotalCents: 10000,
+      shippingAddress: { country: 'US', province: 'CA' },
+      storeCountry: 'US',
+      taxRates: { domestic: 0.0825, international: 0 },
+      taxSettings: {
+        enabled: true,
+        strategy: 'MANUAL',
+        defaultTaxRateBps: 0,
+      },
+    })
+
+    expect(tax).toMatchObject({
+      source: 'rule',
+      amountCents: 0,
+      rateBps: 0,
     })
   })
 
