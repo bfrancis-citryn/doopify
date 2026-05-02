@@ -1,293 +1,151 @@
-# Production Security Headers Plan
+# Production Security Headers And CSP Plan
 
-Documentation date: May 1, 2026
+Documentation date: May 1, 2026  
+Implementation status updated: May 2, 2026
 
 ## Goal
-Plan CSP and response-header hardening for Doopify without breaking Next.js, Stripe checkout, provider webhooks, images, admin pages, or local development.
 
-This is a planning document only. No runtime headers are implemented in this change.
+Harden Doopify response headers and Content Security Policy without breaking Next.js, Stripe checkout, provider webhooks, images, admin pages, or local development.
 
-## Current State Inspected
+## Implementation Status
 
-### `src/proxy.ts`
+Shipped foundation:
 
-Current proxy behavior is focused on route protection, not response hardening.
+- Shared security-header builder in `src/server/security/security-headers.ts`.
+- Proxy-applied response headers through `src/proxy.ts`.
+- Headers are applied to public pages, protected pages, redirects, and JSON auth failures.
+- Production sends HSTS.
+- Production CSP defaults to report-only.
+- CSP can be explicitly enforced with `CSP_MODE=enforce`.
+- CSP can be disabled with `CSP_MODE=off`.
+- All security headers can be emergency-disabled with `SECURITY_HEADERS_ENABLED=false`.
+- Stripe-safe script/connect/frame origins are included.
+- Media CSP can use exact origins from `CSP_MEDIA_ORIGINS` and `MEDIA_PUBLIC_BASE_URL`.
+- When exact media origins are configured, the broad `https:` media fallback is not included.
+- Development mode remains permissive enough for Next/HMR and does not send HSTS.
 
-Observed behavior:
+Still intentionally pending:
 
-- `PUBLIC_PREFIXES` bypass auth for public routes and operational webhook/runner endpoints:
-  - `/login`
-  - `/api/auth`
-  - `/api/checkout`
-  - `/api/storefront`
-  - `/api/webhooks`
-  - `/api/webhook-retries`
-  - `/api/abandoned-checkouts/send-due`
-  - `/api/jobs/run`
-  - `/_next`
-  - `/favicon`
-  - `/images`
-  - `/public`
-- Non-admin public storefront pages pass through.
-- Admin pages and private API routes require `doopify_token`.
-- Valid sessions add request headers:
-  - `x-user-id`
-  - `x-user-role`
-  - `x-user-email`
-- Invalid/missing auth returns API JSON errors or redirects admin pages to `/login`.
-- No security response headers are currently set in `src/proxy.ts`.
+- Production default remains report-only until real storefront/admin/checkout/media flows are monitored.
+- No CSP report ingestion endpoint exists yet.
+- Inline script/style cleanup and nonce/hash support are not part of this slice.
 
-Important implementation constraint:
+## Runtime Controls
 
-- Do not disrupt auth gating or public-prefix behavior when headers are added.
-- If security headers are added in proxy later, they must be applied to every `NextResponse.next()`, redirect, and JSON response path consistently.
+```txt
+SECURITY_HEADERS_ENABLED=false
+CSP_MODE=off|report-only|enforce
+CSP_MEDIA_ORIGINS=https://media.example.com,https://cdn.example.com
+CSP_ANALYTICS_ORIGINS=https://analytics.example.com
+MEDIA_PUBLIC_BASE_URL=https://cdn.example.com/media
+```
 
-### `next.config.mjs`
+Behavior:
 
-Current global headers already exist through `nextConfig.headers()`:
+- `CSP_MODE` controls report-only vs enforce.
+- `CSP_MEDIA_ORIGINS` is the preferred way to list exact image/media origins.
+- `MEDIA_PUBLIC_BASE_URL` is automatically converted to an origin and included in `img-src` when present.
+- If no exact media origin is configured, `img-src` includes broad `https:` for report-only compatibility.
+- If an exact media origin is configured, `img-src` omits the broad `https:` fallback.
+
+## Current Implemented Headers
+
+Baseline headers:
 
 ```txt
 X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self), usb=(), serial=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=(), fullscreen=(self)
 ```
 
-This means the first implementation should either:
-
-1. keep static global headers in `next.config.mjs` and add only CSP/HSTS/Permissions-Policy there, or
-2. move all response security headers into one shared helper used by `src/proxy.ts`.
-
-Avoid maintaining conflicting header definitions in both places.
-
-## Recommended Implementation Strategy
-
-### Preferred approach
-
-Add a shared security-header builder and use it from `src/proxy.ts`.
-
-Suggested file:
-
-```txt
-src/server/security/security-headers.ts
-```
-
-Why:
-
-- It can vary behavior by environment.
-- It can add a CSP nonce later if needed.
-- It can apply to redirects and auth failures, not just normal page responses.
-- It keeps all header decisions in one testable module.
-
-Then either:
-
-- remove duplicate static security headers from `next.config.mjs`, or
-- leave only truly static headers there and document that dynamic headers live in proxy.
-
-Recommended cleanup once proxy implementation is complete:
-
-```txt
-next.config.mjs should not duplicate headers managed by security-headers.ts.
-```
-
-### Staged rollout
-
-1. Add report-only CSP in production first.
-2. Monitor console/report violations in real admin/storefront/checkout flows.
-3. Move to enforced CSP after known origins and inline-style requirements are handled.
-4. Add stricter policies incrementally.
-
-## Proposed Headers
-
-### 1. Content-Security-Policy
-
-Initial production report-only policy:
-
-```txt
-Content-Security-Policy-Report-Only:
-  default-src 'self';
-  base-uri 'self';
-  object-src 'none';
-  frame-ancestors 'none';
-  form-action 'self';
-  script-src 'self' 'unsafe-inline' https://js.stripe.com;
-  script-src-elem 'self' 'unsafe-inline' https://js.stripe.com;
-  style-src 'self' 'unsafe-inline';
-  style-src-elem 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https:;
-  font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' https://api.stripe.com https://*.stripe.com;
-  frame-src https://js.stripe.com https://hooks.stripe.com;
-  worker-src 'self' blob:;
-  manifest-src 'self';
-  upgrade-insecure-requests;
-```
-
-Why report-only first:
-
-- Checkout currently loads Stripe.js dynamically from `https://js.stripe.com/v3/`.
-- Checkout and storefront components contain inline styles and style blocks.
-- Next.js may need dev-only script/eval allowances.
-- Object-storage/CDN media origins are not finalized yet.
-
-Later enforced production policy should remove broad allowances where possible:
-
-- remove `'unsafe-inline'` from scripts after moving dynamic inline code to safe patterns or nonce/hash support
-- restrict `img-src https:` to explicit media CDN origins once object storage/CDN origins are chosen
-- add `report-uri` or `report-to` only after a reporting endpoint exists
-
-### 2. Strict-Transport-Security
-
-Production only:
+Production-only:
 
 ```txt
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 ```
 
-Later, after HTTPS is stable on all subdomains:
+Production default CSP mode:
 
 ```txt
-Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+Content-Security-Policy-Report-Only
 ```
 
-Do not send HSTS in local development.
-
-### 3. Referrer-Policy
-
-Current value is good:
+Explicit enforce mode:
 
 ```txt
-Referrer-Policy: strict-origin-when-cross-origin
+Content-Security-Policy
 ```
 
-Keep this unless checkout/provider flows require a different policy.
+## Implemented CSP Shape
 
-### 4. X-Content-Type-Options
-
-Current value is good:
+Production CSP currently includes:
 
 ```txt
-X-Content-Type-Options: nosniff
+default-src 'self';
+base-uri 'self';
+object-src 'none';
+frame-ancestors 'none';
+form-action 'self';
+script-src 'self' 'unsafe-inline' https://js.stripe.com;
+script-src-elem 'self' 'unsafe-inline' https://js.stripe.com;
+style-src 'self' 'unsafe-inline';
+style-src-elem 'self' 'unsafe-inline';
+img-src 'self' data: blob: <configured-media-origins-or-https-fallback>;
+font-src 'self' data:;
+connect-src 'self' https://api.stripe.com https://*.stripe.com <configured-analytics-origins>;
+frame-src https://js.stripe.com https://hooks.stripe.com;
+worker-src 'self' blob:;
+manifest-src 'self';
+upgrade-insecure-requests
 ```
-
-Keep globally, including media responses.
-
-### 5. Frame protection / `frame-ancestors`
-
-Current `X-Frame-Options: DENY` exists.
-
-Recommended future direction:
-
-- Keep `X-Frame-Options: DENY` for legacy browser defense.
-- Add CSP `frame-ancestors 'none'` for modern browsers.
-
-Important distinction:
-
-- `frame-ancestors` controls who can embed Doopify.
-- `frame-src` controls what Doopify can embed.
-
-Stripe Elements needs `frame-src` allowances, but that does not require allowing Doopify itself to be framed by third parties.
-
-### 6. Permissions-Policy
-
-Initial recommendation:
-
-```txt
-Permissions-Policy:
-  camera=(),
-  microphone=(),
-  geolocation=(),
-  payment=(self),
-  usb=(),
-  serial=(),
-  bluetooth=(),
-  accelerometer=(),
-  gyroscope=(),
-  magnetometer=(),
-  fullscreen=(self)
-```
-
-Notes:
-
-- Keep `payment=(self)` initially to avoid blocking payment-related browser APIs if checkout expands.
-- Do not block clipboard until admin workflows are checked; admins may need copy/paste for IDs, webhooks, or secrets.
 
 ## Required External Origins
 
 ### Stripe
 
-Current checkout dynamically loads Stripe.js from:
-
-```txt
-https://js.stripe.com/v3/
-```
-
-Required CSP origins:
+Required by checkout:
 
 ```txt
 script-src/script-src-elem: https://js.stripe.com
-frame-src: https://js.stripe.com https://hooks.stripe.com
 connect-src: https://api.stripe.com https://*.stripe.com
+frame-src: https://js.stripe.com https://hooks.stripe.com
 ```
 
-Keep this broad enough during report-only rollout because Stripe Elements may call Stripe subdomains internally.
+### Media
 
-### Fonts
-
-Current source inspection did not show external font imports in the checked files, but the plan should allow future Google Fonts only if actually used.
-
-Potential origins:
+Default compatibility behavior:
 
 ```txt
-style-src/style-src-elem: https://fonts.googleapis.com
-font-src: https://fonts.gstatic.com
+img-src 'self' data: blob: https:
 ```
 
-Recommendation:
-
-- Do not add Google font origins unless the app actually imports Google Fonts.
-- Prefer self-hosted fonts for stricter CSP later.
-
-### Images and media
-
-Current media is served through app-owned URLs:
+Enforce-ready behavior when object storage/CDN is configured:
 
 ```txt
-/api/media/{assetId}
+CSP_MEDIA_ORIGINS=https://cdn.example.com
+MEDIA_PUBLIC_BASE_URL=https://cdn.example.com/media
 ```
 
-Current safe baseline:
+Then CSP becomes exact-origin based, for example:
 
 ```txt
-img-src 'self' data: blob:
+img-src 'self' data: blob: https://cdn.example.com
 ```
-
-During media object-storage migration, add explicit production media origins, for example:
-
-```txt
-img-src 'self' data: blob: https://media.example.com https://*.r2.dev https://*.cloudflarestorage.com https://*.amazonaws.com
-```
-
-Recommendation:
-
-- Start with `img-src 'self' data: blob: https:` in report-only mode.
-- Tighten to exact CDN/object-storage domains after `MEDIA_OBJECT_STORAGE_PLAN.md` is implemented.
 
 ### Analytics
 
-Doopify currently has server-side durable `AnalyticsEvent` persistence. No client analytics vendor was confirmed in this inspection.
+Doopify currently has server-side durable analytics. No client analytics vendor is required by default.
 
-Baseline:
+If a client-side vendor is added later, list it explicitly through:
 
 ```txt
-connect-src 'self'
-script-src 'self'
+CSP_ANALYTICS_ORIGINS=https://analytics.example.com
 ```
 
-If a vendor is later added, list it explicitly in the CSP plan before implementation. Do not use wildcard analytics domains by default.
+### Provider webhooks
 
-### Email/provider webhooks
-
-Inbound provider webhooks are server-to-server requests:
+Inbound provider webhooks are server-to-server and not blocked by browser CSP:
 
 ```txt
 POST /api/webhooks/stripe
@@ -298,171 +156,76 @@ POST /api/jobs/run
 POST /api/abandoned-checkouts/send-due
 ```
 
-CSP does not block inbound server-to-server webhook requests. However:
-
-- security headers should still be safe on JSON/webhook responses
-- request body parsing and signature verification must remain unaffected
-- do not add frame/script assumptions to webhook routes
-- do not require browser-only headers for webhook callers
-
-### Admin and Next.js runtime
-
-Admin and App Router pages may require:
-
-```txt
-script-src 'self'
-style-src 'self' 'unsafe-inline'
-img-src 'self' data: blob:
-connect-src 'self'
-```
-
-Development mode may require additional relaxed behavior for Next dev tooling.
+Security headers are safe on these responses and do not replace signature verification.
 
 ## Dev vs Production Behavior
 
 ### Development
 
-Recommended dev behavior:
-
-- Keep existing basic headers if they do not break local dev.
-- Do not send HSTS.
-- Do not enforce CSP.
-- Optional: send a very loose `Content-Security-Policy-Report-Only` only when explicitly enabled.
-- Allow Next dev runtime needs:
-  - `'unsafe-eval'`
-  - `'unsafe-inline'`
-  - websocket connections for HMR such as `ws:` and `wss:`
-
-Example dev policy if needed:
-
-```txt
-Content-Security-Policy-Report-Only:
-  default-src 'self' http: https: data: blob: ws: wss:;
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https:;
-  style-src 'self' 'unsafe-inline' http: https:;
-  connect-src 'self' http: https: ws: wss:;
-```
+- No HSTS.
+- CSP off by default unless explicitly configured.
+- Next/HMR allowances include `ws:`, `wss:`, and `'unsafe-eval'` when CSP is enabled in dev.
 
 ### Production
 
-Recommended production behavior:
+- HSTS enabled.
+- Baseline hardening headers enabled.
+- CSP report-only by default.
+- Enforce only after manual production/staging validation.
 
-- Send HSTS.
-- Send `nosniff`.
-- Send `strict-origin-when-cross-origin`.
-- Send `X-Frame-Options: DENY` plus CSP `frame-ancestors 'none'`.
-- Start CSP as report-only.
-- Move to enforced CSP after verifying checkout, admin, media, and provider flows.
+## Enforcement Checklist
 
-Recommended env controls:
+Before setting `CSP_MODE=enforce` in production:
 
-```txt
-SECURITY_HEADERS_ENABLED=true
-CSP_MODE=report-only|enforce|off
-CSP_REPORT_URI=https://example.com/api/csp-report optional later
+1. Verify `/`, `/shop`, product detail, collections, and collection detail image loading.
+2. Verify `/checkout` loads Stripe.js and completes a test checkout.
+3. Verify `/checkout/success` works after payment completion.
+4. Verify `/admin`, `/settings`, `/admin/webhooks`, `/media`, `/orders/[orderNumber]`, and `/products` load normally.
+5. Verify media URLs load with Postgres fallback and with S3/R2 object storage.
+6. Configure exact media origins with `CSP_MEDIA_ORIGINS` or `MEDIA_PUBLIC_BASE_URL`.
+7. Check browser console/report-only violations for admin UI inline scripts/styles, Stripe frames, media URLs, and any client analytics.
+8. Confirm inbound webhooks are unaffected.
+9. Run:
+
+```bash
+npm run db:generate
+npx tsc --noEmit
+npm run test
+npm run build
+npm run test:integration
 ```
 
-## Implementation Notes For Later
+## Test Coverage
 
-### Shared helper shape
+Current fast tests cover:
 
-Suggested API:
+- baseline header construction
+- production HSTS
+- dev HSTS exclusion
+- production report-only default
+- explicit CSP enforce mode
+- CSP off mode
+- Stripe origin inclusion
+- explicit media and analytics origin inclusion
+- broad media fallback when no exact origin exists
+- `MEDIA_PUBLIC_BASE_URL` inclusion in `img-src`
+- `CSP_MEDIA_ORIGINS` inclusion in `img-src`
+- exact media origins replacing broad `https:` fallback
+- emergency security-header disable
+- proxy response paths for public, protected, redirect, auth failure, and webhook routes
 
-```ts
-type SecurityHeaderOptions = {
-  environment: 'development' | 'production' | 'test'
-  cspMode?: 'off' | 'report-only' | 'enforce'
-  mediaOrigins?: string[]
-  analyticsOrigins?: string[]
-}
-
-export function buildSecurityHeaders(options: SecurityHeaderOptions): HeadersInit
-export function applySecurityHeaders(response: NextResponse, options?: Partial<SecurityHeaderOptions>): NextResponse
-```
-
-### Proxy integration
-
-Every response path should receive headers:
-
-- public `NextResponse.next()` responses
-- protected `NextResponse.next()` responses
-- API JSON auth failures
-- redirects to login
-
-Do not accidentally skip headers on unauthorized API responses.
-
-### `next.config.mjs` cleanup
-
-Once proxy-based headers exist, remove or reduce the current global `headers()` entries to avoid drift.
-
-If static headers remain in `next.config.mjs`, tests should verify they match the shared constants.
-
-## Test Plan
-
-### Unit tests
-
-Add tests for `buildSecurityHeaders()`:
-
-- production includes HSTS
-- development excludes HSTS
-- production includes `X-Content-Type-Options: nosniff`
-- production includes `Referrer-Policy: strict-origin-when-cross-origin`
-- production includes `X-Frame-Options: DENY`
-- production includes `Permissions-Policy`
-- report-only mode sets `Content-Security-Policy-Report-Only`
-- enforce mode sets `Content-Security-Policy`
-- off mode sets no CSP header
-- Stripe origins are included in script/frame/connect directives
-- media origins can be injected without wildcarding everything
-
-### Proxy tests
-
-Add tests for `src/proxy.ts` behavior:
-
-- public storefront page gets security headers
-- admin page redirect to login gets security headers
-- unauthorized API JSON response gets security headers
-- authorized admin/API response gets security headers and still includes existing `x-user-*` headers
-- public webhook path remains public and receives safe headers without requiring auth
-
-### Build/manual checks
-
-Manual browser checks before enforcing CSP:
-
-- `/` storefront loads
-- `/shop` loads images
-- `/shop/[handle]` loads product images
-- `/collections` and `/collections/[handle]` load collection/product imagery
-- `/checkout` loads Stripe.js and payment element
-- `/checkout/success` works after Stripe redirect/polling
-- `/admin` loads
-- `/admin/settings`, `/admin/webhooks`, `/media`, and order detail pages load
-- email/shipping/Stripe webhook endpoints still accept signed requests
-
-## Rollout Recommendation
-
-1. Add `security-headers.ts` helper and tests.
-2. Apply basic non-CSP headers through proxy or keep current `next.config.mjs` headers temporarily.
-3. Add production-only HSTS.
-4. Add production `Content-Security-Policy-Report-Only`.
-5. Verify real admin/storefront/checkout flows.
-6. Add exact media/CDN origins after object-storage origin is known.
-7. Convert CSP from report-only to enforced.
-8. Remove duplicate static header definitions from `next.config.mjs` or document why they remain.
-
-## Non-Goals For First Implementation
+## Non-Goals
 
 - Building a CSP report ingestion endpoint.
 - Adding per-request CSP nonces.
 - Removing all inline styles immediately.
-- Enforcing a strict CSP before Stripe/admin/media flows are tested.
+- Enforcing strict CSP by default.
 - Changing auth behavior in `src/proxy.ts`.
 - Blocking inbound provider webhooks with browser-focused assumptions.
 
-## Open Questions
+## Remaining Open Questions
 
-- Will production media use app-proxied `/api/media/{id}` URLs, direct CDN URLs, or signed object-storage URLs?
-- Will Doopify use Google Fonts, self-hosted fonts, or merchant-configured external font URLs?
-- Will a client-side analytics vendor be added, or will analytics remain server-side only?
-- Should the admin ever be embeddable inside another app, or should `frame-ancestors 'none'` remain permanent?
-- Should CSP reporting go to an internal endpoint, provider service, or logs-only approach?
+- Should CSP violation reports go to an internal endpoint or a third-party monitoring service?
+- Should production eventually remove `'unsafe-inline'` through nonce/hash support?
+- Should product media eventually use direct CDN URLs in storefront DTOs instead of app-proxied `/api/media/{id}` URLs?
+- Should `frame-ancestors 'none'` remain permanent if Doopify is ever embedded inside another admin shell?
