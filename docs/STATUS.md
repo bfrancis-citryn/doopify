@@ -55,6 +55,7 @@ The repo currently includes:
 - shipping and delivery functional expansion with persisted shipping mode, explicit active-rate-provider vs label-provider settings, fallback behavior modes, package/location/manual-rate/fallback-rate APIs, compact provider-first Settings -> Shipping & delivery drawers (including manual fulfillment/local delivery/pickup/packing slip settings), checkout mode-aware live/manual/hybrid rate resolution, and order-level selected shipping method snapshots (`shippingMethodName`, `shippingRateType`, `shippingAmount`, `shippingProvider`, `shippingProviderRateId`, `estimatedDeliveryText`)
 - order detail lifecycle Phase 8 expansion with admin notes API (`PATCH /api/orders/[orderNumber]/notes`), customer-visible note timeline entries, optional tracked customer-note email sends, discount snapshot visibility, and guarded payment/fulfillment status quick actions
 - owner-only provider connection gateway APIs for settings (`GET /api/settings/providers`, `GET /api/settings/providers/[provider]`, `POST /api/settings/providers/[provider]/credentials`, `POST /api/settings/providers/[provider]/verify`, `DELETE /api/settings/providers/[provider]`) with encrypted credential storage and masked status payloads
+- provider connection audit logging for owner credential saves, verification attempts, and disconnects, with actor capture and credential-value redaction
 - Stripe runtime now resolves verified DB credentials first with env fallback for checkout payment-intent creation; webhook signature verification now prefers verified DB webhook secret and falls back to env when DB webhook secret is unavailable
 - Stripe runtime visibility endpoints now exist at owner-only `GET /api/settings/payments/stripe/runtime-status` and public `GET /api/checkout/stripe-config` (publishable key only, source/mode labeled)
 - Settings -> Payments now uses compact provider rows plus per-provider slide-over drawers so credential fields are not always visible on the main settings page
@@ -197,6 +198,16 @@ Shipped foundation:
 - environment rollback via `SECURITY_HEADERS_ENABLED=false` and CSP mode control through `CSP_MODE=off|report-only|enforce`
 - fast tests for header construction and proxy response coverage
 
+#### Provider Credential Audit Logging
+
+Shipped foundation:
+
+- owner-only provider credential saves emit best-effort audit events with actor, provider, state, source, and submitted field names
+- owner-only provider verification attempts emit best-effort audit events with verification outcome and safe metadata keys
+- owner-only provider disconnects emit best-effort audit events with previous/new state and source
+- credential audit snapshots avoid raw provider credential values and include redaction labels for API keys, passwords, and webhook secrets
+- fast credentials-route test verifies audit emission and raw value exclusion
+
 ### Remaining Phase 4 Priorities
 
 1. Setup Wizard and CLI hardening: expand deployment automation with safer non-interactive/dry-run paths and deeper provider provisioning
@@ -211,7 +222,7 @@ Status by acceptance check:
 - Admin can issue a partial/full refund and order, payment, and inventory are consistent afterward — **foundation shipped; continue real-DB coverage**
 - A return moves through its state machine and triggers a refund correctly — **foundation shipped; continue UX and integration coverage**
 - Outbound webhook deliveries are signed, retried with backoff, and visible in the admin — **foundation shipped**
-- Integration secrets never appear unencrypted at rest — **foundation shipped with real-DB update-flow preservation coverage**
+- Integration secrets never appear unencrypted at rest — **foundation shipped with real-DB update-flow preservation coverage plus provider credential audit logging**
 - A bounced order confirmation email surfaces in the admin and can be resent without duplicating side effects — **foundation shipped with real-DB resend/provider-transition coverage**
 - Lifecycle analytics events are emitted from server-owned flows and persisted without becoming a commerce-side dependency — **foundation shipped**
 - Setup can be diagnosed with `doopify doctor`, verified from Settings -> Setup, and configured locally with `doopify setup` — **shipped foundation**
@@ -286,7 +297,7 @@ Production readiness foundation now includes:
 ### Medium Priority
 
 - Stronger admin-only mutation coverage for lifecycle operations
-- More complete audit log consumers for integration changes, refunds, returns, email resends, and webhook retries
+- More complete audit log consumers for refunds, returns, email resends, webhook retries, and shipping labels
 - Additional storefront/admin polish after lifecycle correctness is stable
 
 ### Later
