@@ -1,12 +1,41 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import AdminButton from "./AdminButton";
 
-function buildClassName(parts) {
+function buildClassName(parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
+
+type AdminDrawerContextItem = string | {
+  label: ReactNode;
+  current?: boolean;
+};
+
+type AdminDrawerTab = {
+  id: string;
+  label: ReactNode;
+  content?: ReactNode;
+  render?: () => ReactNode;
+};
+
+type AdminDrawerProps = {
+  activeTabId?: string | null;
+  actions?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+  contextItems?: AdminDrawerContextItem[];
+  footer?: ReactNode;
+  headerActions?: ReactNode;
+  onActiveTabChange?: ((tabId: string | null) => void) | null;
+  onClose?: () => void;
+  open?: boolean;
+  subtitle?: ReactNode;
+  tabs?: AdminDrawerTab[];
+  title?: string;
+};
 
 export default function AdminDrawer({
   activeTabId = null,
@@ -22,9 +51,9 @@ export default function AdminDrawer({
   subtitle = "",
   tabs = [],
   title = "Details",
-}) {
+}: AdminDrawerProps) {
   const isTabControlled = activeTabId != null;
-  const [activeTab, setActiveTab] = useState(null);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const hasTabs = tabs.length > 0;
   const lastOpenRef = useRef(false);
@@ -67,7 +96,7 @@ export default function AdminDrawer({
       return;
     }
 
-    const handleKeyDown = (event) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         onClose?.();
       }
@@ -158,7 +187,7 @@ export default function AdminDrawer({
                   "admin-drawer__context-item",
                   isCurrent ? "is-current" : "",
                 ])}
-                key={`${label}-${index}`}
+                key={`${String(label)}-${index}`}
               >
                 {index > 0 ? <span className="admin-drawer__context-divider">/</span> : null}
                 <span>{label}</span>

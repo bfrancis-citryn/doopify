@@ -144,7 +144,7 @@ export function buildPaymentProviderRows(input: BuildProviderRowsInput) {
         label: 'Setup needed',
         tone: 'warning',
       },
-      sourceMeta: 'Runtime support: not implemented',
+      sourceMeta: 'Runtime support: unavailable',
       statusMeta:
         'Do not enable checkout visibility until payment creation, webhook verification, refund support, and order finalization are shipped.',
       chips: ['PayPal', 'Pay Later', 'Venmo'],

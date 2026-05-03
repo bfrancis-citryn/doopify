@@ -1,29 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import AdminButton from "./AdminButton";
 import AdminCard from "./AdminCard";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-function pad(value) {
+function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function startOfDay(date) {
+function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function startOfMonth(date) {
+function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-function endOfMonth(date) {
+function endOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
-function isSameDay(a, b) {
+function isSameDay(a: Date | null, b: Date | null) {
   return Boolean(
     a &&
       b &&
@@ -33,7 +34,7 @@ function isSameDay(a, b) {
   );
 }
 
-function normalizeDateValue(value) {
+function normalizeDateValue(value: Date | string | null | undefined) {
   if (!value) {
     return null;
   }
@@ -42,10 +43,10 @@ function normalizeDateValue(value) {
   return Number.isNaN(nextDate.getTime()) ? null : nextDate;
 }
 
-function buildMonthDays(displayDate) {
+function buildMonthDays(displayDate: Date) {
   const first = startOfMonth(displayDate);
   const last = endOfMonth(displayDate);
-  const days = [];
+  const days: Array<{ date: Date; outside: boolean }> = [];
 
   const leading = first.getDay();
   for (let index = leading; index > 0; index -= 1) {
@@ -74,7 +75,7 @@ function buildMonthDays(displayDate) {
 }
 
 function buildTimeSlots() {
-  const slots = [];
+  const slots: string[] = [];
   for (let hour = 0; hour <= 23; hour += 1) {
     slots.push(`${pad(hour)}:00`);
     slots.push(`${pad(hour)}:30`);
@@ -82,14 +83,14 @@ function buildTimeSlots() {
   return slots;
 }
 
-function formatMonthLabel(date) {
+function formatMonthLabel(date: Date) {
   return date.toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
   });
 }
 
-function formatSelectedDate(date) {
+function formatSelectedDate(date: Date) {
   return date.toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
@@ -97,7 +98,7 @@ function formatSelectedDate(date) {
   });
 }
 
-function toLocalDateTime(date, time) {
+function toLocalDateTime(date: Date, time: string) {
   const [hour, minute] = time.split(":").map(Number);
   return new Date(
     date.getFullYear(),
@@ -110,7 +111,7 @@ function toLocalDateTime(date, time) {
   );
 }
 
-function formatTimeLabel(slot) {
+function formatTimeLabel(slot: string) {
   const [hour, minute] = slot.split(":").map(Number);
   const localDate = new Date(2000, 0, 1, hour, minute, 0, 0);
   return localDate.toLocaleTimeString(undefined, {
@@ -127,7 +128,7 @@ function nextHalfHourTime() {
   return `${pad(Math.min(hour, 23))}:${pad(roundedMinutes)}`;
 }
 
-function getEarliestAllowedDate(now, minDate) {
+function getEarliestAllowedDate(now: Date, minDate: Date | null) {
   const today = startOfDay(now);
   const minDay = minDate ? startOfDay(minDate) : null;
   if (!minDay) {
@@ -137,7 +138,7 @@ function getEarliestAllowedDate(now, minDate) {
   return minDay.getTime() > today.getTime() ? minDay : today;
 }
 
-function isSlotBeforeBoundary(slotDateTime, now, minDate) {
+function isSlotBeforeBoundary(slotDateTime: Date, now: Date, minDate: Date | null) {
   if (slotDateTime.getTime() < now.getTime()) {
     return true;
   }
@@ -149,6 +150,15 @@ function isSlotBeforeBoundary(slotDateTime, now, minDate) {
   return false;
 }
 
+type AdminSchedulePopoverProps = {
+  value?: Date | string | null;
+  onChange: (value: string | null) => void;
+  timezoneLabel?: string;
+  minDate?: Date | string | null;
+  triggerLabel?: string;
+  disabled?: boolean;
+};
+
 export default function AdminSchedulePopover({
   value = null,
   onChange,
@@ -156,7 +166,7 @@ export default function AdminSchedulePopover({
   minDate,
   triggerLabel = "Schedule",
   disabled = false,
-}) {
+}: AdminSchedulePopoverProps) {
   const initialValueDate = normalizeDateValue(value);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -167,17 +177,17 @@ export default function AdminSchedulePopover({
       ? `${pad(initialValueDate.getHours())}:${pad(initialValueDate.getMinutes())}`
       : nextHalfHourTime()
   );
-  const [popoverStyle, setPopoverStyle] = useState({});
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
 
-  const rootRef = useRef(null);
-  const popoverRef = useRef(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const monthDays = useMemo(() => buildMonthDays(displayDate), [displayDate]);
   const timeSlots = useMemo(() => buildTimeSlots(), []);
   const resolvedMinDate = useMemo(() => normalizeDateValue(minDate), [minDate]);
   const resolvedTimezoneLabel =
     timezoneLabel || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hasScheduledValue = Boolean(
-    normalizeDateValue(value) && normalizeDateValue(value).getTime() > Date.now()
+    normalizeDateValue(value) && normalizeDateValue(value)!.getTime() > Date.now()
   );
 
   useEffect(() => {
@@ -234,16 +244,16 @@ export default function AdminSchedulePopover({
       return;
     }
 
-    const onPointerDown = (event) => {
+    const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      const clickedTrigger = rootRef.current && rootRef.current.contains(target);
-      const clickedPopover = popoverRef.current && popoverRef.current.contains(target);
+      const clickedTrigger = target instanceof Node && rootRef.current && rootRef.current.contains(target);
+      const clickedPopover = target instanceof Node && popoverRef.current && popoverRef.current.contains(target);
       if (!clickedTrigger && !clickedPopover) {
         setOpen(false);
       }
     };
 
-    const onKeyDown = (event) => {
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
       }
@@ -274,17 +284,17 @@ export default function AdminSchedulePopover({
     resolvedMinDate
   );
 
-  const isDayDisabled = (date) => {
+  const isDayDisabled = (date: Date) => {
     const day = startOfDay(date);
     return day.getTime() < earliestAllowedDay.getTime();
   };
 
-  const isSlotDisabled = (slot) => {
+  const isSlotDisabled = (slot: string) => {
     const slotDateTime = toLocalDateTime(selectedDate, slot);
     return isSlotBeforeBoundary(slotDateTime, new Date(), resolvedMinDate);
   };
 
-  const selectFirstValidSlot = (date) => {
+  const selectFirstValidSlot = (date: Date) => {
     const nextValid = timeSlots.find((slot) => {
       const slotDateTime = toLocalDateTime(date, slot);
       return !isSlotBeforeBoundary(slotDateTime, new Date(), resolvedMinDate);

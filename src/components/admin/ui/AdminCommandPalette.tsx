@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
-export const STATIC_COMMANDS = [
+export type AdminCommand = {
+  id: string;
+  label: string;
+  path: string;
+  keywords?: string[];
+};
+
+export const STATIC_COMMANDS: AdminCommand[] = [
   { id: "go-dashboard", label: "Go to Dashboard", path: "/admin", keywords: ["home", "overview"] },
   { id: "go-orders", label: "Go to Orders", path: "/orders", keywords: ["sales", "fulfillment"] },
   { id: "go-draft-orders", label: "Go to Draft Orders", path: "/draft-orders", keywords: ["quotes"] },
@@ -19,7 +27,7 @@ export const STATIC_COMMANDS = [
   { id: "go-brand-kit", label: "Open Brand Kit", path: "/settings?section=brand-kit", keywords: ["branding"] },
 ];
 
-function matchCommand(command, query) {
+function matchCommand(command: AdminCommand, query: string) {
   if (!query) {
     return true;
   }
@@ -30,8 +38,8 @@ function matchCommand(command, query) {
 
 export default function AdminCommandPalette() {
   const router = useRouter();
-  const rootRef = useRef(null);
-  const inputRef = useRef(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -42,8 +50,9 @@ export default function AdminCommandPalette() {
   );
 
   useEffect(() => {
-    const handlePaletteEvent = (event) => {
-      const action = event?.detail?.action || "open";
+    const handlePaletteEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ action?: string }>;
+      const action = customEvent?.detail?.action || "open";
       if (action === "close") {
         setOpen(false);
         return;
@@ -64,7 +73,7 @@ export default function AdminCommandPalette() {
   }, []);
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       const isModifier = event.metaKey || event.ctrlKey;
       const key = event.key.toLowerCase();
 
@@ -104,8 +113,8 @@ export default function AdminCommandPalette() {
       return;
     }
 
-    const handlePointerDown = (event) => {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && rootRef.current && !rootRef.current.contains(event.target)) {
         setOpen(false);
       }
     };
@@ -114,7 +123,7 @@ export default function AdminCommandPalette() {
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
-  const runCommand = (command) => {
+  const runCommand = (command?: AdminCommand) => {
     if (!command) {
       return;
     }
@@ -123,7 +132,7 @@ export default function AdminCommandPalette() {
     setOpen(false);
   };
 
-  const handleInputKeyDown = (event) => {
+  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((current) => (current + 1) % Math.max(filteredCommands.length, 1));
