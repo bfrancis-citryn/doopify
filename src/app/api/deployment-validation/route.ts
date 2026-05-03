@@ -28,7 +28,6 @@ export async function GET(req: Request) {
       mediaS3BucketPresent: Boolean(process.env.MEDIA_S3_BUCKET),
       mediaS3AccessKeyIdPresent: Boolean(process.env.MEDIA_S3_ACCESS_KEY_ID),
       mediaS3SecretAccessKeyPresent: Boolean(process.env.MEDIA_S3_SECRET_ACCESS_KEY),
-      mediaPublicBaseUrlPresent: Boolean(process.env.MEDIA_PUBLIC_BASE_URL),
 
       rateLimitStore,
 

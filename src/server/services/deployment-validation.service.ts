@@ -29,7 +29,6 @@ export type DeploymentValidationFacts = {
   mediaS3BucketPresent: boolean
   mediaS3AccessKeyIdPresent: boolean
   mediaS3SecretAccessKeyPresent: boolean
-  mediaPublicBaseUrlPresent: boolean
 
   rateLimitStore: string | null
 

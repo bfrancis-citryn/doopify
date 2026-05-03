@@ -1,5 +1,52 @@
 # Recent Updates
 
+## Post Phase 16/17 Audit and Build Repair (2026-05-03)
+
+**Goal:** Fix build blocker, repair pre-existing test failures, audit Phase 16/17 correctness, pass all verification gates.
+
+**Changes:**
+
+- `src/server/services/product.service.ts` — Removed corrupted duplicate tail (lines 853–982). The file ended correctly at the first `slugify()` function at line 852. The duplicate contained stray `ng` plus re-pasted `upsertOptions` fragment, `decrementInventory`, `archiveProduct`, `getStorefrontProducts`, and a second `slugify`. All first valid implementations (lines 720–852) are preserved unchanged.
+
+- `src/components/webhooks/delivery-logs.copy.test.ts` — Fixed stale file extension reference: `AdminCommandPalette.jsx` → `AdminCommandPalette.tsx`. The file was converted to TypeScript; the test still read the old `.jsx` path.
+
+- `src/components/settings/SettingsWorkspace.test.ts` — Updated stale assertion: `paypal?.sourceMeta` expected `'not implemented'` but the helper returns `'Runtime support: unavailable'`. Updated to match the actual string.
+
+- `src/server/services/deployment-validation.service.ts` — Removed unused `mediaPublicBaseUrlPresent` fact field. Per `docs/MEDIA_OBJECT_STORAGE_PLAN.md`, `MEDIA_PUBLIC_BASE_URL` is optional: without it, S3 assets are streamed through `/api/media/{assetId}`. The fact was collected but never used in any check.
+
+- `src/app/api/deployment-validation/route.ts` — Removed corresponding unused `mediaPublicBaseUrlPresent` env read.
+
+- `src/server/services/deployment-validation.service.test.ts` — Removed `mediaPublicBaseUrlPresent: false` from `baseFacts()` to match updated type.
+
+**Phase 16 audit result:**
+- `buildLaunchReadinessReport(facts)` is pure (no DB or env access). ✅
+- `/api/readiness` is owner-only via `requireOwner`. ✅
+- Response contains only booleans and safe string literals (source labels like `'db'/'env'/'none'`). No raw secrets. ✅
+- All 11 readiness checks are accurate: store profile, Stripe runtime (real DB-verified vs env-fallback source), shipping (uses real `buildShippingSetupStatus`), tax (distinguishes enabled/disabled/unconfigured), active products, product price, product inventory, product media (optional), storefront URL, email provider (optional), webhook retry secret (optional). ✅
+- Product facts are lightweight: targeted `select` on `id`, `isFeatured` media id, `priceCents`, and `inventory` only. ✅
+- `webhook-jobs` check has `optional: true` — consistent with `RELEASE_BLOCKERS.md` placing WEBHOOK_RETRY_SECRET in "Should fix before public beta" (not a private-beta blocker). ✅
+
+**Phase 17 audit result:**
+- `buildDeploymentValidationReport(facts)` is pure (no DB or env access). ✅
+- `/api/deployment-validation` is owner-only via `requireOwner`. ✅
+- Response contains only booleans and safe labels. No raw secrets or credential values. ✅
+- ENCRYPTION_KEY missing in production is a non-optional blocker (`blockerCount > 0`). ✅
+- S3 vars missing when `MEDIA_STORAGE_PROVIDER=s3` is a non-optional blocker. ✅
+- Rate-limit `memory` store in production is flagged as `needs_setup`. ✅
+- Job runner auth: `JOB_RUNNER_SECRET` or `WEBHOOK_RETRY_SECRET` fallback required. ✅
+- Abandoned checkout auth: `ABANDONED_CHECKOUT_SECRET` or `WEBHOOK_RETRY_SECRET` fallback. ✅
+- `mediaPublicBaseUrlPresent` was unused dead plumbing — removed. ✅
+
+**Verification results:**
+- `npm run db:generate` — PASS
+- `npx tsc --noEmit` — PASS (0 errors)
+- `npm run test` — PASS (111/111 test files, 513/513 tests)
+- `npm run build` — PASS
+- `npm run test:integration` — SKIPPED (DATABASE_URL_TEST not configured)
+
+---
+
+
 ## Phase 17 — Deployment and Pilot Validation (2026-05-03)
 
 **Goal:** Prepare Doopify for a controlled private merchant pilot by validating deployment readiness, environment configuration, and operational recovery paths.

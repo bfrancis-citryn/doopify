@@ -42,7 +42,7 @@ describe('SettingsWorkspace payment helpers', () => {
     const manual = rows.find((entry) => entry.id === 'MANUAL')
 
     expect(paypal?.status.label).toBe('Setup needed')
-    expect(paypal?.sourceMeta).toContain('not implemented')
+    expect(paypal?.sourceMeta).toContain('unavailable')
     expect(manual?.status.label).toBe('Built-in')
     expect(manual?.statusMeta).toContain('Storefront manual checkout should remain disabled')
   })

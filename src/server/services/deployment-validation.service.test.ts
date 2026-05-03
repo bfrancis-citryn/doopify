@@ -14,7 +14,6 @@ function baseFacts(): DeploymentValidationFacts {
     mediaS3BucketPresent: false,
     mediaS3AccessKeyIdPresent: false,
     mediaS3SecretAccessKeyPresent: false,
-    mediaPublicBaseUrlPresent: false,
     rateLimitStore: 'postgres',
     cspMode: 'report-only',
     webhookRetrySecretPresent: true,
