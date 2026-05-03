@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\server\\\\services\" -Force)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\settings\\\\shipping\" -Force)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(git stash *)"
+    ]
+  }
+}

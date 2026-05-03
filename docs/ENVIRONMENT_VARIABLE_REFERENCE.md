@@ -2,7 +2,7 @@
 
 > Runtime and CLI environment variable reference for production operations.
 >
-> Last updated: May 1, 2026
+> Last updated: May 3, 2026
 
 ## Runtime Core
 
@@ -49,6 +49,33 @@
 | --- | --- | --- |
 | `SHIPPO_API_KEY` | Required when Shippo env fallback is used | Shippo API key for shipping rate/provider fallback paths. |
 | `EASYPOST_API_KEY` | Required when EasyPost env fallback is used | EasyPost API key for shipping rate/provider fallback paths. |
+
+## Media / Object Storage
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `MEDIA_STORAGE_PROVIDER` | Optional | `postgres` (default) or `s3`. Controls where media binary data is stored. |
+| `MEDIA_S3_REGION` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 region (e.g., `auto` for Cloudflare R2). |
+| `MEDIA_S3_BUCKET` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 bucket name. |
+| `MEDIA_S3_ACCESS_KEY_ID` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 access key ID. |
+| `MEDIA_S3_SECRET_ACCESS_KEY` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 secret access key. |
+| `MEDIA_S3_ENDPOINT` | Optional | Custom endpoint for S3-compatible providers (e.g., Cloudflare R2). |
+| `MEDIA_PUBLIC_BASE_URL` | Optional | Public CDN base URL for object-stored media (e.g., `https://cdn.example.com/media`). Also used in `img-src` CSP. |
+
+## Security / CSP
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SECURITY_HEADERS_ENABLED` | Optional | Set `false` to emergency-disable all security headers. Default: enabled. |
+| `CSP_MODE` | Optional | `off`, `report-only` (default in production), or `enforce`. Controls Content-Security-Policy enforcement. |
+| `CSP_MEDIA_ORIGINS` | Optional | Comma-separated exact media/CDN origins for `img-src` CSP. Replaces broad `https:` fallback when set. |
+| `CSP_ANALYTICS_ORIGINS` | Optional | Comma-separated analytics origins for `connect-src` CSP if a client analytics vendor is added. |
+
+## Rate Limiting
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DOOPIFY_RATE_LIMIT_STORE` | Optional | `postgres` or `memory`. Defaults to `postgres` in production. Use `postgres` for multi-instance deployments. |
 
 ## Shipping Provider Webhooks
 

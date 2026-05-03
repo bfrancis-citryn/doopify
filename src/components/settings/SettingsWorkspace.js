@@ -729,6 +729,14 @@ export default function SettingsWorkspace() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupLoaded, setSetupLoaded] = useState(false);
   const [setupError, setSetupError] = useState('');
+  const [readinessStatus, setReadinessStatus] = useState(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [readinessLoaded, setReadinessLoaded] = useState(false);
+  const [readinessError, setReadinessError] = useState('');
+  const [deploymentStatus, setDeploymentStatus] = useState(null);
+  const [deploymentLoading, setDeploymentLoading] = useState(false);
+  const [deploymentLoaded, setDeploymentLoaded] = useState(false);
+  const [deploymentError, setDeploymentError] = useState('');
   const [providerStatusMap, setProviderStatusMap] = useState({});
   const [providerStatusLoading, setProviderStatusLoading] = useState(false);
   const [providerStatusLoaded, setProviderStatusLoaded] = useState(false);
@@ -927,6 +935,64 @@ export default function SettingsWorkspace() {
   }, [activeSection, setupLoaded]);
 
   useEffect(() => {
+    if (activeSection !== 'setup' || readinessLoaded) return;
+
+    let cancelled = false;
+
+    async function loadReadinessStatus() {
+      setReadinessLoading(true);
+      setReadinessError('');
+      try {
+        const data = await fetch('/api/readiness', { cache: 'no-store' }).then(parseApiJson);
+        if (!cancelled) setReadinessStatus(data);
+      } catch (loadError) {
+        if (!cancelled) {
+          setReadinessStatus(null);
+          setReadinessError(loadError instanceof Error ? loadError.message : 'Failed to load launch readiness');
+        }
+      } finally {
+        if (!cancelled) {
+          setReadinessLoading(false);
+          setReadinessLoaded(true);
+        }
+      }
+    }
+
+    loadReadinessStatus();
+
+    return () => { cancelled = true; };
+  }, [activeSection, readinessLoaded]);
+
+  useEffect(() => {
+    if (activeSection !== 'setup' || deploymentLoaded) return;
+
+    let cancelled = false;
+
+    async function loadDeploymentValidation() {
+      setDeploymentLoading(true);
+      setDeploymentError('');
+      try {
+        const data = await fetch('/api/deployment-validation', { cache: 'no-store' }).then(parseApiJson);
+        if (!cancelled) setDeploymentStatus(data);
+      } catch (loadError) {
+        if (!cancelled) {
+          setDeploymentStatus(null);
+          setDeploymentError(loadError instanceof Error ? loadError.message : 'Failed to load deployment validation');
+        }
+      } finally {
+        if (!cancelled) {
+          setDeploymentLoading(false);
+          setDeploymentLoaded(true);
+        }
+      }
+    }
+
+    loadDeploymentValidation();
+
+    return () => { cancelled = true; };
+  }, [activeSection, deploymentLoaded]);
+
+  useEffect(() => {
     const shouldLoadProviders = ['payments', 'shipping', 'email'].includes(activeSection);
     if (!shouldLoadProviders || providerStatusLoaded || providerStatusLoading) {
       return;
@@ -1096,6 +1162,12 @@ export default function SettingsWorkspace() {
   const showSetupLoadingState = activeSection === 'setup' && setupLoading && !setupStatus && !setupError;
   const showSetupErrorState = activeSection === 'setup' && Boolean(setupError);
   const showSetupDiagnostics = activeSection === 'setup' && hasSetupDiagnostics;
+  const showReadinessLoading = activeSection === 'setup' && readinessLoading && !readinessStatus && !readinessError;
+  const showReadinessError = activeSection === 'setup' && Boolean(readinessError);
+  const showReadinessChecklist = activeSection === 'setup' && Boolean(readinessStatus?.checks?.length);
+  const showDeploymentLoading = activeSection === 'setup' && deploymentLoading && !deploymentStatus && !deploymentError;
+  const showDeploymentError = activeSection === 'setup' && Boolean(deploymentError);
+  const showDeploymentChecklist = activeSection === 'setup' && Boolean(deploymentStatus?.checks?.length);
   const setupRequiredNextSteps = setupStatus?.requiredNextSteps || [];
   const setupOptionalProductionSteps = setupStatus?.optionalProductionSteps || [];
   const setupOptionalFoundationSteps = useMemo(
@@ -1617,6 +1689,36 @@ export default function SettingsWorkspace() {
     } finally {
       setSetupLoading(false);
       setSetupLoaded(true);
+    }
+  }
+
+  async function refreshReadinessStatus() {
+    try {
+      setReadinessLoading(true);
+      setReadinessError('');
+      const data = await fetch('/api/readiness', { cache: 'no-store' }).then(parseApiJson);
+      setReadinessStatus(data);
+    } catch (refreshError) {
+      setReadinessStatus(null);
+      setReadinessError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh launch readiness');
+    } finally {
+      setReadinessLoading(false);
+      setReadinessLoaded(true);
+    }
+  }
+
+  async function refreshDeploymentValidation() {
+    try {
+      setDeploymentLoading(true);
+      setDeploymentError('');
+      const data = await fetch('/api/deployment-validation', { cache: 'no-store' }).then(parseApiJson);
+      setDeploymentStatus(data);
+    } catch (refreshError) {
+      setDeploymentStatus(null);
+      setDeploymentError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh deployment validation');
+    } finally {
+      setDeploymentLoading(false);
+      setDeploymentLoaded(true);
     }
   }
 
@@ -3214,6 +3316,151 @@ export default function SettingsWorkspace() {
                     configure provider webhooks.
                   </p>
                 </AdminCard>
+
+                {showReadinessLoading ? (
+                  <div className={styles.statusBlock}>
+                    <div className={styles.loadingLine} />
+                    <div className={styles.loadingLine} />
+                    <div className={`${styles.loadingLine} ${styles.loadingLineShort}`} />
+                    <p className={styles.statusText}>Loading launch readiness...</p>
+                  </div>
+                ) : null}
+
+                {showReadinessError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Launch readiness error</p>
+                    <p className={styles.statusText}>{readinessError}</p>
+                  </div>
+                ) : null}
+
+                {showReadinessChecklist ? (
+                  <>
+                    <AdminCard className={styles.setupSummaryCard} variant="card">
+                      <div className={styles.setupCardHeader}>
+                        <div>
+                          <p className={styles.eyebrow}>Launch readiness</p>
+                          <h3 className={styles.setupHeadline}>
+                            {readinessStatus.launchReady ? 'Ready to launch' : 'Not ready to launch'}
+                          </h3>
+                          <p className={styles.statusText}>
+                            {readinessStatus.readyCount} ready&nbsp;&middot;&nbsp;
+                            {readinessStatus.needsSetupCount} need setup&nbsp;&middot;&nbsp;
+                            {readinessStatus.skippedCount} skipped&nbsp;&middot;&nbsp;
+                            {readinessStatus.optionalCount} optional
+                          </p>
+                        </div>
+                        <AdminButton
+                          disabled={readinessLoading}
+                          onClick={() => refreshReadinessStatus()}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          {readinessLoading ? 'Refreshing...' : 'Refresh'}
+                        </AdminButton>
+                      </div>
+                    </AdminCard>
+
+                    <section className={styles.setupGrid}>
+                      {(readinessStatus.checks || []).map((check) => (
+                        <AdminCard as="article" className={styles.setupCard} key={check.id} variant="card">
+                          <div className={styles.setupCardHeader}>
+                            <h4>{check.title}</h4>
+                            <AdminStatusChip
+                              tone={
+                                check.status === 'ready'
+                                  ? 'success'
+                                  : check.status === 'needs_setup'
+                                    ? 'danger'
+                                    : 'neutral'
+                              }
+                            >
+                              {check.status === 'ready'
+                                ? 'Ready'
+                                : check.status === 'needs_setup'
+                                  ? 'Needs setup'
+                                  : check.status === 'skipped'
+                                    ? 'Skipped'
+                                    : 'Optional'}
+                            </AdminStatusChip>
+                          </div>
+                          <p className={styles.statusText}>{check.summary}</p>
+                          {check.fix ? <p className={styles.setupFixText}>Fix: {check.fix}</p> : null}
+                        </AdminCard>
+                      ))}
+                    </section>
+                  </>
+                ) : null}
+
+                {showDeploymentLoading ? (
+                  <div className={styles.statusBlock}>
+                    <div className={styles.loadingLine} />
+                    <div className={styles.loadingLine} />
+                    <div className={`${styles.loadingLine} ${styles.loadingLineShort}`} />
+                    <p className={styles.statusText}>Loading deployment validation...</p>
+                  </div>
+                ) : null}
+
+                {showDeploymentError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Deployment validation error</p>
+                    <p className={styles.statusText}>{deploymentError}</p>
+                  </div>
+                ) : null}
+
+                {showDeploymentChecklist ? (
+                  <>
+                    <AdminCard className={styles.setupSummaryCard} variant="card">
+                      <div className={styles.setupCardHeader}>
+                        <div>
+                          <p className={styles.eyebrow}>Deployment validation</p>
+                          <h3 className={styles.setupHeadline}>
+                            {deploymentStatus.deploymentReady ? 'Deployment ready' : 'Deployment issues found'}
+                          </h3>
+                          <p className={styles.statusText}>
+                            Infrastructure and environment configuration checks.
+                          </p>
+                        </div>
+                        <AdminButton
+                          disabled={deploymentLoading}
+                          onClick={() => refreshDeploymentValidation()}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          {deploymentLoading ? 'Refreshing...' : 'Refresh'}
+                        </AdminButton>
+                      </div>
+                    </AdminCard>
+
+                    <section className={styles.setupGrid}>
+                      {(deploymentStatus.checks || []).map((check) => (
+                        <AdminCard as="article" className={styles.setupCard} key={check.id} variant="card">
+                          <div className={styles.setupCardHeader}>
+                            <h4>{check.title}</h4>
+                            <AdminStatusChip
+                              tone={
+                                check.status === 'ready'
+                                  ? 'success'
+                                  : check.status === 'needs_setup'
+                                    ? 'danger'
+                                    : 'neutral'
+                              }
+                            >
+                              {check.status === 'ready'
+                                ? 'Ready'
+                                : check.status === 'needs_setup'
+                                  ? 'Needs setup'
+                                  : check.status === 'skipped'
+                                    ? 'Skipped'
+                                    : 'Optional'}
+                            </AdminStatusChip>
+                          </div>
+                          <p className={styles.statusText}>{check.summary}</p>
+                          {check.fix ? <p className={styles.setupFixText}>Fix: {check.fix}</p> : null}
+                        </AdminCard>
+                      ))}
+                    </section>
+                  </>
+                ) : null}
 
                 {showSetupDiagnostics ? (
                   <AdminCard className={styles.setupSummaryCard} variant="card">
