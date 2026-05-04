@@ -69,7 +69,9 @@ export async function PATCH(req: Request, { params }: Params) {
       ...(parsed.data.maxSubtotal !== undefined
         ? {
             maxSubtotalCents:
-              parsed.data.maxSubtotal == null ? null : dollarsToCents(parsed.data.maxSubtotal),
+              parsed.data.maxSubtotal == null || parsed.data.maxSubtotal === 0
+                ? null
+                : dollarsToCents(parsed.data.maxSubtotal),
           }
         : {}),
       ...(parsed.data.freeOverAmount !== undefined

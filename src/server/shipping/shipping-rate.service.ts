@@ -302,7 +302,11 @@ function resolveModernManualQuotes(input: {
     .filter((rate) => {
       if (rate.rateType === 'PRICE_BASED') {
         const minSubtotalCents = rate.minSubtotalCents ?? 0
-        const maxSubtotalCents = rate.maxSubtotalCents ?? Number.POSITIVE_INFINITY
+        // Treat 0 as no maximum — saving 0 is almost always a misconfiguration.
+        const maxSubtotalCents =
+          rate.maxSubtotalCents == null || rate.maxSubtotalCents === 0
+            ? Number.POSITIVE_INFINITY
+            : rate.maxSubtotalCents
         return input.subtotalCents >= minSubtotalCents && input.subtotalCents <= maxSubtotalCents
       }
 

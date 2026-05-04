@@ -24,7 +24,8 @@
       "Bash(curl -s \"https://doopify.vercel.app/api/checkout/stripe-config\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://doopify.vercel.app/checkout\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://doopify.vercel.app/settings\")",
-      "Bash(curl -s \"https://doopify.vercel.app/api/readiness\" -o /dev/null -w \"%{http_code}\")"
+      "Bash(curl -s \"https://doopify.vercel.app/api/readiness\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(npx vitest *)"
     ]
   }
 }

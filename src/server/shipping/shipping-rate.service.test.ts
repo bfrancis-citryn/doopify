@@ -442,6 +442,246 @@ describe('shipping-rate service', () => {
     })
   })
 
+  it('blank state/province matches all US states for manual rate', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingManualRates: [
+          {
+            id: 'rate_us_any_state',
+            name: 'US Shipping',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            rateType: 'FLAT',
+            amountCents: 799,
+            minWeight: null,
+            maxWeight: null,
+            minSubtotalCents: null,
+            maxSubtotalCents: null,
+            freeOverAmountCents: null,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+
+    const txQuotes = await getShippingRatesForCheckout({
+      subtotalCents: 3000,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'TX' },
+    })
+    expect(txQuotes).toHaveLength(1)
+    expect(txQuotes[0].amountCents).toBe(799)
+
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingManualRates: [
+          {
+            id: 'rate_us_any_state',
+            name: 'US Shipping',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            rateType: 'FLAT',
+            amountCents: 799,
+            minWeight: null,
+            maxWeight: null,
+            minSubtotalCents: null,
+            maxSubtotalCents: null,
+            freeOverAmountCents: null,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+
+    const nyQuotes = await getShippingRatesForCheckout({
+      subtotalCents: 3000,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'NY' },
+    })
+    expect(nyQuotes).toHaveLength(1)
+    expect(nyQuotes[0].amountCents).toBe(799)
+  })
+
+  it('state-specific rate matches only the specified state', async () => {
+    const fixture = storeFixture({
+      shippingMode: 'MANUAL',
+      shippingManualRates: [
+        {
+          id: 'rate_ca_only',
+          name: 'CA Rate',
+          regionCountry: 'US',
+          regionStateProvince: 'CA',
+          rateType: 'FLAT',
+          amountCents: 599,
+          minWeight: null,
+          maxWeight: null,
+          minSubtotalCents: null,
+          maxSubtotalCents: null,
+          freeOverAmountCents: null,
+          estimatedDeliveryText: null,
+          isActive: true,
+        },
+      ],
+    })
+
+    mocks.prisma.store.findFirst.mockResolvedValue(fixture)
+    const caQuotes = await getShippingRatesForCheckout({
+      subtotalCents: 3000,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'CA' },
+    })
+    expect(caQuotes).toHaveLength(1)
+    expect(caQuotes[0].id).toBe('manual-rate:rate_ca_only')
+
+    // For TX the modern rate does not match; in non-production mode the legacy
+    // domestic fallback may apply. Verify the CA-specific rate is NOT returned.
+    mocks.prisma.store.findFirst.mockResolvedValue(fixture)
+    const txQuotes = await getShippingRatesForCheckout({
+      subtotalCents: 3000,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'TX' },
+    })
+    expect(txQuotes.every((q) => q.id !== 'manual-rate:rate_ca_only')).toBe(true)
+  })
+
+  it('weight-based rate matches when cart weight is within min/max range', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingManualRates: [
+          {
+            id: 'rate_weight',
+            name: 'Heavy Ship',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            rateType: 'WEIGHT_BASED',
+            amountCents: 1500,
+            minWeight: 4,
+            maxWeight: 32,
+            minSubtotalCents: null,
+            maxSubtotalCents: null,
+            freeOverAmountCents: null,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+
+    const quotes = await getShippingRatesForCheckout({
+      subtotalCents: 5000,
+      totalWeightOz: 16,
+      shippingAddress: { country: 'US', province: 'CA' },
+    })
+    expect(quotes).toHaveLength(1)
+    expect(quotes[0].amountCents).toBe(1500)
+  })
+
+  it('weight-based rate does not match when product weights are not set (totalWeightOz=0)', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingManualRates: [
+          {
+            id: 'rate_weight_only',
+            name: 'Weight Ship',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            rateType: 'WEIGHT_BASED',
+            amountCents: 1000,
+            minWeight: 0.1,
+            maxWeight: 100,
+            minSubtotalCents: null,
+            maxSubtotalCents: null,
+            freeOverAmountCents: null,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+
+    // totalWeightOz=0 < minWeight=0.1 so the weight-based rate must not appear.
+    // In non-production mode the service may return a legacy domestic fallback —
+    // the important assertion is that the weight-based rate itself is excluded.
+    const quotes = await getShippingRatesForCheckout({
+      subtotalCents: 5000,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'CA' },
+    })
+    expect(quotes.some((q) => q.id === 'manual-rate:rate_weight_only')).toBe(false)
+  })
+
+  it('PRICE_BASED rate with null maxSubtotalCents matches all cart sizes above min', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingManualRates: [
+          {
+            id: 'rate_price_no_max',
+            name: 'Price-based no max',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            rateType: 'PRICE_BASED',
+            amountCents: 499,
+            minWeight: null,
+            maxWeight: null,
+            minSubtotalCents: 0,
+            maxSubtotalCents: null,
+            freeOverAmountCents: null,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+
+    const quotes = await getShippingRatesForCheckout({
+      subtotalCents: 999999,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'CA' },
+    })
+    expect(quotes).toHaveLength(1)
+    expect(quotes[0].amountCents).toBe(499)
+  })
+
+  it('PRICE_BASED rate with maxSubtotalCents=0 is treated as no maximum (not $0 cap)', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingManualRates: [
+          {
+            id: 'rate_price_zero_max',
+            name: 'Price-based zero max',
+            regionCountry: 'US',
+            regionStateProvince: null,
+            rateType: 'PRICE_BASED',
+            amountCents: 599,
+            minWeight: null,
+            maxWeight: null,
+            minSubtotalCents: 0,
+            maxSubtotalCents: 0,
+            freeOverAmountCents: null,
+            estimatedDeliveryText: null,
+            isActive: true,
+          },
+        ],
+      })
+    )
+
+    const quotes = await getShippingRatesForCheckout({
+      subtotalCents: 5000,
+      totalWeightOz: 0,
+      shippingAddress: { country: 'US', province: 'CA' },
+    })
+    expect(quotes).toHaveLength(1)
+    expect(quotes[0].amountCents).toBe(599)
+  })
+
   it('throws when fallback behavior is HIDE_SHIPPING and live rates fail', async () => {
     mocks.prisma.store.findFirst.mockResolvedValue(
       storeFixture({

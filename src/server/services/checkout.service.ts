@@ -458,15 +458,27 @@ export async function createCheckoutPaymentIntent(input: {
     `[checkout] Stripe runtime source: ${stripeRuntime.source}; mode: ${stripeRuntime.mode ?? 'unknown'}`
   )
 
-  const paymentIntent = await createStripePaymentIntent({
-    amount: totalCents,
-    currency,
-    email: normalizedEmail,
-    metadata: {
-      checkoutEmail: normalizedEmail,
-    },
-    secretKey: stripeRuntime.secretKey,
-  })
+  let paymentIntent: StripePaymentIntent
+  try {
+    paymentIntent = await createStripePaymentIntent({
+      amount: totalCents,
+      currency,
+      email: normalizedEmail,
+      metadata: {
+        checkoutEmail: normalizedEmail,
+      },
+      secretKey: stripeRuntime.secretKey,
+    })
+  } catch (stripeError) {
+    const msg = stripeError instanceof Error ? stripeError.message : String(stripeError)
+    if (msg.toLowerCase().includes('invalid api key') || msg.toLowerCase().includes('no such api key')) {
+      throw new Error(
+        `Stripe rejected the API key (source: ${stripeRuntime.source}, mode: ${stripeRuntime.mode ?? 'unknown'}). ` +
+        'Verify the secret key in Settings → Payments and re-save to update.'
+      )
+    }
+    throw stripeError
+  }
 
   if (!paymentIntent.client_secret) {
     throw new Error('Stripe did not return a client secret for this payment intent')

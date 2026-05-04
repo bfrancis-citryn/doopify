@@ -1333,44 +1333,54 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         <AdminField label="Rate name">
           <AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} />
         </AdminField>
-        <AdminField label="Region country">
-          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} />
+        <AdminField label="Destination country" hint="ISO code, e.g. US, CA, GB. Leave blank to match all countries.">
+          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} placeholder="e.g. US" />
         </AdminField>
-        <AdminField label="Region state / province">
-          <AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} />
+        <AdminField label="State / province (optional)" hint="Leave blank to match all states or provinces in the destination country.">
+          <AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} placeholder="e.g. CA — leave blank for all states" />
         </AdminField>
         <AdminField label="Rate type">
           <AdminSelect
             value={manualForm.rateType}
             onChange={(value) => setManualForm((current) => ({ ...current, rateType: value }))}
             options={[
-              { value: "FLAT", label: "Flat" },
-              { value: "FREE", label: "Free" },
-              { value: "WEIGHT_BASED", label: "Weight-based" },
-              { value: "PRICE_BASED", label: "Price-based" },
+              { value: "FLAT", label: "Flat — fixed charge regardless of order" },
+              { value: "FREE", label: "Free — no shipping charge" },
+              { value: "WEIGHT_BASED", label: "Weight-based — requires product weights" },
+              { value: "PRICE_BASED", label: "Price-based — subtotal range" },
             ]}
           />
         </AdminField>
-        <AdminField label="Amount">
-          <AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} />
-        </AdminField>
-        <AdminField label="Min weight">
-          <AdminInput type="number" value={manualForm.minWeight} onChange={(event) => setManualForm((current) => ({ ...current, minWeight: event.target.value }))} />
-        </AdminField>
-        <AdminField label="Max weight">
-          <AdminInput type="number" value={manualForm.maxWeight} onChange={(event) => setManualForm((current) => ({ ...current, maxWeight: event.target.value }))} />
-        </AdminField>
-        <AdminField label="Min subtotal">
-          <AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} />
-        </AdminField>
-        <AdminField label="Max subtotal">
-          <AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} />
-        </AdminField>
-        <AdminField label="Free-over amount">
-          <AdminInput type="number" value={manualForm.freeOverAmount} onChange={(event) => setManualForm((current) => ({ ...current, freeOverAmount: event.target.value }))} />
-        </AdminField>
-        <AdminField label="Estimated delivery">
-          <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} />
+        {manualForm.rateType !== "FREE" ? (
+          <AdminField label="Amount ($)">
+            <AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} />
+          </AdminField>
+        ) : null}
+        {manualForm.rateType === "WEIGHT_BASED" ? (
+          <>
+            <AdminField label="Min weight (oz)" hint="Minimum total cart weight in ounces for this rate to apply.">
+              <AdminInput type="number" value={manualForm.minWeight} onChange={(event) => setManualForm((current) => ({ ...current, minWeight: event.target.value }))} placeholder="0" />
+            </AdminField>
+            <AdminField label="Max weight (oz)" hint="Maximum total cart weight in ounces. Leave blank for no maximum.">
+              <AdminInput type="number" value={manualForm.maxWeight} onChange={(event) => setManualForm((current) => ({ ...current, maxWeight: event.target.value }))} placeholder="Leave blank for no maximum" />
+            </AdminField>
+            <p className={styles.statusText} style={{ fontSize: "0.8rem", color: "var(--warning, #f59e0b)" }}>
+              Weight-based rates only apply when products have weights set. Add weight to each product variant in the product editor.
+            </p>
+          </>
+        ) : null}
+        {manualForm.rateType === "PRICE_BASED" ? (
+          <>
+            <AdminField label="Min subtotal ($)" hint="Rate applies when cart subtotal is at or above this amount.">
+              <AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} placeholder="0" />
+            </AdminField>
+            <AdminField label="Max subtotal ($)" hint="Rate applies when cart subtotal is at or below this amount. Leave blank for no maximum.">
+              <AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} placeholder="Leave blank for no maximum" />
+            </AdminField>
+          </>
+        ) : null}
+        <AdminField label="Estimated delivery (optional)">
+          <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} placeholder="e.g. 3–5 business days" />
         </AdminField>
         <label className={styles.checkboxField}>
           <AdminInput checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} className={styles.settingsCheckbox} type="checkbox" />
@@ -1392,11 +1402,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         <AdminField label="Fallback name">
           <AdminInput value={fallbackForm.name} onChange={(event) => setFallbackForm((current) => ({ ...current, name: event.target.value }))} />
         </AdminField>
-        <AdminField label="Region country">
-          <AdminInput value={fallbackForm.regionCountry} onChange={(event) => setFallbackForm((current) => ({ ...current, regionCountry: event.target.value }))} />
+        <AdminField label="Destination country" hint="ISO code, e.g. US, CA. Leave blank to match all countries.">
+          <AdminInput value={fallbackForm.regionCountry} onChange={(event) => setFallbackForm((current) => ({ ...current, regionCountry: event.target.value }))} placeholder="e.g. US" />
         </AdminField>
-        <AdminField label="Region state / province">
-          <AdminInput value={fallbackForm.regionStateProvince} onChange={(event) => setFallbackForm((current) => ({ ...current, regionStateProvince: event.target.value }))} />
+        <AdminField label="State / province (optional)" hint="Leave blank to match all states or provinces in the destination country.">
+          <AdminInput value={fallbackForm.regionStateProvince} onChange={(event) => setFallbackForm((current) => ({ ...current, regionStateProvince: event.target.value }))} placeholder="Leave blank for all states" />
         </AdminField>
         <AdminField label="Amount">
           <AdminInput type="number" value={fallbackForm.amount} onChange={(event) => setFallbackForm((current) => ({ ...current, amount: event.target.value }))} />

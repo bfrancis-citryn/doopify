@@ -13,6 +13,8 @@ const DEFAULT_OPTION_SUGGESTIONS = {
   Style: ['Classic', 'Modern'],
 };
 
+const WEIGHT_UNIT_OPTIONS = ['g', 'kg', 'oz', 'lb'];
+
 function OptionEditor({ option, actions, errorMessage }) {
   const [draftValue, setDraftValue] = useState('');
   const suggestions = DEFAULT_OPTION_SUGGESTIONS[option.name] || [];
@@ -220,6 +222,30 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
                       />
                       {rowErrors.inventoryQty ? <p className={styles.fieldErrorText}>{rowErrors.inventoryQty}</p> : null}
                     </div>
+
+                    <div className={styles.weightCell}>
+                      <div className={styles.weightInputWrap}>
+                        <input
+                          className={styles.weightInput}
+                          min="0"
+                          onChange={event => actions.updateVariantField(variant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
+                          placeholder="0"
+                          step="0.01"
+                          style={{ maxWidth: '4.5rem' }}
+                          type="number"
+                          value={variant.weight ?? ''}
+                        />
+                        <select
+                          className={styles.weightUnitSelect}
+                          onChange={event => actions.updateVariantField(variant.id, 'weightUnit', event.target.value)}
+                          value={variant.weightUnit || 'kg'}
+                        >
+                          {WEIGHT_UNIT_OPTIONS.map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                         </>
                       );
                     })()}
@@ -237,11 +263,13 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
 function BasicInventoryCard({ draftProduct, actions }) {
   const baseVariant = draftProduct.variants[0];
   const inventoryQty = baseVariant?.inventoryQty ?? 0;
+  const weight = baseVariant?.weight ?? '';
+  const weightUnit = baseVariant?.weightUnit || 'kg';
 
   return (
     <div className={styles.basicInventoryCard}>
       <div className={styles.basicInventoryHeader}>
-        <h4 className={styles.basicInventoryTitle}>Inventory</h4>
+        <h4 className={styles.basicInventoryTitle}>Inventory &amp; shipping</h4>
         <label className={styles.inventoryTrackedToggle}>
           <span>Inventory tracked</span>
           <input checked readOnly type="checkbox" />
@@ -262,6 +290,30 @@ function BasicInventoryCard({ draftProduct, actions }) {
             type="number"
             value={inventoryQty}
           />
+        </div>
+        <div className={styles.basicInventoryRow}>
+          <span>Weight (for shipping)</span>
+          <div className={styles.weightInputWrap}>
+            <input
+              className={styles.weightInput}
+              min="0"
+              onChange={event => actions.updateVariantField(baseVariant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
+              placeholder="0"
+              step="0.01"
+              style={{ maxWidth: '5.5rem' }}
+              type="number"
+              value={weight ?? ''}
+            />
+            <select
+              className={styles.weightUnitSelect}
+              onChange={event => actions.updateVariantField(baseVariant.id, 'weightUnit', event.target.value)}
+              value={weightUnit}
+            >
+              {WEIGHT_UNIT_OPTIONS.map(unit => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -343,6 +395,7 @@ export default function ProductVariantEditor() {
               <div className={styles.skuColumn}>SKU</div>
               <div className={styles.priceColumn}>Price</div>
               <div className={styles.inventoryColumn}>Available</div>
+              <div className={styles.weightColumn}>Weight</div>
             </div>
 
             <div className={styles.matrixBody}>
@@ -406,6 +459,30 @@ export default function ProductVariantEditor() {
                         value={variant.inventoryQty}
                       />
                       {rowErrors.inventoryQty ? <p className={styles.fieldErrorText}>{rowErrors.inventoryQty}</p> : null}
+                    </div>
+
+                    <div className={styles.weightCell}>
+                      <div className={styles.weightInputWrap}>
+                        <input
+                          className={styles.weightInput}
+                          min="0"
+                          onChange={event => actions.updateVariantField(variant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
+                          placeholder="0"
+                          step="0.01"
+                          style={{ maxWidth: '4.5rem' }}
+                          type="number"
+                          value={variant.weight ?? ''}
+                        />
+                        <select
+                          className={styles.weightUnitSelect}
+                          onChange={event => actions.updateVariantField(variant.id, 'weightUnit', event.target.value)}
+                          value={variant.weightUnit || 'kg'}
+                        >
+                          {WEIGHT_UNIT_OPTIONS.map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                         </>
                       );

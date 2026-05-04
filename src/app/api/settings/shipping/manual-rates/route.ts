@@ -66,7 +66,9 @@ export async function POST(req: Request) {
       minSubtotalCents:
         parsed.data.minSubtotal == null ? null : dollarsToCents(parsed.data.minSubtotal),
       maxSubtotalCents:
-        parsed.data.maxSubtotal == null ? null : dollarsToCents(parsed.data.maxSubtotal),
+        parsed.data.maxSubtotal == null || parsed.data.maxSubtotal === 0
+          ? null
+          : dollarsToCents(parsed.data.maxSubtotal),
       freeOverAmountCents:
         parsed.data.freeOverAmount == null ? null : dollarsToCents(parsed.data.freeOverAmount),
       estimatedDeliveryText: normalizeOptional(parsed.data.estimatedDeliveryText),

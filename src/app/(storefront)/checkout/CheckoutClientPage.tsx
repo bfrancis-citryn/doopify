@@ -114,8 +114,13 @@ type StripePaymentElement = {
   unmount: () => void
 }
 
+type StripeElementsSubmitResult = {
+  error?: { message?: string } | null
+}
+
 type StripeElements = {
   create: (type: 'payment', options: { layout: 'accordion' }) => StripePaymentElement
+  submit: () => Promise<StripeElementsSubmitResult>
 }
 
 type StripeClient = {
@@ -611,6 +616,14 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setConfirmingPayment(true);
 
     try {
+      // Stripe deferred intent flow: elements.submit() must be called before
+      // any async work and before confirmPayment(). It validates the payment
+      // element and prepares the collected payment method data.
+      const submitResult = await elementsRef.current.submit();
+      if (submitResult.error) {
+        throw new Error(submitResult.error.message || 'Please check your payment details and try again.');
+      }
+
       const result = await stripeRef.current.confirmPayment({
         elements: elementsRef.current,
         clientSecret: checkout.clientSecret,
@@ -662,7 +675,8 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         .primary-btn,.secondary-btn{min-height:48px;padding:0 20px;border-radius:999px;border:none;font:inherit;font-size:12px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer}
         .primary-btn{background:var(--store-primary);color:#080808}
         .secondary-btn{background:transparent;border:1px solid rgba(255,255,255,0.14);color:#f3efe7}
-        .primary-btn:disabled,.secondary-btn:disabled{opacity:0.55;cursor:not-allowed}
+        .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.32)!important;border:1px solid rgba(255,255,255,0.08)!important;opacity:1;cursor:not-allowed}
+        .secondary-btn:disabled{opacity:0.42;cursor:not-allowed}
         .error{margin-top:18px;padding:14px 16px;border-radius:16px;border:1px solid rgba(239,68,68,0.4);background:rgba(127,29,29,0.25);color:#fecaca;font-size:14px}
         .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03)}
         .summary-list{display:flex;flex-direction:column;gap:18px}
@@ -991,6 +1005,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                 <strong style={{ display: 'block', marginBottom: 4, fontSize: 13 }}>
                   {error.toLowerCase().includes('units left') ? 'Stock issue' :
                    error.toLowerCase().includes('variant') ? 'Item unavailable' :
+                   paymentReady ? 'Payment failed' :
                    'Could not start checkout'}
                 </strong>
                 {error}
