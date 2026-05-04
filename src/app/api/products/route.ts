@@ -1,10 +1,12 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { ok, err, parseBody } from '@/lib/api'
+import { ok, okWithWarning, err, parseBody } from '@/lib/api'
 import { dollarsToCents } from '@/lib/money'
 import { requireAdmin } from '@/server/auth/require-auth'
 import { getProductSummaries, createProduct, upsertOptions } from '@/server/services/product.service'
 import type { ProductStatus } from '@prisma/client'
+
+export const runtime = 'nodejs'
 
 const optionValueSchema = z.object({
   value: z.string().min(1),
@@ -90,7 +92,8 @@ export async function POST(req: Request) {
 
   try {
     const { options, variants, media, ...productFields } = parsed.data
-    let product = await createProduct({
+
+    const { product: coreProduct, mediaSyncError } = await createProduct({
       ...productFields,
       publishedAt: productFields.publishedAt ? new Date(productFields.publishedAt) : null,
       variants: variants?.map((variant) => ({
@@ -107,15 +110,32 @@ export async function POST(req: Request) {
       media,
     })
 
-    if (options?.length) {
-      product = await upsertOptions(product.id, options)
-    }
-
-    if (!product) {
+    if (!coreProduct) {
       return err('Failed to create product', 500)
     }
 
+    let product = coreProduct
+    let optionsSyncError: string | undefined
+
+    if (options?.length) {
+      try {
+        const withOptions = await upsertOptions(product.id, options)
+        if (withOptions) {
+          product = withOptions
+        }
+      } catch (e) {
+        console.error('[POST /api/products] options sync failed:', e)
+        optionsSyncError = e instanceof Error ? e.message : 'Options sync failed'
+      }
+    }
+
     revalidateProductPaths(product.handle)
+
+    const warnings = [mediaSyncError, optionsSyncError].filter(Boolean)
+    if (warnings.length) {
+      return okWithWarning(product, `Product saved as draft. Could not attach: ${warnings.join('; ')}`, 201)
+    }
+
     return ok(product, 201)
   } catch (e: unknown) {
     console.error('[POST /api/products]', e)

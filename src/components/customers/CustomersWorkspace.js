@@ -6,6 +6,7 @@ import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminDrawer from '../admin/ui/AdminDrawer';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminField from '../admin/ui/AdminField';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminPage from '../admin/ui/AdminPage';
 import AdminPageHeader from '../admin/ui/AdminPageHeader';
@@ -18,10 +19,24 @@ import { useCustomers } from '../../context/CustomersContext';
 import { formatCustomerMoney } from '../../lib/customersData';
 import styles from './CustomersWorkspace.module.css';
 
+const EMPTY_CREATE_FORM = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  note: '',
+  tags: '',
+  shippingAddress: '',
+};
+
 export default function CustomersWorkspace() {
-  const { customers, setCustomers } = useCustomers();
+  const { customers, setCustomers, createCustomer } = useCustomers();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   const visibleCustomers = useMemo(
     () =>
@@ -58,11 +73,68 @@ export default function CustomersWorkspace() {
     },
   ];
 
+  function patchCreateForm(patch) {
+    setCreateForm((f) => ({ ...f, ...patch }));
+  }
+
+  function openCreateDrawer() {
+    setCreateForm(EMPTY_CREATE_FORM);
+    setCreateError('');
+    setCreateDrawerOpen(true);
+  }
+
+  function closeCreateDrawer() {
+    setCreateDrawerOpen(false);
+    setCreateError('');
+  }
+
+  async function handleCreateCustomer(event) {
+    event.preventDefault();
+    if (createSaving) return;
+    if (!createForm.email.trim()) {
+      setCreateError('Email is required.');
+      return;
+    }
+
+    setCreateSaving(true);
+    setCreateError('');
+
+    try {
+      const tags = createForm.tags
+        ? createForm.tags.split(',').map((t) => t.trim()).filter(Boolean)
+        : undefined;
+
+      const result = await createCustomer({
+        email: createForm.email.trim(),
+        firstName: createForm.firstName.trim() || undefined,
+        lastName: createForm.lastName.trim() || undefined,
+        phone: createForm.phone.trim() || undefined,
+        note: createForm.note.trim() || undefined,
+        tags,
+        shippingAddress: createForm.shippingAddress.trim() || undefined,
+      });
+
+      if (result.duplicate) {
+        setCreateError(`A customer with this email already exists.`);
+        setSelectedCustomerId(result.customer.id);
+        closeCreateDrawer();
+        return;
+      }
+
+      closeCreateDrawer();
+      setSelectedCustomerId(result.customer.id);
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Failed to create customer.');
+    } finally {
+      setCreateSaving(false);
+    }
+  }
+
   return (
     <AppShell>
       <AdminPage>
         <AdminPageHeader
-          actions={<AdminButton size="sm" variant="secondary">Create customer</AdminButton>}
+          actions={<AdminButton onClick={openCreateDrawer} size="sm" variant="secondary">Create customer</AdminButton>}
           description="Customer profiles, spend, and lifecycle context."
           eyebrow="Customers"
           title="Customer desk"
@@ -166,6 +238,98 @@ export default function CustomersWorkspace() {
               </AdminCard>
             </div>
           ) : null}
+        </AdminDrawer>
+
+        <AdminDrawer
+          onClose={closeCreateDrawer}
+          open={createDrawerOpen}
+          subtitle="Add a customer profile. Email is required."
+          title="Create customer"
+        >
+          <form className={styles.drawerBody} onSubmit={handleCreateCustomer}>
+            <AdminCard className={styles.drawerSection} variant="card">
+              <h3>Contact</h3>
+              <AdminField label="Email *">
+                <AdminInput
+                  autoComplete="email"
+                  onChange={(e) => patchCreateForm({ email: e.target.value })}
+                  placeholder="customer@example.com"
+                  required
+                  type="email"
+                  value={createForm.email}
+                />
+              </AdminField>
+              <AdminField label="First name">
+                <AdminInput
+                  onChange={(e) => patchCreateForm({ firstName: e.target.value })}
+                  placeholder="Alex"
+                  value={createForm.firstName}
+                />
+              </AdminField>
+              <AdminField label="Last name">
+                <AdminInput
+                  onChange={(e) => patchCreateForm({ lastName: e.target.value })}
+                  placeholder="Rivera"
+                  value={createForm.lastName}
+                />
+              </AdminField>
+              <AdminField label="Phone">
+                <AdminInput
+                  onChange={(e) => patchCreateForm({ phone: e.target.value })}
+                  placeholder="+1 555 000 0000"
+                  type="tel"
+                  value={createForm.phone}
+                />
+              </AdminField>
+            </AdminCard>
+
+            <AdminCard className={styles.drawerSection} variant="card">
+              <h3>Tags</h3>
+              <AdminField hint="Comma-separated. Example: vip, wholesale">
+                <AdminInput
+                  onChange={(e) => patchCreateForm({ tags: e.target.value })}
+                  placeholder="vip, wholesale"
+                  value={createForm.tags}
+                />
+              </AdminField>
+            </AdminCard>
+
+            <AdminCard className={styles.drawerSection} variant="card">
+              <h3>Shipping address</h3>
+              <AdminField hint="Street address. Additional address details can be added after creation.">
+                <AdminInput
+                  onChange={(e) => patchCreateForm({ shippingAddress: e.target.value })}
+                  placeholder="123 Main St, Portland, OR 97201"
+                  value={createForm.shippingAddress}
+                />
+              </AdminField>
+            </AdminCard>
+
+            <AdminCard className={styles.drawerSection} variant="card">
+              <h3>Notes</h3>
+              <AdminTextarea
+                onChange={(e) => patchCreateForm({ note: e.target.value })}
+                placeholder="Internal notes about this customer."
+                rows={4}
+                value={createForm.note}
+              />
+            </AdminCard>
+
+            {createError ? (
+              <p className={styles.drawerSection} style={{ color: 'var(--color-danger, #dc2626)', fontSize: '13px' }}>
+                {createError}
+              </p>
+            ) : null}
+
+            <div className={styles.drawerSection}>
+              <AdminButton disabled={createSaving} size="sm" type="submit" variant="primary">
+                {createSaving ? 'Creating...' : 'Create customer'}
+              </AdminButton>
+              <AdminButton disabled={createSaving} onClick={closeCreateDrawer} size="sm" variant="ghost" type="button">
+                Cancel
+              </AdminButton>
+            </div>
+          </form>
         </AdminDrawer>
       </AdminPage>
     </AppShell>

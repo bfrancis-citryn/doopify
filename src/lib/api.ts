@@ -8,6 +8,11 @@ export function ok<T>(data: T, status = 200) {
   return NextResponse.json({ success: true, data }, { status })
 }
 
+// ── Partial success response (core succeeded, secondary step failed) ──────────
+export function okWithWarning<T>(data: T, warning: string, status = 200) {
+  return NextResponse.json({ success: true, data, warning }, { status })
+}
+
 // ── Standard error response ───────────────────────────────────────────────────
 export function err(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status })

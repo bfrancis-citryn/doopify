@@ -160,7 +160,8 @@ const EMAIL_TEMPLATE_SUMMARY = [
     statusLabel: 'Enabled',
     statusTone: 'success',
     triggerLabel: 'Sent after an order is paid or finalized.',
-    editorStateLabel: 'Template editor coming soon',
+    editorStateLabel: null,
+    editable: true,
   },
   {
     id: 'fulfillment_tracking',
@@ -168,7 +169,8 @@ const EMAIL_TEMPLATE_SUMMARY = [
     statusLabel: 'Enabled',
     statusTone: 'success',
     triggerLabel: 'Sent when fulfillment tracking is created.',
-    editorStateLabel: 'Template editor coming soon',
+    editorStateLabel: null,
+    editable: true,
   },
   {
     id: 'refund_confirmation',
@@ -176,7 +178,8 @@ const EMAIL_TEMPLATE_SUMMARY = [
     statusLabel: 'Coming soon',
     statusTone: 'warning',
     triggerLabel: 'Will send after a refund is issued.',
-    editorStateLabel: 'Template editor coming soon',
+    editorStateLabel: 'Refund confirmation template editor is not available yet.',
+    editable: false,
   },
   {
     id: 'draft_invoice',
@@ -184,7 +187,8 @@ const EMAIL_TEMPLATE_SUMMARY = [
     statusLabel: 'Coming soon',
     statusTone: 'warning',
     triggerLabel: 'Will send when a draft order invoice is created.',
-    editorStateLabel: 'Template editor coming soon',
+    editorStateLabel: 'Draft invoice template editor is not available yet.',
+    editable: false,
   },
   {
     id: 'customer_note',
@@ -192,8 +196,28 @@ const EMAIL_TEMPLATE_SUMMARY = [
     statusLabel: 'Coming soon',
     statusTone: 'warning',
     triggerLabel: 'Will send when staff adds a customer-visible order note.',
-    editorStateLabel: 'Template editor coming soon',
+    editorStateLabel: 'Customer note template editor is not available yet.',
+    editable: false,
   },
+];
+
+const EMPTY_TEMPLATE_DRAFT = {
+  enabled: true,
+  subject: '',
+  preheader: '',
+  headerTitle: '',
+  bodyText: '',
+  buttonLabel: '',
+  footerText: '',
+  replyToEmail: '',
+};
+
+const TEMPLATE_VARIABLES = [
+  { key: '{{orderNumber}}', description: 'Order number' },
+  { key: '{{storeName}}', description: 'Store name' },
+  { key: '{{customerName}}', description: 'Customer name' },
+  { key: '{{trackingNumber}}', description: 'Tracking number' },
+  { key: '{{trackingUrl}}', description: 'Tracking URL' },
 ];
 
 const EMPTY_PROVIDER_FORMS = {
@@ -748,6 +772,13 @@ export default function SettingsWorkspace() {
   const [activeBrandDrawer, setActiveBrandDrawer] = useState(null);
   const [activeTaxDrawer, setActiveTaxDrawer] = useState(null);
   const [activeEmailTemplateId, setActiveEmailTemplateId] = useState('');
+  const [templateEditorDraft, setTemplateEditorDraft] = useState(EMPTY_TEMPLATE_DRAFT);
+  const [templateEditorSaving, setTemplateEditorSaving] = useState(false);
+  const [templateEditorLoading, setTemplateEditorLoading] = useState(false);
+  const [templateEditorError, setTemplateEditorError] = useState('');
+  const [templateEditorSendTo, setTemplateEditorSendTo] = useState('');
+  const [templateEditorSendState, setTemplateEditorSendState] = useState('idle');
+  const [templateEditorSendResult, setTemplateEditorSendResult] = useState(null);
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
   const [providerTestEmailById, setProviderTestEmailById] = useState({
@@ -1823,12 +1854,116 @@ export default function SettingsWorkspace() {
     setActiveTaxDrawer(null);
   }
 
-  function openEmailTemplateDrawer(templateId) {
+  async function openEmailTemplateDrawer(templateId) {
     setActiveEmailTemplateId(templateId);
+    setTemplateEditorError('');
+    setTemplateEditorSendResult(null);
+    setTemplateEditorSendTo('');
+    setTemplateEditorSendState('idle');
+
+    const meta = EMAIL_TEMPLATE_SUMMARY.find((t) => t.id === templateId);
+    if (!meta?.editable) return;
+
+    setTemplateEditorLoading(true);
+    try {
+      const res = await fetch(`/api/email-templates/${templateId}`, { cache: 'no-store' }).then(parseApiJson);
+      const fields = res?.fields || {};
+      setTemplateEditorDraft({
+        enabled: fields.enabled ?? true,
+        subject: fields.subject || '',
+        preheader: fields.preheader || '',
+        headerTitle: fields.headerTitle || '',
+        bodyText: fields.bodyText || '',
+        buttonLabel: fields.buttonLabel || '',
+        footerText: fields.footerText || '',
+        replyToEmail: fields.replyToEmail || '',
+      });
+    } catch {
+      setTemplateEditorError('Failed to load template settings.');
+    } finally {
+      setTemplateEditorLoading(false);
+    }
   }
 
   function closeEmailTemplateDrawer() {
     setActiveEmailTemplateId('');
+    setTemplateEditorDraft(EMPTY_TEMPLATE_DRAFT);
+    setTemplateEditorError('');
+    setTemplateEditorSendResult(null);
+  }
+
+  async function handleSaveEmailTemplate() {
+    if (!activeEmailTemplateId || templateEditorSaving) return;
+    setTemplateEditorSaving(true);
+    setTemplateEditorError('');
+    try {
+      const body = {
+        enabled: templateEditorDraft.enabled,
+        subject: templateEditorDraft.subject,
+        preheader: templateEditorDraft.preheader,
+        headerTitle: templateEditorDraft.headerTitle,
+        bodyText: templateEditorDraft.bodyText,
+        buttonLabel: templateEditorDraft.buttonLabel,
+        footerText: templateEditorDraft.footerText,
+        replyToEmail: templateEditorDraft.replyToEmail || null,
+      };
+      const res = await fetch(`/api/email-templates/${activeEmailTemplateId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(parseApiJson);
+      if (!res) throw new Error('Save failed');
+      pushToast('Template saved.', 'success');
+    } catch {
+      setTemplateEditorError('Failed to save template.');
+    } finally {
+      setTemplateEditorSaving(false);
+    }
+  }
+
+  async function handleResetEmailTemplate() {
+    if (!activeEmailTemplateId || templateEditorSaving) return;
+    setTemplateEditorSaving(true);
+    setTemplateEditorError('');
+    try {
+      const res = await fetch(`/api/email-templates/${activeEmailTemplateId}/reset`, {
+        method: 'POST',
+      }).then(parseApiJson);
+      const fields = res?.fields || {};
+      setTemplateEditorDraft({
+        enabled: fields.enabled ?? true,
+        subject: fields.subject || '',
+        preheader: fields.preheader || '',
+        headerTitle: fields.headerTitle || '',
+        bodyText: fields.bodyText || '',
+        buttonLabel: fields.buttonLabel || '',
+        footerText: fields.footerText || '',
+        replyToEmail: fields.replyToEmail || '',
+      });
+      pushToast('Template reset to defaults.', 'success');
+    } catch {
+      setTemplateEditorError('Failed to reset template.');
+    } finally {
+      setTemplateEditorSaving(false);
+    }
+  }
+
+  async function handleSendTestEmail() {
+    if (!activeEmailTemplateId || !templateEditorSendTo.trim()) return;
+    setTemplateEditorSendState('sending');
+    setTemplateEditorSendResult(null);
+    try {
+      const res = await fetch(`/api/email-templates/${activeEmailTemplateId}/send-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipientEmail: templateEditorSendTo.trim() }),
+      }).then(parseApiJson);
+      setTemplateEditorSendResult(res);
+      setTemplateEditorSendState('done');
+    } catch {
+      setTemplateEditorSendState('error');
+      setTemplateEditorSendResult({ sent: false, error: 'Request failed.' });
+    }
   }
 
   async function handleCopyStripeWebhookEndpoint() {
@@ -3028,9 +3163,15 @@ export default function SettingsWorkspace() {
                             <strong>Trigger:</strong> {template.triggerLabel}
                           </p>
                           <div className={styles.compactActionRow}>
-                            <AdminButton onClick={() => openEmailTemplateDrawer(template.id)} size="sm" variant="secondary">
-                              Manage
-                            </AdminButton>
+                            {template.editable ? (
+                              <AdminButton onClick={() => openEmailTemplateDrawer(template.id)} size="sm" variant="secondary">
+                                Manage
+                              </AdminButton>
+                            ) : (
+                              <AdminButton disabled size="sm" variant="ghost">
+                                Coming soon
+                              </AdminButton>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -4637,11 +4778,12 @@ export default function SettingsWorkspace() {
       <AdminDrawer
         onClose={closeEmailTemplateDrawer}
         open={Boolean(activeEmailTemplate)}
-        subtitle="Template status, trigger, and editor readiness."
+        subtitle={activeEmailTemplate?.editable ? 'Edit subject, content, and preview.' : 'Template status and trigger.'}
         title={activeEmailTemplate ? `${activeEmailTemplate.label}` : 'Customer email template'}
       >
         {activeEmailTemplate ? (
           <div className={styles.drawerStack}>
+            {/* Status card shown for all templates */}
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Template status</h4>
@@ -4650,8 +4792,183 @@ export default function SettingsWorkspace() {
               <p className={styles.compactMeta}>
                 <strong>Trigger:</strong> {activeEmailTemplate.triggerLabel}
               </p>
-              <p className={styles.compactMeta}>{activeEmailTemplate.editorStateLabel}</p>
+              {activeEmailTemplate.editorStateLabel ? (
+                <p className={styles.compactMeta}>{activeEmailTemplate.editorStateLabel}</p>
+              ) : null}
             </AdminCard>
+
+            {/* Real editor — only for editable templates */}
+            {activeEmailTemplate.editable ? (
+              <>
+                {templateEditorLoading ? (
+                  <div className={styles.statusBlock}>
+                    <div className={styles.loadingLine} />
+                    <div className={styles.loadingLine} />
+                    <p className={styles.statusText}>Loading template...</p>
+                  </div>
+                ) : (
+                  <>
+                    <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+                      <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
+                        <h4>Enabled</h4>
+                        <AdminStatusChip tone={templateEditorDraft.enabled ? 'success' : 'neutral'}>
+                          {templateEditorDraft.enabled ? 'On' : 'Off'}
+                        </AdminStatusChip>
+                      </div>
+                      <p className={styles.compactMeta}>When disabled, this email type will not be sent. Orders and payments are not affected.</p>
+                      <div className={styles.compactActionRow}>
+                        <AdminButton
+                          onClick={() => setTemplateEditorDraft((d) => ({ ...d, enabled: !d.enabled }))}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          {templateEditorDraft.enabled ? 'Disable' : 'Enable'}
+                        </AdminButton>
+                      </div>
+                    </AdminCard>
+
+                    <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+                      <h4>Email content</h4>
+                      <div className={styles.drawerFormGrid}>
+                        <AdminField hint="Appears in the recipient's inbox subject line." label="Subject">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, subject: e.target.value }))}
+                            placeholder="Your order {{orderNumber}} is confirmed"
+                            value={templateEditorDraft.subject}
+                          />
+                        </AdminField>
+                        <AdminField hint="Short preview text shown below the subject in some email clients." label="Preview text">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, preheader: e.target.value }))}
+                            placeholder="Thank you for your purchase."
+                            value={templateEditorDraft.preheader}
+                          />
+                        </AdminField>
+                        <AdminField hint="Large heading shown at the top of the email body." label="Header title">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, headerTitle: e.target.value }))}
+                            placeholder="Order confirmation"
+                            value={templateEditorDraft.headerTitle}
+                          />
+                        </AdminField>
+                        <AdminField hint="Main message below the heading." label="Body message">
+                          <AdminTextarea
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, bodyText: e.target.value }))}
+                            placeholder="Thanks for your order! We'll email you when it ships."
+                            rows={4}
+                            value={templateEditorDraft.bodyText}
+                          />
+                        </AdminField>
+                        <AdminField hint="Label on the primary call-to-action button." label="Button label">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, buttonLabel: e.target.value }))}
+                            placeholder="View order"
+                            value={templateEditorDraft.buttonLabel}
+                          />
+                        </AdminField>
+                        <AdminField hint="Text shown at the bottom of the email." label="Footer note">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, footerText: e.target.value }))}
+                            placeholder="Thank you for choosing us."
+                            value={templateEditorDraft.footerText}
+                          />
+                        </AdminField>
+                        <AdminField hint="Optional. Leave blank to use the store reply-to address." label="Reply-to email">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorDraft((d) => ({ ...d, replyToEmail: e.target.value }))}
+                            placeholder="support@example.com"
+                            type="email"
+                            value={templateEditorDraft.replyToEmail}
+                          />
+                        </AdminField>
+                      </div>
+                    </AdminCard>
+
+                    <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+                      <h4>Available variables</h4>
+                      <p className={styles.compactMeta}>Use these in subject, preview text, header, body, button, and footer fields.</p>
+                      <div className={styles.warningTagList}>
+                        {TEMPLATE_VARIABLES.map((v) => (
+                          <AdminTooltip content={v.description} key={v.key}>
+                            <AdminStatusChip tone="neutral">{v.key}</AdminStatusChip>
+                          </AdminTooltip>
+                        ))}
+                      </div>
+                    </AdminCard>
+
+                    <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+                      <h4>Preview</h4>
+                      <p className={styles.compactMeta}>Live preview uses sample order data. Branding inherits from store settings.</p>
+                      <div className={styles.setupFixText} style={{ fontSize: '12px', lineHeight: 1.5 }}>
+                        <p><strong>Subject:</strong> {templateEditorDraft.subject || '(empty)'}</p>
+                        <p><strong>Header:</strong> {templateEditorDraft.headerTitle || '(empty)'}</p>
+                        <p><strong>Body:</strong> {templateEditorDraft.bodyText || '(empty)'}</p>
+                        <p><strong>Button:</strong> {templateEditorDraft.buttonLabel || '(empty)'}</p>
+                        <p><strong>Footer:</strong> {templateEditorDraft.footerText || '(empty)'}</p>
+                      </div>
+                    </AdminCard>
+
+                    <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
+                      <h4>Send test email</h4>
+                      <p className={styles.compactMeta}>Sends a test with sample order data. Does not create real orders or payments.</p>
+                      <div className={styles.drawerFormGrid}>
+                        <AdminField label="Recipient email">
+                          <AdminInput
+                            onChange={(e) => setTemplateEditorSendTo(e.target.value)}
+                            placeholder="you@example.com"
+                            type="email"
+                            value={templateEditorSendTo}
+                          />
+                        </AdminField>
+                      </div>
+                      {templateEditorSendResult ? (
+                        <p className={styles.compactMeta}>
+                          {templateEditorSendResult.sent
+                            ? `Test sent via ${templateEditorSendResult.provider}.`
+                            : templateEditorSendResult.error || 'Send did not complete.'}
+                        </p>
+                      ) : null}
+                      <div className={styles.compactActionRow}>
+                        <AdminButton
+                          disabled={templateEditorSendState === 'sending' || !templateEditorSendTo.trim()}
+                          onClick={handleSendTestEmail}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          {templateEditorSendState === 'sending' ? 'Sending...' : 'Send test'}
+                        </AdminButton>
+                      </div>
+                    </AdminCard>
+
+                    {templateEditorError ? (
+                      <p className={styles.statusText} style={{ color: 'var(--color-danger, #dc2626)' }}>{templateEditorError}</p>
+                    ) : null}
+
+                    <div className={styles.compactActionRow}>
+                      <AdminButton
+                        disabled={templateEditorSaving}
+                        onClick={handleSaveEmailTemplate}
+                        size="sm"
+                        variant="primary"
+                      >
+                        {templateEditorSaving ? 'Saving...' : 'Save template'}
+                      </AdminButton>
+                      <AdminButton
+                        disabled={templateEditorSaving}
+                        onClick={handleResetEmailTemplate}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        Reset to defaults
+                      </AdminButton>
+                      <AdminButton asChild size="sm" variant="ghost">
+                        <Link href="/admin/webhooks">View delivery logs</Link>
+                      </AdminButton>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : null}
           </div>
         ) : null}
       </AdminDrawer>

@@ -806,6 +806,13 @@ export function ProductProvider({ children }) {
       const savedProduct = transformApiProduct(json.data);
       dispatch({ type: 'COMMIT_PRODUCT', product: savedProduct });
       syncEditorLocation({ productId: savedProduct.id }, 'replace');
+
+      // Surface a warning toast when the server completed a partial save
+      // (e.g., product saved as DRAFT but media/options attachment failed).
+      if (json.warning && !silent) {
+        pushToast(json.warning, 'warning');
+        return true;
+      }
     } catch (e) {
       console.error('[ProductContext] save failed', e);
       pushToast('Save failed — check your connection', 'error');

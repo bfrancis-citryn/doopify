@@ -473,11 +473,14 @@ export async function createProduct(data: {
     position?: number
   }>
   media?: ProductMediaPayload[]
-}) {
+}): Promise<{ product: any; mediaSyncError?: string }> {
   const handle = await ensureUniqueHandle(data.handle ?? slugify(data.title))
   const variants = data.variants?.length ? data.variants : [createFallbackVariant()]
 
-  const product = await prisma.$transaction(async (tx) => {
+  // Step 1: Create base product and variants atomically. Media sync is intentionally
+  // excluded from this transaction so that invalid or missing asset IDs do not roll
+  // back the base product create.
+  const coreProduct = await prisma.$transaction(async (tx) => {
     const createdProduct = await tx.product.create({
       data: {
         title: data.title,
@@ -504,17 +507,38 @@ export async function createProduct(data: {
       select: { id: true },
     })
 
-    if (data.media) {
-      await syncProductMedia(tx, createdProduct.id, data.media)
-    }
-
     return tx.product.findUnique({
       where: { id: createdProduct.id },
       include: productInclude,
     })
   })
 
-  const hydratedProduct = product ? attachMediaUrls(product) : null
+  if (!coreProduct) {
+    return { product: null }
+  }
+
+  // Step 2: Attempt media sync outside the core transaction. A failure here preserves
+  // the already-committed product; the caller receives mediaSyncError and can downgrade
+  // status or surface a warning to the user.
+  let mediaSyncError: string | undefined
+  const hasMedia = Array.isArray(data.media) && data.media.length > 0
+  if (hasMedia) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await syncProductMedia(tx, coreProduct.id, data.media!)
+      })
+    } catch (e) {
+      console.error(`[createProduct] media sync failed for product ${coreProduct.id}:`, e)
+      mediaSyncError = e instanceof Error ? e.message : 'Media sync failed'
+    }
+  }
+
+  // Step 3: Re-fetch with all relations so media rows are reflected in the response.
+  const finalRecord = mediaSyncError
+    ? coreProduct
+    : await prisma.product.findUnique({ where: { id: coreProduct.id }, include: productInclude })
+
+  const hydratedProduct = finalRecord ? attachMediaUrls(finalRecord) : null
 
   if (hydratedProduct) {
     await emitInternalEvent('product.created', {
@@ -525,7 +549,7 @@ export async function createProduct(data: {
     })
   }
 
-  return hydratedProduct
+  return { product: hydratedProduct, mediaSyncError }
 }
 
 export async function updateProduct(

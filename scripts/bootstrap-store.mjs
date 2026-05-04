@@ -1,4 +1,5 @@
-import { PrismaClient, AddressType, EventActorType, FulfillmentStatus, OrderDisplayStatus, OrderFinancialStatus, OrderFulfillmentStatus, OrderSource, PaymentProvider, PaymentStatus, ProductStatus, UserRole, UserStatus } from '@prisma/client';
+import pkg from '@prisma/client';
+const { PrismaClient, AddressType, EventActorType, FulfillmentStatus, OrderDisplayStatus, OrderFinancialStatus, OrderFulfillmentStatus, OrderSource, PaymentProvider, PaymentStatus, ProductStatus, UserRole, UserStatus } = pkg;
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();

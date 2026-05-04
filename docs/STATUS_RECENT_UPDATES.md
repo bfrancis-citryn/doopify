@@ -1,5 +1,57 @@
 # Recent Updates
 
+## Phase 19 — Vercel Private Beta Deployment (2026-05-03)
+
+**Goal:** Deploy to Vercel private beta/staging with Neon Postgres and Stripe test mode.
+
+**Local gate status:**
+- `npm run db:generate` — PASS
+- `npx tsc --noEmit` — PASS (0 errors)
+- `npm run test` — PASS (112/112 files, 539/539 tests)
+- `npm run build` — PASS
+
+**Infrastructure prepared:**
+- Neon database schema is in sync (`db:push` confirmed "already in sync")
+- Store record created in Neon via `scripts/ensure-store.mjs`
+- Owner user already existed in database (1 OWNER user confirmed by doctor)
+- Missing secrets added to `.env.local`: `WEBHOOK_RETRY_SECRET`, `JOB_RUNNER_SECRET`, `ABANDONED_CHECKOUT_SECRET`, `ENCRYPTION_KEY`
+- `scripts/bootstrap-store.mjs` ESM import fixed (CommonJS interop)
+- `scripts/ensure-store.mjs` added — minimal idempotent store bootstrap using PrismaPg adapter
+- `npm run db:ensure-store` script added to `package.json`
+
+**Vercel deployment status:** Authentication pending
+- Vercel CLI installed via npx
+- Device code URL: `https://vercel.com/oauth/device?user_code=JNQL-PXKF`
+- After authentication, proceed with: `npx vercel link`, env var push, `npx vercel --prod`
+
+**Required env vars for Vercel deployment** (see `docs/ENVIRONMENT_VARIABLE_REFERENCE.md`):
+- `DATABASE_URL` (Neon, with `sslmode=verify-full`)
+- `DIRECT_URL` (Neon direct)
+- `JWT_SECRET` (32+ char, high entropy)
+- `ENCRYPTION_KEY` (32+ char, high entropy)
+- `NEXT_PUBLIC_STORE_URL` (set to Vercel deployment URL after first deploy)
+- `WEBHOOK_RETRY_SECRET`
+- `JOB_RUNNER_SECRET`
+- `ABANDONED_CHECKOUT_SECRET`
+- `STRIPE_SECRET_KEY` (test mode: `sk_test_...`)
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (test mode: `pk_test_...`)
+- `STRIPE_WEBHOOK_SECRET` (configure after deployment URL is known)
+- `RESEND_API_KEY` (optional for private beta)
+
+**Stripe webhook to configure post-deploy:**
+- Endpoint: `https://<vercel-domain>/api/webhooks/stripe`
+- Events: `payment_intent.succeeded`, `payment_intent.payment_failed`
+- Set `STRIPE_WEBHOOK_SECRET` from the signing secret
+
+**Remaining before first merchant pilot:**
+- Complete Vercel authentication and deploy
+- Register Stripe test webhook against deployed URL
+- Update `NEXT_PUBLIC_STORE_URL` to deployed domain
+- Run pilot validation runbook (see `docs/PILOT_VALIDATION_RUNBOOK.md`)
+
+---
+
+
 ## Post Phase 16/17 Audit and Build Repair (2026-05-03)
 
 **Goal:** Fix build blocker, repair pre-existing test failures, audit Phase 16/17 correctness, pass all verification gates.

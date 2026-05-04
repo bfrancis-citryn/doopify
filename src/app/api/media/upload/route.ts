@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
 import { getMediaStorageAdapter } from '@/server/media/media-storage'
 
+export const runtime = 'nodejs'
+
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 

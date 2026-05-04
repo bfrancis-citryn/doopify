@@ -23,8 +23,12 @@ describe('email settings compact workspace copy', () => {
 
     expect(workspace).toContain('<strong>Trigger:</strong> {template.triggerLabel}')
     expect(workspace).toContain('onClick={() => openEmailTemplateDrawer(template.id)}')
-    expect(workspace).toContain('Template editor coming soon')
+    // Editable templates no longer show "coming soon" — non-editable templates do
+    expect(workspace).toContain('Coming soon')
     expect(workspace).toContain('open={Boolean(activeEmailTemplate)}')
+    // Real editor fields are present for editable templates
+    expect(workspace).toContain('Save template')
+    expect(workspace).toContain('Reset to defaults')
   })
 
   it('disables the legacy inline-email-provider block and keeps drawer-based manage flows', () => {

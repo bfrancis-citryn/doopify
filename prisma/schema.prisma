@@ -1162,3 +1162,20 @@ enum OutboundDeliveryStatus {
   RETRYING
   EXHAUSTED
 }
+
+model EmailTemplateSetting {
+  id           String   @id @default(cuid())
+  templateKey  String   @unique
+  enabled      Boolean  @default(true)
+  subject      String?
+  preheader    String?
+  headerTitle  String?
+  bodyText     String?
+  buttonLabel  String?
+  footerText   String?
+  replyToEmail String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("email_template_settings")
+}

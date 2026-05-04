@@ -5,7 +5,12 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\settings\\\\shipping\" -Force)",
       "Bash(npx tsc *)",
       "Bash(npm run *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(grep -rn '$transaction' /c/Users/citry/OneDrive/Desktop/Doopify/src/ '--include=*.test.ts')",
+      "Bash(node scripts/doopify-cli.mjs doctor)",
+      "Bash(npx vercel *)",
+      "Bash(node scripts/ensure-store.mjs)",
+      "Bash(npx --yes vercel login --token)"
     ]
   }
 }

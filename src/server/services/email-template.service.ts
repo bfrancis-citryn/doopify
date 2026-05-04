@@ -1,3 +1,9 @@
+import {
+  getEmailTemplateSetting,
+  renderTemplateVariables,
+  isTemplateEnabled,
+  type EmailTemplateSettingFields,
+} from '@/server/services/email-template-settings.service'
 import { getStoreSettings } from '@/server/services/settings.service'
 
 export type OrderConfirmationInput = {
@@ -253,19 +259,182 @@ function buildFulfillmentTrackingHtml(
   `
 }
 
+// ── Customized HTML builders using saved template settings ────────────────────
+
+function buildCustomizedOrderConfirmationHtml(
+  input: OrderConfirmationInput,
+  fields: EmailTemplateSettingFields,
+  storeName: string,
+  branding: EmailBranding
+) {
+  const vars = {
+    orderNumber: String(input.orderNumber),
+    storeName,
+    customerName: '',
+  }
+  const headerTitle = renderTemplateVariables(fields.headerTitle, vars)
+  const bodyText = renderTemplateVariables(fields.bodyText, vars)
+  const buttonLabel = renderTemplateVariables(fields.buttonLabel, vars)
+  const footerForEmail: EmailBranding = { ...branding, footerText: renderTemplateVariables(fields.footerText, vars) }
+
+  const itemRows = input.items
+    .map((item) => {
+      const itemTitle = item.variantTitle ? `${item.title} - ${item.variantTitle}` : item.title
+      return `<tr>
+        <td style="padding:8px 0;color:#111827;">${escapeHtml(itemTitle)}</td>
+        <td style="padding:8px 0;color:#6b7280;text-align:center;">${escapeHtml(item.quantity)}</td>
+        <td style="padding:8px 0;color:#111827;text-align:right;">${formatMoney(item.price * item.quantity, input.currency)}</td>
+      </tr>`
+    })
+    .join('')
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;">
+      ${renderEmailHeader(storeName, branding)}
+      <div style="padding:28px 22px;background:#ffffff;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
+        <p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;margin-bottom:16px;">${escapeHtml(storeName)}</p>
+        <h1 style="font-size:28px;line-height:1.2;margin:0 0 12px;">${escapeHtml(headerTitle)}</h1>
+        <p style="font-size:16px;color:#4b5563;margin:0 0 24px;">${escapeHtml(bodyText)}</p>
+        <p style="margin:0 0 8px;font-size:14px;color:#111827;"><strong>Order #${escapeHtml(input.orderNumber)}</strong></p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+          <thead>
+            <tr>
+              <th style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:left;font-size:12px;color:#6b7280;">Item</th>
+              <th style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;color:#6b7280;">Qty</th>
+              <th style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;font-size:12px;color:#6b7280;">Total</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <p style="font-size:18px;margin:0 0 24px;"><strong>Total:</strong> ${formatMoney(input.total, input.currency)}</p>
+        ${input.shippingAddress ? `
+        <div style="padding:20px;border:1px solid #e5e7eb;border-radius:16px;background:#f9fafb;">
+          <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Shipping address</p>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:#111827;">${formatAddress(input.shippingAddress)}</p>
+        </div>` : ''}
+        <div style="margin-top:24px;">
+          <a href="#" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;">${escapeHtml(buttonLabel)}</a>
+        </div>
+      </div>
+      ${renderEmailFooter(footerForEmail)}
+    </div>
+  `
+}
+
+function buildCustomizedFulfillmentTrackingHtml(
+  input: FulfillmentTrackingEmailInput,
+  fields: EmailTemplateSettingFields,
+  storeName: string,
+  branding: EmailBranding
+) {
+  const vars = {
+    orderNumber: String(input.orderNumber),
+    storeName,
+    customerName: '',
+    trackingNumber: input.trackingNumber || '',
+    trackingUrl: input.trackingUrl || '',
+  }
+  const headerTitle = renderTemplateVariables(fields.headerTitle, vars)
+  const bodyText = renderTemplateVariables(fields.bodyText, vars)
+  const buttonLabel = renderTemplateVariables(fields.buttonLabel, vars)
+  const footerForEmail: EmailBranding = { ...branding, footerText: renderTemplateVariables(fields.footerText, vars) }
+
+  const itemRows = input.items
+    .map((item) => {
+      const itemLabel = item.variantTitle ? `${item.title} - ${item.variantTitle}` : item.title
+      return `<li style="margin:0 0 8px;color:#111827;">${escapeHtml(itemLabel)} x ${escapeHtml(item.quantity)}</li>`
+    })
+    .join('')
+
+  const trackingText = input.trackingNumber ? `Tracking #${input.trackingNumber}` : 'Tracking details pending'
+  const trackingHref = input.trackingUrl?.trim()
+  const carrierLine = [input.carrier, input.service].filter(Boolean).join(' ')
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;">
+      ${renderEmailHeader(storeName, branding)}
+      <div style="padding:28px 22px;background:#ffffff;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;">
+        <p style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;margin-bottom:16px;">${escapeHtml(storeName)}</p>
+        <h1 style="font-size:28px;line-height:1.2;margin:0 0 12px;">${escapeHtml(headerTitle)}</h1>
+        <p style="font-size:16px;color:#4b5563;margin:0 0 16px;">${escapeHtml(bodyText)}</p>
+        <p style="margin:0 0 12px;font-size:14px;color:#111827;"><strong>Order #${escapeHtml(input.orderNumber)}</strong></p>
+        ${carrierLine ? `<p style="margin:0 0 12px;font-size:14px;color:#111827;"><strong>Carrier:</strong> ${escapeHtml(carrierLine)}</p>` : ''}
+        <p style="margin:0 0 20px;font-size:14px;color:#111827;"><strong>${escapeHtml(trackingText)}</strong></p>
+        ${trackingHref
+          ? `<a href="${escapeHtml(trackingHref)}" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:22px;">${escapeHtml(buttonLabel)}</a>`
+          : `<span style="display:inline-block;padding:14px 22px;border-radius:999px;background:#9ca3af;color:#ffffff;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:22px;">${escapeHtml(buttonLabel)}</span>`}
+        ${itemRows ? `<div style="padding:20px;border:1px solid #e5e7eb;border-radius:16px;background:#f9fafb;">
+          <p style="margin:0 0 10px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Items in this shipment</p>
+          <ul style="padding-left:18px;margin:0;">${itemRows}</ul>
+        </div>` : ''}
+      </div>
+      ${renderEmailFooter(footerForEmail)}
+    </div>
+  `
+}
+
+// ── Test HTML builders (sample data, no real orders) ─────────────────────────
+
+export function buildOrderConfirmationTestHtml(
+  fields: EmailTemplateSettingFields,
+  storeName: string,
+  store: Awaited<ReturnType<typeof getStoreSettings>>
+): string {
+  const branding = resolveEmailBranding(store)
+  const sampleInput: OrderConfirmationInput = {
+    orderNumber: 1001,
+    email: 'test@example.com',
+    currency: 'USD',
+    total: 79.99,
+    items: [
+      { title: 'Sample Product', variantTitle: 'Large / Blue', quantity: 2, price: 34.99 },
+      { title: 'Another Item', variantTitle: null, quantity: 1, price: 9.99 },
+    ],
+    shippingAddress: {
+      firstName: 'Test', lastName: 'Customer',
+      address1: '123 Main St', city: 'Portland',
+      province: 'OR', postalCode: '97201', country: 'US',
+    },
+  }
+  return buildCustomizedOrderConfirmationHtml(sampleInput, fields, storeName, branding)
+}
+
+export function buildFulfillmentTrackingTestHtml(
+  fields: EmailTemplateSettingFields,
+  storeName: string,
+  store: Awaited<ReturnType<typeof getStoreSettings>>
+): string {
+  const branding = resolveEmailBranding(store)
+  const sampleInput: FulfillmentTrackingEmailInput = {
+    orderNumber: 1001,
+    email: 'test@example.com',
+    trackingNumber: '1Z999AA10123456784',
+    trackingUrl: 'https://example.com/track/1Z999AA10123456784',
+    carrier: 'UPS',
+    service: 'Ground',
+    items: [{ title: 'Sample Product', variantTitle: 'Large / Blue', quantity: 2 }],
+  }
+  return buildCustomizedFulfillmentTrackingHtml(sampleInput, fields, storeName, branding)
+}
+
 export async function buildOrderConfirmationEmailMessage(input: OrderConfirmationInput) {
   const store = await getStoreSettings()
   const storeName = store?.name || 'Doopify'
   const from = store?.email || 'orders@doopify.local'
   const branding = resolveEmailBranding(store)
-  const subject = `${storeName} order #${input.orderNumber} confirmation`
-  const html = buildOrderConfirmationHtml(input, storeName, branding)
 
-  return {
-    from,
-    subject,
-    html,
+  const setting = await getEmailTemplateSetting('order_confirmation')
+  const fields = setting.fields
+
+  if (!isTemplateEnabled(fields)) {
+    return null
   }
+
+  const vars = { orderNumber: String(input.orderNumber), storeName, customerName: '' }
+  const subject = renderTemplateVariables(fields.subject, vars)
+  const html = buildCustomizedOrderConfirmationHtml(input, fields, storeName, branding)
+
+  return { from, subject, html }
 }
 
 export async function buildAbandonedCheckoutRecoveryEmailMessage(input: AbandonedCheckoutRecoveryInput) {
@@ -288,12 +457,23 @@ export async function buildFulfillmentTrackingEmailMessage(input: FulfillmentTra
   const storeName = store?.name || 'Doopify'
   const from = store?.email || 'orders@doopify.local'
   const branding = resolveEmailBranding(store)
-  const subject = `${storeName} shipping update for order #${input.orderNumber}`
-  const html = buildFulfillmentTrackingHtml(input, storeName, branding)
 
-  return {
-    from,
-    subject,
-    html,
+  const setting = await getEmailTemplateSetting('fulfillment_tracking')
+  const fields = setting.fields
+
+  if (!isTemplateEnabled(fields)) {
+    return null
   }
+
+  const vars = {
+    orderNumber: String(input.orderNumber),
+    storeName,
+    customerName: '',
+    trackingNumber: input.trackingNumber || '',
+    trackingUrl: input.trackingUrl || '',
+  }
+  const subject = renderTemplateVariables(fields.subject, vars)
+  const html = buildCustomizedFulfillmentTrackingHtml(input, fields, storeName, branding)
+
+  return { from, subject, html }
 }

@@ -84,6 +84,70 @@ describe('POST /api/media/upload', () => {
     })
   })
 
+  it('rejects request with no file', async () => {
+    const formData = new FormData()
+    const response = await POST(
+      new Request('http://localhost/api/media/upload', { method: 'POST', body: formData })
+    )
+    const json = await response.json()
+    expect(response.status).toBe(400)
+    expect(json.success).toBe(false)
+    expect(json.error).toContain('No file')
+  })
+
+  it('rejects oversized file', async () => {
+    const bigBuffer = new Uint8Array(11 * 1024 * 1024)
+    bigBuffer[0] = 0x89; bigBuffer[1] = 0x50; bigBuffer[2] = 0x4e; bigBuffer[3] = 0x47
+    bigBuffer[4] = 0x0d; bigBuffer[5] = 0x0a; bigBuffer[6] = 0x1a; bigBuffer[7] = 0x0a
+    const formData = new FormData()
+    formData.set('file', new File([bigBuffer], 'big.png', { type: 'image/png' }))
+
+    const response = await POST(
+      new Request('http://localhost/api/media/upload', { method: 'POST', body: formData })
+    )
+    const json = await response.json()
+    expect(response.status).toBe(400)
+    expect(json.error).toContain('10 MB')
+  })
+
+  it('rejects unsupported file type (SVG)', async () => {
+    const svgBytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    const formData = new FormData()
+    formData.set('file', new File([svgBytes], 'icon.svg', { type: 'image/svg+xml' }))
+
+    const response = await POST(
+      new Request('http://localhost/api/media/upload', { method: 'POST', body: formData })
+    )
+    const json = await response.json()
+    expect(response.status).toBe(400)
+    expect(json.error).toContain('not allowed')
+  })
+
+  it('accepts a valid JPEG and returns 201', async () => {
+    const jpegBytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])
+    const formData = new FormData()
+    formData.set('file', new File([jpegBytes], 'photo.jpg', { type: 'image/jpeg' }))
+
+    mocks.put.mockResolvedValue({
+      id: 'asset_jpg',
+      provider: 'postgres',
+      url: '/api/media/asset_jpg',
+      filename: 'photo.jpg',
+      altText: null,
+      mimeType: 'image/jpeg',
+      size: jpegBytes.length,
+      createdAt: new Date(),
+      linkedProducts: 0,
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/media/upload', { method: 'POST', body: formData })
+    )
+    const json = await response.json()
+    expect(response.status).toBe(201)
+    expect(json.data.mimeType).toBe('image/jpeg')
+  })
+
   it('returns a safe failure response when storage upload fails', async () => {
     mocks.put.mockRejectedValue(new Error('storage offline'))
 

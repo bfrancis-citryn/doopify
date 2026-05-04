@@ -514,6 +514,11 @@ export async function processOrderConfirmationEmailDeliveryJob(input: { delivery
       : null,
   })
 
+  // Template disabled — skip send without affecting commerce durability.
+  if (!message) {
+    return
+  }
+
   try {
     const result = await sendTransactionalEmail({
       from: message.from,
@@ -608,6 +613,11 @@ export async function processFulfillmentTrackingEmailDeliveryJob(input: {
       quantity: item.quantity,
     })),
   })
+
+  // Template disabled — skip send without affecting commerce durability.
+  if (!message) {
+    return
+  }
 
   try {
     const result = await sendTransactionalEmail({
@@ -742,6 +752,14 @@ export async function resendEmailDelivery(id: string): Promise<ResendEmailDelive
         }
       : null,
   })
+
+  if (!message) {
+    return {
+      success: false,
+      reason: 'UNSUPPORTED_TEMPLATE' as const,
+      message: 'Order confirmation email template is currently disabled.',
+    }
+  }
 
   const delivery = await sendTrackedEmail({
     event: existing.event,

@@ -7,7 +7,23 @@ const mocks = vi.hoisted(() => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       count: vi.fn(),
+      create: vi.fn(),
     },
+    productVariant: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    productMedia: {
+      findMany: vi.fn(),
+      createMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    mediaAsset: {
+      findMany: vi.fn(),
+    },
+    $transaction: vi.fn(),
   },
   emitInternalEvent: vi.fn(),
 }))
@@ -20,7 +36,13 @@ vi.mock('@/server/events/dispatcher', () => ({
   emitInternalEvent: mocks.emitInternalEvent,
 }))
 
-import { getStorefrontProductByHandle, getStorefrontProducts, getProductSummaries, getProduct } from './product.service'
+import {
+  getStorefrontProductByHandle,
+  getStorefrontProducts,
+  getProductSummaries,
+  getProduct,
+  createProduct,
+} from './product.service'
 
 describe('getProductSummaries — lightweight list', () => {
   beforeEach(() => {
@@ -130,6 +152,81 @@ describe('getProduct — full detail', () => {
     expect(callArg.include).toHaveProperty('variants')
     expect(callArg.include).toHaveProperty('media')
     expect(callArg.include).toHaveProperty('options')
+  })
+})
+
+describe('createProduct — safe partial create', () => {
+  const minimalProduct = {
+    id: 'prod-1',
+    title: 'Test',
+    handle: 'test',
+    status: 'DRAFT',
+    publishedAt: null,
+    description: null,
+    vendor: null,
+    productType: null,
+    tags: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    variants: [{ id: 'var-1', priceCents: 1000, compareAtPriceCents: null, sku: null, inventory: 0, title: 'Default', weight: null, weightUnit: 'kg', position: 0 }],
+    media: [],
+    options: [],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.emitInternalEvent.mockResolvedValue(undefined)
+    mocks.prisma.product.create.mockResolvedValue({ id: 'prod-1' })
+    // Route handle lookups (where.handle) return null (no conflict).
+    // Product fetches (where.id) return minimalProduct.
+    mocks.prisma.product.findUnique.mockImplementation(async ({ where }: any) => {
+      if ('handle' in where) return null
+      if (where.id === 'prod-1') return minimalProduct
+      return null
+    })
+  })
+
+  it('returns product when created with no media', async () => {
+    mocks.prisma.$transaction
+      .mockImplementationOnce(async (cb: any) => cb(mocks.prisma))
+
+    const result = await createProduct({ title: 'Test', status: 'DRAFT' })
+
+    expect(result.product).not.toBeNull()
+    expect(result.product?.id).toBe('prod-1')
+    expect(result.mediaSyncError).toBeUndefined()
+  })
+
+  it('returns product with mediaSyncError when media asset IDs are invalid', async () => {
+    mocks.prisma.$transaction
+      .mockImplementationOnce(async (cb: any) => cb(mocks.prisma))
+      .mockImplementationOnce(async (_cb: any) => {
+        throw new Error('One or more media assets could not be found')
+      })
+
+    const result = await createProduct({
+      title: 'Test',
+      status: 'DRAFT',
+      media: [{ assetId: 'nonexistent-asset' }],
+    })
+
+    expect(result.product).not.toBeNull()
+    expect(result.product?.id).toBe('prod-1')
+    expect(result.mediaSyncError).toContain('media assets could not be found')
+  })
+
+  it('still emits product.created even when media sync fails', async () => {
+    mocks.prisma.$transaction
+      .mockImplementationOnce(async (cb: any) => cb(mocks.prisma))
+      .mockImplementationOnce(async (_cb: any) => {
+        throw new Error('media error')
+      })
+
+    await createProduct({ title: 'Test', media: [{ assetId: 'bad-id' }] })
+
+    expect(mocks.emitInternalEvent).toHaveBeenCalledWith('product.created', expect.objectContaining({
+      productId: 'prod-1',
+    }))
   })
 })
 

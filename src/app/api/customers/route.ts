@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import {
   addCustomerAddress,
   createCustomer,
@@ -7,7 +8,12 @@ import {
   getCustomers,
 } from '@/server/services/customer.service'
 
+export const runtime = 'nodejs'
+
 export async function GET(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   try {
     const { searchParams } = new URL(req.url)
     const result = await getCustomers({
@@ -35,6 +41,9 @@ const createSchema = z.object({
 })
 
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')
 
