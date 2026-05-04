@@ -40,11 +40,13 @@ vi.mock('@/server/events/dispatcher', () => ({
 import {
   applyEmailProviderWebhookEvent,
   createEmailDelivery,
+  EMAIL_DELIVERY_RESEND_ELIGIBLE_STATUSES,
   getEmailDeliveryById,
   getEmailDeliveries,
   markEmailDeliveryFailed,
   markEmailDeliverySent,
   parseEmailProviderWebhookPayload,
+  processOrderConfirmationEmailDeliveryJob,
   processFulfillmentTrackingEmailDeliveryJob,
   queueFulfillmentTrackingEmailDelivery,
   resendEmailDelivery,
@@ -494,5 +496,294 @@ describe('email delivery service', () => {
 
     expect(result).toEqual({ handled: false, reason: 'UNSUPPORTED_EVENT' })
     expect(mocks.prisma.emailDelivery.updateMany).not.toHaveBeenCalled()
+  })
+
+  // ── Order confirmation job: template-disabled and provider-missing paths ─────
+
+  it('marks order confirmation delivery FAILED when template is disabled (returns null)', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-oc-1',
+      event: 'order.paid',
+      template: 'order_confirmation',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order confirmation',
+      status: 'PENDING',
+      provider: 'resend',
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      totalCents: 5000,
+      items: [],
+      addresses: [],
+    })
+    // Template disabled — builder returns null
+    mocks.buildOrderConfirmationEmailMessage.mockResolvedValue(null)
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-oc-1', status: 'FAILED' })
+
+    await processOrderConfirmationEmailDeliveryJob({ deliveryId: 'email-oc-1', orderId: 'order-1' })
+
+    // Must mark FAILED, not leave PENDING
+    expect(mocks.prisma.emailDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'email-oc-1' },
+        data: expect.objectContaining({
+          status: 'FAILED',
+          lastError: expect.stringContaining('disabled'),
+        }),
+      })
+    )
+    // Must NOT attempt to send
+    expect(mocks.sendTransactionalEmail).not.toHaveBeenCalled()
+  })
+
+  it('marks order confirmation delivery FAILED when provider is preview (no API key configured)', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-oc-2',
+      event: 'order.paid',
+      template: 'order_confirmation',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order confirmation',
+      status: 'PENDING',
+      provider: 'resend',
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      totalCents: 5000,
+      items: [],
+      addresses: [],
+    })
+    // Template enabled
+    mocks.buildOrderConfirmationEmailMessage.mockResolvedValue({
+      from: 'orders@example.com',
+      subject: 'Order #1001 confirmation',
+      html: '<p>Confirmed</p>',
+    })
+    // Provider returns preview (no real API key)
+    mocks.sendTransactionalEmail.mockResolvedValue({ provider: 'preview', providerMessageId: undefined })
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-oc-2', status: 'FAILED' })
+
+    await processOrderConfirmationEmailDeliveryJob({ deliveryId: 'email-oc-2', orderId: 'order-1' })
+
+    expect(mocks.prisma.emailDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'email-oc-2' },
+        data: expect.objectContaining({
+          status: 'FAILED',
+          lastError: expect.stringContaining('No email provider'),
+        }),
+      })
+    )
+  })
+
+  // ── Fulfillment tracking job: template-disabled and provider-missing paths ──
+
+  it('marks fulfillment tracking delivery FAILED when template is disabled (returns null)', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-ful-1',
+      event: 'fulfillment.created',
+      template: 'fulfillment_tracking',
+      recipientEmail: 'customer@example.com',
+      subject: 'Shipping update',
+      status: 'PENDING',
+      provider: 'resend',
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      items: [],
+      addresses: [],
+    })
+    mocks.prisma.fulfillment.findUnique.mockResolvedValue({
+      id: 'ful-1',
+      orderId: 'order-1',
+      carrier: 'UPS',
+      service: 'Ground',
+      trackingNumber: 'TRACK999',
+      trackingUrl: 'https://track.example.com/TRACK999',
+      items: [],
+    })
+    // Template disabled — builder returns null
+    mocks.buildFulfillmentTrackingEmailMessage.mockResolvedValue(null)
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-ful-1', status: 'FAILED' })
+
+    await processFulfillmentTrackingEmailDeliveryJob({
+      deliveryId: 'email-ful-1',
+      fulfillmentId: 'ful-1',
+      orderId: 'order-1',
+    })
+
+    expect(mocks.prisma.emailDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'email-ful-1' },
+        data: expect.objectContaining({
+          status: 'FAILED',
+          lastError: expect.stringContaining('disabled'),
+        }),
+      })
+    )
+    expect(mocks.sendTransactionalEmail).not.toHaveBeenCalled()
+  })
+
+  it('marks fulfillment tracking delivery FAILED when provider is preview (no API key configured)', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-ful-2',
+      event: 'fulfillment.created',
+      template: 'fulfillment_tracking',
+      recipientEmail: 'customer@example.com',
+      subject: 'Shipping update',
+      status: 'PENDING',
+      provider: 'resend',
+      orderId: 'order-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-1',
+      orderNumber: 1001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      items: [],
+      addresses: [],
+    })
+    mocks.prisma.fulfillment.findUnique.mockResolvedValue({
+      id: 'ful-2',
+      orderId: 'order-1',
+      carrier: 'USPS',
+      service: 'Priority',
+      trackingNumber: 'USPS999',
+      trackingUrl: 'https://track.example.com/USPS999',
+      items: [],
+    })
+    mocks.buildFulfillmentTrackingEmailMessage.mockResolvedValue({
+      from: 'orders@example.com',
+      subject: 'Order #1001 shipping update',
+      html: '<p>Your order shipped</p>',
+    })
+    // Provider returns preview
+    mocks.sendTransactionalEmail.mockResolvedValue({ provider: 'preview', providerMessageId: undefined })
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-ful-2', status: 'FAILED' })
+
+    await processFulfillmentTrackingEmailDeliveryJob({
+      deliveryId: 'email-ful-2',
+      fulfillmentId: 'ful-2',
+      orderId: 'order-1',
+    })
+
+    expect(mocks.prisma.emailDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'email-ful-2' },
+        data: expect.objectContaining({
+          status: 'FAILED',
+          lastError: expect.stringContaining('No email provider'),
+        }),
+      })
+    )
+  })
+
+  // ── Resend: does not duplicate commerce side effects ─────────────────────────
+
+  it('resend creates a new delivery record without touching order/payment/inventory', async () => {
+    mocks.prisma.emailDelivery.findUnique.mockResolvedValue({
+      id: 'email-resend-1',
+      event: 'order.paid',
+      template: 'order_confirmation',
+      recipientEmail: 'customer@example.com',
+      subject: 'Order confirmation',
+      status: 'FAILED',
+      provider: 'resend',
+      providerMessageId: null,
+      attempts: 1,
+      lastError: 'Resend API error',
+      nextRetryAt: null,
+      sentAt: null,
+      bouncedAt: null,
+      complainedAt: null,
+      orderId: 'order-resend-1',
+      customerId: null,
+      refundId: null,
+      returnId: null,
+      createdAt: new Date('2026-04-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-28T00:00:00.000Z'),
+    })
+    mocks.getOrderById.mockResolvedValue({
+      id: 'order-resend-1',
+      orderNumber: 2001,
+      email: 'customer@example.com',
+      currency: 'USD',
+      totalCents: 7500,
+      items: [{ title: 'Hat', variantTitle: null, quantity: 1, priceCents: 7500 }],
+      addresses: [],
+    })
+    mocks.sendTransactionalEmail.mockResolvedValue({ provider: 'resend', providerMessageId: 'msg-resend-2' })
+    mocks.prisma.emailDelivery.create.mockResolvedValue({ id: 'email-resend-2', status: 'PENDING' })
+    mocks.prisma.emailDelivery.update.mockResolvedValue({ id: 'email-resend-2', status: 'SENT' })
+
+    const result = await resendEmailDelivery('email-resend-1')
+
+    expect(result).toMatchObject({ success: true })
+
+    // Only a new EmailDelivery record and a send are created — no order/payment/inventory writes.
+
+    // Only an EmailDelivery record should be created — not any order/fulfillment/inventory record
+    expect(mocks.prisma.emailDelivery.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prisma.emailDelivery.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          template: 'order_confirmation',
+          status: 'PENDING',
+        }),
+      })
+    )
+  })
+
+  // ── Delivery log DTO field safety ─────────────────────────────────────────────
+
+  it('getEmailDeliveries select does not expose email HTML body or raw secrets', async () => {
+    // Call the list endpoint and confirm the mock was called with a select that
+    // excludes the html body, from address, and any raw provider payload fields.
+    await getEmailDeliveries({ status: 'SENT' })
+
+    const findManyCall = mocks.prisma.emailDelivery.findMany.mock.calls[0]?.[0]
+    const select = findManyCall?.select
+
+    // These fields would expose email content or secrets — must not be present
+    expect(select?.html).toBeUndefined()
+    expect(select?.from).toBeUndefined()
+    expect(select?.rawResponse).toBeUndefined()
+    expect(select?.apiKey).toBeUndefined()
+
+    // Safe metadata fields must be present
+    expect(select?.id).toBe(true)
+    expect(select?.recipientEmail).toBe(true)
+    expect(select?.status).toBe(true)
+    expect(select?.template).toBe(true)
+    expect(select?.provider).toBe(true)
+    expect(select?.lastError).toBe(true)
+  })
+
+  it('resend eligible statuses are the correct subset', () => {
+    // Contract: only failed, bounced, and complained deliveries may be resent
+    expect(EMAIL_DELIVERY_RESEND_ELIGIBLE_STATUSES).toEqual(['FAILED', 'BOUNCED', 'COMPLAINED'])
   })
 })

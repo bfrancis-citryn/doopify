@@ -1,6 +1,8 @@
+/* ─── Page shell ─────────────────────────────────────────────────────────── */
+
 .page {
   display: grid;
-  gap: 0.8rem;
+  gap: 1rem;
 }
 
 .breadcrumbs {
@@ -11,33 +13,52 @@
 .inlineLinkButton {
   color: var(--on-surface-variant);
   text-decoration: none;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 .inlineLinkButton:hover {
   color: var(--on-surface);
 }
 
+/* ─── Feedback banner ────────────────────────────────────────────────────── */
+
+.feedbackBanner {
+  border-radius: 0.75rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 90%, transparent);
+}
+
+/* ─── Header card ─────────────────────────────────────────────────────────── */
+
 .headerCard {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.75rem;
 }
 
 .headerTop {
   display: flex;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: 1rem;
   align-items: flex-start;
+}
+
+.headerMeta {
+  display: grid;
+  gap: 0.25rem;
 }
 
 .title {
   margin: 0;
   color: var(--on-surface);
-  font-size: 1.2rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .meta {
-  margin: 0.22rem 0 0;
+  margin: 0;
   color: var(--on-surface-variant);
   font-size: 0.8rem;
 }
@@ -45,88 +66,312 @@
 .headerActions {
   display: flex;
   gap: 0.4rem;
-  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .chipsRow {
   display: flex;
-  gap: 0.35rem;
+  gap: 1rem;
   flex-wrap: wrap;
+  align-items: center;
 }
+
+.chipGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chipLabel {
+  font-size: 0.72rem;
+  color: var(--on-surface-variant);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ─── Two-column layout ───────────────────────────────────────────────────── */
 
 .grid {
   display: grid;
-  gap: 0.8rem;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   align-items: start;
 }
 
 .mainColumn,
 .sideColumn {
   display: grid;
-  gap: 0.72rem;
+  gap: 1rem;
   align-content: start;
 }
 
-.cardHeader h3 {
-  margin: 0;
+/* ─── Card internals ─────────────────────────────────────────────────────── */
+
+.cardTitle {
+  margin: 0 0 0.75rem;
   color: var(--on-surface);
-  font-size: 0.96rem;
+  font-size: 0.94rem;
+  font-weight: 600;
 }
 
-.lineItemList,
-.fulfillmentList,
-.timelineList {
+.cardSubtitle {
+  margin: -0.35rem 0 0.75rem;
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
+}
+
+.sectionDivider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0 0.6rem;
+}
+
+.sectionEyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--on-surface-variant);
+  flex-shrink: 0;
+}
+
+.sectionDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border);
+}
+
+/* ─── Action row ─────────────────────────────────────────────────────────── */
+
+.actionRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+/* ─── Fulfillment list ───────────────────────────────────────────────────── */
+
+.fulfillmentList {
   display: grid;
-  gap: 0.56rem;
+  gap: 0.5rem;
 }
 
-.lineItemRow,
-.fulfillmentRow,
-.timelineRow {
-  border: 1px solid var(--glass-border);
-  border-radius: 0.7rem;
-  padding: 0.58rem 0.62rem;
-  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
-}
-
-.lineItemRow,
 .fulfillmentRow {
   display: flex;
   justify-content: space-between;
-  gap: 0.65rem;
   align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 70%, transparent);
 }
 
-.lineItemRow strong,
-.fulfillmentRow strong,
-.timelineRow strong {
+.fulfillmentInfo {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.fulfillmentInfo strong {
   color: var(--on-surface);
+  font-size: 0.88rem;
 }
 
-.lineItemRow p,
-.fulfillmentRow p,
-.timelineRow p {
-  margin: 0.16rem 0 0;
+.fulfillmentInfo p {
+  margin: 0;
   color: var(--on-surface-variant);
-  font-size: 0.77rem;
+  font-size: 0.76rem;
 }
 
-.timelineRow small {
+.fulfillmentLinks {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+/* ─── Item selector ──────────────────────────────────────────────────────── */
+
+.selectorList {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.selectorRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+}
+
+.selectorRow span {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.selectorRow small {
   color: var(--on-surface-variant);
-  font-size: 0.72rem;
+  font-size: 0.73rem;
+}
+
+.quantityInput {
+  width: 72px;
+  min-height: 32px;
+  border-radius: 0.5rem;
+  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  color: var(--on-surface);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.88rem;
+}
+
+/* ─── Package form grid ──────────────────────────────────────────────────── */
+
+.formGrid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ─── Live rates ─────────────────────────────────────────────────────────── */
+
+.rateList {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.rateRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+}
+
+.rateRow span {
+  display: grid;
+  gap: 0.1rem;
+  flex: 1;
+}
+
+.rateRow small {
+  color: var(--on-surface-variant);
+  font-size: 0.74rem;
+}
+
+/* ─── Shipping labels ────────────────────────────────────────────────────── */
+
+.labelList {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+}
+
+.labelRow strong {
+  color: var(--on-surface);
+  font-size: 0.86rem;
+}
+
+.labelRow p {
+  margin: 0.1rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.74rem;
+}
+
+/* ─── Checkbox ───────────────────────────────────────────────────────────── */
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
+  margin-top: 0.4rem;
+}
+
+/* ─── Line items ─────────────────────────────────────────────────────────── */
+
+.lineItemList {
+  display: grid;
+  gap: 0;
+}
+
+.lineItemRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.lineItemRow:last-child {
+  border-bottom: none;
+}
+
+.lineItemDetails {
+  display: grid;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.lineItemTitle {
+  color: var(--on-surface);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.lineItemVariant {
+  color: var(--on-surface-variant);
+  font-size: 0.76rem;
+}
+
+.lineItemDiscount {
+  color: var(--on-surface-variant);
+  font-size: 0.74rem;
 }
 
 .lineItemMeta {
   display: grid;
   justify-items: end;
-  gap: 0.08rem;
-  color: var(--on-surface);
+  gap: 0.1rem;
+  flex-shrink: 0;
 }
+
+.lineItemQty {
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+}
+
+.lineItemTotal {
+  color: var(--on-surface);
+  font-size: 0.9rem;
+}
+
+/* ─── Payment summary ────────────────────────────────────────────────────── */
 
 .summaryRows {
   display: grid;
-  gap: 0.38rem;
+  gap: 0.42rem;
 }
 
 .summaryRow {
@@ -134,124 +379,177 @@
   justify-content: space-between;
   gap: 0.5rem;
   color: var(--on-surface);
+  font-size: 0.88rem;
 }
 
-.summaryStrong {
-  font-size: 1rem;
-}
-
-.infoBlock,
-.noteText {
-  margin: 0;
+.summaryRowMuted {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
   color: var(--on-surface-variant);
-  font-size: 0.8rem;
-  display: grid;
-  gap: 0.15rem;
+  font-size: 0.84rem;
 }
 
-.successText,
-.errorText,
-.metaText {
-  margin: 0;
-  font-size: 0.76rem;
-}
-
-.successText {
-  color: var(--success-700, #0f766e);
-}
-
-.errorText {
-  color: var(--error-700, #b91c1c);
-}
-
-.metaText {
-  color: var(--on-surface-variant);
-}
-
-.divider {
+.summaryDivider {
   height: 1px;
   background: var(--glass-border);
-  margin: 0.25rem 0;
+  margin: 0.4rem 0 0.2rem;
 }
 
-.selectorList,
-.rateList,
-.labelList,
-.discountList,
-.noteStack {
-  display: grid;
+.summaryTotal {
+  display: flex;
+  justify-content: space-between;
   gap: 0.5rem;
+  color: var(--on-surface);
+  font-size: 1rem;
+  font-weight: 600;
+  padding-top: 0.1rem;
 }
 
-.selectorRow,
-.rateRow,
-.labelRow,
-.discountRow {
-  border: 1px solid var(--glass-border);
-  border-radius: 0.7rem;
-  padding: 0.56rem 0.62rem;
-  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+/* ─── Discounts ──────────────────────────────────────────────────────────── */
+
+.discountList {
+  display: grid;
+  gap: 0.45rem;
 }
 
-.selectorRow,
-.rateRow,
-.labelRow,
 .discountRow {
   display: flex;
   justify-content: space-between;
-  gap: 0.65rem;
-  align-items: center;
-}
-
-.selectorRow span,
-.rateRow span {
-  display: grid;
-  gap: 0.15rem;
-}
-
-.selectorRow small,
-.rateRow small {
-  color: var(--on-surface-variant);
-  font-size: 0.73rem;
-}
-
-.quantityInput {
-  width: 74px;
-  min-height: 32px;
-  border-radius: 0.5rem;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.6rem;
   border: 1px solid var(--glass-border);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+}
+
+.discountRow strong {
   color: var(--on-surface);
-  padding: 0.2rem 0.45rem;
-}
-
-.formGrid {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.actionRow {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+  font-size: 0.87rem;
 }
 
 .discountRow p {
   margin: 0.12rem 0 0;
-  font-size: 0.73rem;
+  font-size: 0.74rem;
   color: var(--on-surface-variant);
 }
 
-.checkboxRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--on-surface-variant);
-  font-size: 0.76rem;
+/* ─── Notes ──────────────────────────────────────────────────────────────── */
+
+.noteStack {
+  display: grid;
+  gap: 0.55rem;
 }
 
-@media (max-width: 1080px) {
+.noteHistoryList {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.noteHistoryRow {
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+}
+
+.noteHistoryRow strong {
+  color: var(--on-surface);
+  font-size: 0.85rem;
+  display: block;
+}
+
+.noteHistoryRow small {
+  color: var(--on-surface-variant);
+  font-size: 0.72rem;
+}
+
+/* ─── Customer / address blocks ──────────────────────────────────────────── */
+
+.infoBlock {
+  display: grid;
+  gap: 0.18rem;
+  color: var(--on-surface-variant);
+  font-size: 0.83rem;
+}
+
+.infoBlock p {
+  margin: 0;
+}
+
+.addressText {
+  color: var(--on-surface-variant);
+  font-size: 0.83rem;
+  margin: 0;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+/* ─── Timeline ───────────────────────────────────────────────────────────── */
+
+.timelineList {
+  display: grid;
+  gap: 0;
+}
+
+.timelineRow {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.timelineRow:last-child {
+  border-bottom: none;
+}
+
+.timelineRow strong {
+  color: var(--on-surface);
+  font-size: 0.87rem;
+}
+
+.timelineRow p {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
+}
+
+.timelineRow small {
+  color: var(--on-surface-variant);
+  font-size: 0.72rem;
+}
+
+/* ─── Status text ────────────────────────────────────────────────────────── */
+
+.successText {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--success-700, #0f766e);
+}
+
+.errorText {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--error-700, #b91c1c);
+}
+
+.metaText {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--on-surface-variant);
+}
+
+.noteText {
+  margin: 0;
+  color: var(--on-surface-variant);
+  font-size: 0.83rem;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
   .grid {
     grid-template-columns: 1fr;
   }
@@ -260,5 +558,9 @@
 @media (max-width: 760px) {
   .formGrid {
     grid-template-columns: 1fr;
+  }
+
+  .title {
+    font-size: 1.3rem;
   }
 }

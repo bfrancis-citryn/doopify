@@ -2,8 +2,8 @@
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Documentation refresh: April 29, 2026
-> Last repo verification recorded in active docs: April 29, 2026
+> Documentation refresh: May 4, 2026
+> Last repo verification recorded in active docs: May 4, 2026
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -373,6 +373,20 @@ Status: deferred until after platform extraction proves out
 - compatibility and upgrade rules
 - retry and observability story for failed handlers
 - clear isolation model and ownership boundaries
+
+## Phase 20 — Pilot Polish And Setup UX
+
+Status: active
+
+Goals: clean up rough edges from Phase 19 Vercel + Stripe deployed test so the app is ready for one controlled merchant pilot.
+
+Shipped:
+
+- Checkout button disabled state: improved CSS contrast and removed `primaryStyle` inline override when button is disabled so dark-mode "Review payment" and "Place order" buttons never show dark text on a dark background
+- Shipping manual-rate API: `minWeight` field now accepts 0 (was `positive()`, now `min(0)`) so weight-based rates can be configured to match all cart weights including carts where no product weights are set
+- Weight-based shipping: service was already wired correctly; the root cause of the pilot failure was that the minWeight was set above 0 while product weights were 0 — now expressible as minWeight=0
+- New fast tests: weight-based rate match/no-match/zero-weight, price-based subtotal range, state-filtered region, and FREE-over threshold rate matching
+- `docs/PILOT_SMOKE_CHECKLIST.md`: 12-section pilot checklist covering all observable trust paths
 
 ## Verification And Testing
 

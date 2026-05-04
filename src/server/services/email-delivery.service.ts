@@ -514,8 +514,13 @@ export async function processOrderConfirmationEmailDeliveryJob(input: { delivery
       : null,
   })
 
-  // Template disabled — skip send without affecting commerce durability.
+  // Template disabled — skip send and surface a clear failure so it is visible in the delivery log.
   if (!message) {
+    await markEmailDeliveryFailed({
+      deliveryId: delivery.id,
+      error: new Error('Order confirmation email template is disabled. Enable it in Settings → Email.'),
+      retryable: false,
+    })
     return
   }
 
@@ -526,6 +531,17 @@ export async function processOrderConfirmationEmailDeliveryJob(input: { delivery
       subject: message.subject,
       html: message.html,
     })
+
+    // Provider in 'preview' mode means no real API key is configured.
+    // Surface this as a failure so it appears in delivery logs.
+    if (result.provider === 'preview') {
+      await markEmailDeliveryFailed({
+        deliveryId: delivery.id,
+        error: new Error('No email provider configured. Set up Resend in Settings → Email to send real emails.'),
+        retryable: false,
+      })
+      return
+    }
 
     await markEmailDeliverySent({
       deliveryId: delivery.id,
@@ -614,8 +630,13 @@ export async function processFulfillmentTrackingEmailDeliveryJob(input: {
     })),
   })
 
-  // Template disabled — skip send without affecting commerce durability.
+  // Template disabled — skip send and surface a clear failure so it is visible in the delivery log.
   if (!message) {
+    await markEmailDeliveryFailed({
+      deliveryId: delivery.id,
+      error: new Error('Shipping confirmation email template is disabled. Enable it in Settings → Email.'),
+      retryable: false,
+    })
     return
   }
 
@@ -626,6 +647,17 @@ export async function processFulfillmentTrackingEmailDeliveryJob(input: {
       subject: message.subject,
       html: message.html,
     })
+
+    // Provider in 'preview' mode means no real API key is configured.
+    // Surface this as a failure so it appears in delivery logs.
+    if (result.provider === 'preview') {
+      await markEmailDeliveryFailed({
+        deliveryId: delivery.id,
+        error: new Error('No email provider configured. Set up Resend in Settings → Email to send real emails.'),
+        retryable: false,
+      })
+      return
+    }
 
     await markEmailDeliverySent({
       deliveryId: delivery.id,

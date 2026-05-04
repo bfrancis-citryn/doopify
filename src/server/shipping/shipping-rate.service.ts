@@ -563,6 +563,45 @@ async function resolveLiveQuotes(input: {
   }))
 }
 
+function diagnoseModernManualRateMismatch(input: {
+  store: NonNullable<ShippingRateStore>
+  subtotalCents: number
+  totalWeightOz: number
+  shippingAddress: ShippingRateAddress
+}): string | null {
+  const allModernRates = input.store.shippingManualRates || []
+  if (!allModernRates.length) return null
+
+  const activeRates = allModernRates.filter((r) => r.isActive)
+  if (!activeRates.length) {
+    return 'No active manual shipping rates are configured. Add a manual rate in Settings → Shipping & delivery.'
+  }
+
+  const destinationCountry = normalizeCountry(input.shippingAddress.country)
+  const destinationProvince = normalizeProvince(input.shippingAddress.province)
+
+  const regionMatches = activeRates.filter((r) =>
+    filterByRegion({
+      destinationCountry,
+      destinationProvince,
+      regionCountry: r.regionCountry,
+      regionStateProvince: r.regionStateProvince,
+    })
+  )
+
+  if (!regionMatches.length) {
+    const countryLabel = destinationCountry || 'this country'
+    return `No shipping rate is configured for ${countryLabel}. Add a rate with destination country "${countryLabel}" or leave it blank to match all countries.`
+  }
+
+  const hasWeightBased = regionMatches.some((r) => r.rateType === 'WEIGHT_BASED')
+  if (hasWeightBased && input.totalWeightOz === 0) {
+    return 'No shipping rate matched. Weight-based rates require product weights. Add weight to each product variant, or set the rate minimum weight to 0 to match any cart.'
+  }
+
+  return 'No shipping rate matched this destination. Check that rate conditions (weight range, order total) are correct for this cart.'
+}
+
 export async function getShippingRatesForCheckout(input: GetShippingRatesForCheckoutInput): Promise<ShippingRateQuote[]> {
   ensureValidSubtotalCents(input.subtotalCents)
 
@@ -591,8 +630,15 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
   if (mode === 'MANUAL') {
     const manual = manualQuotes()
     if (manual.length) return manual
+    const specificReason = diagnoseModernManualRateMismatch({
+      store,
+      subtotalCents: input.subtotalCents,
+      totalWeightOz,
+      shippingAddress: input.shippingAddress,
+    })
     throw new ShippingRateSetupError(
-      'Manual shipping mode requires an active manual rate, shipping zone rate, free-shipping threshold, or explicit fallback rate for this destination.'
+      specificReason ??
+        'No shipping rate available for this destination. Configure manual rates in Settings → Shipping & delivery.'
     )
   }
 

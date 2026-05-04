@@ -34,12 +34,9 @@ function formatMoney(value, currency = "USD") {
 
 function formatAddress(address) {
   if (!address) return "Not provided";
+  if (typeof address === "string") return address.trim() || "Not provided";
 
-  if (typeof address === "string") {
-    return address.trim() || "Not provided";
-  }
-
-  const text = [
+  const lines = [
     address.firstName && address.lastName
       ? `${address.firstName} ${address.lastName}`
       : address.firstName || address.lastName || "",
@@ -49,25 +46,22 @@ function formatAddress(address) {
     [address.city, address.province, address.postalCode].filter(Boolean).join(", "),
     address.country,
     address.phone ? `Phone: ${address.phone}` : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
+  ].filter(Boolean);
 
-  return text || "Not provided";
-}
-
-function SummaryRow({ label, value, strong = false }) {
-  return (
-    <div className={styles.summaryRow}>
-      <span>{label}</span>
-      <strong className={strong ? styles.summaryStrong : ""}>{value}</strong>
-    </div>
-  );
+  return lines.join("\n") || "Not provided";
 }
 
 function parseErrorMessage(json, fallback) {
   if (json?.error && typeof json.error === "string") return json.error;
   return fallback;
+}
+
+function SectionDivider({ label }) {
+  return (
+    <div className={styles.sectionDivider}>
+      <span className={styles.sectionEyebrow}>{label}</span>
+    </div>
+  );
 }
 
 export default function OrderDetailView({ order }) {
@@ -81,6 +75,9 @@ export default function OrderDetailView({ order }) {
   const [rateQuotes, setRateQuotes] = useState([]);
   const [rateProvider, setRateProvider] = useState("");
   const [selectedRateId, setSelectedRateId] = useState("");
+  // shipmentId is the provider's shipment object id from the original rates call.
+  // EasyPost requires it to buy from the same shipment instead of creating a new one.
+  const [selectedShipmentId, setSelectedShipmentId] = useState("");
   const [selectedQuantities, setSelectedQuantities] = useState({});
   const [parcel, setParcel] = useState({
     weightOz: "12",
@@ -131,14 +128,17 @@ export default function OrderDetailView({ order }) {
       {
         key: "payment",
         label: currentOrder?.paymentStatusRaw || currentOrder?.paymentStatus || "unknown",
+        prefix: "Payment",
       },
       {
         key: "fulfillment",
         label: currentOrder?.fulfillmentStatusRaw || currentOrder?.fulfillmentStatus || "unknown",
+        prefix: "Fulfillment",
       },
       {
         key: "order",
         label: currentOrder?.orderStatus || currentOrder?.status || "unknown",
+        prefix: "Order",
       },
     ],
     [currentOrder]
@@ -149,16 +149,13 @@ export default function OrderDetailView({ order }) {
     for (const item of lineItems) {
       fulfilledByItem.set(item.id, 0);
     }
-
     for (const fulfillment of fulfillments) {
       const status = String(fulfillment?.status || "").toUpperCase();
       if (["CANCELLED", "ERROR", "FAILURE"].includes(status)) continue;
-
       for (const item of fulfillment?.items || []) {
         fulfilledByItem.set(item.orderItemId, (fulfilledByItem.get(item.orderItemId) || 0) + Number(item.quantity || 0));
       }
     }
-
     return lineItems
       .map((item) => {
         const remaining = Number(item.quantity || 0) - (fulfilledByItem.get(item.id) || 0);
@@ -175,28 +172,19 @@ export default function OrderDetailView({ order }) {
 
   function normalizeItemsPayload() {
     const payload = [];
-
     for (const item of fulfillableItems) {
       const raw = selectedQuantities[item.id];
       if (raw == null || raw === "") continue;
       const quantity = Number.parseInt(String(raw), 10);
       if (!Number.isFinite(quantity) || quantity <= 0) continue;
-
       if (quantity > item.remainingQuantity) {
         throw new Error(`Quantity for ${item.title} exceeds remaining fulfillable units.`);
       }
-
-      payload.push({
-        orderItemId: item.id,
-        variantId: item.variantId,
-        quantity,
-      });
+      payload.push({ orderItemId: item.id, variantId: item.variantId, quantity });
     }
-
     if (!payload.length) {
       throw new Error("Select at least one item quantity before creating fulfillment or buying a label.");
     }
-
     return payload;
   }
 
@@ -207,12 +195,9 @@ export default function OrderDetailView({ order }) {
       widthIn: Number(parcel.widthIn),
       heightIn: Number(parcel.heightIn),
     };
-
-    const invalid = Object.values(parsed).some((value) => !Number.isFinite(value) || value <= 0);
-    if (invalid) {
+    if (Object.values(parsed).some((v) => !Number.isFinite(v) || v <= 0)) {
       throw new Error("Package dimensions must be valid positive numbers.");
     }
-
     return parsed;
   }
 
@@ -225,9 +210,7 @@ export default function OrderDetailView({ order }) {
         { cache: "no-store" }
       );
       const json = await response.json();
-      if (json?.success) {
-        setLiveOrder(json.data);
-      }
+      if (json?.success) setLiveOrder(json.data);
     } finally {
       setRefreshing(false);
     }
@@ -235,7 +218,6 @@ export default function OrderDetailView({ order }) {
 
   async function loadShippingRates() {
     if (!currentOrder?.orderNumberValue) return;
-
     setMessage("");
     setErrorMessage("");
     setRatesLoading(true);
@@ -245,26 +227,25 @@ export default function OrderDetailView({ order }) {
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/shipping-rates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items,
-          parcel: parcelPayload,
-        }),
+        body: JSON.stringify({ items, parcel: parcelPayload }),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(parseErrorMessage(json, "Failed to load shipping rates."));
-      }
-
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to load shipping rates."));
       const quotes = Array.isArray(json.data?.quotes) ? json.data.quotes : [];
       setRateQuotes(quotes);
       setRateProvider(json.data?.provider || "");
-      setSelectedRateId(quotes[0]?.providerRateId || quotes[0]?.id || "");
-      if (!quotes.length) {
-        setMessage("No live label rates are available for the selected package.");
-      }
+      const firstQuote = quotes[0];
+      setSelectedRateId(firstQuote?.providerRateId || firstQuote?.id || "");
+      // Store the shipmentId from the first quote so label purchase can use the original shipment.
+      // EasyPost requires this to buy from the same shipment; Shippo ignores it.
+      setSelectedShipmentId(
+        typeof firstQuote?.metadata?.shipmentId === "string" ? firstQuote.metadata.shipmentId : ""
+      );
+      if (!quotes.length) setMessage("No live label rates are available for the selected package.");
     } catch (error) {
       setRateQuotes([]);
       setSelectedRateId("");
+      setSelectedShipmentId("");
       setRateProvider("");
       setErrorMessage(error instanceof Error ? error.message : "Failed to load shipping rates.");
     } finally {
@@ -280,24 +261,21 @@ export default function OrderDetailView({ order }) {
     try {
       const items = normalizeItemsPayload();
       const parcelPayload = normalizeParcelPayload();
-      if (!selectedRateId) {
-        throw new Error("Select a provider rate before buying a label.");
-      }
+      if (!selectedRateId) throw new Error("Select a provider rate before buying a label.");
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/shipping-labels`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           providerRateId: selectedRateId,
+          shipmentId: selectedShipmentId || undefined,
           items,
           parcel: parcelPayload,
         }),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(parseErrorMessage(json, "Failed to buy shipping label."));
-      }
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to buy shipping label."));
       const duplicate = Boolean(json.data?.duplicate);
-      setMessage(duplicate ? "Existing shipping label reused (no duplicate fulfillment created)." : "Shipping label purchased.");
+      setMessage(duplicate ? "Existing shipping label reused." : "Shipping label purchased.");
       await refreshOrder();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to buy shipping label.");
@@ -326,15 +304,13 @@ export default function OrderDetailView({ order }) {
         }),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(parseErrorMessage(json, "Failed to add manual tracking."));
-      }
-      setMessage(manualForm.sendTrackingEmail ? "Manual tracking saved and shipment email queued." : "Manual tracking saved.");
-      setManualForm((previous) => ({
-        ...previous,
-        trackingNumber: "",
-        trackingUrl: "",
-      }));
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to add manual tracking."));
+      setMessage(
+        manualForm.sendTrackingEmail
+          ? "Manual tracking saved. Shipment email queued — check Delivery logs to confirm it sent."
+          : "Manual tracking saved. Shipment email was not requested."
+      );
+      setManualForm((prev) => ({ ...prev, trackingNumber: "", trackingUrl: "" }));
       await refreshOrder();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to add manual tracking.");
@@ -355,9 +331,7 @@ export default function OrderDetailView({ order }) {
         body: JSON.stringify(patch),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(parseErrorMessage(json, "Failed to update order status."));
-      }
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to update order status."));
       setMessage(successMessage);
       await refreshOrder();
     } catch (error) {
@@ -376,14 +350,10 @@ export default function OrderDetailView({ order }) {
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/notes`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          internalNote: internalNoteDraft,
-        }),
+        body: JSON.stringify({ internalNote: internalNoteDraft }),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(parseErrorMessage(json, "Failed to save internal note."));
-      }
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to save internal note."));
       setMessage("Internal note updated.");
       await refreshOrder();
     } catch (error) {
@@ -402,15 +372,10 @@ export default function OrderDetailView({ order }) {
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/notes`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerNote: customerNoteDraft,
-          sendCustomerEmail: sendCustomerNoteEmail,
-        }),
+        body: JSON.stringify({ customerNote: customerNoteDraft, sendCustomerEmail: sendCustomerNoteEmail }),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) {
-        throw new Error(parseErrorMessage(json, "Failed to add customer-visible note."));
-      }
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to add customer-visible note."));
       const sent = Boolean(json.data?.emailDelivery?.sent);
       const attempted = Boolean(json.data?.emailDelivery?.attempted);
       const failed = attempted && !sent;
@@ -434,11 +399,9 @@ export default function OrderDetailView({ order }) {
   if (!currentOrder) {
     return (
       <div className={styles.page}>
-        <div className={styles.breadcrumbs}>
-          <Link className={styles.inlineLinkButton} href="/orders">
-            Back to orders
-          </Link>
-        </div>
+        <nav className={styles.breadcrumbs}>
+          <Link className={styles.inlineLinkButton} href="/orders">← Orders</Link>
+        </nav>
         <AdminEmptyState
           description="This order may have been removed or the identifier may be invalid."
           title="Order not found"
@@ -447,20 +410,34 @@ export default function OrderDetailView({ order }) {
     );
   }
 
+  const hasStatusActions =
+    currentOrder?.availableActions?.canMarkPaid ||
+    currentOrder?.availableActions?.canMarkPaymentPending ||
+    currentOrder?.availableActions?.canMarkFulfilled ||
+    currentOrder?.availableActions?.canMarkUnfulfilled;
+
   return (
     <div className={styles.page}>
-      <div className={styles.breadcrumbs}>
-        <Link className={styles.inlineLinkButton} href="/orders">
-          Back to orders
-        </Link>
-      </div>
+      {/* Breadcrumb */}
+      <nav className={styles.breadcrumbs}>
+        <Link className={styles.inlineLinkButton} href="/orders">← Orders</Link>
+      </nav>
 
+      {/* Global feedback — lifted out of the fulfillment card */}
+      {(message || errorMessage) ? (
+        <div className={styles.feedbackBanner}>
+          {message ? <p className={styles.successText}>{message}</p> : null}
+          {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}
+        </div>
+      ) : null}
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <AdminCard className={styles.headerCard} variant="panel">
         <div className={styles.headerTop}>
-          <div>
+          <div className={styles.headerMeta}>
             <h1 className={styles.title}>{currentOrder.orderNumber}</h1>
             <p className={styles.meta}>
-              Created {new Date(currentOrder.createdAt).toLocaleString()} via {currentOrder.sourceChannel || currentOrder.channel || "unknown source"}
+              {new Date(currentOrder.createdAt).toLocaleString()} · via {currentOrder.sourceChannel || currentOrder.channel || "online store"}
             </p>
           </div>
           <div className={styles.headerActions}>
@@ -472,115 +449,93 @@ export default function OrderDetailView({ order }) {
             </AdminButton>
           </div>
         </div>
+
         <div className={styles.chipsRow}>
           {chips.map((chip) => (
-            <AdminStatusChip key={chip.key} tone={orderStatusChipTone(chip.label)}>
-              {chip.label}
-            </AdminStatusChip>
+            <span className={styles.chipGroup} key={chip.key}>
+              <span className={styles.chipLabel}>{chip.prefix}</span>
+              <AdminStatusChip tone={orderStatusChipTone(chip.label)}>{chip.label}</AdminStatusChip>
+            </span>
           ))}
         </div>
-        <div className={styles.actionRow}>
-          {currentOrder?.availableActions?.canMarkPaid ? (
-            <AdminButton
-              loading={statusActionLoading === "markPaid"}
-              onClick={() =>
-                updateOrderStatusPatch(
-                  { paymentStatus: "PAID" },
-                  "markPaid",
-                  "Payment status updated to PAID."
-                )
-              }
-              size="sm"
-              variant="secondary"
-            >
-              Mark paid
-            </AdminButton>
-          ) : null}
-          {currentOrder?.availableActions?.canMarkPaymentPending ? (
-            <AdminButton
-              loading={statusActionLoading === "markPending"}
-              onClick={() =>
-                updateOrderStatusPatch(
-                  { paymentStatus: "PENDING" },
-                  "markPending",
-                  "Payment status updated to PENDING."
-                )
-              }
-              size="sm"
-              variant="secondary"
-            >
-              Mark payment pending
-            </AdminButton>
-          ) : null}
-          {currentOrder?.availableActions?.canMarkFulfilled ? (
-            <AdminButton
-              loading={statusActionLoading === "markFulfilled"}
-              onClick={() =>
-                updateOrderStatusPatch(
-                  { fulfillmentStatus: "FULFILLED" },
-                  "markFulfilled",
-                  "Fulfillment status updated to FULFILLED."
-                )
-              }
-              size="sm"
-              variant="secondary"
-            >
-              Mark fulfilled
-            </AdminButton>
-          ) : null}
-          {currentOrder?.availableActions?.canMarkUnfulfilled ? (
-            <AdminButton
-              loading={statusActionLoading === "markUnfulfilled"}
-              onClick={() =>
-                updateOrderStatusPatch(
-                  { fulfillmentStatus: "UNFULFILLED" },
-                  "markUnfulfilled",
-                  "Fulfillment status updated to UNFULFILLED."
-                )
-              }
-              size="sm"
-              variant="secondary"
-            >
-              Mark unfulfilled
-            </AdminButton>
-          ) : null}
-        </div>
+
+        {hasStatusActions ? (
+          <div className={styles.actionRow}>
+            {currentOrder?.availableActions?.canMarkPaid ? (
+              <AdminButton
+                loading={statusActionLoading === "markPaid"}
+                onClick={() => updateOrderStatusPatch({ paymentStatus: "PAID" }, "markPaid", "Payment status updated to PAID.")}
+                size="sm"
+                variant="secondary"
+              >
+                Mark paid
+              </AdminButton>
+            ) : null}
+            {currentOrder?.availableActions?.canMarkPaymentPending ? (
+              <AdminButton
+                loading={statusActionLoading === "markPending"}
+                onClick={() => updateOrderStatusPatch({ paymentStatus: "PENDING" }, "markPending", "Payment status updated to PENDING.")}
+                size="sm"
+                variant="secondary"
+              >
+                Mark payment pending
+              </AdminButton>
+            ) : null}
+            {currentOrder?.availableActions?.canMarkFulfilled ? (
+              <AdminButton
+                loading={statusActionLoading === "markFulfilled"}
+                onClick={() => updateOrderStatusPatch({ fulfillmentStatus: "FULFILLED" }, "markFulfilled", "Fulfillment status updated to FULFILLED.")}
+                size="sm"
+                variant="secondary"
+              >
+                Mark fulfilled
+              </AdminButton>
+            ) : null}
+            {currentOrder?.availableActions?.canMarkUnfulfilled ? (
+              <AdminButton
+                loading={statusActionLoading === "markUnfulfilled"}
+                onClick={() => updateOrderStatusPatch({ fulfillmentStatus: "UNFULFILLED" }, "markUnfulfilled", "Fulfillment status updated to UNFULFILLED.")}
+                size="sm"
+                variant="secondary"
+              >
+                Mark unfulfilled
+              </AdminButton>
+            ) : null}
+          </div>
+        ) : null}
       </AdminCard>
 
       <div className={styles.grid}>
+        {/* ── Main column ──────────────────────────────────────────────────── */}
         <div className={styles.mainColumn}>
+
+          {/* ── Fulfillment history ──────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Fulfillment</h3>
-            </div>
-
-            {message ? <p className={styles.successText}>{message}</p> : null}
-            {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}
-
+            <h3 className={styles.cardTitle}>Fulfillment</h3>
             {fulfillments.length ? (
               <div className={styles.fulfillmentList}>
                 {fulfillments.map((entry) => (
                   <div className={styles.fulfillmentRow} key={entry.id}>
-                    <div>
+                    <div className={styles.fulfillmentInfo}>
                       <strong>{entry.carrier || "Carrier pending"}</strong>
                       <p>
                         {entry.service || "Service pending"}
-                        {entry.trackingNumber ? ` | ${entry.trackingNumber}` : ""}
+                        {entry.trackingNumber ? ` · ${entry.trackingNumber}` : ""}
                       </p>
-                      {entry.trackingUrl ? (
-                        <a className={styles.inlineLinkButton} href={entry.trackingUrl} rel="noreferrer" target="_blank">
-                          Track shipment
-                        </a>
-                      ) : null}
-                      {entry.labelUrl ? (
-                        <a className={styles.inlineLinkButton} href={entry.labelUrl} rel="noreferrer" target="_blank">
-                          Reprint label
-                        </a>
-                      ) : null}
+                      <div className={styles.fulfillmentLinks}>
+                        {entry.trackingUrl ? (
+                          <a className={styles.inlineLinkButton} href={entry.trackingUrl} rel="noreferrer" target="_blank">
+                            Track shipment
+                          </a>
+                        ) : null}
+                        {entry.labelUrl ? (
+                          <a className={styles.inlineLinkButton} href={entry.labelUrl} rel="noreferrer" target="_blank">
+                            Reprint label
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
-                    <AdminStatusChip tone={orderStatusChipTone(entry.status)}>
-                      {entry.status}
-                    </AdminStatusChip>
+                    <AdminStatusChip tone={orderStatusChipTone(entry.status)}>{entry.status}</AdminStatusChip>
                   </div>
                 ))}
               </div>
@@ -592,128 +547,9 @@ export default function OrderDetailView({ order }) {
               />
             )}
 
-            <div className={styles.divider} />
-            <div className={styles.cardHeader}>
-              <h3>Fulfillment operations</h3>
-            </div>
-            {fulfillableItems.length ? (
-              <div className={styles.selectorList}>
-                {fulfillableItems.map((item) => (
-                  <label className={styles.selectorRow} key={item.id}>
-                    <span>
-                      <strong>{item.title}</strong>
-                      <small>{item.variantTitle || "Default variant"} | Remaining {item.remainingQuantity}</small>
-                    </span>
-                    <input
-                      className={styles.quantityInput}
-                      max={item.remainingQuantity}
-                      min={0}
-                      onChange={(event) =>
-                        setSelectedQuantities((previous) => ({
-                          ...previous,
-                          [item.id]: event.target.value,
-                        }))
-                      }
-                      placeholder="0"
-                      type="number"
-                      value={selectedQuantities[item.id] ?? ""}
-                    />
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className={styles.metaText}>All line items are already fulfilled.</p>
-            )}
-
-            {labelProviderConnected ? (
-              <>
-                <div className={styles.formGrid}>
-                  <AdminField hint="Required for label rates and purchase." label="Weight (oz)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((previous) => ({ ...previous, weightOz: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.weightOz}
-                    />
-                  </AdminField>
-                  <AdminField label="Length (in)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((previous) => ({ ...previous, lengthIn: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.lengthIn}
-                    />
-                  </AdminField>
-                  <AdminField label="Width (in)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((previous) => ({ ...previous, widthIn: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.widthIn}
-                    />
-                  </AdminField>
-                  <AdminField label="Height (in)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((previous) => ({ ...previous, heightIn: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.heightIn}
-                    />
-                  </AdminField>
-                </div>
-
-                <div className={styles.actionRow}>
-                  <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
-                    Load shipping rates
-                  </AdminButton>
-                </div>
-
-                {rateQuotes.length ? (
-                  <div className={styles.rateList}>
-                    {rateQuotes.map((quote) => {
-                      const rateId = quote.providerRateId || quote.id;
-                      return (
-                        <label className={styles.rateRow} key={rateId}>
-                          <input
-                            checked={selectedRateId === rateId}
-                            name="shipping-rate"
-                            onChange={() => setSelectedRateId(rateId)}
-                            type="radio"
-                          />
-                          <span>
-                            <strong>{quote.displayName || quote.service || "Carrier rate"}</strong>
-                            <small>
-                              {(quote.carrier ? `${quote.carrier} | ` : "") +
-                                formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)}
-                            </small>
-                          </span>
-                        </label>
-                      );
-                    })}
-                    <div className={styles.actionRow}>
-                      <AdminButton disabled={!canBuyShippingLabel} loading={buyingLabel} onClick={buyShippingLabel} size="sm">
-                        Buy shipping label{rateProvider ? ` (${rateProvider})` : ""}
-                      </AdminButton>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className={styles.metaText}>
-                No label provider is connected. Use manual fulfillment below to mark shipped and add tracking.
-              </p>
-            )}
-
             {shippingLabels.length ? (
               <>
-                <div className={styles.divider} />
-                <div className={styles.cardHeader}>
-                  <h3>Shipping labels</h3>
-                </div>
+                <SectionDivider label="Shipping labels" />
                 <div className={styles.labelList}>
                   {shippingLabels.map((label) => (
                     <div className={styles.labelRow} key={label.id}>
@@ -733,36 +569,65 @@ export default function OrderDetailView({ order }) {
                 </div>
               </>
             ) : null}
+          </AdminCard>
 
-            <div className={styles.divider} />
-            <div className={styles.cardHeader}>
-              <h3>Mark fulfilled / add tracking manually</h3>
-            </div>
+          {/* ── Create fulfillment (operations) ──────────────────────────── */}
+          <AdminCard variant="panel">
+            <h3 className={styles.cardTitle}>Create fulfillment</h3>
+            <p className={styles.cardSubtitle}>Select items to fulfill, then save manual tracking or buy a carrier label.</p>
+
+            {fulfillableItems.length ? (
+              <div className={styles.selectorList}>
+                {fulfillableItems.map((item) => (
+                  <label className={styles.selectorRow} key={item.id}>
+                    <span>
+                      <strong>{item.title}</strong>
+                      <small>{item.variantTitle || "Default variant"} · {item.remainingQuantity} remaining</small>
+                    </span>
+                    <input
+                      className={styles.quantityInput}
+                      max={item.remainingQuantity}
+                      min={0}
+                      onChange={(event) =>
+                        setSelectedQuantities((prev) => ({ ...prev, [item.id]: event.target.value }))
+                      }
+                      placeholder="0"
+                      type="number"
+                      value={selectedQuantities[item.id] ?? ""}
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.metaText}>All line items are already fulfilled.</p>
+            )}
+
+            <SectionDivider label="Manual tracking" />
             <div className={styles.formGrid}>
               <AdminField label="Carrier">
                 <AdminInput
-                  onChange={(event) => setManualForm((previous) => ({ ...previous, carrier: event.target.value }))}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, carrier: event.target.value }))}
                   placeholder="UPS"
                   value={manualForm.carrier}
                 />
               </AdminField>
               <AdminField label="Service">
                 <AdminInput
-                  onChange={(event) => setManualForm((previous) => ({ ...previous, service: event.target.value }))}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, service: event.target.value }))}
                   placeholder="Ground"
                   value={manualForm.service}
                 />
               </AdminField>
               <AdminField label="Tracking number">
                 <AdminInput
-                  onChange={(event) => setManualForm((previous) => ({ ...previous, trackingNumber: event.target.value }))}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, trackingNumber: event.target.value }))}
                   placeholder="1Z..."
                   value={manualForm.trackingNumber}
                 />
               </AdminField>
               <AdminField label="Tracking URL">
                 <AdminInput
-                  onChange={(event) => setManualForm((previous) => ({ ...previous, trackingUrl: event.target.value }))}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, trackingUrl: event.target.value }))}
                   placeholder="https://tracking.example.com/..."
                   value={manualForm.trackingUrl}
                 />
@@ -772,46 +637,141 @@ export default function OrderDetailView({ order }) {
               <input
                 checked={manualForm.sendTrackingEmail}
                 onChange={(event) =>
-                  setManualForm((previous) => ({
-                    ...previous,
-                    sendTrackingEmail: event.target.checked,
-                  }))
+                  setManualForm((prev) => ({ ...prev, sendTrackingEmail: event.target.checked }))
                 }
                 type="checkbox"
               />
-              <span>Send shipment tracking email to customer</span>
+              <span>
+                Send shipment tracking email to customer
+                {manualForm.sendTrackingEmail ? (
+                  <span style={{ display: "block", fontSize: "0.72rem", color: "var(--on-surface-variant)", marginTop: 2 }}>
+                    Email is queued via the job runner.{" "}
+                    <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
+                      Check delivery logs
+                    </Link>{" "}
+                    to confirm delivery.
+                  </span>
+                ) : null}
+              </span>
             </label>
             <div className={styles.actionRow}>
               <AdminButton loading={creatingManual} onClick={createManualTrackingFulfillment} size="sm">
                 Save manual tracking
               </AdminButton>
             </div>
+
+            {labelProviderConnected ? (
+              <>
+                <SectionDivider label="Buy shipping label" />
+                <div className={styles.formGrid}>
+                  <AdminField hint="Required for label rates and purchase." label="Weight (oz)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((prev) => ({ ...prev, weightOz: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.weightOz}
+                    />
+                  </AdminField>
+                  <AdminField label="Length (in)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((prev) => ({ ...prev, lengthIn: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.lengthIn}
+                    />
+                  </AdminField>
+                  <AdminField label="Width (in)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((prev) => ({ ...prev, widthIn: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.widthIn}
+                    />
+                  </AdminField>
+                  <AdminField label="Height (in)">
+                    <AdminInput
+                      min="0"
+                      onChange={(event) => setParcel((prev) => ({ ...prev, heightIn: event.target.value }))}
+                      step="0.01"
+                      type="number"
+                      value={parcel.heightIn}
+                    />
+                  </AdminField>
+                </div>
+                <div className={styles.actionRow}>
+                  <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
+                    Load shipping rates
+                  </AdminButton>
+                </div>
+                {rateQuotes.length ? (
+                  <div className={styles.rateList}>
+                    {rateQuotes.map((quote) => {
+                      const rateId = quote.providerRateId || quote.id;
+                      return (
+                        <label className={styles.rateRow} key={rateId}>
+                          <input
+                            checked={selectedRateId === rateId}
+                            name="shipping-rate"
+                            onChange={() => {
+                              setSelectedRateId(rateId);
+                              setSelectedShipmentId(
+                                typeof quote.metadata?.shipmentId === "string" ? quote.metadata.shipmentId : ""
+                              );
+                            }}
+                            type="radio"
+                          />
+                          <span>
+                            <strong>{quote.displayName || quote.service || "Carrier rate"}</strong>
+                            <small>
+                              {(quote.carrier ? `${quote.carrier} · ` : "") +
+                                formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)}
+                            </small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                    <div className={styles.actionRow}>
+                      <AdminButton disabled={!canBuyShippingLabel} loading={buyingLabel} onClick={buyShippingLabel} size="sm">
+                        Buy shipping label{rateProvider ? ` (${rateProvider})` : ""}
+                      </AdminButton>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className={styles.metaText} style={{ marginTop: "0.5rem" }}>
+                No label provider connected — use manual tracking above to mark shipped.
+              </p>
+            )}
           </AdminCard>
 
+          {/* ── Line items ────────────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Line items</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Line items</h3>
             {lineItems.length ? (
               <div className={styles.lineItemList}>
                 {lineItems.map((item) => (
                   <div className={styles.lineItemRow} key={item.id}>
-                    <div>
-                      <strong>{item.title}</strong>
-                      <p>{item.variantTitle || item.variant || "Default variant"}</p>
+                    <div className={styles.lineItemDetails}>
+                      <span className={styles.lineItemTitle}>{item.title}</span>
+                      <span className={styles.lineItemVariant}>{item.variantTitle || item.variant || "Default variant"}</span>
                       {(Number(item.totalDiscountCents || 0) > 0 || Number(item.totalDiscount || 0) > 0) ? (
-                        <p>
-                          Discount allocation:{" "}
-                          {formatMoney(
-                            item.totalDiscount ?? (Number(item.totalDiscountCents || 0) / 100),
+                        <span className={styles.lineItemDiscount}>
+                          Discount: −{formatMoney(
+                            item.totalDiscount ?? Number(item.totalDiscountCents || 0) / 100,
                             currency
                           )}
-                        </p>
+                        </span>
                       ) : null}
                     </div>
                     <div className={styles.lineItemMeta}>
-                      <span>x{item.quantity}</span>
-                      <strong>{formatMoney(item.total ?? Number(item.price || 0) * Number(item.quantity || 0), currency)}</strong>
+                      <span className={styles.lineItemQty}>× {item.quantity}</span>
+                      <strong className={styles.lineItemTotal}>
+                        {formatMoney(item.total ?? Number(item.price || 0) * Number(item.quantity || 0), currency)}
+                      </strong>
                     </div>
                   </div>
                 ))}
@@ -825,26 +785,39 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
+          {/* ── Payment summary ───────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Payment summary</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Payment summary</h3>
             <div className={styles.summaryRows}>
-              <SummaryRow label="Subtotal" value={formatMoney(currentOrder.subtotal, currency)} />
-              <SummaryRow label="Shipping" value={formatMoney(currentOrder.shippingAmount, currency)} />
-              {currentOrder.shippingMethodName ? (
-                <SummaryRow label="Shipping method" value={currentOrder.shippingMethodName} />
+              <div className={styles.summaryRowMuted}>
+                <span>Subtotal</span>
+                <span>{formatMoney(currentOrder.subtotal, currency)}</span>
+              </div>
+              <div className={styles.summaryRowMuted}>
+                <span>Shipping{currentOrder.shippingMethodName ? ` · ${currentOrder.shippingMethodName}` : ""}</span>
+                <span>{formatMoney(currentOrder.shippingAmount, currency)}</span>
+              </div>
+              <div className={styles.summaryRowMuted}>
+                <span>Tax</span>
+                <span>{formatMoney(currentOrder.taxAmount, currency)}</span>
+              </div>
+              {Number(currentOrder.discountAmount || 0) > 0 ? (
+                <div className={styles.summaryRowMuted}>
+                  <span>Discounts</span>
+                  <span>−{formatMoney(currentOrder.discountAmount, currency)}</span>
+                </div>
               ) : null}
-              <SummaryRow label="Tax" value={formatMoney(currentOrder.taxAmount, currency)} />
-              <SummaryRow label="Discount" value={formatMoney(currentOrder.discountAmount || 0, currency)} />
-              <SummaryRow label="Total" strong value={formatMoney(currentOrder.total, currency)} />
+              <div className={styles.summaryDivider} />
+              <div className={styles.summaryTotal}>
+                <span>Total</span>
+                <span>{formatMoney(currentOrder.total, currency)}</span>
+              </div>
             </div>
           </AdminCard>
 
+          {/* ── Discounts ─────────────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Discounts</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Discounts</h3>
             {discounts.length ? (
               <div className={styles.discountList}>
                 {discounts.map((discount) => (
@@ -853,12 +826,12 @@ export default function OrderDetailView({ order }) {
                       <strong>{discount.title || "Discount"}</strong>
                       <p>
                         {discount.code ? `Code: ${discount.code}` : "Manual discount"}
-                        {discount.method ? ` | ${String(discount.method).replaceAll("_", " ").toLowerCase()}` : ""}
+                        {discount.method ? ` · ${String(discount.method).replaceAll("_", " ").toLowerCase()}` : ""}
                       </p>
                     </div>
                     <strong>
-                      -{formatMoney(
-                        discount.amount ?? (Number(discount.amountCents || 0) / 100),
+                      −{formatMoney(
+                        discount.amount ?? Number(discount.amountCents || 0) / 100,
                         currency
                       )}
                     </strong>
@@ -874,6 +847,7 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
+          {/* ── Returns & refunds (OrderAdjustmentsCard) ──────────────────── */}
           <OrderAdjustmentsCard
             onOrderRefresh={refreshOrder}
             orderId={currentOrder.id}
@@ -881,10 +855,9 @@ export default function OrderDetailView({ order }) {
             paymentStatus={currentOrder.paymentStatusRaw || currentOrder.paymentStatus}
           />
 
+          {/* ── Timeline ──────────────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Timeline</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Timeline</h3>
             {timeline.length ? (
               <div className={styles.timelineList}>
                 {timeline.map((entry) => (
@@ -905,16 +878,17 @@ export default function OrderDetailView({ order }) {
           </AdminCard>
         </div>
 
+        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
         <div className={styles.sideColumn}>
+
+          {/* ── Notes ─────────────────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Notes</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Notes</h3>
             <div className={styles.noteStack}>
               <AdminField label="Internal note">
                 <AdminTextarea
                   onChange={(event) => setInternalNoteDraft(event.target.value)}
-                  placeholder="Internal order note"
+                  placeholder="Internal order note (not visible to customer)"
                   rows={3}
                   value={internalNoteDraft}
                 />
@@ -926,7 +900,7 @@ export default function OrderDetailView({ order }) {
               </div>
             </div>
 
-            <div className={styles.divider} />
+            <SectionDivider label="Customer update" />
 
             <div className={styles.noteStack}>
               <AdminField hint="Optional customer-facing update." label="Customer-visible note">
@@ -943,7 +917,7 @@ export default function OrderDetailView({ order }) {
                   onChange={(event) => setSendCustomerNoteEmail(event.target.checked)}
                   type="checkbox"
                 />
-                <span>Send this note to the customer by email</span>
+                <span>Email this note to the customer</span>
               </label>
               <div className={styles.actionRow}>
                 <AdminButton loading={savingCustomerNote} onClick={addCustomerVisibleNote} size="sm">
@@ -952,32 +926,33 @@ export default function OrderDetailView({ order }) {
               </div>
             </div>
 
-            <div className={styles.divider} />
-            <div className={styles.cardHeader}>
-              <h3>Customer-visible note history</h3>
-            </div>
             {customerVisibleNotes.length ? (
-              <div className={styles.timelineList}>
-                {customerVisibleNotes.map((entry) => (
-                  <div className={styles.timelineRow} key={entry.id}>
-                    <strong>{entry.note}</strong>
-                    <small>{new Date(entry.createdAt).toLocaleString()}</small>
-                  </div>
-                ))}
-              </div>
+              <>
+                <SectionDivider label="Note history" />
+                <div className={styles.noteHistoryList}>
+                  {customerVisibleNotes.map((entry) => (
+                    <div className={styles.noteHistoryRow} key={entry.id}>
+                      <strong>{entry.note}</strong>
+                      <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
-              <AdminEmptyState
-                description="No customer-visible notes were added yet."
-                icon="note_stack"
-                title="No notes"
-              />
+              <>
+                <SectionDivider label="Note history" />
+                <AdminEmptyState
+                  description="No customer-visible notes were added yet."
+                  icon="note_stack"
+                  title="No notes"
+                />
+              </>
             )}
           </AdminCard>
 
+          {/* ── Customer ──────────────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Customer</h3>
-            </div>
+            <h3 className={styles.cardTitle}>Customer</h3>
             <div className={styles.infoBlock}>
               <p>{currentOrder.customer?.name || "Guest customer"}</p>
               <p>{currentOrder.customer?.email || currentOrder.email || "No email"}</p>
@@ -985,18 +960,16 @@ export default function OrderDetailView({ order }) {
             </div>
           </AdminCard>
 
+          {/* ── Shipping address ──────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Shipping address</h3>
-            </div>
-            <p className={styles.noteText}>{formatAddress(shippingAddress)}</p>
+            <h3 className={styles.cardTitle}>Shipping address</h3>
+            <p className={styles.addressText}>{formatAddress(shippingAddress)}</p>
           </AdminCard>
 
+          {/* ── Billing address ───────────────────────────────────────────── */}
           <AdminCard variant="panel">
-            <div className={styles.cardHeader}>
-              <h3>Billing address</h3>
-            </div>
-            <p className={styles.noteText}>{formatAddress(billingAddress)}</p>
+            <h3 className={styles.cardTitle}>Billing address</h3>
+            <p className={styles.addressText}>{formatAddress(billingAddress)}</p>
           </AdminCard>
         </div>
       </div>

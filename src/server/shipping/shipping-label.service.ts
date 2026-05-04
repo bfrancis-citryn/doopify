@@ -383,37 +383,42 @@ export async function buyOrderShippingLabel(input: {
   items: OrderLabelItemInput[]
   parcel: OrderLabelParcelInput
   providerRateId: string
+  // EasyPost requires the shipment id from the original rates call to purchase from that shipment.
+  // Shippo uses the rate's object_id directly. Both are stable as long as the provider has not
+  // expired the shipment. Pass the shipmentId from the rate quote's metadata to avoid a re-fetch
+  // that would create a new provider shipment and invalidate the selected rate id.
+  shipmentId?: string
   labelFormat?: string
   labelSize?: string
 }) {
   if (!input.providerRateId?.trim()) {
     throw new Error('providerRateId is required to buy a label')
   }
+  validateParcel(input.parcel)
 
-  const rates = await getOrderShippingRatesForLabel({
+  // Validate order and items without re-fetching live rates from the provider.
+  const { order, selectedItems } = await resolveOrderContext({
     orderNumber: input.orderNumber,
     items: input.items,
-    parcel: input.parcel,
   })
 
-  if (!['PAID', 'PARTIALLY_REFUNDED'].includes(rates.order.paymentStatus)) {
+  if (!['PAID', 'PARTIALLY_REFUNDED'].includes(order.paymentStatus)) {
     throw new Error('Labels can only be purchased for paid orders')
   }
 
-  const selectedQuote = resolveSelectedQuote({
-    quotes: rates.quotes,
-    providerRateId: input.providerRateId,
-  })
+  const { provider, apiKey, store } = await resolveLiveProviderForLabels()
 
-  if (!selectedQuote) {
-    throw new Error('Selected provider rate is no longer available. Refresh rates and try again.')
-  }
+  // Build the rate request for the provider call and for persisting shipment context.
+  // This validates the ship-from location and destination address are present.
+  const request = buildShippingRateRequest({ store, order, parcel: input.parcel })
 
-  const safeProviderRateId = selectedQuote.providerRateId ?? selectedQuote.id
+  const safeProviderRateId = input.providerRateId.trim()
+  const safeShipmentId = input.shipmentId?.trim()
+
   const duplicateLabel = await prisma.shippingLabel.findFirst({
     where: {
-      orderId: rates.order.id,
-      provider: rates.provider,
+      orderId: order.id,
+      provider,
       providerRateId: safeProviderRateId,
       status: {
         in: ['PURCHASED', 'SUCCESS', 'QUEUED'],
@@ -439,51 +444,51 @@ export async function buyOrderShippingLabel(input: {
     }
   }
 
-  const shipmentId =
-    typeof selectedQuote.metadata?.shipmentId === 'string'
-      ? selectedQuote.metadata.shipmentId
-      : undefined
-
+  // Buy directly using the rate/shipment ids from the original rate selection.
+  // This avoids re-fetching rates (which would create a new provider shipment with new
+  // rate ids, making the originally selected providerRateId invalid).
   const purchasedLabel = await purchaseShippingProviderLabel({
-    provider: rates.provider,
+    provider,
     request: {
-      apiKey: rates.apiKey,
+      apiKey,
       rateId: safeProviderRateId,
-      shipmentId,
-      request: rates.request,
+      shipmentId: safeShipmentId,
+      request,
       labelFormat: input.labelFormat,
       labelSize: input.labelSize,
     },
   })
 
   const fulfilledByOrderItemId = normalizeFulfilledQuantities({
-    orderItems: rates.order.items,
-    fulfillmentRows: rates.order.fulfillments,
+    orderItems: order.items,
+    fulfillmentRows: order.fulfillments,
   })
 
-  for (const item of rates.selectedItems) {
+  for (const item of selectedItems) {
     const current = fulfilledByOrderItemId.get(item.orderItemId) ?? 0
     fulfilledByOrderItemId.set(item.orderItemId, current + item.quantity)
   }
 
   const nextFulfillmentStatus = resolveFulfillmentStatusFromQuantities({
-    orderItems: rates.order.items,
+    orderItems: order.items,
     fulfilledByOrderItemId,
   })
+
+  const currency = (store.currency || 'USD').toUpperCase()
 
   const saved = await prisma.$transaction(async (tx) => {
     const fulfillment = await tx.fulfillment.create({
       data: {
-        orderId: rates.order.id,
+        orderId: order.id,
         status: purchasedLabel.status === 'QUEUED' ? 'PENDING' : 'SUCCESS',
-        carrier: purchasedLabel.carrier ?? selectedQuote.carrier,
-        service: purchasedLabel.service ?? selectedQuote.service,
+        carrier: purchasedLabel.carrier,
+        service: purchasedLabel.service,
         trackingNumber: purchasedLabel.trackingNumber,
         trackingUrl: purchasedLabel.trackingUrl,
         labelUrl: purchasedLabel.labelUrl,
         shippedAt: new Date(),
         items: {
-          create: rates.selectedItems.map((item) => ({
+          create: selectedItems.map((item) => ({
             orderItemId: item.orderItemId,
             variantId: item.variantId,
             quantity: item.quantity,
@@ -497,27 +502,28 @@ export async function buyOrderShippingLabel(input: {
 
     const shippingLabel = await tx.shippingLabel.create({
       data: {
-        orderId: rates.order.id,
+        orderId: order.id,
         fulfillmentId: fulfillment.id,
-        provider: rates.provider,
-        providerShipmentId: purchasedLabel.providerShipmentId,
+        provider,
+        providerShipmentId: purchasedLabel.providerShipmentId ?? safeShipmentId,
         providerRateId: purchasedLabel.providerRateId ?? safeProviderRateId,
         providerLabelId: purchasedLabel.providerLabelId,
-        carrier: purchasedLabel.carrier ?? selectedQuote.carrier,
-        service: purchasedLabel.service ?? selectedQuote.service,
+        carrier: purchasedLabel.carrier,
+        service: purchasedLabel.service,
         status: purchasedLabel.status || 'PURCHASED',
         labelUrl: purchasedLabel.labelUrl,
-        labelFormat: input.labelFormat ?? rates.store.defaultLabelFormat ?? 'PDF',
+        labelFormat: input.labelFormat ?? store.defaultLabelFormat ?? 'PDF',
         trackingNumber: purchasedLabel.trackingNumber,
         trackingUrl: purchasedLabel.trackingUrl,
-        rateAmountCents: selectedQuote.amountCents,
-        labelAmountCents: purchasedLabel.labelAmountCents ?? purchasedLabel.rateAmountCents ?? selectedQuote.amountCents,
-        currency: (purchasedLabel.currency || rates.currency || 'USD').toUpperCase(),
+        rateAmountCents: purchasedLabel.rateAmountCents,
+        labelAmountCents: purchasedLabel.labelAmountCents ?? purchasedLabel.rateAmountCents,
+        currency: (purchasedLabel.currency || currency).toUpperCase(),
         rawResponse: {
-          selectedQuote,
           providerResponse: purchasedLabel.rawResponse ?? null,
           requestSummary: {
-            items: rates.selectedItems,
+            providerRateId: safeProviderRateId,
+            shipmentId: safeShipmentId,
+            items: selectedItems,
             parcel: input.parcel,
             labelFormat: input.labelFormat,
             labelSize: input.labelSize,
@@ -527,7 +533,7 @@ export async function buyOrderShippingLabel(input: {
     })
 
     await tx.order.update({
-      where: { id: rates.order.id },
+      where: { id: order.id },
       data: {
         fulfillmentStatus: nextFulfillmentStatus,
       },
@@ -535,12 +541,12 @@ export async function buyOrderShippingLabel(input: {
 
     await tx.orderEvent.create({
       data: {
-        orderId: rates.order.id,
+        orderId: order.id,
         type: 'SHIPPING_LABEL_PURCHASED',
         title: purchasedLabel.trackingNumber
           ? `Shipping label purchased with tracking ${purchasedLabel.trackingNumber}`
           : 'Shipping label purchased',
-        detail: `${rates.provider} label purchased (${safeProviderRateId})`,
+        detail: `${provider} label purchased (${safeProviderRateId})`,
         actorType: 'STAFF',
       },
     })
@@ -550,7 +556,7 @@ export async function buyOrderShippingLabel(input: {
 
   await emitInternalEvent('fulfillment.created', {
     fulfillmentId: saved.fulfillment.id,
-    orderId: rates.order.id,
+    orderId: order.id,
     trackingNumber: saved.fulfillment.trackingNumber ?? undefined,
     sendTrackingEmail: true,
   })

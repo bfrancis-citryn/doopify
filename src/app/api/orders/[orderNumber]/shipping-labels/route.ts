@@ -10,6 +10,10 @@ interface Params {
 
 const schema = z.object({
   providerRateId: z.string().trim().min(1).max(200),
+  // shipmentId is the provider's shipment object id from the original rates call.
+  // Required for EasyPost (used to buy from the existing shipment instead of re-fetching).
+  // Optional for Shippo (rate object_id is sufficient).
+  shipmentId: z.string().trim().max(200).optional(),
   labelFormat: z.string().trim().min(1).max(40).optional(),
   labelSize: z.string().trim().min(1).max(40).optional(),
   items: z
@@ -51,6 +55,7 @@ export async function POST(req: Request, { params }: Params) {
     const label = await buyOrderShippingLabel({
       orderNumber: parsedOrderNumber,
       providerRateId: parsed.data.providerRateId,
+      shipmentId: parsed.data.shipmentId,
       labelFormat: parsed.data.labelFormat,
       labelSize: parsed.data.labelSize,
       items: parsed.data.items,

@@ -27,9 +27,10 @@ function buildOrder(overrides: Record<string, unknown> = {}) {
     currency: 'USD',
     subtotal: 50,
     shippingAmount: 9.99,
+    shippingMethodName: 'Standard ground',
     taxAmount: 4,
-    discountAmount: 0,
-    total: 63.99,
+    discountAmount: 5,
+    total: 58.99,
     discounts: [
       {
         id: 'disc_1',
@@ -95,11 +96,12 @@ function buildOrder(overrides: Record<string, unknown> = {}) {
 }
 
 describe('OrderDetailView', () => {
-  it('renders order detail view model sections', () => {
+  it('renders all required section headings', () => {
     const html = renderToStaticMarkup(<OrderDetailView order={buildOrder()} />)
 
     expect(html).toContain('#1001')
     expect(html).toContain('Fulfillment')
+    expect(html).toContain('Create fulfillment')
     expect(html).toContain('Line items')
     expect(html).toContain('Payment summary')
     expect(html).toContain('Discounts')
@@ -111,7 +113,27 @@ describe('OrderDetailView', () => {
     expect(html).toContain('OrderAdjustmentsCardStub')
   })
 
-  it('renders intentional empty states when no refunds/returns/fulfillments equivalent data exists', () => {
+  it('renders payment summary with shipping method, subtotal, tax, and total', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder()} />)
+
+    expect(html).toContain('Payment summary')
+    expect(html).toContain('Subtotal')
+    expect(html).toContain('Shipping')
+    expect(html).toContain('Standard ground')
+    expect(html).toContain('Tax')
+    expect(html).toContain('Total')
+  })
+
+  it('renders labeled status chips for payment, fulfillment, and order', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder()} />)
+
+    expect(html).toContain('Payment')
+    expect(html).toContain('PAID')
+    expect(html).toContain('UNFULFILLED')
+    expect(html).toContain('OPEN')
+  })
+
+  it('renders intentional empty states when no data exists in any section', () => {
     const html = renderToStaticMarkup(
       <OrderDetailView
         order={buildOrder({
@@ -136,6 +158,11 @@ describe('OrderDetailView', () => {
     expect(orderStatusChipTone('UNFULFILLED')).toBe('warning')
     expect(orderStatusChipTone('FAILED')).toBe('danger')
     expect(orderStatusChipTone('UNKNOWN_STATE')).toBe('neutral')
+    expect(orderStatusChipTone('SUCCESS')).toBe('success')
+    expect(orderStatusChipTone('PENDING')).toBe('warning')
+    expect(orderStatusChipTone('CANCELLED')).toBe('danger')
+    expect(orderStatusChipTone('FULFILLED')).toBe('success')
+    expect(orderStatusChipTone('PARTIALLY_FULFILLED')).toBe('warning')
   })
 
   it('handles missing customer and addresses safely', () => {
@@ -154,5 +181,78 @@ describe('OrderDetailView', () => {
     expect(html).toContain('No email')
     expect(html).toContain('No phone')
     expect(html).toContain('Not provided')
+  })
+
+  it('renders fulfillment tracking links when present', () => {
+    const html = renderToStaticMarkup(
+      <OrderDetailView
+        order={buildOrder({
+          fulfillments: [
+            {
+              id: 'ful_track',
+              status: 'SUCCESS',
+              carrier: 'FedEx',
+              service: 'Express',
+              trackingNumber: 'FX999',
+              trackingUrl: 'https://fedex.com/track/FX999',
+              labelUrl: 'https://labels.example.com/FX999.pdf',
+            },
+          ],
+        })}
+      />
+    )
+
+    expect(html).toContain('Track shipment')
+    expect(html).toContain('Reprint label')
+    expect(html).toContain('FX999')
+  })
+
+  it('shows all items still unfulfilled in the create fulfillment section', () => {
+    const html = renderToStaticMarkup(
+      <OrderDetailView
+        order={buildOrder({ fulfillments: [] })}
+      />
+    )
+
+    expect(html).toContain('Hoodie')
+    // fulfillableItems has the item since no fulfillments exist
+    expect(html).toContain('Large')
+  })
+
+  it('shows "All line items are already fulfilled" when nothing remains unfulfilled', () => {
+    const html = renderToStaticMarkup(
+      <OrderDetailView
+        order={buildOrder({
+          fulfillments: [
+            {
+              id: 'ful_complete',
+              status: 'SUCCESS',
+              carrier: 'UPS',
+              items: [{ orderItemId: 'item_1', quantity: 2 }],
+            },
+          ],
+        })}
+      />
+    )
+
+    expect(html).toContain('All line items are already fulfilled')
+  })
+
+  it('shows discount amount in payment summary when discountAmount is positive', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder({ discountAmount: 5 })} />)
+    // The payment summary should surface the discount line
+    expect(html).toContain('Discounts')
+  })
+
+  it('renders the "Back to orders" breadcrumb link', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder()} />)
+    expect(html).toContain('href="/orders"')
+    expect(html).toContain('Orders')
+  })
+
+  it('renders "Order not found" empty state when order is null', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={null} />)
+    expect(html).toContain('Order not found')
+    expect(html).toContain('href="/orders"')
   })
 })

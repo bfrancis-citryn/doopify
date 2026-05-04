@@ -2,9 +2,9 @@
 
 > Canonical status snapshot for developers, maintainers, and AI agents.
 >
-> Documentation refresh: April 29, 2026
-> Last repo verification recorded in active docs: April 29, 2026
-> Current active phase: **Phase 4 - Merchant Lifecycle And Outbound Integrations**
+> Documentation refresh: May 4, 2026
+> Last repo verification recorded in active docs: May 4, 2026
+> Current active phase: **Phase 20 - Pilot Polish And Merchant Operations (complete)**
 
 ## Why This File Exists
 
@@ -373,6 +373,59 @@ Do not market or build around these yet:
 - Adding a root-level runtime filesystem plugin loader
 - Replacing the current admin with fully generated CRUD screens
 - Treating browser redirects as payment truth
+
+## Phase 20 — Pilot Polish And Merchant Operations
+
+Phase 20 is complete. All three workstreams shipped:
+
+### Workstream A — Order Detail UI Polish
+
+- `OrderDetailView.jsx` and `OrderDetailView.module.css` fully rewritten
+- Header: order number at 1.6rem, labeled status chips (Payment/Fulfillment/Order), conditional quick actions
+- Giant fulfillment card split into "Fulfillment" (history) and "Create fulfillment" (operations)
+- Global feedback banner lifted out of fulfillment card; visible at all scroll positions
+- Line item and timeline rows use bottom-border separators instead of individual bordered cards
+- Payment summary: muted rows for subtotal/shipping/tax, bold total with hairline divider, shipping method inline
+- `OrderDetailView.test.tsx` expanded from 4 to 12 tests
+
+### Workstream B — Live Rates And Label Purchase
+
+**Checkout button polish**: disabled state CSS raised to `rgba(255,255,255,0.50)` text; `primaryStyle` no longer applied when disabled, eliminating dark-on-black in dark mode; loading copy changed to "Loading payment form..."; Brand & Appearance token relationship documented; `checkout-button.copy.test.ts` added (14 tests).
+
+**Shipping settings UX**: `freeOverAmount` field now rendered for FREE rates in collapsible "Advanced conditions"; rate type change resets condition fields; `validateManualRate()` client-side validation with per-drawer error display; label renaming (Min/Max subtotal → Min/Max order total).
+
+**Shipping rate matching**: `minWeight`/`maxWeight` validation changed from `positive()` to `min(0)` in both manual-rate API routes; `diagnoseModernManualRateMismatch()` added for specific error messages when no rate matches (no active rates / wrong destination / weight required / condition mismatch); `shipping-settings.copy.test.ts` added (13 tests); `shipping-rate.service.test.ts` expanded with FREE-over-amount, maxSubtotal-zero, specific error message tests.
+
+**Label purchase critical bug fixed**: `buyOrderShippingLabel` previously re-fetched rates from the provider (creating a new EasyPost/Shippo shipment), making the original selected `providerRateId` invalid — label purchase always failed in practice. Fixed by removing the re-fetch: accepts `shipmentId?: string` from the original rates call and buys directly. API schema updated; `OrderDetailView.jsx` now passes `shipmentId` from rate metadata. `shipping-label.service.test.ts` expanded with 4 new tests (8 total); `shipping-setup.service.test.ts` added (8 tests).
+
+**Live rate and label purchase status**: **Real** — both EasyPost and Shippo adapters call real provider APIs. Setup prerequisites: provider API key, ship-from location, and default package. `canBuyLabels` in setup-status API signals readiness.
+
+### Workstream C — Transactional Email Verification
+
+**Order confirmation email** flow is: `order.paid` → `queueOrderConfirmationEmailDelivery` (PENDING `EmailDelivery` + job) → `processOrderConfirmationEmailDeliveryJob` → SENT or FAILED. Content: order number, items, total, shipping address.
+
+**Shipping confirmation email** flow is: `createManualFulfillment(sendTrackingEmail: true)` → `queueFulfillmentTrackingEmailDelivery` (PENDING `EmailDelivery` + job) → `processFulfillmentTrackingEmailDeliveryJob` → SENT or FAILED. Content: carrier, service, tracking number, tracking URL, items.
+
+**Two bugs fixed in both processors**:
+- Template disabled previously left delivery PENDING forever → now marks FAILED with "template is disabled" reason
+- Preview mode (no RESEND_API_KEY) previously marked delivery SENT → now marks FAILED with "No email provider configured" reason
+
+**UI**: post-save message includes delivery log link; tracking email checkbox shows inline hint when checked.
+
+**Resend safety verified**: new `EmailDelivery` record only, no order/payment/inventory mutations.
+
+`email-delivery.service.test.ts` expanded from 14 to 22 tests (template-disabled, preview-mode, resend side-effects, DTO field safety, resend eligibility contract).
+
+**Pilot smoke checklist**: `docs/PILOT_SMOKE_CHECKLIST.md` — 12-section checklist covering prerequisites, auth, product setup, shipping config, checkout, webhook/order verification, inventory, discounts, email, setup panel, edge cases, and sign-off table.
+
+### Verification (May 4, 2026)
+
+```bash
+npm run db:generate  # clean
+npx tsc --noEmit     # clean
+npm run test         # 609 passed (115 files)
+npm run build        # clean
+```
 
 ## Verification History
 

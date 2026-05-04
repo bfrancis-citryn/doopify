@@ -225,6 +225,8 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   const [pickupForm, setPickupForm] = useState(DEFAULT_PICKUP_FORM);
   const [packingSlipForm, setPackingSlipForm] = useState(DEFAULT_PACKING_SLIP_FORM);
   const [locationValidationMessage, setLocationValidationMessage] = useState("");
+  const [showAdvancedConditions, setShowAdvancedConditions] = useState(false);
+  const [manualDrawerError, setManualDrawerError] = useState("");
 
   const packages = settings?.shippingPackages || [];
   const locations = settings?.shippingLocations || [];
@@ -564,6 +566,8 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   }
 
   function openManualRateDrawer(entry) {
+    setManualDrawerError("");
+    setShowAdvancedConditions(false);
     if (!entry) {
       setManualForm({ ...DEFAULT_MANUAL_RATE_FORM });
     } else {
@@ -584,6 +588,34 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       });
     }
     setManualDrawerOpen(true);
+  }
+
+  function validateManualRate() {
+    if (!manualForm.name.trim()) {
+      return "Rate name is required.";
+    }
+    const amount = parseNumber(manualForm.amount);
+    if (manualForm.rateType !== "FREE" && (amount == null || amount < 0)) {
+      return "Amount must be 0 or greater.";
+    }
+    if (manualForm.rateType === "WEIGHT_BASED") {
+      const minW = parseNumber(manualForm.minWeight);
+      if (minW == null) {
+        return "Min weight is required for weight-based rates. Enter 0 to match all cart weights.";
+      }
+      const maxW = parseNumber(manualForm.maxWeight);
+      if (maxW != null && minW != null && maxW < minW) {
+        return "Max weight must be greater than or equal to min weight.";
+      }
+    }
+    if (manualForm.rateType === "PRICE_BASED") {
+      const minS = parseNumber(manualForm.minSubtotal);
+      const maxS = parseNumber(manualForm.maxSubtotal);
+      if (maxS != null && maxS > 0 && minS != null && maxS < minS) {
+        return "Max order total must be greater than or equal to min order total.";
+      }
+    }
+    return null;
   }
 
   function openFallbackRateDrawer(entry) {
@@ -672,6 +704,12 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   }
 
   async function saveManualRate() {
+    setManualDrawerError("");
+    const validationError = validateManualRate();
+    if (validationError) {
+      setManualDrawerError(validationError);
+      return;
+    }
     await persistEntity(
       manualForm.id ? `/api/settings/shipping/manual-rates/${manualForm.id}` : "/api/settings/shipping/manual-rates",
       manualForm.id ? "PATCH" : "POST",
@@ -1328,64 +1366,92 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         open={manualDrawerOpen}
         onClose={() => setManualDrawerOpen(false)}
         title={manualForm.id ? "Edit manual checkout rate" : "Add manual checkout rate"}
-        subtitle="Controls checkout charge, not postage purchase."
+        subtitle="Controls what customers pay at checkout — not postage."
       >
         <AdminField label="Rate name">
-          <AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} />
+          <AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Standard shipping" />
         </AdminField>
-        <AdminField label="Destination country" hint="ISO code, e.g. US, CA, GB. Leave blank to match all countries.">
-          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} placeholder="e.g. US" />
+        <AdminField label="Destination country" hint="Two-letter ISO code, e.g. US, CA, GB. Leave blank to match all countries.">
+          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} placeholder="e.g. US — leave blank for all countries" />
         </AdminField>
-        <AdminField label="State / province (optional)" hint="Leave blank to match all states or provinces in the destination country.">
+        <AdminField label="State / province (optional)" hint="Leave blank to match all states or provinces in the selected country.">
           <AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} placeholder="e.g. CA — leave blank for all states" />
         </AdminField>
         <AdminField label="Rate type">
           <AdminSelect
             value={manualForm.rateType}
-            onChange={(value) => setManualForm((current) => ({ ...current, rateType: value }))}
+            onChange={(value) => setManualForm((current) => ({ ...current, rateType: value, minWeight: "", maxWeight: "", minSubtotal: "", maxSubtotal: "", freeOverAmount: "" }))}
             options={[
-              { value: "FLAT", label: "Flat — fixed charge regardless of order" },
-              { value: "FREE", label: "Free — no shipping charge" },
+              { value: "FLAT", label: "Flat rate — fixed charge for any order" },
+              { value: "FREE", label: "Free shipping — no charge" },
+              { value: "PRICE_BASED", label: "Order total range — different rates by cart value" },
               { value: "WEIGHT_BASED", label: "Weight-based — requires product weights" },
-              { value: "PRICE_BASED", label: "Price-based — subtotal range" },
             ]}
           />
         </AdminField>
+
         {manualForm.rateType !== "FREE" ? (
-          <AdminField label="Amount ($)">
-            <AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} />
+          <AdminField label="Amount ($)" hint={manualForm.rateType === "FLAT" ? "Fixed charge shown to every customer who matches this rate." : undefined}>
+            <AdminInput type="number" value={manualForm.amount} onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))} placeholder="0.00" />
           </AdminField>
         ) : null}
+
+        {manualForm.rateType === "PRICE_BASED" ? (
+          <>
+            <AdminField label="Min order total ($)" hint="Rate applies when the cart subtotal is at or above this amount. Enter 0 for no minimum.">
+              <AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} placeholder="0" />
+            </AdminField>
+            <AdminField label="Max order total ($)" hint="Rate applies when the cart subtotal is at or below this amount. Leave blank or enter 0 for no maximum.">
+              <AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} placeholder="Leave blank for no maximum" />
+            </AdminField>
+          </>
+        ) : null}
+
         {manualForm.rateType === "WEIGHT_BASED" ? (
           <>
-            <AdminField label="Min weight (oz)" hint="Minimum total cart weight in ounces for this rate to apply.">
+            <AdminField label="Min weight (oz)" hint="Minimum total cart weight in ounces. Enter 0 to match any cart weight including products with no weight set.">
               <AdminInput type="number" value={manualForm.minWeight} onChange={(event) => setManualForm((current) => ({ ...current, minWeight: event.target.value }))} placeholder="0" />
             </AdminField>
             <AdminField label="Max weight (oz)" hint="Maximum total cart weight in ounces. Leave blank for no maximum.">
               <AdminInput type="number" value={manualForm.maxWeight} onChange={(event) => setManualForm((current) => ({ ...current, maxWeight: event.target.value }))} placeholder="Leave blank for no maximum" />
             </AdminField>
-            <p className={styles.statusText} style={{ fontSize: "0.8rem", color: "var(--warning, #f59e0b)" }}>
-              Weight-based rates only apply when products have weights set. Add weight to each product variant in the product editor.
+            <p className={styles.statusText} style={{ fontSize: "0.8rem", color: "var(--warning, #f59e0b)", marginTop: 4 }}>
+              Weight-based rates only apply when products have weights set. Add weight to each product variant in the product editor, or set min weight to 0 to match any cart.
             </p>
           </>
         ) : null}
-        {manualForm.rateType === "PRICE_BASED" ? (
-          <>
-            <AdminField label="Min subtotal ($)" hint="Rate applies when cart subtotal is at or above this amount.">
-              <AdminInput type="number" value={manualForm.minSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, minSubtotal: event.target.value }))} placeholder="0" />
-            </AdminField>
-            <AdminField label="Max subtotal ($)" hint="Rate applies when cart subtotal is at or below this amount. Leave blank for no maximum.">
-              <AdminInput type="number" value={manualForm.maxSubtotal} onChange={(event) => setManualForm((current) => ({ ...current, maxSubtotal: event.target.value }))} placeholder="Leave blank for no maximum" />
-            </AdminField>
-          </>
+
+        {manualForm.rateType === "FREE" ? (
+          <div style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedConditions((v) => !v)}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--muted-foreground, rgba(255,255,255,0.55))", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 4 }}
+            >
+              {showAdvancedConditions ? "▾" : "▸"} Advanced conditions
+            </button>
+            {showAdvancedConditions ? (
+              <div style={{ marginTop: 10 }}>
+                <AdminField label="Apply only when order is at least ($)" hint="Leave blank for always-free shipping. Enter an amount to make this a 'free shipping over $X' rule.">
+                  <AdminInput type="number" value={manualForm.freeOverAmount} onChange={(event) => setManualForm((current) => ({ ...current, freeOverAmount: event.target.value }))} placeholder="Leave blank for always free" />
+                </AdminField>
+              </div>
+            ) : null}
+          </div>
         ) : null}
-        <AdminField label="Estimated delivery (optional)">
+
+        <AdminField label="Estimated delivery (optional)" hint="Shown to customers at checkout, e.g. 3–5 business days.">
           <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} placeholder="e.g. 3–5 business days" />
         </AdminField>
         <label className={styles.checkboxField}>
           <AdminInput checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} className={styles.settingsCheckbox} type="checkbox" />
           <span>Active</span>
         </label>
+        {manualDrawerError ? (
+          <p className={styles.statusText} style={{ color: "var(--destructive, #ef4444)", marginTop: 8 }}>
+            {manualDrawerError}
+          </p>
+        ) : null}
         <div className={styles.actionRow}>
           <AdminButton disabled={saving} size="sm" onClick={saveManualRate}>
             Save manual rate

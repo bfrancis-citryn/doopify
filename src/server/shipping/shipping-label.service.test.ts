@@ -300,4 +300,123 @@ describe('buyOrderShippingLabel', () => {
       shippingLabel: { id: 'label_existing' },
     })
   })
+
+  it('passes shipmentId from input directly to purchaseShippingProviderLabel (no rate re-fetch)', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.purchaseShippingProviderLabel.mockResolvedValue({
+      providerShipmentId: 'shp_direct',
+      providerRateId: 'rate_1',
+      providerLabelId: 'pl_2',
+      carrier: 'USPS',
+      service: 'Priority',
+      status: 'PURCHASED',
+      labelUrl: 'https://labels.example.com/label_2.pdf',
+      trackingNumber: 'TRACK456',
+      trackingUrl: 'https://track.example.com/TRACK456',
+      labelAmountCents: 642,
+      currency: 'USD',
+      rawResponse: { ok: true },
+    })
+
+    await buyOrderShippingLabel({
+      orderNumber: 1001,
+      items: [{ orderItemId: 'oi_1', quantity: 1 }],
+      parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+      providerRateId: 'rate_1',
+      shipmentId: 'shp_original_from_rates_call',
+    })
+
+    // Must NOT re-fetch rates from provider (getShippingProviderLiveRates would be called for rate re-fetch)
+    expect(mocks.getShippingProviderLiveRates).not.toHaveBeenCalled()
+
+    // Must pass the shipmentId exactly as provided (EasyPost needs this for its /buy endpoint)
+    expect(mocks.purchaseShippingProviderLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'EASYPOST',
+        request: expect.objectContaining({
+          rateId: 'rate_1',
+          shipmentId: 'shp_original_from_rates_call',
+          apiKey: 'ep_test_key',
+        }),
+      })
+    )
+  })
+
+  it('buys label without shipmentId when not provided (Shippo path)', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.purchaseShippingProviderLabel.mockResolvedValue({
+      providerRateId: 'rate_1',
+      carrier: 'USPS',
+      service: 'Priority',
+      status: 'PURCHASED',
+      labelUrl: 'https://labels.example.com/shippo_label.pdf',
+      trackingNumber: 'SHIPPO123',
+      trackingUrl: 'https://track.example.com/SHIPPO123',
+      labelAmountCents: 799,
+      currency: 'USD',
+      rawResponse: {},
+    })
+
+    await buyOrderShippingLabel({
+      orderNumber: 1001,
+      items: [{ orderItemId: 'oi_1', quantity: 1 }],
+      parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+      providerRateId: 'rate_1',
+      // No shipmentId — Shippo does not need it
+    })
+
+    expect(mocks.getShippingProviderLiveRates).not.toHaveBeenCalled()
+    expect(mocks.purchaseShippingProviderLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          rateId: 'rate_1',
+          shipmentId: undefined,
+        }),
+      })
+    )
+  })
+
+  it('rejects label purchase when no label provider is connected', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'EASYPOST',
+      connected: false,
+    })
+    mocks.getShippingProviderApiKey.mockResolvedValue(null)
+
+    await expect(
+      buyOrderShippingLabel({
+        orderNumber: 1001,
+        items: [{ orderItemId: 'oi_1', quantity: 1 }],
+        parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+        providerRateId: 'rate_1',
+      })
+    ).rejects.toThrow(/not connected|credentials are unavailable|provider/i)
+
+    expect(mocks.purchaseShippingProviderLabel).not.toHaveBeenCalled()
+    expect(mocks.prisma.fulfillment.create).not.toHaveBeenCalled()
+  })
+
+  it('rejects label purchase when no ship-from location is configured', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.getStoreSettings.mockResolvedValue({
+      ...baseStore,
+      shippingLocations: [],          // no location configured
+      shippingOriginAddress1: null,   // no legacy origin either
+      shippingOriginCity: null,
+      shippingOriginPostalCode: null,
+      shippingOriginCountry: null,
+    })
+
+    await expect(
+      buyOrderShippingLabel({
+        orderNumber: 1001,
+        items: [{ orderItemId: 'oi_1', quantity: 1 }],
+        parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+        providerRateId: 'rate_1',
+      })
+    ).rejects.toThrow(/ship-from location|origin|location is required/i)
+
+    expect(mocks.purchaseShippingProviderLabel).not.toHaveBeenCalled()
+  })
 })

@@ -1,0 +1,220 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  prisma: {
+    store: {
+      findFirst: vi.fn(),
+    },
+  },
+  getShippingProviderConnectionStatus: vi.fn(),
+}))
+
+vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
+
+vi.mock('@/server/shipping/shipping-provider.service', () => ({
+  getShippingProviderConnectionStatus: mocks.getShippingProviderConnectionStatus,
+}))
+
+import { buildShippingSetupStatus } from './shipping-setup.service'
+
+function storeFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'store_1',
+    shippingMode: 'MANUAL',
+    shippingLiveProvider: null,
+    shippingProviderUsage: 'LIVE_AND_LABELS',
+    activeRateProvider: 'NONE',
+    labelProvider: 'NONE',
+    shippingFallbackEnabled: true,
+    shippingOriginAddress1: '10 Origin St',
+    shippingOriginCity: 'Austin',
+    shippingOriginPostalCode: '78701',
+    shippingOriginCountry: 'US',
+    defaultPackageWeightOz: 16,
+    defaultPackageLengthIn: 10,
+    defaultPackageWidthIn: 8,
+    defaultPackageHeightIn: 4,
+    shippingDomesticRateCents: 599,
+    shippingInternationalRateCents: 1499,
+    shippingLocations: [
+      {
+        id: 'loc_1',
+        name: 'HQ',
+        address1: '10 Origin St',
+        city: 'Austin',
+        stateProvince: 'TX',
+        postalCode: '78701',
+        country: 'US',
+        isDefault: true,
+        isActive: true,
+      },
+    ],
+    shippingPackages: [
+      {
+        id: 'pkg_1',
+        name: 'Default Box',
+        length: 10,
+        width: 8,
+        height: 4,
+        emptyPackageWeight: 12,
+        weightUnit: 'OZ',
+        isDefault: true,
+        isActive: true,
+      },
+    ],
+    shippingManualRates: [
+      {
+        id: 'mr_1',
+        name: 'Ground',
+        rateType: 'FLAT',
+        amountCents: 599,
+        isActive: true,
+      },
+    ],
+    shippingFallbackRates: [],
+    shippingZones: [],
+    ...overrides,
+  }
+}
+
+describe('buildShippingSetupStatus', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'EASYPOST',
+      connected: false,
+    })
+  })
+
+  it('reports canBuyLabels: false when no location is configured', async () => {
+    const store = storeFixture({
+      shippingLocations: [],
+      shippingOriginAddress1: null,
+      shippingOriginCity: null,
+      shippingOriginPostalCode: null,
+      shippingOriginCountry: null,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.hasOriginAddress).toBe(false)
+    expect(status.canBuyLabels).toBe(false)
+    expect(status.warnings.some((w) => /origin address/i.test(w))).toBe(true)
+  })
+
+  it('reports canBuyLabels: false when no default package is configured', async () => {
+    const store = storeFixture({
+      shippingPackages: [],
+      defaultPackageWeightOz: null,
+      defaultPackageLengthIn: null,
+      defaultPackageWidthIn: null,
+      defaultPackageHeightIn: null,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.hasDefaultPackage).toBe(false)
+    expect(status.canBuyLabels).toBe(false)
+  })
+
+  it('reports canBuyLabels: false when provider is not connected', async () => {
+    const store = storeFixture({
+      shippingLiveProvider: 'EASYPOST',
+      shippingProviderUsage: 'LIVE_AND_LABELS',
+      activeRateProvider: 'EASYPOST',
+      labelProvider: 'EASYPOST',
+    })
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'EASYPOST',
+      connected: false,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.hasProvider).toBe(true)
+    expect(status.providerConnected).toBe(false)
+    expect(status.canBuyLabels).toBe(false)
+  })
+
+  it('reports canBuyLabels: true when location, package, and provider are all ready', async () => {
+    const store = storeFixture({
+      shippingMode: 'LIVE_RATES',
+      shippingLiveProvider: 'EASYPOST',
+      shippingProviderUsage: 'LIVE_AND_LABELS',
+      activeRateProvider: 'EASYPOST',
+      labelProvider: 'EASYPOST',
+    })
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'EASYPOST',
+      connected: true,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.hasOriginAddress).toBe(true)
+    expect(status.hasDefaultPackage).toBe(true)
+    expect(status.providerConnected).toBe(true)
+    expect(status.canBuyLabels).toBe(true)
+    expect(status.canUseLiveRates).toBe(true)
+  })
+
+  it('reports canUseLiveRates: false in MANUAL mode even when provider is connected', async () => {
+    const store = storeFixture({
+      shippingMode: 'MANUAL',
+      shippingLiveProvider: 'EASYPOST',
+      activeRateProvider: 'EASYPOST',
+      labelProvider: 'EASYPOST',
+    })
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'EASYPOST',
+      connected: true,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.canUseLiveRates).toBe(false)
+    // canBuyLabels can still be true in MANUAL mode (labels are independent from checkout mode)
+    expect(status.canBuyLabels).toBe(true)
+  })
+
+  it('reports correct nextSteps when provider is selected but not connected', async () => {
+    const store = storeFixture({
+      shippingMode: 'LIVE_RATES',
+      shippingLiveProvider: 'SHIPPO',
+      activeRateProvider: 'SHIPPO',
+      labelProvider: 'SHIPPO',
+    })
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'SHIPPO',
+      connected: false,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.providerConnected).toBe(false)
+    expect(status.warnings.some((w) => /not connected|credentials/i.test(w))).toBe(true)
+  })
+
+  it('reports canUseManualRates: true when active manual rates are configured', async () => {
+    const store = storeFixture({
+      shippingMode: 'MANUAL',
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.hasManualRates).toBe(true)
+    expect(status.canUseManualRates).toBe(true)
+  })
+
+  it('reports setup as complete when no warnings remain', async () => {
+    const store = storeFixture({
+      shippingMode: 'MANUAL',
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    // Manual mode with location, package, and manual rates = no warnings
+    expect(status.warnings.filter((w) => !/fallback/i.test(w))).toHaveLength(0)
+    expect(status.nextSteps).toContain('Shipping setup looks complete.')
+  })
+})

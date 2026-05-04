@@ -252,6 +252,15 @@ function resolveCheckoutLogo(store: CheckoutStoreSettings | null): string {
   return store?.checkoutLogoUrl || store?.logoUrl || '';
 }
 
+// Checkout buttons inherit Brand & Appearance tokens from the store's Brand Kit settings
+// (accentColor, primaryColor, buttonStyle, buttonTextTransform, buttonRadius). These are
+// the same fields managed in Settings -> Brand & appearance and exposed via the public
+// store settings endpoint. The checkout page is intentionally self-contained (inline CSS
+// + inline styles) so it renders correctly even when the main storefront stylesheet is
+// not loaded, but it defers all visual identity decisions to the Brand Kit values.
+// Disabled and loading states override inline styles via the .primary-btn:disabled CSS
+// rule and by omitting the primaryStyle object from the inline style prop, ensuring
+// readable contrast in dark mode regardless of the accent color.
 function resolveButtonPresentation(store: CheckoutStoreSettings | null) {
   const style = store?.buttonStyle || 'solid';
   const transform = store?.buttonTextTransform === 'uppercase' ? 'uppercase' : 'none';
@@ -675,7 +684,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         .primary-btn,.secondary-btn{min-height:48px;padding:0 20px;border-radius:999px;border:none;font:inherit;font-size:12px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer}
         .primary-btn{background:var(--store-primary);color:#080808}
         .secondary-btn{background:transparent;border:1px solid rgba(255,255,255,0.14);color:#f3efe7}
-        .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.32)!important;border:1px solid rgba(255,255,255,0.08)!important;opacity:1;cursor:not-allowed}
+        .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.50)!important;border:1px solid rgba(255,255,255,0.14)!important;opacity:1;cursor:not-allowed}
         .secondary-btn:disabled{opacity:0.42;cursor:not-allowed}
         .error{margin-top:18px;padding:14px 16px;border-radius:16px;border:1px solid rgba(239,68,68,0.4);background:rgba(127,29,29,0.25);color:#fecaca;font-size:14px}
         .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03)}
@@ -967,17 +976,25 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                     <button
                       className="primary-btn"
                       disabled={creatingIntent || !items.length || !selectedShippingQuoteId}
-                      style={{ ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }}
+                      style={
+                        creatingIntent || !items.length || !selectedShippingQuoteId
+                          ? brandButtonBaseStyle
+                          : { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }
+                      }
                       type="submit"
                     >
-                      {creatingIntent ? 'Loading payment...' : 'Review payment'}
+                      {creatingIntent ? 'Loading payment form...' : 'Review payment'}
                     </button>
                   ) : (
                     <>
                       <button
                         className="primary-btn"
                         disabled={confirmingPayment}
-                        style={{ ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }}
+                        style={
+                          confirmingPayment
+                            ? brandButtonBaseStyle
+                            : { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }
+                        }
                         type="submit"
                       >
                         {confirmingPayment ? 'Placing order...' : 'Place order'}
