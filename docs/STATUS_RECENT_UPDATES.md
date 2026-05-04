@@ -19,10 +19,20 @@
 - `scripts/ensure-store.mjs` added — minimal idempotent store bootstrap using PrismaPg adapter
 - `npm run db:ensure-store` script added to `package.json`
 
-**Vercel deployment status:** Authentication pending
-- Vercel CLI installed via npx
-- Device code URL: `https://vercel.com/oauth/device?user_code=JNQL-PXKF`
-- After authentication, proceed with: `npx vercel link`, env var push, `npx vercel --prod`
+**Vercel deployment status:** DEPLOYED ✅
+- URL: `https://doopify.vercel.app`
+- Project: `bfrancis-citryns-projects/doopify`
+- Build: PASS (TypeScript, Turbopack, 82 pages/routes)
+- `/login` → 200 ✅
+- `/` → 200 ✅
+- `/shop` → 200 ✅
+- `/checkout` → 200 ✅
+- `/settings` → 307 redirect (auth-gated, correct) ✅
+- `/api/readiness` → 401 (auth-gated, correct) ✅
+- `/api/webhooks/stripe` (no sig) → 400 ✅
+- `/api/webhook-retries/run` (no secret) → 401 ✅
+- `/api/jobs/run` (no secret) → 401 ✅
+- `/api/storefront/products` → 200, returning products ✅
 
 **Required env vars for Vercel deployment** (see `docs/ENVIRONMENT_VARIABLE_REFERENCE.md`):
 - `DATABASE_URL` (Neon, with `sslmode=verify-full`)
