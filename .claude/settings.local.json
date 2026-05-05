@@ -26,7 +26,12 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://doopify.vercel.app/settings\")",
       "Bash(curl -s \"https://doopify.vercel.app/api/readiness\" -o /dev/null -w \"%{http_code}\")",
       "Bash(npx vitest *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(npm test *)",
+      "Bash(cat vitest.config.ts)",
+      "Bash(cat vitest.config.js)",
+      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\invites\\\\[id]\\\\resend\")"
     ]
   }
 }

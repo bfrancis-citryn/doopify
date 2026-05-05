@@ -81,6 +81,15 @@ The repo currently includes:
 - GitHub Actions CI workflow for push/PR verification plus optional integration workflow gated by `DATABASE_URL_TEST` secret
 - production runbook docs for deployment checklist, environment variables, webhooks/provider setup, backup/restore, and admin recovery
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs
+- First-run owner bootstrap flow at `POST /api/bootstrap/owner` and `/create-owner` UI page; gated by active-owner check plus optional `SETUP_TOKEN` env var; route returns 409 if owner already exists; signs owner in immediately after creation
+- Team management service (`src/server/services/team.service.ts`) with bootstrapOwner, invite, accept invite (bcrypt-hashed single-use expiring tokens), createUser, listUsers, listPendingInvites, updateRole, disable (kills sessions immediately), reactivate, revokeInvite, resendInvite, and last-owner safety invariant enforced for disable/demote operations
+- `UserInvite` model in Prisma schema with hashed token, expiry, role, and inviter tracking
+- ADMIN role added to UserRole enum (between OWNER and STAFF); `requireAdmin` now allows OWNER, ADMIN, and STAFF; `requireOwner` stays OWNER-only; team management APIs require OWNER
+- Team API surface: `GET/POST /api/team/users`, `PATCH /api/team/users/[id]` (set_role, disable, reactivate), `GET/POST /api/team/invites`, `DELETE /api/team/invites/[id]`, `POST /api/team/invites/[id]/resend`, `POST /api/team/invites/accept`
+- `/join?token=<raw>` page for invite acceptance with JoinPortal component
+- Settings → Team panel (TeamSettingsPanel) with role chips, last-login display, inline role editor, disable/reactivate controls, pending invite list with revoke/resend, and invite/create drawer
+- Proxy updated: `/create-owner`, `/join`, `/api/bootstrap`, `/api/team/invites/accept` are public; `/api/team/*` requires session
+- `SETUP_TOKEN` optional env var for additional bootstrap security; if set, token is required during owner creation; if not set, bootstrap is open (only when no owner exists)
 
 ## Phase 3 Status
 

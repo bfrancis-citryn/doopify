@@ -154,5 +154,81 @@ describe('settings providers credentials route', () => {
     expect(response.status).toBe(404)
     expect(mocks.recordAuditLogBestEffort).not.toHaveBeenCalled()
   })
+
+  it('saves Stripe credentials without returning raw secretKey or webhookSecret values', async () => {
+    mocks.requireOwner.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+    mocks.parseSupportedProvider.mockReturnValue('STRIPE')
+    mocks.saveProviderCredentials.mockResolvedValue({
+      provider: 'STRIPE',
+      category: 'PAYMENT',
+      integrationType: 'PAYMENT_STRIPE',
+      state: 'CREDENTIALS_SAVED',
+      source: 'db',
+      hasCredentials: true,
+      credentialMeta: [
+        { key: 'PUBLISHABLE_KEY', present: true, maskedValue: 'pk_t••••st' },
+        { key: 'SECRET_KEY', present: true, maskedValue: 'sk_t••••st' },
+        { key: 'WEBHOOK_SECRET', present: true, maskedValue: 'whs••••ec' },
+        { key: 'MODE', present: true, maskedValue: 'test' },
+      ],
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/settings/providers/stripe/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          publishableKey: 'pk_test_saved_key',
+          secretKey: 'sk_test_saved_secret',
+          webhookSecret: 'whsec_test_saved_secret',
+          mode: 'test',
+        }),
+      }),
+      { params: Promise.resolve({ provider: 'stripe' }) }
+    )
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+
+    expect(mocks.saveProviderCredentials).toHaveBeenCalledWith('STRIPE', {
+      publishableKey: 'pk_test_saved_key',
+      secretKey: 'sk_test_saved_secret',
+      webhookSecret: 'whsec_test_saved_secret',
+      mode: 'test',
+    })
+
+    const serialized = JSON.stringify(payload)
+    expect(serialized).not.toContain('sk_test_saved_secret')
+    expect(serialized).not.toContain('whsec_test_saved_secret')
+
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        provider: 'STRIPE',
+        status: {
+          state: 'CREDENTIALS_SAVED',
+          source: 'db',
+        },
+      },
+    })
+
+    expect(mocks.recordAuditLogBestEffort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'provider.credentials_saved',
+        resource: { type: 'ProviderConnection', id: 'STRIPE' },
+        snapshot: expect.objectContaining({
+          provider: 'STRIPE',
+          fields: expect.objectContaining({
+            containsSecretFields: true,
+            mode: 'test',
+          }),
+        }),
+        redactions: expect.arrayContaining(['provider credential values', 'webhook secrets']),
+      })
+    )
+  })
 })
 

@@ -6,7 +6,11 @@ import { applySecurityHeaders } from '@/server/security/security-headers'
 
 const PUBLIC_PREFIXES = [
   '/login',
+  '/create-owner',
+  '/join',
   '/api/auth',
+  '/api/bootstrap',
+  '/api/team/invites/accept',
   '/api/checkout',
   '/api/storefront',
   '/api/webhooks',

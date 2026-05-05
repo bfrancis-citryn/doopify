@@ -109,5 +109,68 @@ describe('settings providers verify route', () => {
     })
     expect(JSON.stringify(payload)).not.toContain('sk_test_')
   })
+
+  it('returns 200 with verification metadata after successful Stripe API verification', async () => {
+    mocks.requireOwner.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+
+    mocks.verifyProviderConnection.mockResolvedValue({
+      status: {
+        provider: 'STRIPE',
+        state: 'VERIFIED',
+        lastVerifiedAt: '2026-05-04T10:00:00.000Z',
+        lastError: null,
+        source: 'db',
+        credentialMeta: [
+          { key: 'SECRET_KEY', present: true, maskedValue: 'sk_l••••ve' },
+          { key: 'PUBLISHABLE_KEY', present: true, maskedValue: 'pk_l••••ve' },
+          { key: 'WEBHOOK_SECRET', present: true, maskedValue: 'whs••••ec' },
+          { key: 'MODE', present: true, maskedValue: 'live' },
+        ],
+      },
+      verification: {
+        ok: true,
+        message: 'Provider verification succeeded.',
+        metadata: {
+          accountId: 'acct_live_verified',
+          chargesEnabled: true,
+          payoutsEnabled: true,
+        },
+      },
+    })
+
+    const response = await POST(new Request('http://localhost'), {
+      params: Promise.resolve({ provider: 'stripe' }),
+    })
+
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        provider: 'STRIPE',
+        status: {
+          state: 'VERIFIED',
+          lastVerifiedAt: '2026-05-04T10:00:00.000Z',
+          source: 'db',
+        },
+        verification: {
+          ok: true,
+          message: 'Provider verification succeeded.',
+          metadata: {
+            accountId: 'acct_live_verified',
+            chargesEnabled: true,
+            payoutsEnabled: true,
+          },
+        },
+      },
+    })
+
+    const serialized = JSON.stringify(payload)
+    expect(serialized).not.toContain('sk_live_')
+    expect(serialized).not.toContain('whsec_')
+  })
 })
 

@@ -75,8 +75,7 @@ export default function OrderDetailView({ order }) {
   const [rateQuotes, setRateQuotes] = useState([]);
   const [rateProvider, setRateProvider] = useState("");
   const [selectedRateId, setSelectedRateId] = useState("");
-  // shipmentId is the provider's shipment object id from the original rates call.
-  // EasyPost requires it to buy from the same shipment instead of creating a new one.
+  // EasyPost requires the original shipment id to avoid creating a duplicate shipment on purchase.
   const [selectedShipmentId, setSelectedShipmentId] = useState("");
   const [selectedQuantities, setSelectedQuantities] = useState({});
   const [parcel, setParcel] = useState({
@@ -236,8 +235,6 @@ export default function OrderDetailView({ order }) {
       setRateProvider(json.data?.provider || "");
       const firstQuote = quotes[0];
       setSelectedRateId(firstQuote?.providerRateId || firstQuote?.id || "");
-      // Store the shipmentId from the first quote so label purchase can use the original shipment.
-      // EasyPost requires this to buy from the same shipment; Shippo ignores it.
       setSelectedShipmentId(
         typeof firstQuote?.metadata?.shipmentId === "string" ? firstQuote.metadata.shipmentId : ""
       );
@@ -423,7 +420,7 @@ export default function OrderDetailView({ order }) {
         <Link className={styles.inlineLinkButton} href="/orders">← Orders</Link>
       </nav>
 
-      {/* Global feedback — lifted out of the fulfillment card */}
+      {/* Global feedback banner — lifted out of cards so it is always visible */}
       {(message || errorMessage) ? (
         <div className={styles.feedbackBanner}>
           {message ? <p className={styles.successText}>{message}</p> : null}
@@ -431,13 +428,14 @@ export default function OrderDetailView({ order }) {
         </div>
       ) : null}
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <AdminCard className={styles.headerCard} variant="panel">
         <div className={styles.headerTop}>
           <div className={styles.headerMeta}>
             <h1 className={styles.title}>{currentOrder.orderNumber}</h1>
             <p className={styles.meta}>
-              {new Date(currentOrder.createdAt).toLocaleString()} · via {currentOrder.sourceChannel || currentOrder.channel || "online store"}
+              {new Date(currentOrder.createdAt).toLocaleString()} · via{" "}
+              {currentOrder.sourceChannel || currentOrder.channel || "online store"}
             </p>
           </div>
           <div className={styles.headerActions}>
@@ -506,11 +504,11 @@ export default function OrderDetailView({ order }) {
       </AdminCard>
 
       <div className={styles.grid}>
-        {/* ── Main column ──────────────────────────────────────────────────── */}
+        {/* ── Main column ────────────────────────────────────────────────────── */}
         <div className={styles.mainColumn}>
 
-          {/* ── Fulfillment history ──────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Fulfillment history ────────────────────────────────────────── */}
+          <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Fulfillment</h3>
             {fulfillments.length ? (
               <div className={styles.fulfillmentList}>
@@ -571,11 +569,12 @@ export default function OrderDetailView({ order }) {
             ) : null}
           </AdminCard>
 
-          {/* ── Create fulfillment (operations) ──────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Create fulfillment ─────────────────────────────────────────── */}
+          <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Create fulfillment</h3>
             <p className={styles.cardSubtitle}>Select items to fulfill, then save manual tracking or buy a carrier label.</p>
 
+            {/* Item selector */}
             {fulfillableItems.length ? (
               <div className={styles.selectorList}>
                 {fulfillableItems.map((item) => (
@@ -602,37 +601,49 @@ export default function OrderDetailView({ order }) {
               <p className={styles.metaText}>All line items are already fulfilled.</p>
             )}
 
+            {/* Manual tracking */}
             <SectionDivider label="Manual tracking" />
+
+            <p className={styles.helperNote}>
+              Manual tracking marks items as shipped and can send the shipping confirmation email to your customer.
+            </p>
+
+            {/* Carrier + Service — 2 columns */}
             <div className={styles.formGrid}>
               <AdminField label="Carrier">
                 <AdminInput
                   onChange={(event) => setManualForm((prev) => ({ ...prev, carrier: event.target.value }))}
-                  placeholder="UPS"
+                  placeholder="UPS, FedEx, USPS…"
                   value={manualForm.carrier}
                 />
               </AdminField>
               <AdminField label="Service">
                 <AdminInput
                   onChange={(event) => setManualForm((prev) => ({ ...prev, service: event.target.value }))}
-                  placeholder="Ground"
+                  placeholder="Ground, Priority…"
                   value={manualForm.service}
                 />
               </AdminField>
+            </div>
+
+            {/* Tracking number + URL — full width */}
+            <div className={styles.formStack}>
               <AdminField label="Tracking number">
                 <AdminInput
                   onChange={(event) => setManualForm((prev) => ({ ...prev, trackingNumber: event.target.value }))}
-                  placeholder="1Z..."
+                  placeholder="1Z…"
                   value={manualForm.trackingNumber}
                 />
               </AdminField>
-              <AdminField label="Tracking URL">
+              <AdminField label="Tracking URL" hint="Optional — link the customer can click to track their shipment.">
                 <AdminInput
                   onChange={(event) => setManualForm((prev) => ({ ...prev, trackingUrl: event.target.value }))}
-                  placeholder="https://tracking.example.com/..."
+                  placeholder="https://tracking.example.com/…"
                   value={manualForm.trackingUrl}
                 />
               </AdminField>
             </div>
+
             <label className={styles.checkboxRow}>
               <input
                 checked={manualForm.sendTrackingEmail}
@@ -644,7 +655,7 @@ export default function OrderDetailView({ order }) {
               <span>
                 Send shipment tracking email to customer
                 {manualForm.sendTrackingEmail ? (
-                  <span style={{ display: "block", fontSize: "0.72rem", color: "var(--on-surface-variant)", marginTop: 2 }}>
+                  <span style={{ display: "block", fontSize: "0.76rem", color: "var(--on-surface-variant)", marginTop: "0.2rem" }}>
                     Email is queued via the job runner.{" "}
                     <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
                       Check delivery logs
@@ -654,17 +665,19 @@ export default function OrderDetailView({ order }) {
                 ) : null}
               </span>
             </label>
+
             <div className={styles.actionRow}>
               <AdminButton loading={creatingManual} onClick={createManualTrackingFulfillment} size="sm">
                 Save manual tracking
               </AdminButton>
             </div>
 
+            {/* Live label buying */}
             {labelProviderConnected ? (
               <>
                 <SectionDivider label="Buy shipping label" />
                 <div className={styles.formGrid}>
-                  <AdminField hint="Required for label rates and purchase." label="Weight (oz)">
+                  <AdminField hint="Required for label purchase." label="Weight (oz)">
                     <AdminInput
                       min="0"
                       onChange={(event) => setParcel((prev) => ({ ...prev, weightOz: event.target.value }))}
@@ -742,39 +755,50 @@ export default function OrderDetailView({ order }) {
                 ) : null}
               </>
             ) : (
-              <p className={styles.metaText} style={{ marginTop: "0.5rem" }}>
-                No label provider connected — use manual tracking above to mark shipped.
-              </p>
+              <div className={styles.noProviderNotice}>
+                <span>No label provider connected — use manual tracking above to mark shipped, or configure a carrier in{" "}
+                  <Link className={styles.inlineLinkButton} href="/admin/settings/shipping">
+                    Shipping settings
+                  </Link>.
+                </span>
+              </div>
             )}
           </AdminCard>
 
-          {/* ── Line items ────────────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Line items ──────────────────────────────────────────────────── */}
+          <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Line items</h3>
             {lineItems.length ? (
               <div className={styles.lineItemList}>
-                {lineItems.map((item) => (
-                  <div className={styles.lineItemRow} key={item.id}>
-                    <div className={styles.lineItemDetails}>
-                      <span className={styles.lineItemTitle}>{item.title}</span>
-                      <span className={styles.lineItemVariant}>{item.variantTitle || item.variant || "Default variant"}</span>
-                      {(Number(item.totalDiscountCents || 0) > 0 || Number(item.totalDiscount || 0) > 0) ? (
-                        <span className={styles.lineItemDiscount}>
-                          Discount: −{formatMoney(
-                            item.totalDiscount ?? Number(item.totalDiscountCents || 0) / 100,
-                            currency
-                          )}
+                {lineItems.map((item) => {
+                  const unitPrice = item.price ?? (Number(item.priceCents || 0) / 100);
+                  const totalPrice = item.total ?? (unitPrice * Number(item.quantity || 0));
+                  const hasDiscount = Number(item.totalDiscountCents || 0) > 0 || Number(item.totalDiscount || 0) > 0;
+                  return (
+                    <div className={styles.lineItemRow} key={item.id}>
+                      <div className={styles.lineItemDetails}>
+                        <span className={styles.lineItemTitle}>{item.title}</span>
+                        <span className={styles.lineItemVariant}>{item.variantTitle || item.variant || "Default variant"}</span>
+                        {hasDiscount ? (
+                          <span className={styles.lineItemDiscount}>
+                            Discount: −{formatMoney(
+                              item.totalDiscount ?? Number(item.totalDiscountCents || 0) / 100,
+                              currency
+                            )}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className={styles.lineItemMeta}>
+                        <span className={styles.lineItemQtyPrice}>
+                          {item.quantity} × {formatMoney(unitPrice, currency)}
                         </span>
-                      ) : null}
+                        <strong className={styles.lineItemTotal}>
+                          {formatMoney(totalPrice, currency)}
+                        </strong>
+                      </div>
                     </div>
-                    <div className={styles.lineItemMeta}>
-                      <span className={styles.lineItemQty}>× {item.quantity}</span>
-                      <strong className={styles.lineItemTotal}>
-                        {formatMoney(item.total ?? Number(item.price || 0) * Number(item.quantity || 0), currency)}
-                      </strong>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <AdminEmptyState
@@ -785,8 +809,8 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
-          {/* ── Payment summary ───────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Payment summary ─────────────────────────────────────────────── */}
+          <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Payment summary</h3>
             <div className={styles.summaryRows}>
               <div className={styles.summaryRowMuted}>
@@ -794,7 +818,14 @@ export default function OrderDetailView({ order }) {
                 <span>{formatMoney(currentOrder.subtotal, currency)}</span>
               </div>
               <div className={styles.summaryRowMuted}>
-                <span>Shipping{currentOrder.shippingMethodName ? ` · ${currentOrder.shippingMethodName}` : ""}</span>
+                <span>
+                  Shipping
+                  {currentOrder.shippingMethodName ? (
+                    <span style={{ display: "block", fontSize: "0.76rem", marginTop: "0.1rem" }}>
+                      {currentOrder.shippingMethodName}
+                    </span>
+                  ) : null}
+                </span>
                 <span>{formatMoney(currentOrder.shippingAmount, currency)}</span>
               </div>
               <div className={styles.summaryRowMuted}>
@@ -815,8 +846,8 @@ export default function OrderDetailView({ order }) {
             </div>
           </AdminCard>
 
-          {/* ── Discounts ─────────────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Discounts ───────────────────────────────────────────────────── */}
+          <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Discounts</h3>
             {discounts.length ? (
               <div className={styles.discountList}>
@@ -829,7 +860,7 @@ export default function OrderDetailView({ order }) {
                         {discount.method ? ` · ${String(discount.method).replaceAll("_", " ").toLowerCase()}` : ""}
                       </p>
                     </div>
-                    <strong>
+                    <strong className={styles.discountAmount}>
                       −{formatMoney(
                         discount.amount ?? Number(discount.amountCents || 0) / 100,
                         currency
@@ -847,7 +878,7 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
-          {/* ── Returns & refunds (OrderAdjustmentsCard) ──────────────────── */}
+          {/* ── Returns & refunds (OrderAdjustmentsCard) ────────────────────── */}
           <OrderAdjustmentsCard
             onOrderRefresh={refreshOrder}
             orderId={currentOrder.id}
@@ -855,15 +886,15 @@ export default function OrderDetailView({ order }) {
             paymentStatus={currentOrder.paymentStatusRaw || currentOrder.paymentStatus}
           />
 
-          {/* ── Timeline ──────────────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Timeline ────────────────────────────────────────────────────── */}
+          <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Timeline</h3>
             {timeline.length ? (
               <div className={styles.timelineList}>
                 {timeline.map((entry) => (
                   <div className={styles.timelineRow} key={entry.id}>
                     <strong>{entry.event || entry.title || entry.type}</strong>
-                    <p>{entry.detail || "No detail provided."}</p>
+                    {entry.detail ? <p>{entry.detail}</p> : null}
                     <small>{new Date(entry.createdAt).toLocaleString()}</small>
                   </div>
                 ))}
@@ -878,17 +909,17 @@ export default function OrderDetailView({ order }) {
           </AdminCard>
         </div>
 
-        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+        {/* ── Sidebar ────────────────────────────────────────────────────────── */}
         <div className={styles.sideColumn}>
 
-          {/* ── Notes ─────────────────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Notes ───────────────────────────────────────────────────────── */}
+          <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Notes</h3>
             <div className={styles.noteStack}>
               <AdminField label="Internal note">
                 <AdminTextarea
                   onChange={(event) => setInternalNoteDraft(event.target.value)}
-                  placeholder="Internal order note (not visible to customer)"
+                  placeholder="Internal order note — not visible to the customer"
                   rows={3}
                   value={internalNoteDraft}
                 />
@@ -950,8 +981,8 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
-          {/* ── Customer ──────────────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Customer ────────────────────────────────────────────────────── */}
+          <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Customer</h3>
             <div className={styles.infoBlock}>
               <p>{currentOrder.customer?.name || "Guest customer"}</p>
@@ -960,14 +991,14 @@ export default function OrderDetailView({ order }) {
             </div>
           </AdminCard>
 
-          {/* ── Shipping address ──────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Shipping address ─────────────────────────────────────────────── */}
+          <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Shipping address</h3>
             <p className={styles.addressText}>{formatAddress(shippingAddress)}</p>
           </AdminCard>
 
-          {/* ── Billing address ───────────────────────────────────────────── */}
-          <AdminCard variant="panel">
+          {/* ── Billing address ──────────────────────────────────────────────── */}
+          <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Billing address</h3>
             <p className={styles.addressText}>{formatAddress(billingAddress)}</p>
           </AdminCard>

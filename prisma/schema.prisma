@@ -8,6 +8,7 @@ datasource db {
 
 enum UserRole {
   OWNER
+  ADMIN
   STAFF
   VIEWER
 }
@@ -472,6 +473,20 @@ model Session {
   @@index([token])
   @@index([userId])
   @@map("sessions")
+}
+
+model UserInvite {
+  id          String   @id @default(cuid())
+  email       String
+  role        UserRole @default(STAFF)
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  invitedById String?
+  createdAt   DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("user_invites")
 }
 
 model RateLimitWindow {

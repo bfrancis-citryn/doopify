@@ -14,6 +14,24 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 
 ## Closed In This Pass
 
+### First-Run Bootstrap And Owner Security
+
+- No permanent default admin credentials exist in production
+- `POST /api/bootstrap/owner` checks atomically (inside a transaction) that no active OWNER exists before creating one; returns 409 if an owner already exists
+- Optional `SETUP_TOKEN` env var: if configured, token must be provided to bootstrap; if absent, bootstrap is open but still gated by the active-owner check
+- Bootstrap route is a public prefix so it works before any session exists; it closes permanently after first use because subsequent calls always fail the active-owner check
+- `/create-owner` page checks `/api/bootstrap/owner` on load and redirects to login if bootstrap is no longer available
+- Owner is signed in immediately after creation, eliminating any credential-sharing window
+
+### Team Account Security
+
+- Invite tokens are 64 hex characters (32 random bytes), stored only as bcrypt hashes in `UserInvite`; the raw token is never persisted
+- Invites are single-use (deleted atomically on acceptance inside a transaction), expire in 7 days, and are independently revocable
+- Disabling a user immediately deletes all their sessions; `verifyToken` also independently checks `user.isActive`, so disabled users cannot use stale JWTs
+- The last-owner invariant is enforced in service code: disable and role-demote operations fail if the target is the only active OWNER
+- Only OWNER can access team management APIs; ADMIN, STAFF, and VIEWER are blocked by `requireOwner`
+- API responses never include `passwordHash` or raw `tokenHash` fields
+
 ### Auth And Session Integrity
 
 - `src/lib/env.ts` validates critical environment variables up front
@@ -27,6 +45,7 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - admin and private API protection is running through the active Next.js 16 proxy hook
 - Sensitive API routes use route-level authorization helpers in addition to `src/proxy.ts`. Proxy protection is the outer gate; route-level helpers are the route's own authorization guard.
 - route-level auth helpers in `src/server/auth/require-auth.ts` provide a second authorization layer for sensitive API handlers
+- ADMIN role added to UserRole enum; `requireAdmin` now accepts OWNER, ADMIN, and STAFF; `requireOwner` remains OWNER-only; team and payment credential APIs require OWNER
 - product and variant creation routes now call `requireAdmin(req)` before mutation work
 - the old idea of adding `src/middleware.ts` was intentionally not kept because the repo should not maintain both proxy and middleware flows
 

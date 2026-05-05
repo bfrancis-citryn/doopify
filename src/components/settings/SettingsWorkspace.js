@@ -20,6 +20,7 @@ import AdminTable from '../admin/ui/AdminTable';
 import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminTooltip from '../admin/ui/AdminTooltip';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
+import TeamSettingsPanel from './TeamSettingsPanel';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
 import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
 
@@ -31,6 +32,7 @@ const SETTINGS_SECTIONS = [
   { id: 'webhooks', label: 'Webhooks' },
   { id: 'email', label: 'Email' },
   { id: 'brand-kit', label: 'Brand & appearance' },
+  { id: 'team', label: 'Team' },
   { id: 'setup', label: 'Setup' },
 ];
 
@@ -3445,6 +3447,10 @@ export default function SettingsWorkspace() {
                 </div>
                 <IntegrationsPanel />
               </div>
+            ) : null}
+
+            {!loading && !error && activeSection === 'team' ? (
+              <TeamSettingsPanel currentUserRole={user?.role} />
             ) : null}
 
             {!loading && !error && activeSection === 'setup' ? (

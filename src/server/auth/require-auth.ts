@@ -52,7 +52,7 @@ export async function requireRole(req: Request, roles: UserRole[]): Promise<Rout
 }
 
 export function requireAdmin(req: Request) {
-  return requireRole(req, ['OWNER', 'STAFF'])
+  return requireRole(req, ['OWNER', 'ADMIN', 'STAFF'])
 }
 
 export function requireOwner(req: Request) {

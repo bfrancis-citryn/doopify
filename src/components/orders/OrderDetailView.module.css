@@ -1,8 +1,11 @@
-/* ─── Page shell ─────────────────────────────────────────────────────────── */
+/* ─── Page shell ──────────────────────────────────────────────────────────── */
 
 .page {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 4px; /* slight inset so cards don't touch viewport edges */
 }
 
 .breadcrumbs {
@@ -14,26 +17,42 @@
   color: var(--on-surface-variant);
   text-decoration: none;
   font-size: 0.82rem;
+  transition: color 0.14s;
 }
 
 .inlineLinkButton:hover {
   color: var(--on-surface);
 }
 
-/* ─── Feedback banner ────────────────────────────────────────────────────── */
+/* ─── Feedback banner ─────────────────────────────────────────────────────── */
 
 .feedbackBanner {
-  border-radius: 0.75rem;
-  padding: 0.6rem 1rem;
+  border-radius: 1rem;
+  padding: 0.75rem 1.25rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 90%, transparent);
+  display: grid;
+  gap: 0.25rem;
+}
+
+/* ─── Card padding ────────────────────────────────────────────────────────── */
+
+/* Apply to main-column AdminCard components */
+.card {
+  padding: 1.25rem 1.5rem;
+}
+
+/* Apply to right-sidebar AdminCard components */
+.sideCard {
+  padding: 1rem 1.25rem;
 }
 
 /* ─── Header card ─────────────────────────────────────────────────────────── */
 
 .headerCard {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.875rem;
+  padding: 1.25rem 1.5rem;
 }
 
 .headerTop {
@@ -41,37 +60,43 @@
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .headerMeta {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .title {
   margin: 0;
   color: var(--on-surface);
-  font-size: 1.6rem;
+  font-size: 1.65rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .meta {
   margin: 0;
   color: var(--on-surface-variant);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .headerActions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.5rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .chipsRow {
   display: flex;
-  gap: 1rem;
+  gap: 0.875rem;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -79,52 +104,81 @@
 .chipGroup {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.38rem;
 }
 
 .chipLabel {
   font-size: 0.72rem;
   color: var(--on-surface-variant);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 /* ─── Two-column layout ───────────────────────────────────────────────────── */
 
 .grid {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) 360px;
   align-items: start;
 }
 
 .mainColumn,
 .sideColumn {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
   align-content: start;
+  min-width: 0; /* prevent overflow from pushing the grid */
 }
 
-/* ─── Card internals ─────────────────────────────────────────────────────── */
+/* ─── Card internals ──────────────────────────────────────────────────────── */
 
 .cardTitle {
-  margin: 0 0 0.75rem;
+  margin: 0 0 1rem;
   color: var(--on-surface);
-  font-size: 0.94rem;
+  font-size: 1rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .cardSubtitle {
-  margin: -0.35rem 0 0.75rem;
+  margin: -0.5rem 0 1rem;
   color: var(--on-surface-variant);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.helperNote {
+  margin: 0.25rem 0 0.875rem;
+  color: var(--on-surface-variant);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  border: 1px solid var(--glass-border);
+}
+
+.noProviderNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  border: 1px solid var(--glass-border);
+  color: var(--on-surface-variant);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .sectionDivider {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 1rem 0 0.6rem;
+  margin: 1.25rem 0 0.875rem;
 }
 
 .sectionEyebrow {
@@ -142,172 +196,217 @@
   background: var(--glass-border);
 }
 
-/* ─── Action row ─────────────────────────────────────────────────────────── */
+/* ─── Action row ──────────────────────────────────────────────────────────── */
 
 .actionRow {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-top: 0.75rem;
+  margin-top: 1rem;
+  align-items: center;
 }
 
-/* ─── Fulfillment list ───────────────────────────────────────────────────── */
+/* ─── Fulfillment list ────────────────────────────────────────────────────── */
 
 .fulfillmentList {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 
 .fulfillmentRow {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  border-radius: 0.65rem;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.875rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 70%, transparent);
 }
 
 .fulfillmentInfo {
   display: grid;
-  gap: 0.18rem;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 1;
 }
 
 .fulfillmentInfo strong {
   color: var(--on-surface);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .fulfillmentInfo p {
   margin: 0;
   color: var(--on-surface-variant);
-  font-size: 0.76rem;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .fulfillmentLinks {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 0.2rem;
+  gap: 0.875rem;
+  margin-top: 0.375rem;
+  flex-wrap: wrap;
 }
 
-/* ─── Item selector ──────────────────────────────────────────────────────── */
+/* ─── Item selector ───────────────────────────────────────────────────────── */
 
 .selectorList {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .selectorRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.6rem;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
 }
 
 .selectorRow span {
   display: grid;
-  gap: 0.12rem;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.selectorRow strong {
+  color: var(--on-surface);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
 }
 
 .selectorRow small {
   color: var(--on-surface-variant);
-  font-size: 0.73rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 .quantityInput {
-  width: 72px;
-  min-height: 32px;
-  border-radius: 0.5rem;
+  width: 80px;
+  min-height: 38px;
+  border-radius: 0.6rem;
   border: 1px solid var(--glass-border);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface-container-low) 84%, transparent);
   color: var(--on-surface);
-  padding: 0.2rem 0.45rem;
+  padding: 0.4rem 0.55rem;
   font-size: 0.88rem;
+  flex-shrink: 0;
 }
 
-/* ─── Package form grid ──────────────────────────────────────────────────── */
+/* ─── Form grids ──────────────────────────────────────────────────────────── */
 
+/* 2-column for Carrier + Service */
 .formGrid {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.875rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* ─── Live rates ─────────────────────────────────────────────────────────── */
+/* Single-column for Tracking number + URL (full width) */
+.formStack {
+  display: grid;
+  gap: 0.875rem;
+  margin-top: 0.875rem;
+}
+
+/* ─── Live rates ──────────────────────────────────────────────────────────── */
 
 .rateList {
   display: grid;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
 }
 
 .rateRow {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.6rem;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+  cursor: pointer;
 }
 
 .rateRow span {
   display: grid;
-  gap: 0.1rem;
+  gap: 0.15rem;
   flex: 1;
+  min-width: 0;
+}
+
+.rateRow strong {
+  font-size: 0.88rem;
+  color: var(--on-surface);
 }
 
 .rateRow small {
   color: var(--on-surface-variant);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
 }
 
-/* ─── Shipping labels ────────────────────────────────────────────────────── */
+/* ─── Shipping labels ─────────────────────────────────────────────────────── */
 
 .labelList {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .labelRow {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.6rem;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
 }
 
 .labelRow strong {
   color: var(--on-surface);
-  font-size: 0.86rem;
+  font-size: 0.88rem;
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .labelRow p {
-  margin: 0.1rem 0 0;
+  margin: 0.2rem 0 0;
   color: var(--on-surface-variant);
-  font-size: 0.74rem;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 
-/* ─── Checkbox ───────────────────────────────────────────────────────────── */
+/* ─── Checkbox ────────────────────────────────────────────────────────────── */
 
 .checkboxRow {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.625rem;
   color: var(--on-surface-variant);
-  font-size: 0.78rem;
-  margin-top: 0.4rem;
+  font-size: 0.84rem;
+  margin-top: 0.75rem;
+  line-height: 1.5;
+  cursor: pointer;
 }
 
-/* ─── Line items ─────────────────────────────────────────────────────────── */
+.checkboxRow input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 0.1em; /* optical alignment with first line of label text */
+  accent-color: var(--primary);
+  width: 15px;
+  height: 15px;
+}
+
+/* ─── Line items ──────────────────────────────────────────────────────────── */
 
 .lineItemList {
   display: grid;
@@ -318,8 +417,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.65rem 0;
+  gap: 1rem;
+  padding: 0.875rem 0;
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -329,165 +428,196 @@
 
 .lineItemDetails {
   display: grid;
-  gap: 0.15rem;
+  gap: 0.2rem;
   flex: 1;
   min-width: 0;
 }
 
 .lineItemTitle {
   color: var(--on-surface);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .lineItemVariant {
   color: var(--on-surface-variant);
-  font-size: 0.76rem;
+  font-size: 0.79rem;
+  line-height: 1.4;
 }
 
 .lineItemDiscount {
   color: var(--on-surface-variant);
-  font-size: 0.74rem;
+  font-size: 0.77rem;
+  line-height: 1.4;
 }
 
 .lineItemMeta {
-  display: grid;
-  justify-items: end;
-  gap: 0.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
   flex-shrink: 0;
 }
 
-.lineItemQty {
+.lineItemQtyPrice {
   color: var(--on-surface-variant);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .lineItemTotal {
   color: var(--on-surface);
   font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-/* ─── Payment summary ────────────────────────────────────────────────────── */
+/* ─── Payment summary ─────────────────────────────────────────────────────── */
 
 .summaryRows {
   display: grid;
-  gap: 0.42rem;
-}
-
-.summaryRow {
-  display: flex;
-  justify-content: space-between;
   gap: 0.5rem;
-  color: var(--on-surface);
-  font-size: 0.88rem;
 }
 
 .summaryRowMuted {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.75rem;
   color: var(--on-surface-variant);
-  font-size: 0.84rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.summaryRowMuted span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.summaryRowMuted span:last-child {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .summaryDivider {
   height: 1px;
   background: var(--glass-border);
-  margin: 0.4rem 0 0.2rem;
+  margin: 0.5rem 0 0.25rem;
 }
 
 .summaryTotal {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 0.75rem;
   color: var(--on-surface);
-  font-size: 1rem;
-  font-weight: 600;
-  padding-top: 0.1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
-/* ─── Discounts ──────────────────────────────────────────────────────────── */
+.summaryTotal span:last-child {
+  white-space: nowrap;
+}
+
+/* ─── Discounts ───────────────────────────────────────────────────────────── */
 
 .discountList {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .discountRow {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.6rem;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
 }
 
 .discountRow strong {
   color: var(--on-surface);
-  font-size: 0.87rem;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .discountRow p {
-  margin: 0.12rem 0 0;
-  font-size: 0.74rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
   color: var(--on-surface-variant);
+  line-height: 1.45;
 }
 
-/* ─── Notes ──────────────────────────────────────────────────────────────── */
+.discountAmount {
+  white-space: nowrap;
+  color: var(--on-surface);
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ─── Notes ───────────────────────────────────────────────────────────────── */
 
 .noteStack {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.75rem;
 }
 
 .noteHistoryList {
   display: grid;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
+  gap: 0.5rem;
 }
 
 .noteHistoryRow {
-  padding: 0.5rem 0.65rem;
-  border-radius: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--glass-border);
   background: color-mix(in srgb, var(--surface-container-low) 65%, transparent);
+  display: grid;
+  gap: 0.3rem;
 }
 
 .noteHistoryRow strong {
   color: var(--on-surface);
-  font-size: 0.85rem;
+  font-size: 0.87rem;
+  line-height: 1.5;
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .noteHistoryRow small {
   color: var(--on-surface-variant);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
 }
 
-/* ─── Customer / address blocks ──────────────────────────────────────────── */
+/* ─── Customer / address blocks ───────────────────────────────────────────── */
 
 .infoBlock {
   display: grid;
-  gap: 0.18rem;
+  gap: 0.3rem;
   color: var(--on-surface-variant);
-  font-size: 0.83rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
 }
 
 .infoBlock p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .addressText {
   color: var(--on-surface-variant);
-  font-size: 0.83rem;
+  font-size: 0.86rem;
   margin: 0;
-  line-height: 1.55;
+  line-height: 1.65;
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
-/* ─── Timeline ───────────────────────────────────────────────────────────── */
+/* ─── Timeline ────────────────────────────────────────────────────────────── */
 
 .timelineList {
   display: grid;
@@ -496,8 +626,8 @@
 
 .timelineRow {
   display: grid;
-  gap: 0.15rem;
-  padding: 0.65rem 0;
+  gap: 0.2rem;
+  padding: 0.875rem 0;
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -507,51 +637,72 @@
 
 .timelineRow strong {
   color: var(--on-surface);
-  font-size: 0.87rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .timelineRow p {
   margin: 0;
   color: var(--on-surface-variant);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .timelineRow small {
   color: var(--on-surface-variant);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
 }
 
-/* ─── Status text ────────────────────────────────────────────────────────── */
+/* ─── Status text ─────────────────────────────────────────────────────────── */
 
 .successText {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
   color: var(--success-700, #0f766e);
 }
 
 .errorText {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
   color: var(--error-700, #b91c1c);
 }
 
 .metaText {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
   color: var(--on-surface-variant);
 }
 
 .noteText {
   margin: 0;
   color: var(--on-surface-variant);
-  font-size: 0.83rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
-/* ─── Responsive ─────────────────────────────────────────────────────────── */
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 960px) {
   .grid {
     grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .sideColumn {
+    /* On tablet, sidebar reflows below main content naturally */
   }
 }
 
@@ -561,6 +712,30 @@
   }
 
   .title {
-    font-size: 1.3rem;
+    font-size: 1.35rem;
+  }
+
+  .headerCard,
+  .card,
+  .sideCard {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: 0;
+  }
+
+  .lineItemRow {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .lineItemMeta {
+    align-items: flex-start;
+    flex-direction: row;
+    gap: 0.5rem;
   }
 }

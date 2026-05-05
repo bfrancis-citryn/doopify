@@ -103,6 +103,51 @@ describe('route auth helpers', () => {
     expect(auth.response.status).toBe(403)
   })
 
+  it('allows ADMIN through requireAdmin', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({
+      id: 'admin-1',
+      email: 'admin@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'ADMIN',
+    })
+
+    const auth = await requireAdmin(request)
+
+    expect(auth.ok).toBe(true)
+    if (!auth.ok) throw new Error('Expected authorized result')
+    expect(auth.user.role).toBe('ADMIN')
+  })
+
+  it('blocks ADMIN from requireOwner routes', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({
+      id: 'admin-2',
+      email: 'admin2@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'ADMIN',
+    })
+
+    const auth = await requireOwner(request)
+
+    expect(auth.ok).toBe(false)
+    if (auth.ok) throw new Error('Expected forbidden result')
+    expect(auth.response.status).toBe(403)
+  })
+
+  it('returns 401 when getSessionUser returns null (disabled user or expired session)', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue(null)
+
+    const auth = await requireAuth(request)
+
+    expect(auth.ok).toBe(false)
+    if (auth.ok) throw new Error('Expected unauthorized result')
+    expect(auth.response.status).toBe(401)
+  })
+
   it('does not expose token or session internals in blocked responses', async () => {
     mocks.getAuthTokenFromCookieHeader.mockReturnValue(null)
 

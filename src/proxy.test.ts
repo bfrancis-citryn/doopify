@@ -105,4 +105,39 @@ describe('proxy auth protection and security headers', () => {
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
+
+  it('allows /create-owner through without auth as a public route', async () => {
+    const response = await proxy(new NextRequest('http://localhost/create-owner'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
+  it('allows /api/bootstrap/owner through without auth as a public route', async () => {
+    const response = await proxy(new NextRequest('http://localhost/api/bootstrap/owner'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
+  it('allows /join through without auth as a public route', async () => {
+    const response = await proxy(new NextRequest('http://localhost/join'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
+  it('allows /api/team/invites/accept through without auth as a public route', async () => {
+    const response = await proxy(new NextRequest('http://localhost/api/team/invites/accept'))
+
+    expect(response.status).toBe(200)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
+  it('blocks /api/team/users without auth', async () => {
+    const response = await proxy(new NextRequest('http://localhost/api/team/users'))
+
+    expect(response.status).toBe(401)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
 })

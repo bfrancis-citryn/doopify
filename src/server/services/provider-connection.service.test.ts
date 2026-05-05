@@ -202,5 +202,49 @@ describe('provider connection service', () => {
       },
     })
   })
+
+  it('encrypts Stripe SECRET_KEY and WEBHOOK_SECRET when saving credentials', async () => {
+    const integrationRecord = {
+      id: 'int_stripe_save',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-04-30T04:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_new_secret' },
+        { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_new_key' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:live' },
+        { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_live_new_secret' },
+      ],
+    }
+
+    mocks.prisma.integration.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(integrationRecord)
+
+    mocks.prisma.integration.create.mockResolvedValue({ id: 'int_stripe_save' })
+
+    const status = await saveProviderCredentials('STRIPE', {
+      publishableKey: 'pk_live_new_key',
+      secretKey: 'sk_live_new_secret',
+      webhookSecret: 'whsec_live_new_secret',
+      mode: 'live',
+    })
+
+    expect(mocks.encrypt).toHaveBeenCalledWith('sk_live_new_secret')
+    expect(mocks.encrypt).toHaveBeenCalledWith('whsec_live_new_secret')
+    expect(mocks.encrypt).toHaveBeenCalledWith('pk_live_new_key')
+
+    const allUpsertArgs = mocks.prisma.integrationSecret.upsert.mock.calls as Array<[{ create: { key: string; value: string }; update: { value: string } }]>
+    const secretKeyUpsert = allUpsertArgs.find((args) => args[0].create.key === 'SECRET_KEY')
+    expect(secretKeyUpsert).toBeDefined()
+    expect(secretKeyUpsert![0].create.value).toBe('enc:sk_live_new_secret')
+    expect(secretKeyUpsert![0].update.value).toBe('enc:sk_live_new_secret')
+
+    const webhookUpsert = allUpsertArgs.find((args) => args[0].create.key === 'WEBHOOK_SECRET')
+    expect(webhookUpsert).toBeDefined()
+    expect(webhookUpsert![0].create.value).toBe('enc:whsec_live_new_secret')
+
+    expect(status.state).toBe('CREDENTIALS_SAVED')
+  })
 })
 
