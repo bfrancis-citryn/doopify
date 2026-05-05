@@ -14,6 +14,7 @@ import { getStripeRuntimeConnection } from '@/server/payments/stripe-runtime.ser
 import {
   getShippingRatesForCheckout,
 } from '@/server/shipping/shipping-rate.service'
+import { convertVariantWeightToOz, totalCartWeightOz } from '@/server/shipping/weight-conversion'
 import type { ShippingRateQuote } from '@/server/shipping/shipping-rate.types'
 import { markCheckoutRecoveredByPaymentIntent } from '@/server/services/abandoned-checkout.service'
 import { addCustomerAddress, createCustomer, getCustomerByEmail } from '@/server/services/customer.service'
@@ -160,26 +161,6 @@ function mapShippingQuoteForSnapshot(quote: ShippingRateQuote) {
   }
 }
 
-function convertVariantWeightToOz(weight: number | null | undefined, unit: string | null | undefined) {
-  if (!Number.isFinite(weight) || Number(weight) <= 0) return 0
-
-  const normalizedUnit = String(unit || 'oz').trim().toLowerCase()
-  const normalizedWeight = Number(weight)
-
-  if (normalizedUnit === 'lb' || normalizedUnit === 'lbs' || normalizedUnit === 'pound') {
-    return normalizedWeight * 16
-  }
-
-  if (normalizedUnit === 'g' || normalizedUnit === 'gram') {
-    return normalizedWeight * 0.0352739619
-  }
-
-  if (normalizedUnit === 'kg' || normalizedUnit === 'kilogram') {
-    return normalizedWeight * 35.2739619
-  }
-
-  return normalizedWeight
-}
 
 async function resolveLineItems(items: CheckoutItemInput[]) {
   const uniqueVariantIds = Array.from(new Set(items.map((item) => item.variantId)))
@@ -247,10 +228,7 @@ async function resolveSelectedShippingQuote(input: {
   shippingAddress: CheckoutAddress
   selectedShippingQuoteId?: string
 }) {
-  const totalWeightOz = input.lineItems.reduce(
-    (sum, item) => sum + Number(item.weightOz || 0) * Number(item.quantity || 0),
-    0
-  )
+  const totalWeightOz = totalCartWeightOz(input.lineItems)
 
   const quotes = await getShippingRatesForCheckout({
     storeId: input.storeId,

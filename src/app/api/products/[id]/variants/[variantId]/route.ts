@@ -13,6 +13,7 @@ const schema = z.object({
   compareAtPrice: z.number().optional(),
   inventory: z.number().int().min(0).optional(),
   weight: z.number().optional(),
+  weightUnit: z.string().optional(),
 })
 
 export async function PATCH(req: Request, { params }: Params) {

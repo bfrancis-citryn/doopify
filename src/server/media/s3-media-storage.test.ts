@@ -185,6 +185,28 @@ describe('s3 media storage adapter', () => {
     expect(mock.deleteRecord).toHaveBeenCalledWith({ where: { id: 'asset_123' } })
   })
 
+  it('deletes from s3 and removes db metadata on success', async () => {
+    const removeObject = vi.fn().mockResolvedValue(undefined)
+    const deleteRecord = vi.fn().mockResolvedValue({ id: 'asset_123' })
+    const mock = buildDeps({ removeObject, deleteRecord })
+
+    const adapter = createS3MediaStorageAdapter(
+      {
+        endpoint: 'https://example-s3.test',
+        region: 'auto',
+        bucket: 'doopify-media',
+        accessKeyId: 'key',
+        secretAccessKey: 'secret',
+      },
+      mock.deps as any
+    )
+
+    await adapter.delete('asset_123')
+
+    expect(mock.removeObject).toHaveBeenCalledWith('doopify-media', 'media/asset_123/hero-banner.png')
+    expect(mock.deleteRecord).toHaveBeenCalledWith({ where: { id: 'asset_123' } })
+  })
+
   it('returns a redirect read when a public URL is recorded', async () => {
     const findUnique = vi.fn().mockResolvedValue({
       id: 'asset_123',

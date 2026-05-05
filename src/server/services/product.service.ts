@@ -704,6 +704,7 @@ export async function updateVariant(
     compareAtPriceCents: number
     inventory: number
     weight: number
+    weightUnit: string
   }>
 ) {
   return prisma.productVariant.update({ where: { id }, data })
