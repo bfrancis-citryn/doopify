@@ -765,6 +765,10 @@ export default function SettingsWorkspace() {
   const [deploymentLoading, setDeploymentLoading] = useState(false);
   const [deploymentLoaded, setDeploymentLoaded] = useState(false);
   const [deploymentError, setDeploymentError] = useState('');
+  const [wizardSteps, setWizardSteps] = useState(null);
+  const [wizardLoading, setWizardLoading] = useState(false);
+  const [wizardLoaded, setWizardLoaded] = useState(false);
+  const [wizardError, setWizardError] = useState('');
   const [providerStatusMap, setProviderStatusMap] = useState({});
   const [providerStatusLoading, setProviderStatusLoading] = useState(false);
   const [providerStatusLoaded, setProviderStatusLoaded] = useState(false);
@@ -1028,6 +1032,49 @@ export default function SettingsWorkspace() {
   }, [activeSection, deploymentLoaded]);
 
   useEffect(() => {
+    if (activeSection !== 'setup' || wizardLoaded) return;
+
+    let cancelled = false;
+
+    async function loadWizardStatus() {
+      setWizardLoading(true);
+      setWizardError('');
+      try {
+        const data = await fetch('/api/setup/wizard', { cache: 'no-store' }).then(parseApiJson);
+        if (!cancelled) setWizardSteps(data);
+      } catch (loadError) {
+        if (!cancelled) {
+          setWizardSteps(null);
+          setWizardError(loadError instanceof Error ? loadError.message : 'Failed to load setup wizard');
+        }
+      } finally {
+        if (!cancelled) {
+          setWizardLoading(false);
+          setWizardLoaded(true);
+        }
+      }
+    }
+
+    loadWizardStatus();
+
+    return () => { cancelled = true; };
+  }, [activeSection, wizardLoaded]);
+
+  async function refreshWizard() {
+    setWizardLoading(true);
+    setWizardError('');
+    try {
+      const data = await fetch('/api/setup/wizard', { cache: 'no-store' }).then(parseApiJson);
+      setWizardSteps(data);
+    } catch (loadError) {
+      setWizardError(loadError instanceof Error ? loadError.message : 'Failed to load setup wizard');
+    } finally {
+      setWizardLoading(false);
+      setWizardLoaded(true);
+    }
+  }
+
+  useEffect(() => {
     const shouldLoadProviders = ['payments', 'shipping', 'email'].includes(activeSection);
     if (!shouldLoadProviders || providerStatusLoaded || providerStatusLoading) {
       return;
@@ -1203,6 +1250,9 @@ export default function SettingsWorkspace() {
   const showDeploymentLoading = activeSection === 'setup' && deploymentLoading && !deploymentStatus && !deploymentError;
   const showDeploymentError = activeSection === 'setup' && Boolean(deploymentError);
   const showDeploymentChecklist = activeSection === 'setup' && Boolean(deploymentStatus?.checks?.length);
+  const showWizardLoading = activeSection === 'setup' && wizardLoading && !wizardSteps && !wizardError;
+  const showWizardError = activeSection === 'setup' && Boolean(wizardError);
+  const showWizardSteps = activeSection === 'setup' && Boolean(wizardSteps?.steps?.length);
   const setupRequiredNextSteps = setupStatus?.requiredNextSteps || [];
   const setupOptionalProductionSteps = setupStatus?.optionalProductionSteps || [];
   const setupOptionalFoundationSteps = useMemo(
@@ -3469,6 +3519,123 @@ export default function SettingsWorkspace() {
                     configure provider webhooks.
                   </p>
                 </AdminCard>
+
+                {/* ── Getting started wizard ──────────────────────────────── */}
+                {showWizardLoading ? (
+                  <div className={styles.statusBlock}>
+                    <div className={styles.loadingLine} />
+                    <div className={styles.loadingLine} />
+                    <div className={`${styles.loadingLine} ${styles.loadingLineShort}`} />
+                    <p className={styles.statusText}>Loading setup checklist...</p>
+                  </div>
+                ) : null}
+
+                {showWizardError ? (
+                  <div className={styles.statusBlock}>
+                    <p className={styles.statusTitle}>Setup checklist error</p>
+                    <p className={styles.statusText}>{wizardError}</p>
+                  </div>
+                ) : null}
+
+                {showWizardSteps ? (
+                  <>
+                    <AdminCard className={styles.setupSummaryCard} variant="card">
+                      <div className={styles.setupCardHeader}>
+                        <div>
+                          <p className={styles.eyebrow}>Getting started</p>
+                          <h3 className={styles.setupHeadline}>
+                            {wizardSteps.wizardComplete ? 'Store ready for pilot' : 'Setup in progress'}
+                          </h3>
+                          <p className={styles.statusText}>
+                            {wizardSteps.completedCount} of {wizardSteps.steps.length} steps complete
+                            {wizardSteps.wizardComplete ? ' · all required steps done' : ''}
+                          </p>
+                        </div>
+                        <AdminButton
+                          disabled={wizardLoading}
+                          onClick={() => refreshWizard()}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          {wizardLoading ? 'Refreshing...' : 'Refresh'}
+                        </AdminButton>
+                      </div>
+                    </AdminCard>
+
+                    <section className={styles.setupList} style={{ listStyle: 'none', padding: 0 }}>
+                      {(wizardSteps.steps || []).map((step) => (
+                        <AdminCard
+                          as="article"
+                          className={styles.setupCard}
+                          key={step.id}
+                          variant="card"
+                          style={{ marginBottom: '0.5rem' }}
+                        >
+                          <div className={styles.setupCardHeader}>
+                            <div>
+                              <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '1.4rem',
+                                  height: '1.4rem',
+                                  borderRadius: '50%',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                  background: step.status === 'ready'
+                                    ? 'var(--success-100, #dcfce7)'
+                                    : step.status === 'optional'
+                                      ? 'var(--surface-container-low)'
+                                      : 'var(--warning-100, #fef9c3)',
+                                  color: step.status === 'ready'
+                                    ? 'var(--success-700, #15803d)'
+                                    : step.status === 'optional'
+                                      ? 'var(--on-surface-variant)'
+                                      : 'var(--warning-700, #a16207)',
+                                }}>
+                                  {step.status === 'ready' ? '✓' : step.step}
+                                </span>
+                                {step.title}
+                                {!step.isRequired ? (
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', fontWeight: 400 }}>
+                                    optional
+                                  </span>
+                                ) : null}
+                              </h4>
+                              <p className={styles.statusText} style={{ marginTop: '0.25rem' }}>{step.reason}</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'center' }}>
+                              <AdminStatusChip
+                                tone={
+                                  step.status === 'ready' ? 'success'
+                                    : step.status === 'optional' || step.status === 'skipped' ? 'neutral'
+                                      : 'warning'
+                                }
+                              >
+                                {step.status === 'needs_setup' ? 'Needs setup' : step.status}
+                              </AdminStatusChip>
+                              {step.ctaRoute && step.ctaLabel ? (
+                                <a
+                                  href={step.ctaRoute}
+                                  style={{
+                                    fontSize: '0.8rem',
+                                    color: 'var(--primary)',
+                                    textDecoration: 'none',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {step.ctaLabel} →
+                                </a>
+                              ) : null}
+                            </div>
+                          </div>
+                        </AdminCard>
+                      ))}
+                    </section>
+                  </>
+                ) : null}
 
                 {showReadinessLoading ? (
                   <div className={styles.statusBlock}>
