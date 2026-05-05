@@ -3,9 +3,11 @@ import crypto from 'node:crypto'
 
 import { env } from '@/lib/env'
 import { prisma } from '@/lib/prisma'
+import { recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import type { UserRole } from '@prisma/client'
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const PASSWORD_RESET_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
 const TEAM_MANAGEABLE_ROLES: UserRole[] = ['OWNER', 'ADMIN', 'STAFF', 'VIEWER']
 
 function normalizeEmail(email: string) {
@@ -47,7 +49,16 @@ async function assertNotLastOwner(userId: string, operation: string) {
 
 function validateSetupToken(suppliedToken: string | null | undefined) {
   const required = trimToNull(env.SETUP_TOKEN)
-  if (!required) return // no token configured — open bootstrap
+
+  // In production, SETUP_TOKEN must be configured. If it is not set, deny bootstrap.
+  if (!required && env.NODE_ENV === 'production') {
+    throw new Error(
+      'SETUP_TOKEN is required in production. Set SETUP_TOKEN in your environment variables before creating the first owner account.'
+    )
+  }
+
+  if (!required) return // development/test: open bootstrap when no token is configured
+
   const supplied = trimToNull(suppliedToken)
   if (!supplied || supplied !== required) {
     throw new Error('Invalid setup token.')
@@ -114,6 +125,14 @@ export async function bootstrapOwner(input: BootstrapOwnerInput) {
         role: true,
       },
     })
+  })
+
+  await recordAuditLogBestEffort({
+    action: 'team.owner_created',
+    actor: { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: created.id },
+    summary: `First owner account created: ${created.email}`,
+    snapshot: { email: created.email, role: 'OWNER' },
   })
 
   return created
@@ -258,6 +277,15 @@ export async function inviteTeamUser(input: InviteTeamUserInput): Promise<{
     },
   })
 
+  await recordAuditLogBestEffort({
+    action: 'team.invite_created',
+    actor: input.invitedById ? { actorType: 'STAFF', actorId: input.invitedById } : { actorType: 'SYSTEM' },
+    resource: { type: 'UserInvite', id: invite.id },
+    summary: `Invite created for ${email} with role ${input.role}`,
+    snapshot: { email, role: input.role },
+    redactions: ['tokenHash'],
+  })
+
   return { invite, rawToken }
 }
 
@@ -299,7 +327,7 @@ export async function acceptTeamInvite(input: AcceptInviteInput) {
 
   const email = normalizeEmail(matched.email)
 
-  return prisma.$transaction(async (tx) => {
+  const newUser = await prisma.$transaction(async (tx) => {
     // Delete the invite (single-use)
     await tx.userInvite.delete({ where: { id: matched!.id } })
 
@@ -328,18 +356,32 @@ export async function acceptTeamInvite(input: AcceptInviteInput) {
       },
     })
   })
+
+  await recordAuditLogBestEffort({
+    action: 'team.invite_accepted',
+    actor: { actorType: 'STAFF', actorId: newUser.id, actorEmail: newUser.email, actorRole: newUser.role },
+    resource: { type: 'User', id: newUser.id },
+    summary: `Invite accepted: ${newUser.email} joined as ${newUser.role}`,
+    snapshot: { email: newUser.email, role: newUser.role },
+  })
+
+  return newUser
 }
 
 // ── Update user role ────────────────────────────────────────────────────────
 
-export async function updateTeamUserRole(userId: string, newRole: UserRole) {
+export async function updateTeamUserRole(
+  userId: string,
+  newRole: UserRole,
+  actor?: { id: string; email: string; role: UserRole | string } | null
+) {
   if (!TEAM_MANAGEABLE_ROLES.includes(newRole)) {
     throw new Error('Invalid role.')
   }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true, isActive: true },
+    select: { id: true, email: true, role: true, isActive: true },
   })
   if (!user) throw new Error('User not found.')
 
@@ -347,42 +389,78 @@ export async function updateTeamUserRole(userId: string, newRole: UserRole) {
     await assertNotLastOwner(userId, 'demote this user from OWNER')
   }
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: { role: newRole },
     select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
   })
+
+  await recordAuditLogBestEffort({
+    action: 'team.role_changed',
+    actor: actor ? { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role } : { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: userId },
+    summary: `Role changed for ${user.email}: ${user.role} → ${newRole}`,
+    snapshot: { previousRole: user.role, newRole },
+  })
+
+  return updated
 }
 
 // ── Disable user ────────────────────────────────────────────────────────────
 
-export async function disableTeamUser(userId: string) {
+export async function disableTeamUser(
+  userId: string,
+  actor?: { id: string; email: string; role: UserRole | string } | null
+) {
   await assertNotLastOwner(userId, 'disable this user')
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, role: true } })
   if (!user) throw new Error('User not found.')
 
   // Invalidate all sessions immediately
   await prisma.session.deleteMany({ where: { userId } })
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: { isActive: false },
     select: { id: true, email: true, role: true, isActive: true },
   })
+
+  await recordAuditLogBestEffort({
+    action: 'team.user_disabled',
+    actor: actor ? { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role } : { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: userId },
+    summary: `User disabled: ${user.email}`,
+    snapshot: { email: user.email, role: user.role },
+  })
+
+  return updated
 }
 
 // ── Reactivate user ─────────────────────────────────────────────────────────
 
-export async function reactivateTeamUser(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+export async function reactivateTeamUser(
+  userId: string,
+  actor?: { id: string; email: string; role: UserRole | string } | null
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, role: true } })
   if (!user) throw new Error('User not found.')
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: { isActive: true },
     select: { id: true, email: true, role: true, isActive: true },
   })
+
+  await recordAuditLogBestEffort({
+    action: 'team.user_reactivated',
+    actor: actor ? { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role } : { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: userId },
+    summary: `User reactivated: ${user.email}`,
+    snapshot: { email: user.email, role: user.role },
+  })
+
+  return updated
 }
 
 // ── Revoke invite ───────────────────────────────────────────────────────────
@@ -428,4 +506,126 @@ export async function listPendingInvites(): Promise<TeamInviteView[]> {
     select: { id: true, email: true, role: true, expiresAt: true, createdAt: true, invitedById: true },
     orderBy: { createdAt: 'desc' },
   })
+}
+
+// ── Password reset ──────────────────────────────────────────────────────────
+
+export type PasswordResetView = {
+  id: string
+  userId: string
+  expiresAt: Date
+  createdAt: Date
+}
+
+export async function requestPasswordReset(
+  userId: string,
+  actor?: { id: string; email: string; role: UserRole | string } | null
+): Promise<{ reset: PasswordResetView; rawToken: string }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, isActive: true },
+  })
+  if (!user) throw new Error('User not found.')
+  if (!user.isActive) throw new Error('Cannot reset password for a disabled account.')
+
+  // Delete any existing reset tokens for this user
+  await prisma.passwordReset.deleteMany({ where: { userId } })
+
+  const rawToken = crypto.randomBytes(32).toString('hex')
+  const tokenHash = await bcrypt.hash(rawToken, 10)
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS)
+
+  const reset = await prisma.passwordReset.create({
+    data: { userId, tokenHash, expiresAt },
+    select: { id: true, userId: true, expiresAt: true, createdAt: true },
+  })
+
+  await recordAuditLogBestEffort({
+    action: 'team.password_reset_requested',
+    actor: actor ? { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role } : { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: userId },
+    summary: `Password reset requested for ${user.email}`,
+    redactions: ['tokenHash', 'rawToken'],
+  })
+
+  return { reset, rawToken }
+}
+
+export async function acceptPasswordReset(rawToken: string, newPassword: string): Promise<void> {
+  const password = trimToNull(newPassword)
+  if (!password || password.length < 8) {
+    throw new Error('Password must be at least 8 characters.')
+  }
+
+  const candidates = await prisma.passwordReset.findMany({
+    where: { expiresAt: { gt: new Date() } },
+    select: { id: true, userId: true, tokenHash: true },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  })
+
+  let matched: (typeof candidates)[number] | null = null
+  for (const candidate of candidates) {
+    if (await bcrypt.compare(rawToken, candidate.tokenHash)) {
+      matched = candidate
+      break
+    }
+  }
+
+  if (!matched) throw new Error('Invalid or expired reset link.')
+
+  const passwordHash = await bcrypt.hash(password, 12)
+
+  await prisma.$transaction(async (tx) => {
+    await tx.passwordReset.delete({ where: { id: matched!.id } })
+    await tx.user.update({ where: { id: matched!.userId }, data: { passwordHash } })
+    // Revoke all sessions so the new password is required to log back in
+    await tx.session.deleteMany({ where: { userId: matched!.userId } })
+  })
+
+  await recordAuditLogBestEffort({
+    action: 'team.password_reset_completed',
+    actor: { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: matched.userId },
+    summary: `Password reset completed for user ${matched.userId}`,
+    redactions: ['tokenHash', 'rawToken', 'passwordHash'],
+  })
+}
+
+// ── Session management ──────────────────────────────────────────────────────
+
+export type SessionView = {
+  id: string
+  ip: string | null
+  userAgent: string | null
+  createdAt: Date
+  expiresAt: Date
+}
+
+export async function getUserSessions(userId: string): Promise<SessionView[]> {
+  return prisma.session.findMany({
+    where: { userId, expiresAt: { gt: new Date() } },
+    select: { id: true, ip: true, userAgent: true, createdAt: true, expiresAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+export async function revokeUserSessions(
+  userId: string,
+  actor?: { id: string; email: string; role: UserRole | string } | null
+): Promise<{ count: number }> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } })
+  if (!user) throw new Error('User not found.')
+
+  const { count } = await prisma.session.deleteMany({ where: { userId } })
+
+  await recordAuditLogBestEffort({
+    action: 'team.sessions_revoked',
+    actor: actor ? { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role } : { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: userId },
+    summary: `${count} session(s) revoked for ${user.email}`,
+    snapshot: { count },
+  })
+
+  return { count }
 }

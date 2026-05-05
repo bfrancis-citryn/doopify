@@ -10,7 +10,7 @@ vi.mock('@/lib/auth', () => ({
   getSessionUser: mocks.getSessionUser,
 }))
 
-import { requireAdmin, requireAuth, requireOwner } from './require-auth'
+import { requireAdmin, requireAdminOrAbove, requireAuth, requireOwner } from './require-auth'
 
 const request = new Request('http://localhost/api/private', {
   headers: { cookie: 'doopify_token=session-token' },
@@ -162,5 +162,42 @@ describe('route auth helpers', () => {
     })
     expect(JSON.stringify(body)).not.toContain('session-token')
     expect(JSON.stringify(body)).not.toContain('doopify_token')
+  })
+
+  it('allows OWNER and ADMIN through requireAdminOrAbove', async () => {
+    for (const role of ['OWNER', 'ADMIN'] as const) {
+      mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+      mocks.getSessionUser.mockResolvedValue({ id: 'u1', email: 'u@e.com', firstName: null, lastName: null, role })
+      const auth = await requireAdminOrAbove(request)
+      expect(auth.ok).toBe(true)
+      if (auth.ok) expect(auth.user.role).toBe(role)
+    }
+  })
+
+  it('blocks STAFF from requireAdminOrAbove routes', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({ id: 'u1', email: 'u@e.com', firstName: null, lastName: null, role: 'STAFF' })
+
+    const auth = await requireAdminOrAbove(request)
+    expect(auth.ok).toBe(false)
+    if (!auth.ok) expect(auth.response.status).toBe(403)
+  })
+
+  it('blocks VIEWER from requireAdminOrAbove routes', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({ id: 'u1', email: 'u@e.com', firstName: null, lastName: null, role: 'VIEWER' })
+
+    const auth = await requireAdminOrAbove(request)
+    expect(auth.ok).toBe(false)
+    if (!auth.ok) expect(auth.response.status).toBe(403)
+  })
+
+  it('blocks VIEWER from requireAdmin routes', async () => {
+    mocks.getAuthTokenFromCookieHeader.mockReturnValue('session-token')
+    mocks.getSessionUser.mockResolvedValue({ id: 'u1', email: 'u@e.com', firstName: null, lastName: null, role: 'VIEWER' })
+
+    const auth = await requireAdmin(request)
+    expect(auth.ok).toBe(false)
+    if (!auth.ok) expect(auth.response.status).toBe(403)
   })
 })

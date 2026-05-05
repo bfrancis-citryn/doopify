@@ -61,7 +61,7 @@ describe('team users [id] route', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.disableTeamUser).toHaveBeenCalledWith('u1')
+    expect(mocks.disableTeamUser).toHaveBeenCalledWith('u1', ownerAuth.user)
   })
 
   it('owner can reactivate a user', async () => {
@@ -78,7 +78,7 @@ describe('team users [id] route', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.reactivateTeamUser).toHaveBeenCalledWith('u1')
+    expect(mocks.reactivateTeamUser).toHaveBeenCalledWith('u1', ownerAuth.user)
   })
 
   it('owner can change a user role', async () => {
@@ -95,7 +95,7 @@ describe('team users [id] route', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.updateTeamUserRole).toHaveBeenCalledWith('u1', 'ADMIN')
+    expect(mocks.updateTeamUserRole).toHaveBeenCalledWith('u1', 'ADMIN', ownerAuth.user)
   })
 
   it('returns 400 with last-owner error when trying to disable last owner', async () => {

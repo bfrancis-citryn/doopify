@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   env: {
     DATABASE_URL: 'postgresql://localhost/test',
     JWT_SECRET: 'test_jwt_secret_for_tests_only_123456',
-    NODE_ENV: 'test',
+    NODE_ENV: 'test' as 'test' | 'production' | 'development',
     SETUP_TOKEN: undefined as string | undefined,
     STRIPE_SECRET_KEY: undefined,
     STRIPE_WEBHOOK_SECRET: undefined,
@@ -42,18 +42,32 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     session: {
       deleteMany: vi.fn(),
+      findMany: vi.fn(),
+    },
+    passwordReset: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+      update: vi.fn(),
     },
     $transaction: vi.fn(),
   },
   bcryptHash: vi.fn(),
   bcryptCompare: vi.fn(),
+  recordAuditLogBestEffort: vi.fn(),
 }))
 
 vi.mock('@/lib/env', () => ({ env: mocks.env }))
 vi.mock('@/lib/prisma', () => ({ prisma: mocks.prisma }))
+vi.mock('@/server/services/audit-log.service', () => ({
+  recordAuditLogBestEffort: mocks.recordAuditLogBestEffort,
+}))
 vi.mock('bcryptjs', () => ({
   default: {
     hash: mocks.bcryptHash,
@@ -62,16 +76,20 @@ vi.mock('bcryptjs', () => ({
 }))
 
 import {
+  acceptPasswordReset,
   acceptTeamInvite,
   activeOwnerExists,
   bootstrapOwner,
   disableTeamUser,
+  getUserSessions,
   inviteTeamUser,
   listPendingInvites,
   listTeamUsers,
   reactivateTeamUser,
+  requestPasswordReset,
   resendTeamInvite,
   revokeTeamInvite,
+  revokeUserSessions,
   updateTeamUserRole,
 } from './team.service'
 
@@ -79,10 +97,13 @@ describe('team service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.env.SETUP_TOKEN = undefined
+    mocks.env.NODE_ENV = 'test'
     mocks.bcryptHash.mockResolvedValue('hashed_value')
     mocks.bcryptCompare.mockResolvedValue(false)
     mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(mocks.prisma))
     mocks.prisma.session.deleteMany.mockResolvedValue({ count: 0 })
+    mocks.prisma.passwordReset.deleteMany.mockResolvedValue({ count: 0 })
+    mocks.recordAuditLogBestEffort.mockResolvedValue(null)
   })
 
   // ── activeOwnerExists ───────────────────────────────────────────────────────
@@ -444,6 +465,176 @@ describe('team service', () => {
       const invites = await listPendingInvites()
       expect(invites).toHaveLength(1)
       expect(invites[0].email).toBe('pending@e.com')
+    })
+  })
+
+  // ── Production SETUP_TOKEN enforcement ─────────────────────────────────────
+
+  describe('bootstrapOwner — production setup token enforcement', () => {
+    it('requires SETUP_TOKEN in production when env var is not configured', async () => {
+      mocks.env.NODE_ENV = 'production'
+      mocks.env.SETUP_TOKEN = undefined
+      mocks.prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(
+        bootstrapOwner({ email: 'owner@example.com', password: 'securepassword1' })
+      ).rejects.toThrow('SETUP_TOKEN is required in production')
+    })
+
+    it('rejects invalid SETUP_TOKEN in production', async () => {
+      mocks.env.NODE_ENV = 'production'
+      mocks.env.SETUP_TOKEN = 'correct-token'
+      mocks.prisma.user.findFirst.mockResolvedValue(null)
+
+      await expect(
+        bootstrapOwner({ email: 'owner@example.com', password: 'securepassword1', setupToken: 'wrong' })
+      ).rejects.toThrow('Invalid setup token')
+    })
+
+    it('accepts valid SETUP_TOKEN in production', async () => {
+      mocks.env.NODE_ENV = 'production'
+      mocks.env.SETUP_TOKEN = 'correct-token'
+      mocks.prisma.user.findFirst.mockResolvedValue(null)
+      mocks.prisma.user.findUnique.mockResolvedValue(null)
+      mocks.prisma.user.create.mockResolvedValue({
+        id: 'u_prod',
+        email: 'owner@example.com',
+        firstName: null,
+        lastName: null,
+        role: 'OWNER',
+      })
+
+      const result = await bootstrapOwner({
+        email: 'owner@example.com',
+        password: 'securepassword1',
+        setupToken: 'correct-token',
+      })
+      expect(result.role).toBe('OWNER')
+    })
+
+    it('does not require SETUP_TOKEN in development', async () => {
+      mocks.env.NODE_ENV = 'development'
+      mocks.env.SETUP_TOKEN = undefined
+      mocks.prisma.user.findFirst.mockResolvedValue(null)
+      mocks.prisma.user.findUnique.mockResolvedValue(null)
+      mocks.prisma.user.create.mockResolvedValue({
+        id: 'u_dev',
+        email: 'dev@example.com',
+        firstName: null,
+        lastName: null,
+        role: 'OWNER',
+      })
+
+      await expect(
+        bootstrapOwner({ email: 'dev@example.com', password: 'devpassword1' })
+      ).resolves.toMatchObject({ role: 'OWNER' })
+    })
+  })
+
+  // ── requestPasswordReset ────────────────────────────────────────────────────
+
+  describe('requestPasswordReset', () => {
+    it('generates a hashed reset token and stores it', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'staff@e.com', isActive: true })
+      mocks.prisma.passwordReset.deleteMany.mockResolvedValue({ count: 0 })
+      mocks.prisma.passwordReset.create.mockResolvedValue({
+        id: 'pr1',
+        userId: 'u1',
+        expiresAt: new Date(Date.now() + 86400000),
+        createdAt: new Date(),
+      })
+
+      const { rawToken, reset } = await requestPasswordReset('u1')
+
+      expect(rawToken).toBeTruthy()
+      expect(rawToken.length).toBeGreaterThan(32)
+      expect(mocks.bcryptHash).toHaveBeenCalledWith(rawToken, 10)
+      const createCall = mocks.prisma.passwordReset.create.mock.calls[0][0]
+      expect(createCall.data.tokenHash).toBe('hashed_value')
+      expect(createCall.data).not.toHaveProperty('rawToken')
+      expect(reset.userId).toBe('u1')
+    })
+
+    it('throws for disabled user', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'staff@e.com', isActive: false })
+
+      await expect(requestPasswordReset('u1')).rejects.toThrow('disabled')
+    })
+
+    it('throws for missing user', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue(null)
+
+      await expect(requestPasswordReset('nonexistent')).rejects.toThrow('User not found')
+    })
+  })
+
+  // ── acceptPasswordReset ─────────────────────────────────────────────────────
+
+  describe('acceptPasswordReset', () => {
+    it('accepts valid token, updates password hash, and deletes the reset record', async () => {
+      mocks.prisma.passwordReset.findMany.mockResolvedValue([
+        { id: 'pr1', userId: 'u1', tokenHash: 'hashed_raw_token' },
+      ])
+      mocks.bcryptCompare.mockResolvedValueOnce(true)
+      mocks.prisma.passwordReset.delete.mockResolvedValue({ id: 'pr1' })
+      mocks.prisma.user.update.mockResolvedValue({ id: 'u1' })
+      mocks.prisma.session.deleteMany.mockResolvedValue({ count: 2 })
+
+      await acceptPasswordReset('raw_token', 'newpassword123')
+
+      expect(mocks.bcryptHash).toHaveBeenCalledWith('newpassword123', 12)
+      expect(mocks.prisma.passwordReset.delete).toHaveBeenCalledWith({ where: { id: 'pr1' } })
+      expect(mocks.prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { passwordHash: 'hashed_value' } })
+      )
+      // All sessions revoked after reset
+      expect(mocks.prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } })
+    })
+
+    it('rejects invalid or expired token', async () => {
+      mocks.prisma.passwordReset.findMany.mockResolvedValue([
+        { id: 'pr1', userId: 'u1', tokenHash: 'some_hash' },
+      ])
+      mocks.bcryptCompare.mockResolvedValue(false)
+
+      await expect(acceptPasswordReset('bad_token', 'newpassword123')).rejects.toThrow('Invalid or expired')
+    })
+
+    it('is single-use — deletes reset record on acceptance', async () => {
+      mocks.prisma.passwordReset.findMany.mockResolvedValue([
+        { id: 'pr1', userId: 'u1', tokenHash: 'hash' },
+      ])
+      mocks.bcryptCompare.mockResolvedValueOnce(true)
+      mocks.prisma.passwordReset.delete.mockResolvedValue({ id: 'pr1' })
+      mocks.prisma.user.update.mockResolvedValue({ id: 'u1' })
+      mocks.prisma.session.deleteMany.mockResolvedValue({ count: 0 })
+
+      await acceptPasswordReset('raw', 'newpassword123')
+      expect(mocks.prisma.passwordReset.delete).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // ── getUserSessions / revokeUserSessions ────────────────────────────────────
+
+  describe('getUserSessions', () => {
+    it('returns active sessions for a user', async () => {
+      mocks.prisma.session.findMany.mockResolvedValue([
+        { id: 's1', ip: '1.2.3.4', userAgent: 'Chrome', createdAt: new Date(), expiresAt: new Date() },
+      ])
+      const sessions = await getUserSessions('u1')
+      expect(sessions).toHaveLength(1)
+      expect(sessions[0].id).toBe('s1')
+    })
+  })
+
+  describe('revokeUserSessions', () => {
+    it('deletes all sessions for user and returns count', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({ id: 'u1', email: 'u@e.com' })
+      mocks.prisma.session.deleteMany.mockResolvedValue({ count: 3 })
+
+      const result = await revokeUserSessions('u1')
+      expect(result.count).toBe(3)
+      expect(mocks.prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u1' } })
     })
   })
 })

@@ -31,7 +31,10 @@
       "Bash(cat vitest.config.ts)",
       "Bash(cat vitest.config.js)",
       "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\")",
-      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\invites\\\\[id]\\\\resend\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\invites\\\\[id]\\\\resend\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); const scripts=Object.entries\\(p.scripts\\).filter\\(\\([k]\\)=>k.startsWith\\('doopify'\\)\\); console.log\\(JSON.stringify\\(scripts,null,2\\)\\)\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\\\\sessions\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\\\\reset-password\")"
     ]
   }
 }

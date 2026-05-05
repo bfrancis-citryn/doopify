@@ -108,6 +108,45 @@ export async function createUser(data: {
   })
 }
 
+// ── Change password ───────────────────────────────────────────────────────────
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+  currentSessionToken?: string | null
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, passwordHash: true, isActive: true },
+  })
+  if (!user || !user.isActive) throw new Error('User not found or account is disabled.')
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!valid) throw new Error('Current password is incorrect.')
+
+  if (newPassword.length < 8) throw new Error('New password must be at least 8 characters.')
+
+  const passwordHash = await bcrypt.hash(newPassword, 12)
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { passwordHash } })
+    // Revoke every other session so the new password is required on other devices
+    if (currentSessionToken) {
+      await tx.session.deleteMany({ where: { userId, NOT: { token: currentSessionToken } } })
+    } else {
+      await tx.session.deleteMany({ where: { userId } })
+    }
+  })
+}
+
+// ── Revoke other sessions (keep current) ─────────────────────────────────────
+export async function revokeOtherSessions(userId: string, currentSessionToken: string): Promise<number> {
+  const { count } = await prisma.session.deleteMany({
+    where: { userId, NOT: { token: currentSessionToken } },
+  })
+  return count
+}
+
 // ── Get token from request cookies ───────────────────────────────────────────
 export function getTokenFromCookieHeader(cookieHeader: string | null): string | null {
   return getCookieValue(cookieHeader, AUTH_COOKIE)

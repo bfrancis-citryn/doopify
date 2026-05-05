@@ -16,6 +16,7 @@
     "doopify:stripe:webhook": "node scripts/doopify-cli.mjs stripe webhook",
     "doopify:db:check": "node scripts/doopify-cli.mjs db check",
     "doopify:deploy": "node scripts/doopify-cli.mjs deploy",
+    "doopify:reset-owner": "node scripts/reset-owner.mjs",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

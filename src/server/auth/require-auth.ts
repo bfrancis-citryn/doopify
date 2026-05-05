@@ -51,8 +51,14 @@ export async function requireRole(req: Request, roles: UserRole[]): Promise<Rout
   return auth
 }
 
+// OWNER + ADMIN + STAFF: standard admin access (orders, products, customers, etc.)
 export function requireAdmin(req: Request) {
   return requireRole(req, ['OWNER', 'ADMIN', 'STAFF'])
+}
+
+// OWNER + ADMIN only: for ops that STAFF should not perform
+export function requireAdminOrAbove(req: Request) {
+  return requireRole(req, ['OWNER', 'ADMIN'])
 }
 
 export function requireOwner(req: Request) {

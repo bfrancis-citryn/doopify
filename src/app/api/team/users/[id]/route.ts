@@ -32,14 +32,16 @@ export async function PATCH(req: Request, context: RouteContext) {
     return err(parsed.error.errors[0].message, 422)
   }
 
+  const actor = { id: auth.user.id, email: auth.user.email, role: auth.user.role }
+
   try {
     let user
     if (parsed.data.action === 'set_role') {
-      user = await updateTeamUserRole(id, parsed.data.role)
+      user = await updateTeamUserRole(id, parsed.data.role, actor)
     } else if (parsed.data.action === 'disable') {
-      user = await disableTeamUser(id)
+      user = await disableTeamUser(id, actor)
     } else {
-      user = await reactivateTeamUser(id)
+      user = await reactivateTeamUser(id, actor)
     }
     return ok({ user })
   } catch (error) {

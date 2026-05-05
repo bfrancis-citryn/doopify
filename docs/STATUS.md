@@ -90,6 +90,15 @@ The repo currently includes:
 - Settings → Team panel (TeamSettingsPanel) with role chips, last-login display, inline role editor, disable/reactivate controls, pending invite list with revoke/resend, and invite/create drawer
 - Proxy updated: `/create-owner`, `/join`, `/api/bootstrap`, `/api/team/invites/accept` are public; `/api/team/*` requires session
 - `SETUP_TOKEN` optional env var for additional bootstrap security; if set, token is required during owner creation; if not set, bootstrap is open (only when no owner exists)
+- Phase 21: SETUP_TOKEN is now **required in production** (`NODE_ENV=production`) when bootstrapping; development/test remain open; invalid or missing token returns a clear error message
+- Phase 21: Change-my-password flow at `PATCH /api/auth/password` — requires current password, revokes other sessions after change, keeps current session alive
+- Phase 21: Password reset flow — owner generates 24-hour expiring hashed token at `POST /api/team/users/[id]/reset-password`; reset accepted (token-gated, public) at `POST /api/auth/password-reset`; all sessions revoked on acceptance; `/reset-password?token=<raw>` UI page
+- Phase 21: `PasswordReset` model added to Prisma schema — hashed token, userId, expiry; single-use deletion on acceptance
+- Phase 21: Session management — owner views `GET /api/team/users/[id]/sessions` and revokes `DELETE /api/team/users/[id]/sessions`; authenticated user revokes other sessions at `POST /api/auth/sessions/revoke-others`
+- Phase 21: `requireAdminOrAbove` added (OWNER + ADMIN only, excludes STAFF); completes the three-level helper set alongside `requireAdmin` (OWNER+ADMIN+STAFF) and `requireOwner`
+- Phase 21: Audit logging added to all team operations — owner_created, invite_created, invite_accepted, role_changed, user_disabled, user_reactivated, password_reset_requested, password_reset_completed, sessions_revoked, other_sessions_revoked
+- Phase 21: `scripts/reset-owner.mjs` CLI recovery tool (`npm run doopify:reset-owner`) — connects via DATABASE_URL, creates first OWNER if none exists or resets any existing OWNER password, revokes all sessions, logs no hashes or secrets
+- Phase 21: Settings → My account panel (AccountSettingsPanel) for change-password and self-revoke-other-sessions; `/reset-password` public page added to proxy and navigation
 
 ## Phase 3 Status
 

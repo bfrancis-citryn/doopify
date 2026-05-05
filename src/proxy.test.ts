@@ -140,4 +140,16 @@ describe('proxy auth protection and security headers', () => {
     expect(response.status).toBe(401)
     expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
+
+  it('allows /reset-password through without auth as a public route', async () => {
+    const response = await proxy(new NextRequest('http://localhost/reset-password'))
+    expect(response.status).toBe(200)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
+  it('allows /api/auth/password-reset through without auth (public token-gated endpoint)', async () => {
+    const response = await proxy(new NextRequest('http://localhost/api/auth/password-reset'))
+    expect(response.status).toBe(200)
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
 })

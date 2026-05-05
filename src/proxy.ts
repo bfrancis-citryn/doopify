@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = [
   '/login',
   '/create-owner',
   '/join',
+  '/reset-password',
   '/api/auth',
   '/api/bootstrap',
   '/api/team/invites/accept',
