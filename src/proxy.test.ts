@@ -23,6 +23,7 @@ describe('proxy auth protection and security headers', () => {
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin')
     expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+    expect(response.headers.get('Content-Security-Policy-Report-Only')).toContain("frame-ancestors 'none'")
     expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
 

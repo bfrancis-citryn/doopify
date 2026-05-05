@@ -34,6 +34,12 @@ describe('security headers', () => {
 
     expect(headers.get('Content-Security-Policy')).toBeNull()
     expect(headers.get('Content-Security-Policy-Report-Only')).toContain("default-src 'self'")
+    expect(headers.get('Content-Security-Policy-Report-Only')).toContain("frame-ancestors 'none'")
+  })
+
+  it('uses report-only CSP by default in non-production environments too', () => {
+    const headers = buildSecurityHeaders({ environment: 'development' })
+    expect(headers.get('Content-Security-Policy-Report-Only')).toContain("default-src 'self'")
   })
 
   it('can enforce CSP when explicitly configured', () => {

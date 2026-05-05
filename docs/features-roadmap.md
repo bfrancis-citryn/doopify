@@ -2,8 +2,8 @@
 
 > Single source of truth for what is shipped, what is next, and what is intentionally deferred.
 >
-> Documentation refresh: May 4, 2026
-> Last repo verification recorded in active docs: May 4, 2026
+> Documentation refresh: May 5, 2026
+> Last repo verification recorded in active docs: May 5, 2026
 > Strategy: current app first, commerce loop first, platform second
 
 ## Planning Surface
@@ -30,7 +30,9 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Prisma/Postgres-backed commerce schema with admin auth, sessions, catalog, customers, orders, discounts, media, settings, payments, fulfillments, refunds, returns, integrations, inbound webhook deliveries, and outbound webhook deliveries
 - Next.js App Router API surface with protected admin routes and public storefront routes
 - Hardened auth flow with session-backed JWT validation, safe cookie parsing, env validation, and login rate limiting
+- Owner MFA baseline with TOTP enrollment, recovery codes, owner login challenges, and owner grace-period tracking
 - Storefront catalog pages at `/`, `/shop`, `/shop/[handle]`, `/collections`, and `/collections/[handle]`
+- Storefront legal baseline pages at `/privacy` and `/terms`, plus `/.well-known/security.txt`
 - Cart-to-checkout flow at `/checkout`
 - `POST /api/checkout/create` for live-priced checkout session creation
 - `POST /api/webhooks/stripe` for verified webhook processing
@@ -66,6 +68,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Abandoned checkout recovery foundation with persisted checkout recovery fields, admin review APIs/UI, safe tokenized recovery payload API, and secret-protected due-send processing
 - Brand Kit foundation with centralized Store branding fields, admin Brand Kit screen/API, and safe storefront/checkout/email branding defaults
 - Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
+- Admin customer data export API at `GET /api/customers/[id]/export` with audit emission
 - Public storefront settings endpoint for branding-safe store data
 - Collection service layer and storefront-safe collection DTOs
 - Admin collection workspace at `/admin/collections`
@@ -373,6 +376,19 @@ Status: deferred until after platform extraction proves out
 - compatibility and upgrade rules
 - retry and observability story for failed handlers
 - clear isolation model and ownership boundaries
+
+## Phase 26 - Production Security And Compliance Baseline
+
+Status: in progress
+
+Goals:
+
+- owner MFA baseline (TOTP + recovery codes + login challenge path)
+- hard security headers defaults with CSP frame-ancestors protection
+- legal storefront pages (`/privacy`, `/terms`) and `/.well-known/security.txt`
+- expanded audit logging for shipping/email-template/fulfillment-sensitive actions
+- backup/restore drill + secret rotation operational runbooks
+- customer data posture documentation and admin export baseline
 
 ## Phase 20 — Pilot Polish And Setup UX
 

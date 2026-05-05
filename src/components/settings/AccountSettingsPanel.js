@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useEffect } from 'react';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminField from '../admin/ui/AdminField';
@@ -16,6 +17,35 @@ export default function AccountSettingsPanel({ currentUser }) {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionResult, setSessionResult] = useState('');
   const [sessionError, setSessionError] = useState('');
+  const [mfaStatus, setMfaStatus] = useState(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaEnrollment, setMfaEnrollment] = useState(null);
+  const [mfaRecoveryCodes, setMfaRecoveryCodes] = useState([]);
+  const [mfaActionLoading, setMfaActionLoading] = useState(false);
+
+  const isOwner = currentUser?.role === 'OWNER';
+
+  const loadMfaStatus = async () => {
+    if (!isOwner) return;
+    setMfaLoading(true);
+    setMfaError('');
+    try {
+      const res = await fetch('/api/auth/mfa', { cache: 'no-store' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || 'Failed to load MFA status');
+      setMfaStatus(payload?.data || null);
+    } catch (error) {
+      setMfaError(error instanceof Error ? error.message : 'Failed to load MFA status');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMfaStatus();
+  }, [isOwner]);
 
   const setField = (key, value) => {
     setPasswordForm((f) => ({ ...f, [key]: value }));
@@ -81,6 +111,86 @@ export default function AccountSettingsPanel({ currentUser }) {
       setSessionError('Unable to reach the server.');
     } finally {
       setSessionLoading(false);
+    }
+  };
+
+  const startMfaEnrollment = async () => {
+    if (mfaActionLoading) return;
+    setMfaActionLoading(true);
+    setMfaError('');
+    setMfaRecoveryCodes([]);
+    try {
+      const res = await fetch('/api/auth/mfa/enroll/start', { method: 'POST' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || 'Failed to start MFA enrollment');
+      setMfaEnrollment(payload?.data || null);
+      setMfaCode('');
+      await loadMfaStatus();
+    } catch (error) {
+      setMfaError(error instanceof Error ? error.message : 'Failed to start MFA enrollment');
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const verifyMfaEnrollment = async () => {
+    if (mfaActionLoading || !mfaCode.trim()) return;
+    setMfaActionLoading(true);
+    setMfaError('');
+    try {
+      const res = await fetch('/api/auth/mfa/enroll/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: mfaCode }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || 'Failed to verify MFA enrollment');
+      setMfaRecoveryCodes(payload?.data?.recoveryCodes || []);
+      setMfaEnrollment(null);
+      setMfaCode('');
+      await loadMfaStatus();
+    } catch (error) {
+      setMfaError(error instanceof Error ? error.message : 'Failed to verify MFA enrollment');
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const regenerateRecoveryCodes = async () => {
+    if (mfaActionLoading) return;
+    if (!window.confirm('Regenerate recovery codes? Existing codes will stop working immediately.')) return;
+    setMfaActionLoading(true);
+    setMfaError('');
+    try {
+      const res = await fetch('/api/auth/mfa/recovery/regenerate', { method: 'POST' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || 'Failed to regenerate recovery codes');
+      setMfaRecoveryCodes(payload?.data?.recoveryCodes || []);
+      await loadMfaStatus();
+    } catch (error) {
+      setMfaError(error instanceof Error ? error.message : 'Failed to regenerate recovery codes');
+    } finally {
+      setMfaActionLoading(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    if (mfaActionLoading) return;
+    if (!window.confirm('Disable owner MFA? This lowers account security.')) return;
+    setMfaActionLoading(true);
+    setMfaError('');
+    try {
+      const res = await fetch('/api/auth/mfa/disable', { method: 'POST' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || 'Failed to disable MFA');
+      setMfaEnrollment(null);
+      setMfaRecoveryCodes([]);
+      setMfaCode('');
+      await loadMfaStatus();
+    } catch (error) {
+      setMfaError(error instanceof Error ? error.message : 'Failed to disable MFA');
+    } finally {
+      setMfaActionLoading(false);
     }
   };
 
@@ -193,6 +303,77 @@ export default function AccountSettingsPanel({ currentUser }) {
           </div>
         </AdminCard>
       </section>
+
+      {isOwner ? (
+        <section className={styles.configSection}>
+          <div className={styles.sectionHeading}>
+            <h3>Owner MFA</h3>
+          </div>
+
+          <AdminCard variant="inset" className={styles.compactSettingsCard} as="section">
+            {mfaLoading ? <p className={styles.statusText}>Loading MFA status...</p> : null}
+            {!mfaLoading && mfaStatus ? (
+              <p className={styles.statusText}>
+                {mfaStatus.enabled
+                  ? `MFA enabled. Recovery codes remaining: ${mfaStatus.recoveryCodesRemaining}.`
+                  : `MFA not enabled.${mfaStatus.gracePeriodEndsAt ? ` Grace ends ${new Date(mfaStatus.gracePeriodEndsAt).toLocaleString()}.` : ''}`}
+              </p>
+            ) : null}
+
+            {mfaEnrollment ? (
+              <div className={styles.fieldStack}>
+                <AdminField label="Manual setup key">
+                  <AdminInput readOnly value={mfaEnrollment.secret || ''} />
+                </AdminField>
+                <AdminField label="OTPAuth URI">
+                  <AdminInput readOnly value={mfaEnrollment.otpAuthUri || ''} />
+                </AdminField>
+                <AdminField label="Verification code">
+                  <AdminInput
+                    value={mfaCode}
+                    onChange={(event) => setMfaCode(event.target.value)}
+                    placeholder="6-digit authenticator code"
+                  />
+                </AdminField>
+                <div className={styles.compactActionRow}>
+                  <AdminButton variant="primary" size="sm" disabled={mfaActionLoading || !mfaCode.trim()} onClick={verifyMfaEnrollment}>
+                    {mfaActionLoading ? 'Verifying...' : 'Verify and enable MFA'}
+                  </AdminButton>
+                </div>
+              </div>
+            ) : null}
+
+            {mfaRecoveryCodes.length ? (
+              <div style={{ marginTop: 12 }}>
+                <p className={styles.statusText}>
+                  Recovery codes are shown once. Save them in your secure password manager.
+                </p>
+                <div className={styles.warningTagList}>
+                  {mfaRecoveryCodes.map((code) => (
+                    <span key={code} className={styles.codeToken}>
+                      {code}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {mfaError ? <p style={{ color: 'var(--color-danger, #e55)', fontSize: 13, marginTop: 8 }}>{mfaError}</p> : null}
+
+            <div className={styles.compactActionRow} style={{ marginTop: 12 }}>
+              <AdminButton variant="secondary" size="sm" disabled={mfaActionLoading} onClick={startMfaEnrollment}>
+                {mfaActionLoading ? 'Working...' : mfaStatus?.enabled ? 'Rotate authenticator setup' : 'Start MFA enrollment'}
+              </AdminButton>
+              <AdminButton variant="secondary" size="sm" disabled={mfaActionLoading || !mfaStatus?.enabled} onClick={regenerateRecoveryCodes}>
+                Regenerate recovery codes
+              </AdminButton>
+              <AdminButton variant="danger" size="sm" disabled={mfaActionLoading || !mfaStatus?.enabled} onClick={disableMfa}>
+                Disable MFA
+              </AdminButton>
+            </div>
+          </AdminCard>
+        </section>
+      ) : null}
     </div>
   );
 }

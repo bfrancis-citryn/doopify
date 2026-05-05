@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
     },
   },
   createManualFulfillment: vi.fn(),
+  auditActorFromUser: vi.fn(),
+  recordAuditLogBestEffort: vi.fn(),
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
@@ -20,6 +22,11 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/server/services/order.service', () => ({
   createManualFulfillment: mocks.createManualFulfillment,
+}))
+
+vi.mock('@/server/services/audit-log.service', () => ({
+  auditActorFromUser: mocks.auditActorFromUser,
+  recordAuditLogBestEffort: mocks.recordAuditLogBestEffort,
 }))
 
 import { POST } from './route'
@@ -35,6 +42,8 @@ const validPayload = {
 describe('POST /api/orders/[orderNumber]/manual-fulfillment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.auditActorFromUser.mockImplementation((user) => user)
+    mocks.recordAuditLogBestEffort.mockResolvedValue(null)
   })
 
   it('requires admin authorization', async () => {
@@ -87,6 +96,10 @@ describe('POST /api/orders/[orderNumber]/manual-fulfillment', () => {
         trackingNumber: 'TRACK123',
       })
     )
+    expect(mocks.recordAuditLogBestEffort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'fulfillment.manual_created',
+      })
+    )
   })
 })
-

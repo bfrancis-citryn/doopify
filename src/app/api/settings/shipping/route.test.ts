@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   getShippingSettingsStore: vi.fn(),
   updateShippingSettings: vi.fn(),
+  auditActorFromUser: vi.fn(),
+  recordAuditLogBestEffort: vi.fn(),
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
@@ -13,6 +15,11 @@ vi.mock('@/server/auth/require-auth', () => ({
 vi.mock('@/server/shipping/shipping-settings.service', () => ({
   getShippingSettingsStore: mocks.getShippingSettingsStore,
   updateShippingSettings: mocks.updateShippingSettings,
+}))
+
+vi.mock('@/server/services/audit-log.service', () => ({
+  auditActorFromUser: mocks.auditActorFromUser,
+  recordAuditLogBestEffort: mocks.recordAuditLogBestEffort,
 }))
 
 import { GET, PATCH } from './route'
@@ -73,6 +80,8 @@ function storeFixture(overrides: Record<string, unknown> = {}) {
 describe('settings shipping route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.auditActorFromUser.mockImplementation((user) => user)
+    mocks.recordAuditLogBestEffort.mockResolvedValue(null)
   })
 
   it('GET /api/settings/shipping requires admin auth', async () => {
@@ -136,6 +145,11 @@ describe('settings shipping route', () => {
       shippingInternationalRateCents: 3050,
       shippingThresholdCents: 15000,
     })
+    expect(mocks.recordAuditLogBestEffort).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'shipping.settings_updated',
+      })
+    )
 
     const payload = await response.json()
     expect(payload).toMatchObject({

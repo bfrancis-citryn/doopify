@@ -404,6 +404,24 @@ export default async function LandingPage() {
           justify-content: space-between;
         }
 
+        .footer-links {
+          display: inline-flex;
+          align-items: center;
+          gap: 14px;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+
+        .footer-links a {
+          color: #6f695f;
+          text-decoration: none;
+        }
+
+        .footer-links a:hover {
+          color: #b8ad9e;
+        }
+
         .footer-brand {
           font-family: var(--font-headline), sans-serif;
           font-size: 18px;
@@ -573,6 +591,10 @@ export default async function LandingPage() {
         <footer className="footer">
           <span className="footer-brand">{store?.name || 'Doopify'}</span>
           <span className="footer-copy">&copy; 2026 {store?.name || 'Doopify'}. All rights reserved.</span>
+          <span className="footer-links">
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+          </span>
         </footer>
       </div>
     </>

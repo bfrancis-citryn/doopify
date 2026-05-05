@@ -98,6 +98,9 @@ export async function getSessionUser(token: string) {
       lastName: true,
       role: true,
       isActive: true,
+      mfaTotpSecretEnc: true,
+      mfaEnabledAt: true,
+      mfaGracePeriodEndsAt: true,
     },
   })
 

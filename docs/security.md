@@ -12,6 +12,7 @@ Security model, known risks, and operational hardening status for Doopify privat
 - `requireAuth`, `requireAdmin`, `requireAdminOrAbove`, and `requireOwner` helpers are applied to sensitive API routes.
 - Password changes revoke all other active sessions.
 - Password resets use 24-hour single-use hashed tokens and revoke all sessions on acceptance.
+- OWNER accounts can enable TOTP MFA with recovery codes and login challenges.
 
 ---
 
@@ -42,7 +43,7 @@ Applied by `src/proxy.ts` on every response:
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy` (restrictive default)
 - `Strict-Transport-Security` (production only)
-- CSP in report-only mode with Stripe-safe origins (production)
+- CSP in report-only mode with Stripe-safe origins and `frame-ancestors 'none'`
 
 CSP is currently `report-only`. Tighten to enforced mode after admin, checkout, media, and provider flows are verified in your environment.
 
@@ -61,6 +62,8 @@ Audit events are emitted for:
 - Refund issuance and failures
 - Return lifecycle transitions
 - Fulfillment operations
+- Shipping settings mutations
+- Email template update/reset actions
 - Outbound webhook delivery events
 
 Audit events are best-effort — a failed audit write does not block the underlying operation.
@@ -104,4 +107,4 @@ Before accepting real payment volume:
 
 ## Responsible disclosure
 
-This is a private beta product. If you discover a security issue, report it to the maintainer directly before any public disclosure.
+This is a private beta product. If you discover a security issue, report it through `/.well-known/security.txt` or contact the maintainer directly before any public disclosure.

@@ -1,5 +1,6 @@
 import { ok, err } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   isEditableTemplateKey,
   resetEmailTemplateSetting,
@@ -23,6 +24,13 @@ export async function POST(req: Request, { params }: Params) {
 
   try {
     const setting = await resetEmailTemplateSetting(templateKey)
+    await recordAuditLogBestEffort({
+      action: 'email_template.reset',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'EmailTemplateSetting', id: templateKey },
+      summary: `Email template reset to defaults: ${templateKey}`,
+      snapshot: { templateKey, isCustomized: setting.isCustomized },
+    })
     return ok(setting)
   } catch (e) {
     console.error(`[POST /api/email-templates/${templateKey}/reset]`, e)

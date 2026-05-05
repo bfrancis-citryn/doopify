@@ -1,10 +1,14 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
+import { requireAdmin } from '@/server/auth/require-auth'
 import { getCustomer, updateCustomer } from '@/server/services/customer.service'
 
 interface Params { params: Promise<{ id: string }> }
 
 export async function GET(_req: Request, { params }: Params) {
+  const auth = await requireAdmin(_req)
+  if (!auth.ok) return auth.response
+
   const { id } = await params
   try {
     const customer = await getCustomer(id)
@@ -27,6 +31,9 @@ const updateSchema = z.object({
 })
 
 export async function PATCH(req: Request, { params }: Params) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
+
   const { id } = await params
   const body = await parseBody(req)
   if (!body) return err('Invalid request body')

@@ -687,6 +687,18 @@
   gap: 0.4rem;
 }
 
+.codeToken {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-lowest) 68%, transparent);
+  color: var(--on-surface);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .commandList {
   display: flex;
   flex-direction: column;

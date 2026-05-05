@@ -151,3 +151,29 @@ export async function addCustomerAddress(
     data: { customerId, ...data },
   })
 }
+
+export async function exportCustomerData(customerId: string) {
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: {
+      addresses: true,
+      orders: {
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: true,
+          addresses: true,
+          payments: true,
+          refunds: { include: { items: true } },
+          returns: { include: { items: true } },
+        },
+      },
+    },
+  })
+
+  if (!customer) return null
+
+  return {
+    exportedAt: new Date().toISOString(),
+    customer,
+  }
+}

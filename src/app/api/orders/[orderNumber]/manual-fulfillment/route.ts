@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import { createManualFulfillment } from '@/server/services/order.service'
 
 interface Params {
@@ -70,6 +71,22 @@ export async function POST(req: Request, { params }: Params) {
       sendTrackingEmail: parsed.data.sendTrackingEmail,
     })
 
+    await recordAuditLogBestEffort({
+      action: 'fulfillment.manual_created',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'Order', id: order.id },
+      summary: `Manual fulfillment created for order #${parsedOrderNumber}`,
+      snapshot: {
+        orderId: order.id,
+        orderNumber: parsedOrderNumber,
+        fulfillmentId: fulfillment.id,
+        itemCount: parsed.data.items.length,
+        sendTrackingEmail: Boolean(parsed.data.sendTrackingEmail),
+        trackingNumberPresent: Boolean(parsed.data.trackingNumber),
+      },
+      redactions: ['trackingNumber', 'trackingUrl'],
+    })
+
     return ok(fulfillment, 201)
   } catch (error) {
     console.error('[POST /api/orders/[orderNumber]/manual-fulfillment]', error)
@@ -77,4 +94,3 @@ export async function POST(req: Request, { params }: Params) {
     return err(message, 400)
   }
 }
-

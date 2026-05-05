@@ -14,5 +14,7 @@ export async function GET(req: Request) {
     firstName: user.firstName,
     lastName: user.lastName,
     role: user.role,
+    mfaEnabled: Boolean(user.mfaEnabledAt && user.mfaTotpSecretEnc),
+    mfaGracePeriodEndsAt: user.mfaGracePeriodEndsAt,
   })
 }

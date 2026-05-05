@@ -2,7 +2,7 @@
 
 > Runtime and CLI environment variable reference for production operations.
 >
-> Last updated: May 3, 2026
+> Last updated: May 5, 2026
 
 ## Runtime Core
 
@@ -16,6 +16,7 @@
 | `WEBHOOK_RETRY_SECRET` | Yes | Auth secret for `POST /api/webhook-retries/run`. |
 | `JOB_RUNNER_SECRET` | Optional override | Auth secret for `POST /api/jobs/run` (falls back to `WEBHOOK_RETRY_SECRET` when unset). |
 | `ABANDONED_CHECKOUT_SECRET` | Optional override | Auth secret for `POST /api/abandoned-checkouts/send-due` (falls back to `WEBHOOK_RETRY_SECRET` when unset). |
+| `OWNER_MFA_GRACE_PERIOD_DAYS` | Optional | Owner MFA grace window in days before policy enforcement guidance. Default: `14`. |
 
 ## Stripe
 
@@ -67,7 +68,7 @@
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `SECURITY_HEADERS_ENABLED` | Optional | Set `false` to emergency-disable all security headers. Default: enabled. |
-| `CSP_MODE` | Optional | `off`, `report-only` (default in production), or `enforce`. Controls Content-Security-Policy enforcement. |
+| `CSP_MODE` | Optional | `off`, `report-only` (default), or `enforce`. Controls Content-Security-Policy enforcement. |
 | `CSP_MEDIA_ORIGINS` | Optional | Comma-separated exact media/CDN origins for `img-src` CSP. Replaces broad `https:` fallback when set. |
 | `CSP_ANALYTICS_ORIGINS` | Optional | Comma-separated analytics origins for `connect-src` CSP if a client analytics vendor is added. |
 

@@ -54,11 +54,18 @@ export default function LoginPortal() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [mfaChallengeId, setMfaChallengeId] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaExpiresAt, setMfaExpiresAt] = useState('');
+  const [mfaHint, setMfaHint] = useState('');
   const [activeField, setActiveField] = useState(null);
   const [tiltStyle, setTiltStyle] = useState({ '--rotate-x': '0deg', '--rotate-y': '0deg' });
 
   const nextPath = searchParams.get('next') || '/admin';
-  const isReady = useMemo(() => email.trim().length > 0 && password.trim().length > 0, [email, password]);
+  const isReady = useMemo(() => {
+    if (mfaChallengeId) return mfaCode.trim().length >= 6;
+    return email.trim().length > 0 && password.trim().length > 0;
+  }, [email, password, mfaChallengeId, mfaCode]);
 
   useEffect(() => {
     router.prefetch(nextPath);
@@ -89,18 +96,35 @@ export default function LoginPortal() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, rememberMe }),
-      });
+      const response = mfaChallengeId
+        ? await fetch('/api/auth/mfa/challenge/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ challengeId: mfaChallengeId, code: mfaCode }),
+          })
+        : await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password, rememberMe }),
+          });
 
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         setErrorMessage(payload?.error || 'Sign-in failed. Check your credentials and try again.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!mfaChallengeId && payload?.data?.mfaRequired) {
+        setMfaChallengeId(payload.data.challengeId || '');
+        setMfaExpiresAt(payload.data.expiresAt || '');
+        setMfaHint('Enter a code from your authenticator app or use an owner recovery code.');
+        setMfaCode('');
         setIsLoading(false);
         return;
       }
@@ -137,61 +161,94 @@ export default function LoginPortal() {
               <div className={styles.cardHeader}>
                 <DoopifyMark />
                 <div className={styles.cardTitleBlock}>
-                  <h2 className={styles.cardTitle}>Welcome back</h2>
-                  <p className={styles.cardSubtitle}>Sign in to your private Doopify admin workspace.</p>
+                  <h2 className={styles.cardTitle}>{mfaChallengeId ? 'Two-factor check' : 'Welcome back'}</h2>
+                  <p className={styles.cardSubtitle}>
+                    {mfaChallengeId
+                      ? 'Owner MFA is enabled. Enter a TOTP or recovery code to continue.'
+                      : 'Sign in to your private Doopify admin workspace.'}
+                  </p>
                 </div>
               </div>
 
               <form className={styles.form} onSubmit={handleSubmit}>
                 <div className={styles.fieldStack}>
-                  <label className={`${styles.field} ${activeField === 'email' ? styles.fieldActive : ''}`}>
-                    <span className={styles.inputIcon}><MailIcon /></span>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={event => {
-                        setEmail(event.target.value);
-                        if (errorMessage) setErrorMessage('');
-                      }}
-                      onFocus={() => setActiveField('email')}
-                      onBlur={() => setActiveField(null)}
-                      placeholder="Email address"
-                      className={styles.input}
-                    />
-                  </label>
+                  {mfaChallengeId ? (
+                    <label className={`${styles.field} ${activeField === 'mfa' ? styles.fieldActive : ''}`}>
+                      <span className={styles.inputIcon}><LockIcon /></span>
+                      <input
+                        type="text"
+                        value={mfaCode}
+                        onChange={event => {
+                          setMfaCode(event.target.value);
+                          if (errorMessage) setErrorMessage('');
+                        }}
+                        onFocus={() => setActiveField('mfa')}
+                        onBlur={() => setActiveField(null)}
+                        placeholder="Authenticator or recovery code"
+                        className={styles.input}
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <label className={`${styles.field} ${activeField === 'email' ? styles.fieldActive : ''}`}>
+                        <span className={styles.inputIcon}><MailIcon /></span>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={event => {
+                            setEmail(event.target.value);
+                            if (errorMessage) setErrorMessage('');
+                          }}
+                          onFocus={() => setActiveField('email')}
+                          onBlur={() => setActiveField(null)}
+                          placeholder="Email address"
+                          className={styles.input}
+                        />
+                      </label>
 
-                  <label className={`${styles.field} ${activeField === 'password' ? styles.fieldActive : ''}`}>
-                    <span className={styles.inputIcon}><LockIcon /></span>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={event => {
-                        setPassword(event.target.value);
-                        if (errorMessage) setErrorMessage('');
-                      }}
-                      onFocus={() => setActiveField('password')}
-                      onBlur={() => setActiveField(null)}
-                      placeholder="Password"
-                      className={styles.input}
-                    />
-                    <button
-                      type="button"
-                      className={styles.eyeButton}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      onClick={() => setShowPassword(current => !current)}
-                    >
-                      <EyeIcon open={showPassword} />
-                    </button>
-                  </label>
+                      <label className={`${styles.field} ${activeField === 'password' ? styles.fieldActive : ''}`}>
+                        <span className={styles.inputIcon}><LockIcon /></span>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={password}
+                          onChange={event => {
+                            setPassword(event.target.value);
+                            if (errorMessage) setErrorMessage('');
+                          }}
+                          onFocus={() => setActiveField('password')}
+                          onBlur={() => setActiveField(null)}
+                          placeholder="Password"
+                          className={styles.input}
+                        />
+                        <button
+                          type="button"
+                          className={styles.eyeButton}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          onClick={() => setShowPassword(current => !current)}
+                        >
+                          <EyeIcon open={showPassword} />
+                        </button>
+                      </label>
+                    </>
+                  )}
                 </div>
 
-                <div className={styles.formMeta}>
-                  <label className={styles.checkboxRow}>
-                    <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(current => !current)} className={styles.checkbox} />
-                    <span>Remember me</span>
-                  </label>
-                  <span className={styles.metaNote}>Private staff portal</span>
-                </div>
+                {mfaChallengeId ? (
+                  <div className={styles.formMeta}>
+                    <span className={styles.metaNote}>
+                      {mfaHint || 'Use your authenticator app or one-time recovery code.'}
+                      {mfaExpiresAt ? ` Challenge expires ${new Date(mfaExpiresAt).toLocaleTimeString()}.` : ''}
+                    </span>
+                  </div>
+                ) : (
+                  <div className={styles.formMeta}>
+                    <label className={styles.checkboxRow}>
+                      <input type="checkbox" checked={rememberMe} onChange={() => setRememberMe(current => !current)} className={styles.checkbox} />
+                      <span>Remember me</span>
+                    </label>
+                    <span className={styles.metaNote}>Private staff portal</span>
+                  </div>
+                )}
 
                 {errorMessage ? <div className={styles.errorBanner}>{errorMessage}</div> : null}
 
@@ -199,7 +256,7 @@ export default function LoginPortal() {
                   <span className={styles.submitGlow} />
                   <span className={styles.submitInner}>
                     {isLoading ? <span className={styles.spinner} aria-hidden="true" /> : null}
-                    <span>{isLoading ? 'Signing in...' : 'Sign in'}</span>
+                    <span>{isLoading ? (mfaChallengeId ? 'Verifying...' : 'Signing in...') : (mfaChallengeId ? 'Verify code' : 'Sign in')}</span>
                     {!isLoading ? <span className={styles.arrow}>-&gt;</span> : null}
                   </span>
                 </button>

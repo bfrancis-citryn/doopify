@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   getEmailTemplateSetting,
   isEditableTemplateKey,
@@ -61,6 +62,18 @@ export async function PATCH(req: Request, { params }: Params) {
 
   try {
     const setting = await upsertEmailTemplateSetting(templateKey, parsed.data)
+    await recordAuditLogBestEffort({
+      action: 'email_template.updated',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'EmailTemplateSetting', id: templateKey },
+      summary: `Email template updated: ${templateKey}`,
+      snapshot: {
+        templateKey,
+        updatedFields: Object.keys(parsed.data).sort(),
+        enabled: setting.fields.enabled,
+      },
+      redactions: ['template_html', 'template_body'],
+    })
     return ok(setting)
   } catch (e) {
     console.error(`[PATCH /api/email-templates/${templateKey}]`, e)

@@ -59,7 +59,27 @@ After restoration:
 5. Promote recovered target.
 6. Record timeline and root cause notes.
 
+## Restore Drill Checklist
+
+Run this checklist at least quarterly against a disposable recovery target:
+
+1. Create a fresh logical backup (`pg_dump`) and record checksum + timestamp.
+2. Restore to a non-production database using `pg_restore --clean --if-exists`.
+3. Run verification gates:
+   - `npm run db:generate`
+   - `npx tsc --noEmit`
+   - `npm run test`
+   - `npm run build`
+4. Execute smoke flows:
+   - owner/admin login
+   - checkout creation + status polling
+   - Stripe webhook signature verification path
+   - order/admin read access
+5. Confirm background runners (`/api/jobs/run`, webhook retries) can process due work without errors.
+6. Record drill duration, blockers, and follow-up fixes in the incident log.
+
 ## Related Runbooks
 
 - `docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md`
 - `docs/ADMIN_USER_RECOVERY_GUIDE.md`
+- `docs/SECRET_ROTATION_RUNBOOK.md`

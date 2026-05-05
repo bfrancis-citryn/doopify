@@ -1,21 +1,51 @@
 import bcrypt from 'bcryptjs'
-import { prisma } from '@/lib/prisma'
-import { signToken, AUTH_COOKIE } from '@/lib/auth'
 import type { UserRole } from '@prisma/client'
+
+import { signToken, AUTH_COOKIE } from '@/lib/auth'
 import { getCookieValue } from '@/lib/cookies'
+import { prisma } from '@/lib/prisma'
+
+export type SessionContext = {
+  ip?: string | null
+  userAgent?: string | null
+}
+
+export type AuthenticatedUser = {
+  id: string
+  email: string
+  firstName: string | null
+  lastName: string | null
+  role: UserRole
+  isActive: boolean
+  mfaTotpSecretEnc: string | null
+  mfaEnabledAt: Date | null
+  mfaGracePeriodEndsAt: Date | null
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-// ── Login ─────────────────────────────────────────────────────────────────────
-export async function loginUser(
+export async function authenticateUserCredentials(
   email: string,
-  password: string,
-  context?: { ip?: string | null; userAgent?: string | null }
-) {
+  password: string
+): Promise<AuthenticatedUser> {
   const normalizedEmail = normalizeEmail(email)
-  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: {
+      id: true,
+      email: true,
+      passwordHash: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      isActive: true,
+      mfaTotpSecretEnc: true,
+      mfaEnabledAt: true,
+      mfaGracePeriodEndsAt: true,
+    },
+  })
 
   if (!user || !user.isActive) {
     throw new Error('Invalid email or password')
@@ -26,10 +56,25 @@ export async function loginUser(
     throw new Error('Invalid email or password')
   }
 
-  // Create a persistent session record
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    isActive: user.isActive,
+    mfaTotpSecretEnc: user.mfaTotpSecretEnc,
+    mfaEnabledAt: user.mfaEnabledAt,
+    mfaGracePeriodEndsAt: user.mfaGracePeriodEndsAt,
+  }
+}
 
-  // Sign with a temporary sessionId placeholder first, then update
+export async function createSessionForUser(
+  user: Pick<AuthenticatedUser, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>,
+  context?: SessionContext
+) {
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
   const tempToken = signToken({
     userId: user.id,
     email: user.email,
@@ -49,7 +94,6 @@ export async function loginUser(
     },
   })
 
-  // Sign the real token with the actual sessionId
   const token = signToken({
     userId: user.id,
     email: user.email,
@@ -59,7 +103,6 @@ export async function loginUser(
     sessionId: session.id,
   })
 
-  // Update the session record with the final token
   await prisma.session.update({
     where: { id: session.id },
     data: { token },
@@ -82,12 +125,15 @@ export async function loginUser(
   }
 }
 
-// ── Logout ────────────────────────────────────────────────────────────────────
+export async function loginUser(email: string, password: string, context?: SessionContext) {
+  const user = await authenticateUserCredentials(email, password)
+  return createSessionForUser(user, context)
+}
+
 export async function logoutUser(token: string) {
   await prisma.session.deleteMany({ where: { token } })
 }
 
-// ── Create admin user (used in seed) ─────────────────────────────────────────
 export async function createUser(data: {
   email: string
   password: string
@@ -108,7 +154,6 @@ export async function createUser(data: {
   })
 }
 
-// ── Change password ───────────────────────────────────────────────────────────
 export async function changePassword(
   userId: string,
   currentPassword: string,
@@ -130,7 +175,6 @@ export async function changePassword(
 
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { passwordHash } })
-    // Revoke every other session so the new password is required on other devices
     if (currentSessionToken) {
       await tx.session.deleteMany({ where: { userId, NOT: { token: currentSessionToken } } })
     } else {
@@ -139,7 +183,6 @@ export async function changePassword(
   })
 }
 
-// ── Revoke other sessions (keep current) ─────────────────────────────────────
 export async function revokeOtherSessions(userId: string, currentSessionToken: string): Promise<number> {
   const { count } = await prisma.session.deleteMany({
     where: { userId, NOT: { token: currentSessionToken } },
@@ -147,7 +190,6 @@ export async function revokeOtherSessions(userId: string, currentSessionToken: s
   return count
 }
 
-// ── Get token from request cookies ───────────────────────────────────────────
 export function getTokenFromCookieHeader(cookieHeader: string | null): string | null {
   return getCookieValue(cookieHeader, AUTH_COOKIE)
 }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import { updatePaymentStatus, updateFulfillmentStatus } from '@/server/services/order.service'
 import type { PaymentStatus, FulfillmentStatus } from '@prisma/client'
 
@@ -32,9 +33,31 @@ export async function PATCH(req: Request, { params }: Params) {
 
     if (parsed.data.paymentStatus) {
       await updatePaymentStatus(order.id, parsed.data.paymentStatus as PaymentStatus)
+      await recordAuditLogBestEffort({
+        action: 'order.payment_status_updated',
+        actor: auditActorFromUser(auth.user),
+        resource: { type: 'Order', id: order.id },
+        summary: `Order #${num} payment status updated`,
+        snapshot: {
+          orderNumber: num,
+          previousPaymentStatus: order.paymentStatus,
+          newPaymentStatus: parsed.data.paymentStatus,
+        },
+      })
     }
     if (parsed.data.fulfillmentStatus) {
       await updateFulfillmentStatus(order.id, parsed.data.fulfillmentStatus as FulfillmentStatus)
+      await recordAuditLogBestEffort({
+        action: 'order.fulfillment_status_updated',
+        actor: auditActorFromUser(auth.user),
+        resource: { type: 'Order', id: order.id },
+        summary: `Order #${num} fulfillment status updated`,
+        snapshot: {
+          orderNumber: num,
+          previousFulfillmentStatus: order.fulfillmentStatus,
+          newFulfillmentStatus: parsed.data.fulfillmentStatus,
+        },
+      })
     }
 
     const updated = await prisma.order.findUnique({

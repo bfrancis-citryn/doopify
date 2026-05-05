@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
 import { centsToDollars, dollarsToCents } from '@/lib/money'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   buildLegacyProviderFields,
   resolveActiveRateProvider,
@@ -318,6 +319,21 @@ export async function PATCH(req: Request) {
       ...(parsed.data.packingSlipFooterNote !== undefined
         ? { packingSlipFooterNote: parsed.data.packingSlipFooterNote?.trim() || null }
         : {}),
+    })
+
+    await recordAuditLogBestEffort({
+      action: 'shipping.settings_updated',
+      actor: auditActorFromUser(auth.user),
+      resource: { type: 'Store', id: store.id },
+      summary: `Shipping settings updated by ${auth.user.email}`,
+      snapshot: {
+        storeId: store.id,
+        updatedFields: Object.keys(parsed.data).sort(),
+        shippingMode: updated.shippingMode,
+        activeRateProvider: updated.activeRateProvider,
+        labelProvider: updated.labelProvider,
+        fallbackBehavior: updated.fallbackBehavior,
+      },
     })
 
     return ok(serializeShippingSettings(updated))

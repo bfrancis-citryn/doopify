@@ -24,6 +24,7 @@ const envSchema = z.object({
   JOB_RUNNER_SECRET: z.string().min(16).optional(),
   ABANDONED_CHECKOUT_SECRET: z.string().min(16).optional(),
   SETUP_TOKEN: z.string().min(8).optional(),
+  OWNER_MFA_GRACE_PERIOD_DAYS: z.string().min(1).optional(),
 })
 
 export const env = envSchema.parse({

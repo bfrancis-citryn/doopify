@@ -9,6 +9,7 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 ## What it does
 
 - Protected admin with role-based team management (Owner, Admin, Staff)
+- Owner MFA (TOTP, recovery codes, and login challenge)
 - Public storefront with product catalog, collection browsing, and cart
 - Server-owned checkout with Stripe PaymentIntents — browser redirects are not order truth
 - Verified Stripe webhook order finalization with idempotent inventory decrement
@@ -21,6 +22,7 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 - Abandoned checkout recovery with tokenized recovery links
 - Background job infrastructure with retry, exhaustion, and cron-compatible runner
 - Audit logging for team operations, payment events, and lifecycle mutations
+- Legal/compliance storefront baseline (`/privacy`, `/terms`, `/.well-known/security.txt`)
 - Media storage (Postgres default; S3/R2 optional)
 - GitHub Actions CI and production deployment runbooks
 
@@ -56,7 +58,9 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 | Troubleshooting | [docs/troubleshooting.md](./docs/troubleshooting.md) |
 | Production runbook | [docs/PRODUCTION_RUNBOOK.md](./docs/PRODUCTION_RUNBOOK.md) |
 | Backup and restore | [docs/BACKUP_AND_RESTORE.md](./docs/BACKUP_AND_RESTORE.md) |
+| Secret rotation | [docs/SECRET_ROTATION_RUNBOOK.md](./docs/SECRET_ROTATION_RUNBOOK.md) |
 | Admin recovery | [docs/ADMIN_USER_RECOVERY_GUIDE.md](./docs/ADMIN_USER_RECOVERY_GUIDE.md) |
+| Customer data posture | [docs/CUSTOMER_DATA_POSTURE.md](./docs/CUSTOMER_DATA_POSTURE.md) |
 
 ---
 

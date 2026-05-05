@@ -2,7 +2,12 @@ import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { consumeRateLimit } from '@/lib/rate-limit'
 import { setAuthCookie } from '@/lib/auth'
-import { loginUser } from '@/server/services/auth.service'
+import { authenticateUserCredentials, createSessionForUser } from '@/server/services/auth.service'
+import {
+  beginOwnerMfaLoginChallenge,
+  ensureOwnerMfaGracePeriod,
+  shouldChallengeOwnerOnLogin,
+} from '@/server/services/mfa.service'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -31,13 +36,33 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { token, user } = await loginUser(parsed.data.email, parsed.data.password, {
+    const user = await authenticateUserCredentials(parsed.data.email, parsed.data.password)
+
+    if (user.role === 'OWNER' && !user.mfaEnabledAt) {
+      await ensureOwnerMfaGracePeriod(user.id)
+    }
+
+    if (shouldChallengeOwnerOnLogin(user)) {
+      const challenge = await beginOwnerMfaLoginChallenge(user.id, {
+        ip,
+        userAgent: req.headers.get('user-agent'),
+      })
+
+      return ok({
+        mfaRequired: true,
+        method: 'totp',
+        challengeId: challenge.challengeId,
+        expiresAt: challenge.expiresAt.toISOString(),
+      })
+    }
+
+    const session = await createSessionForUser(user, {
       ip,
       userAgent: req.headers.get('user-agent'),
     })
 
-    const res = ok({ user })
-    setAuthCookie(res, token)
+    const res = ok({ user: session.user })
+    setAuthCookie(res, session.token)
     return res
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Login failed'

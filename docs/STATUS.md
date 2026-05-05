@@ -2,9 +2,9 @@
 
 > Canonical status snapshot for developers, maintainers, and AI agents.
 >
-> Documentation refresh: May 4, 2026
-> Last repo verification recorded in active docs: May 4, 2026
-> Current active phase: **Phase 20 - Pilot Polish And Merchant Operations (complete)**
+> Documentation refresh: May 5, 2026
+> Last repo verification recorded in active docs: May 5, 2026
+> Current active phase: **Phase 26 - Production Security And Compliance Baseline (in progress)**
 
 ## Why This File Exists
 
@@ -35,10 +35,13 @@ The repo currently includes:
 - persisted commerce money fields now use integer minor units (cents) at rest with server-side conversion boundaries
 - Next.js App Router admin, storefront, and API surface
 - protected admin auth with session-backed JWT validation
+- owner MFA foundation with TOTP enrollment, recovery codes, and login challenge verification
 - private route protection through `src/proxy.ts`
-- production security-header foundation with shared header builder, proxy-applied baseline headers, production-only HSTS, Permissions-Policy, and production CSP report-only mode with Stripe-safe origins
+- production security-header foundation with shared header builder, proxy-applied baseline headers, HSTS in production, Referrer-Policy, X-Content-Type-Options, and CSP frame-ancestors coverage with report-only mode defaults
 - route-level authorization helpers (`requireAuth`, `requireAdmin`, `requireOwner`, `requireRole`) applied across sensitive admin mutation and observability APIs as an inner authorization guard
 - public storefront routes for homepage, shop, product detail, collections, and collection detail
+- legal storefront pages at `/privacy` and `/terms` with configurable store contact fields
+- `/.well-known/security.txt` vulnerability disclosure endpoint
 - Stripe checkout creation, Stripe webhook processing, checkout status polling, checkout session persistence, and idempotent paid-order finalization
 - inventory decrement only after verified Stripe payment success
 - centralized checkout pricing in `src/server/checkout/pricing.ts`
@@ -248,6 +251,18 @@ Shipped foundation:
 - return audit snapshots include return id, order id/number, previous/new status, reason/note summaries, item count, and refund linkage for close-with-refund without storing provider payloads or secrets
 - return flow durability is defended against audit-emission failures so return state transitions and refund-linkage behavior continue even if audit persistence fails
 - fast tests cover transition audit emission, close-with-refund linkage, audit-failure isolation, and leakage guards on return audit payloads
+
+#### Phase 26 Security And Compliance Baseline
+
+Shipped:
+
+- owner-only MFA APIs and login challenge flow (`/api/auth/mfa/*`) with owner grace-period tracking
+- shipping settings mutations now emit `shipping.settings_updated` audit events
+- email template update/reset actions now emit `email_template.updated` and `email_template.reset` audit events
+- manual fulfillment and order payment/fulfillment status actions now emit fulfillment/payment status audit events
+- customer export foundation added at `GET /api/customers/[id]/export` with audit event emission
+- customer detail mutation/read routes now enforce admin auth
+- legal/storefront compliance endpoints now include `/privacy`, `/terms`, and `/.well-known/security.txt`
 
 ### Remaining Phase 4 Priorities
 

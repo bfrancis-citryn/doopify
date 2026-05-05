@@ -80,7 +80,7 @@ function resolveCspMode(environment: RuntimeEnvironment, explicitMode?: CspMode)
     return envMode
   }
 
-  return environment === 'production' ? 'report-only' : 'off'
+  return 'report-only'
 }
 
 function buildCsp(options: Required<Pick<SecurityHeaderOptions, 'mediaOrigins' | 'analyticsOrigins'>> & {

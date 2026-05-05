@@ -2,8 +2,8 @@
 
 > Security, correctness, and operational readiness for the commerce loop.
 >
-> Documentation refresh: April 29, 2026
-> Last repo verification recorded in active docs: April 29, 2026
+> Documentation refresh: May 5, 2026
+> Last repo verification recorded in active docs: May 5, 2026
 > Companion to `STATUS.md` and `features-roadmap.md`.
 
 ## Why Hardening Matters
@@ -31,6 +31,13 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - The last-owner invariant is enforced in service code: disable and role-demote operations fail if the target is the only active OWNER
 - Only OWNER can access team management APIs; ADMIN, STAFF, and VIEWER are blocked by `requireOwner`
 - API responses never include `passwordHash` or raw `tokenHash` fields
+
+### Owner MFA Baseline
+
+- OWNER accounts can enroll TOTP MFA and receive one-time recovery codes.
+- OWNER login now supports explicit MFA challenge verification before session issuance when MFA is enabled.
+- MFA recovery code usage is audited and consumed exactly once.
+- Owner grace-period tracking exists for staged enforcement planning without weakening current auth/session guards.
 
 ### Auth And Session Integrity
 
@@ -149,6 +156,12 @@ Phase 4 adds merchant lifecycle and integration risks: refunds, returns, outboun
 - `/admin/webhooks` now surfaces runner heartbeat visibility alongside delivery monitoring
 - heartbeat writes are best-effort and must not block `POST /api/jobs/run` job processing when heartbeat persistence fails
 - runner visibility is scheduler-agnostic and supports Vercel Cron or external workers calling `POST /api/jobs/run`
+
+### Legal And Disclosure Baseline
+
+- Public legal pages now exist at `/privacy` and `/terms`.
+- A disclosure channel is published at `/.well-known/security.txt`.
+- Store contact details used on legal surfaces are sourced from persisted store settings.
 
 ### Internal Extensibility Without Premature Plugin Complexity
 
