@@ -1,101 +1,101 @@
 # Doopify Agent Instructions
 
-> This file replaces the old `CLAUDE.md` workflow.  
-> It exists to guide AI coding agents and future maintainers without creating a second conflicting roadmap.
+> This file guides AI coding agents and future maintainers without creating a second conflicting roadmap.
 
-Documentation refresh: April 28, 2026
+Documentation refresh: May 5, 2026
 
 ## Required Reading Order
 
 Before writing code, read:
 
-1. `docs/STATUS.md`
-2. `docs/PROJECT_INTENT.md`
-3. `docs/features-roadmap.md`
-4. `docs/HARDENING.md`
-5. `docs/CONTRIBUTING.md`
-6. `docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md` when working on the current email observability slice
-7. `docs/SETUP_AND_CLI_PLAN.md` when working on setup diagnostics, Setup tab, or CLI deployment automation
+1. `docs/STATUS.md` — current shipped, active, and pending status
+2. `docs/PROJECT_INTENT.md` — product intent, architecture principles, and non-goals
+3. `docs/features-roadmap.md` — product phases and build sequencing
+4. `docs/HARDENING.md` — security, correctness, and operational readiness
+5. `docs/CONTRIBUTING.md` — development rules and definition of done
 
-If these files conflict, treat `docs/STATUS.md` as the current state, `docs/features-roadmap.md` as the build sequence, and `docs/HARDENING.md` as the security/correctness backlog.
+When working on specific areas:
+- Email observability: `docs/internal/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
+- Setup/CLI: `docs/internal/SETUP_AND_CLI_PLAN.md`
+- Shipping: `docs/internal/SHIPPING_SETUP_AND_LABELS_ROADMAP.md`
 
-Do not use files in `docs/archive/` as current status.
+If these files conflict, treat `docs/STATUS.md` as current state, `docs/features-roadmap.md` as the build sequence, and `docs/HARDENING.md` as the security/correctness backlog.
+
+Do not use files in `docs/archive/` or `docs/internal/` as current status — they are historical context.
 
 ## Current Repo Truth
 
 Doopify is a real DB-backed commerce app, not a prototype.
 
+Phase 21 is complete. The repo is in post-Phase-21 state with a full commerce foundation.
+
 Implemented:
 
-- Prisma/Postgres-backed commerce schema
-- protected admin auth with session-backed JWT validation
-- private route protection through `src/proxy.ts`
-- DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, integrations, inbound webhook deliveries, and outbound webhook deliveries
-- storefront product routes at `/`, `/shop`, and `/shop/[handle]`
-- storefront collection routes at `/collections` and `/collections/[handle]`
-- checkout flow at `/checkout`
-- `POST /api/checkout/create`
-- `POST /api/webhooks/stripe`
-- `GET /api/checkout/status`
-- idempotent order creation from verified Stripe payment success
-- inventory decrement after verified payment success
-- centralized checkout pricing service in `src/server/checkout/pricing.ts`
-- checkout-native code discounts validated and applied through the server pricing authority
-- settings-backed shipping/tax rates and persisted shipping-zone/rate and jurisdiction tax-rule config consumed by checkout pricing
-- collection service layer, storefront-safe collection DTOs, collection publish/unpublish semantics
-- durable Stripe webhook delivery logging with verified local payload storage and retry metadata
-- local-payload replay API, retry scheduling and exhaustion, cron-compatible retry runner (`POST /api/webhook-retries/run`)
-- admin webhook visibility workspace at `/admin/webhooks` with inbound/outbound delivery visibility and retry controls
-- Phase 4 refund service with pending refund persistence, Stripe idempotency keys, payment/order status updates, validated item-level restocking, and return linkage
-- Phase 4 return service with state-machine transitions, order-owned item validation, received-return close-with-refund support, and admin order action panels
-- Phase 4 outbound merchant webhooks with subscriptions, timestamped HMAC signing, retry/backoff, delivery claiming, exhausted/dead-letter visibility, manual retry API, integration settings UI, and admin delivery visibility
-- encrypted integration webhook secrets and custom `HEADER_` secrets, with edit behavior that preserves existing signing secrets unless explicitly cleared
-- unique integration/event subscription constraint and deduped event writes
-- typed internal event dispatcher
-- static integration registry
-- first-party logging and order confirmation email consumers
-- fast Vitest test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs covering checkout inventory, payment idempotency, discount usage, concurrent races, webhook retry idempotency, and refund/return lifecycle behavior
-
-Current active phase:
-
-- **Phase 4 - Merchant Lifecycle And Outbound Integrations**
-
-Phase 3 is fully complete. Phase 4 refund/return and outbound merchant webhook foundations are shipped. Current priority order is: finish correctness hardening verification, transactional email observability, analytics fan-out, then Setup Wizard/CLI foundation.
-
-Current priorities:
-
-1. Verify Phase 4 correctness hardening locally with `db:generate`, `tsc`, tests, and build
-2. Transactional email observability: delivery status, bounce/complaint handling, and safe resend tooling
-3. Analytics event fan-out through the existing dispatcher
-4. Setup Wizard and CLI foundation: `doopify doctor`, setup status API, Settings -> Setup tab, then `doopify setup`
-5. Broader real-DB coverage for outbound webhook retry/idempotency and email behavior
-6. Additional audit-log coverage around integration changes, webhook retries, email resends, refunds, and returns
+- Prisma/Postgres-backed commerce schema for products, variants, media, customers, orders, payments, fulfillments, refunds, returns, discounts, settings, sessions, integrations, inbound/outbound webhook deliveries, email deliveries, analytics events, background jobs, and team/invite management
+- Protected admin auth with session-backed JWT validation
+- Private route protection through `src/proxy.ts`
+- Role-based access: OWNER, ADMIN, STAFF with `requireAuth`, `requireAdmin`, `requireAdminOrAbove`, `requireOwner` helpers
+- DB-backed admin APIs for all commerce entities
+- Storefront product routes at `/`, `/shop`, and `/shop/[handle]`
+- Storefront collection routes at `/collections` and `/collections/[handle]`
+- Checkout flow at `/checkout` with server-owned pricing, shipping selection, and Stripe PaymentIntents
+- `POST /api/checkout/create` — checkout session creation and pricing
+- `POST /api/webhooks/stripe` — verified Stripe webhook order finalization
+- `GET /api/checkout/status` — order status polling
+- `POST /api/checkout/shipping-rates` — server-side shipping rate quotes
+- Idempotent order creation from verified Stripe payment success
+- Inventory decrement only after verified payment success
+- Centralized checkout pricing service in `src/server/checkout/pricing.ts`
+- Checkout-native code discounts validated server-side
+- Settings-backed shipping zones/rates and jurisdiction-aware tax rules
+- Full shipping setup: manual rates, live provider rates (EasyPost/Shippo), hybrid fallback, label purchase, tracking
+- Refund service with pending persistence, Stripe idempotency, item validation, restocking, return linkage
+- Return service with state-machine transitions and close-with-refund
+- Outbound merchant webhooks with subscriptions, HMAC signing, retry/backoff, dead-letter visibility
+- Encrypted integration secrets via `IntegrationSecret` model
+- Transactional email delivery tracking with Resend or SMTP
+- Provider bounce/complaint webhook handling
+- Analytics event fan-out through the dispatcher
+- Abandoned checkout recovery with tokenized recovery links
+- Background job infrastructure with claiming, retry/backoff, exhaustion
+- First-run owner bootstrap at `/create-owner` with `SETUP_TOKEN` production gate
+- Team management: invite, accept, role change, disable, reactivate, password reset, session management
+- `UserInvite` and `PasswordReset` Prisma models with hashed single-use expiring tokens
+- Production security headers with proxy-applied baseline, HSTS, and CSP report-only mode
+- Audit logging for team operations, provider credentials, refunds, returns, and fulfillments
+- GitHub Actions CI workflow
+- Vitest fast tests plus `DATABASE_URL_TEST`-gated real-DB integration specs
+- Media object storage adapter: Postgres (default) or S3-compatible (Cloudflare R2/AWS S3)
+- Brand Kit with store-backed branding fields, admin screen/API, and safe public brand payloads
 
 ## What Not To Rebuild
 
 Do not rebuild these foundations unless source inspection proves they are broken:
 
 - Prisma commerce schema
-- admin auth/session foundation
-- product admin persistence
-- media library foundation
-- storefront product catalog routes
-- checkout creation route
-- Stripe webhook route
-- checkout status route
-- collection service/API/storefront foundation
-- refund/return service foundation
-- inbound webhook delivery/replay/retry foundation
-- outbound merchant webhook delivery foundation
-- integration settings/secrets foundation
-- typed event dispatcher
-- static integration registry
+- Admin auth/session foundation
+- Role-based access helpers
+- Product/variant/media admin persistence
+- Storefront catalog routes
+- Checkout creation and pricing service
+- Stripe webhook route and order finalization
+- Collection service/API/storefront
+- Refund/return service foundation
+- Shipping rate service and provider adapters
+- Inbound webhook delivery/replay/retry foundation
+- Outbound merchant webhook delivery foundation
+- Integration secrets foundation
+- Typed event dispatcher and static registry
+- Email delivery service and provider adapter
+- Background job lifecycle
+- Team management service
+- Owner bootstrap flow
 
 ## Agent Rules
 
 ### No Placeholder Commerce Logic
 
-Do not write fake payment, fake order, fake inventory, fake email, fake setup, or fake pricing logic unless explicitly asked for a mock.
+Do not write fake payment, fake order, fake inventory, fake email, or fake pricing logic unless explicitly asked for a mock.
 
 If a feature touches money, inventory, auth, email delivery, setup/deployment, integrations, or public/private data boundaries, implement it against the real service architecture.
 
@@ -113,21 +113,13 @@ Extend what exists when possible.
 
 ### Keep Route Handlers Thin
 
-Route handlers should:
-
-- parse request input
-- validate
-- authorize
-- call a service
-- return a consistent response
+Route handlers should: parse input, validate, authorize, call a service, return a consistent response.
 
 Business logic belongs in service modules.
 
 ### Keep Prisma Central
 
-All core commerce persistence should go through Prisma.
-
-Do not introduce a second data source of truth.
+All core commerce persistence should go through Prisma. Do not introduce a second data source of truth.
 
 ### Keep Checkout Server-Owned
 
@@ -145,44 +137,17 @@ Do not add runtime plugin loading or marketplace mechanics yet.
 
 The browser Setup tab may read setup status and guide the user. It must not run local shell commands.
 
-Local file writes, provider API/CLI calls, Prisma commands, Vercel env changes, Neon setup, and Stripe webhook configuration belong in a local CLI such as `doopify doctor` / `doopify setup`.
+Local file writes, provider API calls, Prisma commands, Vercel env changes, and Stripe webhook configuration belong in a local CLI (`doopify doctor` / `doopify setup`).
 
-### Respect Next.js Version Drift
+### Respect Next.js Version Conventions
 
-This repo uses Next.js 16 conventions. Before touching framework-specific behavior, check the installed Next.js docs or existing project code.
+This repo uses Next.js 16. Before touching framework-specific behavior, check existing project code.
 
-Be especially careful with:
-
+Be careful with:
 - `src/proxy.ts`
 - App Router route handlers
-- caching and revalidation
-- server/client component boundaries
-
-## Current Best Next Tasks
-
-The following are shipped and must not be rebuilt from scratch:
-
-- automated tests for checkout, webhook idempotency, invalid webhook signatures, inventory exhaustion, and collections — **shipped**
-- centralized checkout pricing for discounts, shipping, and tax — **shipped** (`src/server/checkout/pricing.ts`)
-- collection publish/unpublish semantics — **shipped**
-- inbound webhook delivery logging, local-payload replay, retry, and admin visibility — **shipped** (`/admin/webhooks`)
-- configurable shipping zones/rates and jurisdiction-aware tax rules — **shipped**
-- shared rate-limit store, Postgres SSL normalization, audit logging — **shipped** (Phase 3 complete)
-- storefront merchandising: `FeaturedCollectionsGrid`, branding tokens from settings — **shipped**
-- refund service with pending persistence, Stripe idempotency, item validation, status updates, and restocking — **shipped foundation**
-- return service with validated state machine, close-with-refund path, and returned-item refund bounds — **shipped foundation**
-- admin order refund/return action panels and return workflow controls — **shipped foundation**
-- outbound merchant webhook subscriptions, signing, retry/backoff, delivery claiming, dead-letter visibility, manual retry, settings UI, and admin visibility — **shipped foundation**
-
-The strongest remaining tasks are:
-
-1. Run the local verification gate after the latest correctness patches
-2. Implement transactional email observability per `docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
-3. Add safe email resend APIs and admin visibility
-4. Add provider bounce/complaint webhook handling when provider choice is finalized
-5. Add analytics event fan-out through the dispatcher
-6. Implement `doopify doctor` and the setup status service from `docs/SETUP_AND_CLI_PLAN.md`
-7. Expand real-DB coverage for outbound webhook retry/idempotency and email delivery behavior
+- Caching and revalidation
+- Server/client component boundaries
 
 ## Definition Of Done For Agent Work
 
@@ -206,8 +171,6 @@ npm run test
 npm run build
 ```
 
-If `npm run test` does not exist yet, do not silently ignore the gap for revenue-path work. Add or document the needed test setup.
-
 ## Documentation Updates
 
 When a shipped/pending/deferred status changes, update:
@@ -215,6 +178,8 @@ When a shipped/pending/deferred status changes, update:
 - `docs/STATUS.md`
 - `docs/features-roadmap.md`
 - `docs/HARDENING.md` if security/correctness/ops changed
-- `README.md` if onboarding or public repo orientation changed
+- `README.md` if onboarding or orientation changed
 
-Do not recreate `CLAUDE.md`, active Phase 3 kickoff docs, or a duplicate phase-completion roadmap.
+Do not recreate `CLAUDE.md`, phase kickoff docs, or a duplicate phase-completion roadmap.
+
+Internal planning docs live in `docs/internal/`. Do not treat them as current status.

@@ -34,7 +34,10 @@
       "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\invites\\\\[id]\\\\resend\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); const scripts=Object.entries\\(p.scripts\\).filter\\(\\([k]\\)=>k.startsWith\\('doopify'\\)\\); console.log\\(JSON.stringify\\(scripts,null,2\\)\\)\")",
       "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\\\\sessions\")",
-      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\\\\reset-password\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\\\\src\\\\app\\\\api\\\\team\\\\users\\\\[id]\\\\reset-password\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\citry\\\\OneDrive\\\\Desktop\\\\Doopify\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }
