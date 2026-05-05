@@ -781,12 +781,17 @@ export async function createManualFulfillment(data: {
     return createdFulfillment
   })
 
-  await emitInternalEvent('fulfillment.created', {
-    fulfillmentId: fulfillment.id,
-    orderId: data.orderId,
-    trackingNumber: fulfillment.trackingNumber ?? undefined,
-    sendTrackingEmail: Boolean(data.sendTrackingEmail),
-  })
+  // fulfillment is already committed — event emission is best-effort
+  try {
+    await emitInternalEvent('fulfillment.created', {
+      fulfillmentId: fulfillment.id,
+      orderId: data.orderId,
+      trackingNumber: fulfillment.trackingNumber ?? undefined,
+      sendTrackingEmail: Boolean(data.sendTrackingEmail),
+    })
+  } catch (error) {
+    console.error('[createManualFulfillment] event emission failed after fulfillment commit', error)
+  }
 
   return fulfillment
 }

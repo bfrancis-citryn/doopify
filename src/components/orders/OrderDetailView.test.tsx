@@ -19,6 +19,7 @@ function buildOrder(overrides: Record<string, unknown> = {}) {
   return {
     id: 'ord_1',
     orderNumber: '#1001',
+    orderNumberValue: 1001,
     createdAt: '2026-04-30T12:00:00.000Z',
     sourceChannel: 'online',
     paymentStatusRaw: 'PAID',
@@ -150,7 +151,8 @@ describe('OrderDetailView', () => {
     expect(html).toContain('No line items')
     expect(html).toContain('No timeline events')
     expect(html).toContain('No notes')
-    expect(html).toContain('No discounts')
+    // discounts section is hidden when empty — no standalone Discounts card or empty state
+    expect(html).not.toContain('No discounts')
   })
 
   it('maps status chip tones correctly', () => {
@@ -254,5 +256,43 @@ describe('OrderDetailView', () => {
     const html = renderToStaticMarkup(<OrderDetailView order={null} />)
     expect(html).toContain('Order not found')
     expect(html).toContain('href="/orders"')
+  })
+
+  it('renders discount codes inline in the payment summary when discounts exist', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder()} />)
+
+    // discount code rendered as a tag inside payment summary, not as a separate card
+    expect(html).toContain('SPRING10')
+    expect(html).toContain('Spring sale')
+    // no standalone Discounts heading card (the section is now inside Payment summary)
+    // the discount total line is still in the summary rows
+    expect(html).toContain('Discounts')
+  })
+
+  it('does not render a standalone Discounts card with empty state', () => {
+    const html = renderToStaticMarkup(
+      <OrderDetailView order={buildOrder({ discounts: [], discountAmount: 0 })} />
+    )
+    // no "No discounts" empty state message
+    expect(html).not.toContain('No discounts applied')
+    expect(html).not.toContain('No discount applications were recorded')
+  })
+
+  it('renders email delivery logs link in the create fulfillment section', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder({ fulfillments: [] })} />)
+    expect(html).toContain('email delivery logs')
+    expect(html).toContain('/admin/webhooks?tab=email')
+  })
+
+  it('renders the manual tracking form fields in the create fulfillment section', () => {
+    const html = renderToStaticMarkup(<OrderDetailView order={buildOrder({ fulfillments: [] })} />)
+
+    expect(html).toContain('Manual tracking')
+    expect(html).toContain('Carrier')
+    expect(html).toContain('Service')
+    expect(html).toContain('Tracking number')
+    expect(html).toContain('Tracking URL')
+    expect(html).toContain('Send shipment tracking email to customer')
+    expect(html).toContain('Save manual tracking')
   })
 })

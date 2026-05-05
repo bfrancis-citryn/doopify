@@ -672,6 +672,14 @@ export default function OrderDetailView({ order }) {
               </AdminButton>
             </div>
 
+            <p className={styles.emailLogHint}>
+              After saving, check{" "}
+              <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
+                email delivery logs
+              </Link>{" "}
+              to confirm any shipment or order confirmation emails sent correctly.
+            </p>
+
             {/* Live label buying */}
             {labelProviderConnected ? (
               <>
@@ -844,38 +852,34 @@ export default function OrderDetailView({ order }) {
                 <span>{formatMoney(currentOrder.total, currency)}</span>
               </div>
             </div>
-          </AdminCard>
 
-          {/* ── Discounts ───────────────────────────────────────────────────── */}
-          <AdminCard className={styles.card} variant="panel">
-            <h3 className={styles.cardTitle}>Discounts</h3>
+            {/* Discount codes applied — only show when codes exist */}
             {discounts.length ? (
-              <div className={styles.discountList}>
-                {discounts.map((discount) => (
-                  <div className={styles.discountRow} key={discount.id}>
-                    <div>
-                      <strong>{discount.title || "Discount"}</strong>
-                      <p>
-                        {discount.code ? `Code: ${discount.code}` : "Manual discount"}
-                        {discount.method ? ` · ${String(discount.method).replaceAll("_", " ").toLowerCase()}` : ""}
-                      </p>
+              <>
+                <div className={styles.summaryDivider} style={{ marginTop: "1rem" }} />
+                <div className={styles.discountTagList}>
+                  {discounts.map((discount) => (
+                    <div className={styles.discountTagRow} key={discount.id}>
+                      <span className={styles.discountTagCode}>
+                        {discount.code || "Manual"}
+                      </span>
+                      <span className={styles.discountTagTitle}>
+                        {discount.title || "Discount"}
+                        {discount.method
+                          ? ` · ${String(discount.method).replaceAll("_", " ").toLowerCase()}`
+                          : ""}
+                      </span>
+                      <span className={styles.discountTagAmount}>
+                        −{formatMoney(
+                          discount.amount ?? Number(discount.amountCents || 0) / 100,
+                          currency
+                        )}
+                      </span>
                     </div>
-                    <strong className={styles.discountAmount}>
-                      −{formatMoney(
-                        discount.amount ?? Number(discount.amountCents || 0) / 100,
-                        currency
-                      )}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <AdminEmptyState
-                description="No discount applications were recorded for this order."
-                icon="sell"
-                title="No discounts"
-              />
-            )}
+                  ))}
+                </div>
+              </>
+            ) : null}
           </AdminCard>
 
           {/* ── Returns & refunds (OrderAdjustmentsCard) ────────────────────── */}

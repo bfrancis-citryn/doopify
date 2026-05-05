@@ -178,4 +178,32 @@ describe('createManualFulfillment', () => {
       })
     ).rejects.toThrow('only available for paid orders')
   })
+
+  it('returns the fulfillment record even when emitInternalEvent throws after the DB commit', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.prisma.fulfillment.create.mockResolvedValue({
+      id: 'ful_isolation',
+      orderId: ORDER_ID,
+      trackingNumber: 'TRACK_ISO',
+      items: [{ id: 'fi_iso', orderItemId: ORDER_ITEM_A, quantity: 1 }],
+    })
+    // simulate a broken event system — emitInternalEvent rejects
+    mocks.emitInternalEvent.mockRejectedValue(new Error('event bus unavailable'))
+
+    const result = await createManualFulfillment({
+      orderId: ORDER_ID,
+      items: [{ orderItemId: ORDER_ITEM_A, variantId: 'var_a', quantity: 1 }],
+      trackingNumber: 'TRACK_ISO',
+      sendTrackingEmail: true,
+    })
+
+    // fulfillment was persisted before event emission — must be returned
+    expect(result.id).toBe('ful_isolation')
+    expect(mocks.prisma.fulfillment.create).toHaveBeenCalledOnce()
+    // event emission was attempted
+    expect(mocks.emitInternalEvent).toHaveBeenCalledWith('fulfillment.created', expect.objectContaining({
+      fulfillmentId: 'ful_isolation',
+      sendTrackingEmail: true,
+    }))
+  })
 })
