@@ -14,6 +14,7 @@ type AdminSelectOption = {
 };
 
 type AdminSelectProps = {
+  ariaLabel?: string;
   className?: string;
   disabled?: boolean;
   onChange?: (value: string) => void;
@@ -23,6 +24,7 @@ type AdminSelectProps = {
 };
 
 export default function AdminSelect({
+  ariaLabel = '',
   className = '',
   disabled = false,
   onChange,
@@ -147,6 +149,7 @@ export default function AdminSelect({
   return (
     <div className={buildClassName(['admin-select', className])} ref={rootRef}>
       <button
+        aria-label={ariaLabel || undefined}
         aria-expanded={open}
         className="admin-select__trigger"
         disabled={disabled}

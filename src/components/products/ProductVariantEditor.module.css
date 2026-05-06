@@ -389,14 +389,16 @@
 }
 
 .weightInputWrap {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(4.75rem, auto);
   gap: 0.35rem;
   align-items: center;
+  overflow: visible;
 }
 
 .weightInput {
-  width: 6.5rem;
-  min-width: 6.5rem;
+  width: 100%;
+  min-width: 0;
   padding: 0.7rem 0.8rem;
   transition: box-shadow 140ms ease;
   font-variant-numeric: tabular-nums;
@@ -408,12 +410,19 @@
 
 .weightUnitSelect {
   flex-shrink: 0;
-  width: 4.75rem;
-  min-width: 4.75rem;
-  padding: 0.7rem 0.55rem;
+  width: 5rem;
+  min-width: 5rem;
+}
+
+.weightUnitSelect :global(.admin-select__trigger) {
+  min-height: 2.35rem;
+  padding: 0.5rem 0.55rem;
   font-size: 0.8rem;
-  text-align: center;
   font-weight: 700;
+}
+
+.weightUnitSelect :global(.admin-select__value) {
+  text-transform: lowercase;
 }
 
 .matrixFooter {
@@ -480,7 +489,7 @@
   }
 
   .weightInputWrap {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .matrixTools,

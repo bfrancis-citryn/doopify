@@ -44,5 +44,12 @@ describe('buildDashboardFirstRunGuide', () => {
     expect(guide?.requiredSteps[3].route).toBe('/products')
     expect(guide?.requiredSteps[4].route).toBe('/shop')
     expect(guide?.requiredSteps.every((step) => step.statusLabel === 'Needs setup')).toBe(true)
+    expect(guide?.requiredSteps.map((step) => step.ctaLabel)).toEqual([
+      'Open General',
+      'Open Payments',
+      'Open Shipping',
+      'Open Products',
+      'Open Storefront',
+    ])
   })
 })

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminEmptyState from '../admin/ui/AdminEmptyState';
+import AdminSelect from '../admin/ui/AdminSelect';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductVariantEditor.module.css';
 
@@ -14,6 +15,19 @@ const DEFAULT_OPTION_SUGGESTIONS = {
 };
 
 const WEIGHT_UNIT_OPTIONS = ['g', 'kg', 'oz', 'lb'];
+const WEIGHT_UNIT_SELECT_OPTIONS = WEIGHT_UNIT_OPTIONS.map(unit => ({ value: unit, label: unit }));
+
+function WeightUnitSelect({ ariaLabel, onChange, value }) {
+  return (
+    <AdminSelect
+      ariaLabel={ariaLabel}
+      className={styles.weightUnitSelect}
+      onChange={onChange}
+      options={WEIGHT_UNIT_SELECT_OPTIONS}
+      value={value || 'kg'}
+    />
+  );
+}
 
 function OptionEditor({ option, actions, errorMessage }) {
   const [draftValue, setDraftValue] = useState('');
@@ -234,15 +248,11 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
                           type="number"
                           value={variant.weight ?? ''}
                         />
-                        <select
-                          className={`admin-input ${styles.weightUnitSelect}`}
-                          onChange={event => actions.updateVariantField(variant.id, 'weightUnit', event.target.value)}
+                        <WeightUnitSelect
+                          ariaLabel={`Weight unit for ${variant.title || 'variant'}`}
+                          onChange={nextValue => actions.updateVariantField(variant.id, 'weightUnit', nextValue)}
                           value={variant.weightUnit || 'kg'}
-                        >
-                          {WEIGHT_UNIT_OPTIONS.map(unit => (
-                            <option key={unit} value={unit}>{unit}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
                     </div>
                         </>
@@ -302,15 +312,11 @@ function BasicInventoryCard({ draftProduct, actions }) {
               type="number"
               value={weight ?? ''}
             />
-            <select
-              className={`admin-input ${styles.weightUnitSelect}`}
-              onChange={event => actions.updateVariantField(baseVariant.id, 'weightUnit', event.target.value)}
+            <WeightUnitSelect
+              ariaLabel="Weight unit for default variant"
+              onChange={nextValue => actions.updateVariantField(baseVariant.id, 'weightUnit', nextValue)}
               value={weightUnit}
-            >
-              {WEIGHT_UNIT_OPTIONS.map(unit => (
-                <option key={unit} value={unit}>{unit}</option>
-              ))}
-            </select>
+            />
           </div>
         </div>
       </div>
@@ -470,15 +476,11 @@ export default function ProductVariantEditor() {
                           type="number"
                           value={variant.weight ?? ''}
                         />
-                        <select
-                          className={`admin-input ${styles.weightUnitSelect}`}
-                          onChange={event => actions.updateVariantField(variant.id, 'weightUnit', event.target.value)}
+                        <WeightUnitSelect
+                          ariaLabel={`Weight unit for ${variant.title || 'variant'}`}
+                          onChange={nextValue => actions.updateVariantField(variant.id, 'weightUnit', nextValue)}
                           value={variant.weightUnit || 'kg'}
-                        >
-                          {WEIGHT_UNIT_OPTIONS.map(unit => (
-                            <option key={unit} value={unit}>{unit}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
                     </div>
                         </>

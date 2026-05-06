@@ -1,15 +1,50 @@
+.setupPanel {
+  padding: 0.74rem 0.82rem;
+  display: grid;
+  gap: 0.66rem;
+}
+
+.setupPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.72rem;
+  align-items: flex-start;
+}
+
+.setupPanelHeader h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.setupPanelHeader p {
+  margin: 0.22rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.76rem;
+}
+
+.requiredSetupGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.48rem;
+}
+
+.requiredSetupItem {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.72rem;
+  background: color-mix(in srgb, var(--surface-container-low) 80%, transparent);
+  padding: 0.52rem 0.58rem;
+  display: grid;
+  gap: 0.42rem;
+}
+
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
-  grid-template-areas:
-    "activity health"
-    "activity links"
-    "activity guide";
   gap: 0.78rem;
+  align-items: start;
 }
 
 .primaryCard {
-  grid-area: activity;
   padding: 0.88rem;
   display: grid;
   gap: 0.62rem;
@@ -22,16 +57,10 @@
   gap: 0.62rem;
 }
 
-.healthCard {
-  grid-area: health;
-}
-
-.linksCard {
-  grid-area: links;
-}
-
-.guideCard {
-  grid-area: guide;
+.sideRail {
+  display: grid;
+  gap: 0.78rem;
+  align-content: start;
 }
 
 .cardHeader {
@@ -147,33 +176,74 @@
   background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
 }
 
-.guideIntro {
+.optionalSetupWrap {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 0.45rem;
+}
+
+.optionalSetupWrap summary {
+  cursor: pointer;
+  color: var(--on-surface-variant);
+  font-size: 0.74rem;
+  user-select: none;
+}
+
+.optionalSetupChips {
+  margin-top: 0.48rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.optionalSetupChip {
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.28rem 0.46rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.32rem;
+  font-size: 0.7rem;
+  color: var(--on-surface);
+}
+
+.optionalSetupChip:hover {
+  border-color: var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
+}
+
+.activityEmptyState {
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: 0.74rem;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.activityEmptyState h3 {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.84rem;
+}
+
+.activityEmptyState p {
+  margin: 0;
+  font-size: 0.74rem;
   color: var(--on-surface-variant);
 }
 
-.guideSectionTitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.8rem;
+.activityEmptyActions {
+  display: inline-flex;
+  gap: 0.42rem;
+  flex-wrap: wrap;
 }
 
-.setupGuideList {
-  display: grid;
-}
-
-.setupGuideItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.5rem;
-  border-top: 1px solid var(--glass-border);
-  padding: 0.5rem 0;
-}
-
-.setupGuideItem:first-child {
-  border-top: 0;
-  padding-top: 0;
+.activityEmptyActions a {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.68rem;
+  padding: 0.35rem 0.52rem;
+  font-size: 0.72rem;
+  color: var(--on-surface);
 }
 
 .stepMeta {
@@ -182,7 +252,7 @@
 }
 
 .stepMeta strong {
-  font-size: 0.79rem;
+  font-size: 0.78rem;
 }
 
 .stepMeta small {
@@ -191,14 +261,14 @@
 }
 
 .stepActions {
-  display: grid;
-  justify-items: end;
-  gap: 0.16rem;
-  text-align: right;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
 }
 
 .stepActions a {
-  font-size: 0.73rem;
+  font-size: 0.72rem;
   color: var(--primary);
 }
 
@@ -208,12 +278,25 @@
 }
 
 @media (max-width: 1000px) {
+  .requiredSetupGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .optionalSetupChips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .grid {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      "activity"
-      "health"
-      "links"
-      "guide";
+  }
+}
+
+@media (max-width: 680px) {
+  .setupPanelHeader {
+    flex-direction: column;
+  }
+
+  .optionalSetupChips {
+    grid-template-columns: 1fr;
   }
 }

@@ -39,32 +39,12 @@ function formatRelativeTime(dateValue) {
   return formatter.format(Math.round(diffHours / 24), 'day');
 }
 
-const FALLBACK_ACTIVITY = [
-  {
-    id: 'fallback-catalog',
-    title: 'Catalog sync completed successfully.',
-    detail: 'Product, inventory, and pricing data look healthy.',
-    href: '/products',
-    time: 'Ready',
-    icon: 'inventory_2',
-  },
-  {
-    id: 'fallback-orders',
-    title: 'Order desk is ready for review.',
-    detail: 'Open the live queue to manage fulfillment and payment follow-up.',
-    href: '/orders',
-    time: 'Ready',
-    icon: 'shopping_bag',
-  },
-  {
-    id: 'fallback-customers',
-    title: 'Customer profiles are synced.',
-    detail: 'Jump into CRM to inspect activity and lifetime value.',
-    href: '/customers',
-    time: 'Ready',
-    icon: 'groups',
-  },
-];
+const STEP_STATUS_TONE = {
+  Ready: 'success',
+  'Needs setup': 'warning',
+  Configured: 'success',
+  Optional: 'neutral',
+};
 
 export default function AdminDashboardWorkspace() {
   const { orders, loading: ordersLoading } = useOrders();
@@ -164,7 +144,7 @@ export default function AdminDashboardWorkspace() {
     };
   }, [lowInventoryThreshold, orders, products]);
 
-  const recentActivity = overview.activity.length ? overview.activity : FALLBACK_ACTIVITY;
+  const recentActivity = overview.activity;
   const loading = ordersLoading || productsLoading || customersLoading;
   const firstRunGuide = useMemo(() => buildDashboardFirstRunGuide(setupWizard), [setupWizard]);
 
@@ -194,6 +174,49 @@ export default function AdminDashboardWorkspace() {
           <AdminStatCard label="Customers" meta="Profiles available to support" value={loading ? '--' : formatCompactNumber(customers.length)} />
         </AdminStatsGrid>
 
+        {firstRunGuide ? (
+          <AdminCard className={styles.setupPanel} variant="card">
+            <div className={styles.setupPanelHeader}>
+              <div>
+                <h2 className="font-headline">Finish setup</h2>
+                <p>Complete the required steps before running a checkout test.</p>
+              </div>
+              <AdminStatusChip tone="warning">In progress</AdminStatusChip>
+            </div>
+
+            <div className={styles.requiredSetupGrid}>
+              {firstRunGuide.requiredSteps.map((step) => (
+                <div className={styles.requiredSetupItem} key={step.id}>
+                  <div className={styles.stepMeta}>
+                    <strong>{step.title}</strong>
+                    <small>{step.description}</small>
+                  </div>
+                  <div className={styles.stepActions}>
+                    <AdminStatusChip tone={STEP_STATUS_TONE[step.statusLabel] || 'neutral'}>
+                      {step.statusLabel}
+                    </AdminStatusChip>
+                    <Link href={step.route}>{step.ctaLabel}</Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <details className={styles.optionalSetupWrap}>
+              <summary>Optional hardening: Email, Team, MFA</summary>
+              <div className={styles.optionalSetupChips}>
+                {firstRunGuide.optionalSteps.map((step) => (
+                  <Link className={styles.optionalSetupChip} href={step.route} key={step.id}>
+                    <span>{step.title}</span>
+                    <AdminStatusChip tone={STEP_STATUS_TONE[step.statusLabel] || 'neutral'}>
+                      {step.statusLabel}
+                    </AdminStatusChip>
+                  </Link>
+                ))}
+              </div>
+            </details>
+          </AdminCard>
+        ) : null}
+
         <div className={styles.grid}>
           <AdminCard className={styles.primaryCard} variant="panel">
             <div className={styles.cardHeader}>
@@ -204,6 +227,15 @@ export default function AdminDashboardWorkspace() {
             {loading ? (
               <div className={styles.loadingWrap}>
                 <AdminSkeleton variant="table" rows={5} columns={1} />
+              </div>
+            ) : !recentActivity.length ? (
+              <div className={styles.activityEmptyState}>
+                <h3>No activity yet</h3>
+                <p>Create your first product or complete a test checkout to start building the activity feed.</p>
+                <div className={styles.activityEmptyActions}>
+                  <Link href="/products">Add product</Link>
+                  <Link href="/settings?section=setup">Open setup</Link>
+                </div>
               </div>
             ) : (
               <div className={styles.activityList}>
@@ -221,70 +253,30 @@ export default function AdminDashboardWorkspace() {
             )}
           </AdminCard>
 
-          <AdminCard className={`${styles.sideCard} ${styles.healthCard}`} variant="card">
-            <div className={styles.cardHeader}>
-              <h2 className="font-headline">Commerce health</h2>
-            </div>
-            <div className={styles.metricList}>
-              <div><span>AOV</span><strong>{loading ? '--' : formatCurrency(overview.averageOrderValue)}</strong></div>
-              <div><span>Inventory units</span><strong>{loading ? '--' : formatCompactNumber(overview.inventoryUnits)}</strong></div>
-              <div><span>Low stock products</span><strong>{loading ? '--' : formatCompactNumber(overview.lowStockCount)}</strong></div>
-            </div>
-          </AdminCard>
-
-          <AdminCard className={`${styles.sideCard} ${styles.linksCard}`} variant="card">
-            <div className={styles.cardHeader}>
-              <h2 className="font-headline">Quick links</h2>
-            </div>
-            <div className={styles.linkList}>
-              <Link href="/orders">Review order queue</Link>
-              <Link href="/products">Update catalog and inventory</Link>
-              <Link href="/admin/webhooks">Open delivery logs</Link>
-              <Link href="/draft-orders?new=1">Create draft order</Link>
-            </div>
-          </AdminCard>
-
-          {firstRunGuide ? (
-            <AdminCard className={`${styles.sideCard} ${styles.guideCard}`} variant="card">
+          <div className={styles.sideRail}>
+            <AdminCard className={`${styles.sideCard} ${styles.healthCard}`} variant="card">
               <div className={styles.cardHeader}>
-                <h2 className="font-headline">First-run setup</h2>
-                <AdminStatusChip tone="warning">In progress</AdminStatusChip>
+                <h2 className="font-headline">Commerce health</h2>
               </div>
-              <p className={styles.guideIntro}>Complete these steps to unlock a safe private beta checkout flow.</p>
-
-              <h3 className={styles.guideSectionTitle}>Required</h3>
-              <div className={styles.setupGuideList}>
-                {firstRunGuide.requiredSteps.map((step, index) => (
-                  <div className={styles.setupGuideItem} key={step.id}>
-                    <div className={styles.stepMeta}>
-                      <strong>{index + 1}. {step.title}</strong>
-                      <small>{step.description}</small>
-                    </div>
-                    <div className={styles.stepActions}>
-                      <span className={styles.stepStatus}>{step.statusLabel}</span>
-                      <Link href={step.route}>{step.ctaLabel}</Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <h3 className={styles.guideSectionTitle}>Optional</h3>
-              <div className={styles.setupGuideList}>
-                {firstRunGuide.optionalSteps.map((step, index) => (
-                  <div className={styles.setupGuideItem} key={step.id}>
-                    <div className={styles.stepMeta}>
-                      <strong>{index + 1}. {step.title}</strong>
-                      <small>{step.description}</small>
-                    </div>
-                    <div className={styles.stepActions}>
-                      <span className={styles.stepStatus}>{step.statusLabel}</span>
-                      <Link href={step.route}>{step.ctaLabel}</Link>
-                    </div>
-                  </div>
-                ))}
+              <div className={styles.metricList}>
+                <div><span>AOV</span><strong>{loading ? '--' : formatCurrency(overview.averageOrderValue)}</strong></div>
+                <div><span>Inventory units</span><strong>{loading ? '--' : formatCompactNumber(overview.inventoryUnits)}</strong></div>
+                <div><span>Low stock products</span><strong>{loading ? '--' : formatCompactNumber(overview.lowStockCount)}</strong></div>
               </div>
             </AdminCard>
-          ) : null}
+
+            <AdminCard className={`${styles.sideCard} ${styles.linksCard}`} variant="card">
+              <div className={styles.cardHeader}>
+                <h2 className="font-headline">Quick links</h2>
+              </div>
+              <div className={styles.linkList}>
+                <Link href="/orders">Review orders</Link>
+                <Link href="/products">Add product</Link>
+                <Link href="/settings?section=shipping">Open shipping settings</Link>
+                <Link href="/admin/webhooks">Open delivery logs</Link>
+              </div>
+            </AdminCard>
+          </div>
         </div>
       </AdminPage>
     </AppShell>
