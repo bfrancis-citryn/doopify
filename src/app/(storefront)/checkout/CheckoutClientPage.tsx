@@ -130,6 +130,7 @@ type StripeClient = {
     appearance: {
       theme: 'night'
       variables: Record<string, string>
+      rules?: Record<string, Record<string, string>>
     }
   }) => StripeElements
   confirmPayment: (options: {
@@ -152,6 +153,8 @@ type CartContextValue = {
   items: CartItem[]
   total: number
   replaceItems: (items: CartItem[]) => void
+  removeItem: (variantId: string) => void
+  updateQuantity: (variantId: string, quantity: number) => void
 }
 
 type CheckoutClientPageProps = {
@@ -342,7 +345,7 @@ function resolveButtonPresentation(store: CheckoutStoreSettings | null) {
 
 export default function CheckoutClientPage({ publishableKey, store, recoveryToken }: CheckoutClientPageProps) {
   const router = useRouter();
-  const { items, total: cartSubtotal, replaceItems } = useCart() as CartContextValue;
+  const { items, total: cartSubtotal, replaceItems, removeItem, updateQuantity } = useCart() as CartContextValue;
   const [email, setEmail] = useState('');
   const [shippingAddress, setShippingAddress] = useState(EMPTY_ADDRESS);
   const [billingAddress, setBillingAddress] = useState(EMPTY_ADDRESS);
@@ -406,6 +409,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
           ? 'error-blocked'
           : 'disabled'
         : 'ready';
+  const orderEditingLocked = creatingIntent || confirmingPayment;
 
   useEffect(() => {
     if (!recoveryToken || recoveryToken === lastRecoveredTokenRef.current) return;
@@ -496,6 +500,26 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     setBillingAddress((current) => ({ ...current, [field]: value }));
   }
 
+  function handleOrderQuantityChange(variantId: string, nextQuantity: number) {
+    if (checkout) resetPaymentStep();
+    if (shippingQuotes.length || selectedShippingQuoteId || shippingRatesError) {
+      resetShippingSelection();
+    }
+    setError('');
+    setDiscountError('');
+    updateQuantity(variantId, nextQuantity);
+  }
+
+  function handleOrderItemRemove(variantId: string) {
+    if (checkout) resetPaymentStep();
+    if (shippingQuotes.length || selectedShippingQuoteId || shippingRatesError) {
+      resetShippingSelection();
+    }
+    setError('');
+    setDiscountError('');
+    removeItem(variantId);
+  }
+
   async function loadShippingRates() {
     setShippingRatesError('');
     setDiscountError('');
@@ -568,9 +592,48 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         variables: {
           colorPrimary: store?.accentColor || store?.primaryColor || '#c9a86c',
           colorBackground: '#111114',
-          colorText: '#f5f5f5',
+          colorText: '#f8f8f8',
+          colorTextSecondary: '#d5d5d9',
+          colorTextPlaceholder: '#9b9ba1',
+          colorIcon: '#d5d5d9',
+          colorIconCardError: '#ef4444',
           colorDanger: '#ef4444',
+          colorSuccess: '#34d399',
+          colorBorder: '#3a3a42',
+          colorInputBackground: '#0d0d12',
           borderRadius: '16px',
+          spacingUnit: '4px',
+          fontSizeBase: '16px',
+        },
+        rules: {
+          '.Label': {
+            color: '#f2f2f4',
+            fontSize: '14px',
+            marginBottom: '6px',
+          },
+          '.Input': {
+            color: '#f8f8f8',
+            backgroundColor: '#0d0d12',
+            border: '1px solid #40404a',
+            boxShadow: 'none',
+          },
+          '.Input::placeholder': {
+            color: '#9b9ba1',
+          },
+          '.Input:focus': {
+            border: '1px solid #e8e8ea',
+            boxShadow: '0 0 0 1px rgba(232,232,234,0.45)',
+          },
+          '.Tab': {
+            color: '#ececf0',
+            backgroundColor: '#131318',
+            border: '1px solid #3a3a42',
+          },
+          '.Tab--selected': {
+            color: '#111114',
+            backgroundColor: '#f1f1f4',
+            borderColor: '#f1f1f4',
+          },
         },
       },
     });
@@ -724,11 +787,11 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         .checkout-logo{color:#f3efe7;text-decoration:none;font-family:var(--font-headline),sans-serif;font-size:20px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
         .checkout-shell{max-width:1280px;margin:0 auto;padding:40px 32px 80px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,0.75fr);gap:32px}
         .checkout-card{padding:28px;border-radius:28px;border:1px solid rgba(255,255,255,0.09);background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025)),rgba(255,255,255,0.02);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 22px 46px rgba(0,0,0,0.22)}
-        .eyebrow{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:rgba(255,255,255,0.38);margin-bottom:10px}
+        .eyebrow{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:rgba(255,255,255,0.72);margin-bottom:10px}
         .title{font-family:var(--font-headline),sans-serif;font-size:46px;line-height:0.96;letter-spacing:-0.05em;margin:0 0 14px}
-        .lede{font-size:15px;line-height:1.7;color:rgba(255,255,255,0.6);margin:0 0 32px}
+        .lede{font-size:15px;line-height:1.7;color:rgba(255,255,255,0.78);margin:0 0 32px}
         .section{margin-top:28px}
-        .section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.44);margin-bottom:16px}
+        .section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.72);margin-bottom:16px}
         .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
         .field{display:flex;flex-direction:column;gap:8px}
         .field span{font-size:12px;color:rgba(255,255,255,0.56)}
@@ -747,7 +810,8 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.72)!important;border:1px solid rgba(255,255,255,0.22)!important;opacity:1;cursor:not-allowed}
         .secondary-btn:disabled{opacity:0.42;cursor:not-allowed}
         .error{margin-top:18px;padding:14px 16px;border-radius:16px;border:1px solid rgba(239,68,68,0.4);background:rgba(127,29,29,0.25);color:#fecaca;font-size:14px}
-        .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03)}
+        .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08)}
+        #payment-element{color-scheme:dark}
         .summary-list{display:flex;flex-direction:column;gap:18px}
         .summary-item{display:flex;gap:14px}
         .summary-thumb{width:76px;height:76px;border-radius:18px;background:rgba(255,255,255,0.05);overflow:hidden;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.22)}
@@ -755,8 +819,13 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         .summary-meta{flex:1;min-width:0}
         .summary-title{font-size:15px;color:#f3efe7;margin:0 0 6px}
         .summary-variant{font-size:12px;color:rgba(255,255,255,0.44);margin:0 0 6px}
-        .summary-qty{font-size:12px;color:rgba(255,255,255,0.52)}
+        .summary-qty{font-size:12px;color:rgba(255,255,255,0.72)}
         .summary-price{font-size:14px;color:#f3efe7;white-space:nowrap}
+        .summary-edit-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+        .summary-edit-btn{min-width:30px;height:30px;border-radius:999px;border:1px solid rgba(255,255,255,0.24);background:rgba(255,255,255,0.08);color:#f3efe7;font-size:15px;line-height:1;cursor:pointer}
+        .summary-edit-btn:disabled{opacity:0.45;cursor:not-allowed}
+        .summary-remove-btn{height:30px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:rgba(255,255,255,0.86);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
+        .summary-remove-btn:disabled{opacity:0.45;cursor:not-allowed}
         .summary-divider{height:1px;background:rgba(255,255,255,0.08);margin:22px 0}
         .summary-row{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:rgba(255,255,255,0.66);margin-bottom:12px}
         .summary-row.total{font-size:18px;color:#f3efe7;font-weight:600;margin-top:12px}
@@ -789,7 +858,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
             <p className="eyebrow">Secure checkout</p>
             <h1 className="title">Finish the purchase flow.</h1>
             <p className="lede">
-              Real cart items, real inventory checks, and payment completion backed by the Stripe webhook path.
+              Your cart is reviewed in real time so totals, shipping, and payment details stay accurate.
             </p>
 
             {!items.length ? (
@@ -1124,6 +1193,34 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                     <p className="summary-title">{item.title}</p>
                     {item.variantTitle ? <p className="summary-variant">{item.variantTitle}</p> : null}
                     <p className="summary-qty">Qty {item.quantity}</p>
+                    <div className="summary-edit-row">
+                      <button
+                        className="summary-edit-btn"
+                        disabled={orderEditingLocked}
+                        onClick={() => handleOrderQuantityChange(item.variantId, item.quantity - 1)}
+                        type="button"
+                        aria-label={`Decrease quantity for ${item.title}`}
+                      >
+                        -
+                      </button>
+                      <button
+                        className="summary-edit-btn"
+                        disabled={orderEditingLocked}
+                        onClick={() => handleOrderQuantityChange(item.variantId, item.quantity + 1)}
+                        type="button"
+                        aria-label={`Increase quantity for ${item.title}`}
+                      >
+                        +
+                      </button>
+                      <button
+                        className="summary-remove-btn"
+                        disabled={orderEditingLocked}
+                        onClick={() => handleOrderItemRemove(item.variantId)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                   <div className="summary-price">{formatMoney(item.price * item.quantity, currency)}</div>
                 </div>

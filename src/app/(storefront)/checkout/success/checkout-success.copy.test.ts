@@ -38,8 +38,18 @@ describe('checkout success waiting-state copy', () => {
     expect(source).toContain('Contact the store for help with your order.')
     expect(source).toContain('supportEmail')
     expect(source).toContain('supportPhone')
+    expect(source).toContain('supportPhoneHref')
+    expect(source).toContain('mailto:${support.supportEmail}')
+    expect(source).toContain('href={support.supportPhoneHref}')
     expect(source).toContain('Check again')
     expect(source).toContain('Continue shopping')
     expect(source).toContain('Contact support')
+  })
+
+  it('matches success-state primary CTA styling to checkout button presentation', () => {
+    const source = read(PAGE)
+    expect(source).toContain('resolveButtonPresentation')
+    expect(source).toContain('primaryActionStyle')
+    expect(source).toContain('style={primaryActionStyle}')
   })
 })

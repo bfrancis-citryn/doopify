@@ -22,6 +22,12 @@ type PublicStoreSettings = {
   supportEmail?: string | null
   email?: string | null
   phone?: string | null
+  secondaryColor?: string | null
+  buttonStyle?: 'solid' | 'outline' | 'soft' | string | null
+  buttonTextTransform?: 'uppercase' | 'none' | string | null
+  buttonRadius?: 'none' | 'sm' | 'md' | 'lg' | 'full' | string | null
+  accentColor?: string | null
+  primaryColor?: string | null
 }
 
 type ApiSuccess<TData> = {
@@ -59,6 +65,90 @@ function formatMoney(amount: number | null | undefined, currency = 'USD'): strin
   }).format(amount)
 }
 
+function parseHexColor(value: string | null | undefined) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized)
+  if (!match) return null
+  const hex = match[1]
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+  }
+}
+
+function colorDistance(left: { r: number; g: number; b: number }, right: { r: number; g: number; b: number }) {
+  return Math.abs(left.r - right.r) + Math.abs(left.g - right.g) + Math.abs(left.b - right.b)
+}
+
+function isNearCheckoutBackground(hexColor: string | null | undefined) {
+  const color = parseHexColor(hexColor)
+  const background = parseHexColor('#080808')
+  if (!color || !background) return false
+  return colorDistance(color, background) < 80
+}
+
+function isDarkColor(hexColor: string | null | undefined) {
+  const color = parseHexColor(hexColor)
+  if (!color) return false
+  const luminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255
+  return luminance < 0.5
+}
+
+function resolveButtonPresentation(store: PublicStoreSettings | null) {
+  const style = store?.buttonStyle || 'solid'
+  const transform = store?.buttonTextTransform === 'uppercase' ? 'uppercase' : 'none'
+  const radius = (() => {
+    switch (store?.buttonRadius) {
+      case 'none':
+        return '0px'
+      case 'sm':
+        return '6px'
+      case 'md':
+        return '12px'
+      case 'lg':
+        return '18px'
+      case 'full':
+        return '9999px'
+      default:
+        return '9999px'
+    }
+  })()
+
+  const accent = store?.accentColor || store?.primaryColor || '#c9a86c'
+  const fallbackSurface = store?.secondaryColor || '#f3efe7'
+  const solidBackground = isNearCheckoutBackground(accent) ? fallbackSurface : accent
+  const solidText = isDarkColor(solidBackground) ? '#f3efe7' : '#080808'
+
+  const primaryStyle =
+    style === 'outline'
+      ? {
+          background: 'transparent',
+          color: isNearCheckoutBackground(accent) ? '#f3efe7' : accent,
+          border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}`,
+        }
+      : style === 'soft'
+        ? {
+            background: `${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}33`,
+            color: '#f3efe7',
+            border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}66`,
+          }
+        : {
+            background: solidBackground,
+            color: solidText,
+            border: 'none',
+          }
+
+  return { transform, radius, primaryStyle }
+}
+
+function buildPhoneHref(rawPhone: string) {
+  const normalized = rawPhone.replace(/[^\d+]/g, '')
+  if (!normalized) return ''
+  return `tel:${normalized}`
+}
+
 function resolveSupportSummary(store: PublicStoreSettings | null) {
   const supportEmail = String(store?.supportEmail || store?.email || '').trim()
   const supportPhone = String(store?.phone || '').trim()
@@ -66,19 +156,22 @@ function resolveSupportSummary(store: PublicStoreSettings | null) {
   if (!supportEmail && !supportPhone) {
     return {
       helpText: 'Contact the store for help with your order.',
+      detailText: '',
       supportEmail: '',
       supportPhone: '',
+      supportPhoneHref: '',
     }
   }
 
   const parts = [supportEmail, supportPhone].filter(Boolean)
   return {
-    helpText: `Questions? Contact ${parts.join(' • ')}`,
+    helpText: 'Contact the store for help with your order.',
+    detailText: `Questions? Contact ${parts.join(' | ')}`,
     supportEmail,
     supportPhone,
+    supportPhoneHref: buildPhoneHref(supportPhone),
   }
 }
-
 type ViewState = 'processing' | 'confirmed' | 'pending' | 'failed'
 
 export default function CheckoutSuccessClientPage() {
@@ -187,6 +280,15 @@ export default function CheckoutSuccessClientPage() {
   }, [clearCart, paymentIntentId, pollCycle]);
 
   const support = useMemo(() => resolveSupportSummary(store), [store]);
+  const buttonPresentation = useMemo(() => resolveButtonPresentation(store), [store]);
+  const primaryActionStyle = useMemo(
+    () => ({
+      ...buttonPresentation.primaryStyle,
+      borderRadius: buttonPresentation.radius,
+      textTransform: buttonPresentation.transform,
+    }),
+    [buttonPresentation]
+  );
   const viewState: ViewState =
     status === 'paid'
       ? 'confirmed'
@@ -219,7 +321,10 @@ export default function CheckoutSuccessClientPage() {
         .btn-primary{background:var(--store-primary,#c9a86c);color:#080808}
         .btn-secondary{background:transparent;color:#f3efe7;border:1px solid rgba(255,255,255,0.2)}
         .btn-tertiary{background:rgba(255,255,255,0.08);color:#f3efe7;border:1px solid rgba(255,255,255,0.12)}
-        .support{font-size:13px;color:rgba(255,255,255,0.7)}
+        .support{font-size:15px;color:rgba(255,255,255,0.78)}
+        .support-subtle{font-size:13px;color:rgba(255,255,255,0.62)}
+        .support-links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+        .support-link{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.22);background:rgba(255,255,255,0.08);color:#f3efe7;font-size:14px;line-height:1;text-decoration:none}
         @keyframes spin{to{transform:rotate(360deg)}}
       `}</style>
 
@@ -247,13 +352,24 @@ export default function CheckoutSuccessClientPage() {
                 {orderTotal != null ? (
                   <p className="support">Total: {formatMoney(orderTotal, orderCurrency)}</p>
                 ) : null}
-                <p className="support">
+                <p className="support-subtle">
                   {estimatedDeliveryText || "We'll send a confirmation email with your next order updates shortly."}
                 </p>
                 <p className="support">{support.helpText}</p>
+                {support.detailText ? <p className="support-subtle">{support.detailText}</p> : null}
+                {support.supportEmail || support.supportPhone ? (
+                  <div className="support-links">
+                    {support.supportEmail ? (
+                      <a className="support-link" href={`mailto:${support.supportEmail}`}>{support.supportEmail}</a>
+                    ) : null}
+                    {support.supportPhone && support.supportPhoneHref ? (
+                      <a className="support-link" href={support.supportPhoneHref}>{support.supportPhone}</a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="actions">
-                <Link className="btn btn-primary" href="/shop">Continue shopping</Link>
+                <Link className="btn btn-primary" href="/shop" style={primaryActionStyle}>Continue shopping</Link>
               </div>
             </>
           ) : null}
@@ -267,7 +383,7 @@ export default function CheckoutSuccessClientPage() {
               </p>
               <p className="support">{support.helpText}</p>
               <div className="actions">
-                <button className="btn btn-primary" onClick={handleCheckAgain} type="button">Check again</button>
+                <button className="btn btn-primary" onClick={handleCheckAgain} style={primaryActionStyle} type="button">Check again</button>
                 <Link className="btn btn-secondary" href="/shop">Continue shopping</Link>
                 {support.supportEmail ? (
                   <a className="btn btn-tertiary" href={`mailto:${support.supportEmail}`}>Contact support</a>
@@ -282,7 +398,7 @@ export default function CheckoutSuccessClientPage() {
               <h1 className="title">Payment could not be completed</h1>
               <p className="body">{failureReason || 'Please return to checkout and try another payment method.'}</p>
               <div className="actions">
-                <Link className="btn btn-primary" href="/checkout">Return to checkout</Link>
+                <Link className="btn btn-primary" href="/checkout" style={primaryActionStyle}>Return to checkout</Link>
               </div>
             </>
           ) : null}
@@ -291,3 +407,4 @@ export default function CheckoutSuccessClientPage() {
     </>
   );
 }
+

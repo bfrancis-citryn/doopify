@@ -112,6 +112,24 @@ describe('checkout button copy and state', () => {
     expect(source).toContain("'Loading shipping options...'")
   })
 
+  it('keeps payment section labels and card form colors readable on dark backgrounds', () => {
+    const source = read(PAGE)
+    expect(source).toContain("colorTextSecondary: '#d5d5d9'")
+    expect(source).toContain("'.Label'")
+    expect(source).toContain("color: '#f2f2f4'")
+    expect(source).toContain(".section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.72);margin-bottom:16px}")
+    expect(source).toContain(".payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08)}")
+  })
+
+  it('lets customers edit cart quantities directly from checkout summary', () => {
+    const source = read(PAGE)
+    expect(source).toContain('handleOrderQuantityChange')
+    expect(source).toContain('handleOrderItemRemove')
+    expect(source).toContain('Decrease quantity for ${item.title}')
+    expect(source).toContain('Increase quantity for ${item.title}')
+    expect(source).toContain('Remove')
+  })
+
   it('does not create an order from the browser redirect', () => {
     const source = read(PAGE)
     // The only navigation on success is a router.push to /checkout/success
