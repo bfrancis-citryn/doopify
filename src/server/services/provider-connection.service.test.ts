@@ -60,6 +60,7 @@ vi.mock('@/server/shipping/shipping-provider.service', () => ({
 }))
 
 import {
+  getProviderStatus,
   getRuntimeProviderConnection,
   saveProviderCredentials,
   verifyProviderConnection,
@@ -323,6 +324,88 @@ describe('provider connection service', () => {
       })
     )
     expect(result.verification.ok).toBe(true)
+  })
+
+  it('persists Stripe verification metadata for post-reload status/runtime reads', async () => {
+    mocks.prisma.integration.findFirst.mockResolvedValue({
+      id: 'int_stripe_verify_meta',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-05-06T00:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_verify_9876' },
+        { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_verify_9876' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:live' },
+      ],
+    })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          id: 'acct_verified_987',
+          charges_enabled: true,
+          payouts_enabled: true,
+        }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await verifyProviderConnection('STRIPE')
+
+    expect(result.verification.ok).toBe(true)
+    const upsertKeys = (mocks.prisma.integrationSecret.upsert.mock.calls as Array<[any]>).map(
+      ([arg]) => arg?.create?.key
+    )
+    expect(upsertKeys).toContain('META_VERIFIED_AT')
+    expect(upsertKeys).toContain('META_LAST_VERIFIED_AT')
+    expect(upsertKeys).toContain('META_VERIFICATION_DATA')
+    expect(mocks.prisma.integrationSecret.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          key: 'META_LAST_ERROR',
+        }),
+      })
+    )
+  })
+
+  it('ignores masked Stripe placeholder submissions and keeps encrypted secrets unchanged', async () => {
+    const existingIntegration = {
+      id: 'int_stripe_masked_save',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-05-06T00:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_9012' },
+        { id: 'sec_4', key: 'MODE', value: 'enc:test' },
+      ],
+    }
+
+    mocks.prisma.integration.findFirst
+      .mockResolvedValueOnce(existingIntegration)
+      .mockResolvedValueOnce({ id: 'int_stripe_masked_save' })
+      .mockResolvedValue(existingIntegration)
+
+    mocks.prisma.integration.update.mockResolvedValue({ id: 'int_stripe_masked_save' })
+
+    await saveProviderCredentials('STRIPE', {
+      publishableKey: 'pk_test_••••••1234',
+      secretKey: 'sk_test_••••••5678',
+      webhookSecret: 'whsec_••••••9012',
+      mode: 'test',
+    })
+
+    const allUpserts = mocks.prisma.integrationSecret.upsert.mock.calls as Array<[any]>
+    expect(allUpserts.some(([arg]) => String(arg?.create?.value || '').includes('••••'))).toBe(false)
+    expect(allUpserts.some(([arg]) => arg?.create?.value === 'enc:pk_test_existing_1234')).toBe(true)
+    expect(allUpserts.some(([arg]) => arg?.create?.value === 'enc:sk_test_existing_5678')).toBe(true)
+    expect(allUpserts.some(([arg]) => arg?.create?.value === 'enc:whsec_existing_9012')).toBe(true)
+
+    const status = await getProviderStatus('STRIPE')
+    const serialized = JSON.stringify(status)
+    expect(serialized).not.toContain('sk_test_existing_5678')
+    expect(serialized).not.toContain('whsec_existing_9012')
   })
 
   it('returns Stripe masked metadata with prefix and last4 only', async () => {

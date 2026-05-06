@@ -60,6 +60,7 @@ const PROVIDER_CONFIG: Record<SupportedProvider, ProviderConfig> = {
   },
 }
 
+const META_VERIFIED_AT = 'META_VERIFIED_AT'
 const META_LAST_VERIFIED_AT = 'META_LAST_VERIFIED_AT'
 const META_LAST_ERROR = 'META_LAST_ERROR'
 const META_VERIFICATION_DATA = 'META_VERIFICATION_DATA'
@@ -78,6 +79,19 @@ function sanitizeProviderError(error: unknown) {
 
 function trimToNull(value: unknown) {
   return normalizeCredential(value)
+}
+
+function isMaskedCredentialPlaceholder(value: string | null) {
+  if (!value) return false
+  const normalized = value.trim()
+  if (!normalized) return false
+  if (!/[•*]{3,}|\.{3,}/.test(normalized)) return false
+  return (
+    normalized.startsWith('pk_') ||
+    normalized.startsWith('sk_') ||
+    normalized.startsWith('whsec_') ||
+    normalized.startsWith('re_')
+  )
 }
 
 function normalizeProviderKey(input: string) {
@@ -133,6 +147,7 @@ function extractDecryptedSecret(secretMap: Map<string, string>, key: string) {
 }
 
 function extractVerificationMeta(secretMap: Map<string, string>) {
+  const verifiedAt = extractDecryptedSecret(secretMap, META_VERIFIED_AT)
   const lastVerifiedAt = extractDecryptedSecret(secretMap, META_LAST_VERIFIED_AT)
   const lastError = extractDecryptedSecret(secretMap, META_LAST_ERROR)
   const verificationDataRaw = extractDecryptedSecret(secretMap, META_VERIFICATION_DATA)
@@ -150,7 +165,8 @@ function extractVerificationMeta(secretMap: Map<string, string>) {
   }
 
   return {
-    lastVerifiedAt: lastVerifiedAt || null,
+    verifiedAt: verifiedAt || lastVerifiedAt || null,
+    lastVerifiedAt: lastVerifiedAt || verifiedAt || null,
     lastError: lastError || null,
     verificationData,
   }
@@ -238,6 +254,23 @@ async function updateVerificationMeta(input: {
         where: {
           integrationId_key: {
             integrationId: input.integrationId,
+            key: META_VERIFIED_AT,
+          },
+        },
+        create: {
+          integrationId: input.integrationId,
+          key: META_VERIFIED_AT,
+          value: verifiedAtValue,
+        },
+        update: {
+          value: verifiedAtValue,
+        },
+      })
+
+      await tx.integrationSecret.upsert({
+        where: {
+          integrationId_key: {
+            integrationId: input.integrationId,
             key: META_LAST_VERIFIED_AT,
           },
         },
@@ -302,7 +335,7 @@ async function updateVerificationMeta(input: {
       where: {
         integrationId: input.integrationId,
         key: {
-          in: [META_LAST_VERIFIED_AT, META_VERIFICATION_DATA],
+          in: [META_VERIFIED_AT, META_LAST_VERIFIED_AT, META_VERIFICATION_DATA],
         },
       },
     })
@@ -377,18 +410,24 @@ function normalizeCredentialInput(provider: SupportedProvider, input: Record<str
 
   const publishableKey = trimToNull(input.publishableKey)
   const secretKey = trimToNull(input.secretKey)
+  const webhookSecret = trimToNull(input.webhookSecret)
+  const normalized: Record<string, string> = {}
 
-  if (!publishableKey) throw new Error('publishableKey is required')
-  if (!secretKey) throw new Error('secretKey is required')
-
-  const normalized: Record<string, string> = {
-    PUBLISHABLE_KEY: publishableKey,
-    SECRET_KEY: secretKey,
-    MODE: normalizeStripeMode(input.mode),
+  if (publishableKey && !isMaskedCredentialPlaceholder(publishableKey)) {
+    normalized.PUBLISHABLE_KEY = publishableKey
   }
 
-  const webhookSecret = trimToNull(input.webhookSecret)
-  if (webhookSecret) normalized.WEBHOOK_SECRET = webhookSecret
+  if (secretKey && !isMaskedCredentialPlaceholder(secretKey)) {
+    normalized.SECRET_KEY = secretKey
+  }
+
+  if (webhookSecret && !isMaskedCredentialPlaceholder(webhookSecret) && hasRealCredential(webhookSecret)) {
+    normalized.WEBHOOK_SECRET = webhookSecret
+  }
+
+  if (input.mode != null) {
+    normalized.MODE = normalizeStripeMode(input.mode)
+  }
 
   return normalized
 }
@@ -462,7 +501,7 @@ async function upsertProviderIntegrationCredentials(input: {
       where: {
         integrationId: integration.id,
         key: {
-          in: [META_LAST_VERIFIED_AT, META_LAST_ERROR, META_VERIFICATION_DATA],
+          in: [META_VERIFIED_AT, META_LAST_VERIFIED_AT, META_LAST_ERROR, META_VERIFICATION_DATA],
         },
       },
     })
@@ -622,6 +661,7 @@ export type ProviderStatus = {
   state: ProviderConnectionState
   source: ProviderSource
   hasCredentials: boolean
+  verifiedAt: string | null
   lastVerifiedAt: string | null
   lastError: string | null
   verificationData: Record<string, unknown> | null
@@ -653,6 +693,7 @@ export async function getProviderStatus(provider: SupportedProvider): Promise<Pr
       }),
       source: runtime.source,
       hasCredentials: shippingStatus.hasCredentials,
+      verifiedAt: verification.verifiedAt,
       lastVerifiedAt: verification.lastVerifiedAt,
       lastError: verification.lastError,
       verificationData: verification.verificationData,
@@ -673,6 +714,7 @@ export async function getProviderStatus(provider: SupportedProvider): Promise<Pr
       state: runtime.source === 'env' ? 'CREDENTIALS_SAVED' : 'NOT_CONFIGURED',
       source: runtime.source,
       hasCredentials: runtime.source !== 'none',
+      verifiedAt: null,
       lastVerifiedAt: null,
       lastError: null,
       verificationData: null,
@@ -685,6 +727,7 @@ export async function getProviderStatus(provider: SupportedProvider): Promise<Pr
   const hasCredentials = hasRequiredSecrets(provider, secretMap)
   const verification = extractVerificationMeta(secretMap)
   const runtime = await getRuntimeProviderConnectionInternal(provider)
+  const effectiveSource: ProviderSource = hasCredentials ? 'db' : runtime.source
 
   return {
     provider,
@@ -696,8 +739,9 @@ export async function getProviderStatus(provider: SupportedProvider): Promise<Pr
       lastVerifiedAt: verification.lastVerifiedAt,
       lastError: verification.lastError,
     }),
-    source: runtime.source,
+    source: effectiveSource,
     hasCredentials,
+    verifiedAt: verification.verifiedAt,
     lastVerifiedAt: verification.lastVerifiedAt,
     lastError: verification.lastError,
     verificationData: verification.verificationData,
@@ -731,10 +775,38 @@ export async function saveProviderCredentials(provider: SupportedProvider, crede
     return getProviderStatus(provider)
   }
 
-  await upsertProviderIntegrationCredentials({
-    provider,
-    normalizedCredentials: normalized,
-  })
+  if (provider === 'STRIPE') {
+    const existing = await findLatestProviderIntegration(provider)
+    const existingSecretMap = existing ? buildSecretMap(existing.secrets) : new Map<string, string>()
+    const existingCredentials = getDecryptedCredentials(provider, existingSecretMap)
+
+    const mergedCredentials: Record<string, string> = {
+      ...existingCredentials,
+      ...normalized,
+    }
+
+    if (!hasRealCredential(mergedCredentials.PUBLISHABLE_KEY)) throw new Error('publishableKey is required')
+    if (!hasRealCredential(mergedCredentials.SECRET_KEY)) throw new Error('secretKey is required')
+
+    if (!hasRealCredential(mergedCredentials.MODE)) {
+      const inferredMode = mergedCredentials.SECRET_KEY.startsWith('sk_live_') ? 'live' : 'test'
+      mergedCredentials.MODE = normalizeStripeMode(inferredMode)
+    }
+
+    if (mergedCredentials.WEBHOOK_SECRET && !hasRealCredential(mergedCredentials.WEBHOOK_SECRET)) {
+      delete mergedCredentials.WEBHOOK_SECRET
+    }
+
+    await upsertProviderIntegrationCredentials({
+      provider,
+      normalizedCredentials: mergedCredentials,
+    })
+  } else {
+    await upsertProviderIntegrationCredentials({
+      provider,
+      normalizedCredentials: normalized,
+    })
+  }
 
   return getProviderStatus(provider)
 }

@@ -1121,17 +1121,27 @@ export default function SettingsWorkspace() {
       setProviderStatusLoading(true);
       setProviderStatusError('');
       try {
-        const [payload, runtimeStatus] = await Promise.all([
+        const [providerResult, runtimeResult] = await Promise.allSettled([
           fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson),
           fetch('/api/settings/payments/stripe/runtime-status', { cache: 'no-store' }).then(parseApiJson),
         ]);
         if (cancelled) return;
+
+        if (providerResult.status !== 'fulfilled') {
+          throw providerResult.reason || new Error('Failed to load provider statuses');
+        }
+
         const nextMap = {};
-        for (const entry of payload?.providers || []) {
+        for (const entry of providerResult.value?.providers || []) {
           nextMap[entry.provider] = entry;
         }
+        if (runtimeResult.status === 'fulfilled') {
+          setStripeRuntimeStatus(runtimeResult.value || null);
+        } else {
+          setStripeRuntimeStatus(null);
+          setProviderStatusError('Stripe runtime status could not be loaded. Provider credential status is still shown from DB.');
+        }
         setProviderStatusMap(nextMap);
-        setStripeRuntimeStatus(runtimeStatus || null);
         setProviderStatusLoaded(true);
       } catch (loadError) {
         if (cancelled) return;
@@ -2096,16 +2106,26 @@ export default function SettingsWorkspace() {
     setProviderStatusLoading(true);
     setProviderStatusError('');
     try {
-      const [payload, runtimeStatus] = await Promise.all([
+      const [providerResult, runtimeResult] = await Promise.allSettled([
         fetch('/api/settings/providers', { cache: 'no-store' }).then(parseApiJson),
         fetch('/api/settings/payments/stripe/runtime-status', { cache: 'no-store' }).then(parseApiJson),
       ]);
+
+      if (providerResult.status !== 'fulfilled') {
+        throw providerResult.reason || new Error('Failed to refresh provider statuses');
+      }
+
       const nextMap = {};
-      for (const entry of payload?.providers || []) {
+      for (const entry of providerResult.value?.providers || []) {
         nextMap[entry.provider] = entry;
       }
       setProviderStatusMap(nextMap);
-      setStripeRuntimeStatus(runtimeStatus || null);
+      if (runtimeResult.status === 'fulfilled') {
+        setStripeRuntimeStatus(runtimeResult.value || null);
+      } else {
+        setStripeRuntimeStatus(null);
+        setProviderStatusError('Stripe runtime status could not be loaded. Provider credential status is still shown from DB.');
+      }
       setProviderStatusLoaded(true);
     } catch (refreshError) {
       setProviderStatusError(refreshError instanceof Error ? refreshError.message : 'Failed to refresh provider statuses');
