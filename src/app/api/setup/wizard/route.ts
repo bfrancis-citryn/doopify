@@ -1,4 +1,5 @@
 import { err, ok } from '@/lib/api'
+import { evaluatePublicStoreUrl } from '@/lib/public-store-url'
 import { prisma } from '@/lib/prisma'
 import { requireOwner } from '@/server/auth/require-auth'
 import { getStripeRuntimeConnection } from '@/server/payments/stripe-runtime.service'
@@ -82,11 +83,17 @@ export async function GET(req: Request) {
     ])
 
     const shippingStatus = shippingStore ? await buildShippingSetupStatus(shippingStore) : null
+    const publicStoreUrl = evaluatePublicStoreUrl({
+      value: process.env.NEXT_PUBLIC_STORE_URL,
+      nodeEnv: process.env.NODE_ENV,
+    })
 
     const facts: SetupWizardFacts = {
       ownerExists: ownerCount > 0,
       storeNameConfigured: Boolean(store?.name?.trim()),
       storeEmailConfigured: Boolean(store?.email?.trim()),
+      storeUrlReady: publicStoreUrl.ready,
+      storeUrlIssue: publicStoreUrl.issue,
 
       stripeSource: stripe.source,
       stripeVerified: stripe.verified,

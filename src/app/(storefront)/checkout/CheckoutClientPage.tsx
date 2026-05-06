@@ -61,6 +61,7 @@ type CheckoutStoreSettings = {
   currency?: string
   logoUrl?: string
   checkoutLogoUrl?: string
+  secondaryColor?: string
   buttonStyle?: 'solid' | 'outline' | 'soft' | string
   buttonTextTransform?: 'uppercase' | 'none' | string
   buttonRadius?: 'none' | 'sm' | 'md' | 'lg' | 'full' | string
@@ -252,6 +253,37 @@ function resolveCheckoutLogo(store: CheckoutStoreSettings | null): string {
   return store?.checkoutLogoUrl || store?.logoUrl || '';
 }
 
+function parseHexColor(value: string | null | undefined) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized)
+  if (!match) return null
+  const hex = match[1]
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+  }
+}
+
+function colorDistance(left: { r: number; g: number; b: number }, right: { r: number; g: number; b: number }) {
+  return Math.abs(left.r - right.r) + Math.abs(left.g - right.g) + Math.abs(left.b - right.b)
+}
+
+function isNearCheckoutBackground(hexColor: string | null | undefined) {
+  const color = parseHexColor(hexColor)
+  const background = parseHexColor('#080808')
+  if (!color || !background) return false
+  return colorDistance(color, background) < 80
+}
+
+function isDarkColor(hexColor: string | null | undefined) {
+  const color = parseHexColor(hexColor)
+  if (!color) return false
+  const luminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255
+  return luminance < 0.5
+}
+
 // Checkout buttons inherit Brand & Appearance tokens from the store's Brand Kit settings
 // (accentColor, primaryColor, buttonStyle, buttonTextTransform, buttonRadius). These are
 // the same fields managed in Settings -> Brand & appearance and exposed via the public
@@ -282,23 +314,26 @@ function resolveButtonPresentation(store: CheckoutStoreSettings | null) {
   })();
 
   const accent = store?.accentColor || store?.primaryColor || '#c9a86c';
+  const fallbackSurface = store?.secondaryColor || '#f3efe7';
+  const solidBackground = isNearCheckoutBackground(accent) ? fallbackSurface : accent;
+  const solidText = isDarkColor(solidBackground) ? '#f3efe7' : '#080808';
 
   const primaryStyle =
     style === 'outline'
       ? {
           background: 'transparent',
-          color: accent,
-          border: `1px solid ${accent}`,
+          color: isNearCheckoutBackground(accent) ? '#f3efe7' : accent,
+          border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}`,
         }
       : style === 'soft'
         ? {
-            background: `${accent}33`,
+            background: `${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}33`,
             color: '#f3efe7',
-            border: `1px solid ${accent}66`,
+            border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}66`,
           }
         : {
-            background: accent,
-            color: '#080808',
+            background: solidBackground,
+            color: solidText,
             border: 'none',
           };
 
@@ -349,6 +384,28 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
   const previewSubtotal = checkout?.subtotal ?? cartSubtotal;
   const previewShipping = checkout?.shippingAmount ?? selectedShippingQuote?.amount ?? null;
   const previewTotal = checkout?.total ?? (previewSubtotal + (selectedShippingQuote?.amount || 0));
+  const shippingAddressValid = isAddressComplete(shippingAddress);
+  const billingAddressValid = billingSameAsShipping || isAddressComplete(billingAddress);
+  const checkoutInitializationFailed = Boolean(error && !paymentReady);
+  const reviewPaymentDisabledReason = (() => {
+    if (creatingIntent) return 'Preparing secure payment form...';
+    if (!items.length) return 'Your cart is empty.';
+    if (!shippingAddressValid || !billingAddressValid) {
+      return 'Enter a valid shipping and billing address before continuing.';
+    }
+    if (!selectedShippingQuoteId) return 'Select a shipping method before continuing.';
+    if (checkoutInitializationFailed) return 'Checkout initialization failed. Fix the error above and try again.';
+    if (checkout && !paymentReady) return 'Payment form is still loading. Please wait a moment.';
+    return '';
+  })();
+  const reviewButtonState =
+    creatingIntent
+      ? 'loading'
+      : reviewPaymentDisabledReason
+        ? checkoutInitializationFailed
+          ? 'error-blocked'
+          : 'disabled'
+        : 'ready';
 
   useEffect(() => {
     if (!recoveryToken || recoveryToken === lastRecoveredTokenRef.current) return;
@@ -683,8 +740,11 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
         .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
         .primary-btn,.secondary-btn{min-height:48px;padding:0 20px;border-radius:999px;border:none;font:inherit;font-size:12px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer}
         .primary-btn{background:var(--store-primary);color:#080808}
+        .primary-btn[data-state='ready']{box-shadow:0 0 0 1px rgba(243,239,231,0.12) inset}
+        .primary-btn[data-state='loading']{background:rgba(255,255,255,0.14)!important;color:#f3efe7!important;border:1px solid rgba(255,255,255,0.18)!important}
+        .primary-btn[data-state='error-blocked']{background:rgba(127,29,29,0.28)!important;color:#fecaca!important;border:1px solid rgba(239,68,68,0.52)!important}
         .secondary-btn{background:transparent;border:1px solid rgba(255,255,255,0.14);color:#f3efe7}
-        .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.50)!important;border:1px solid rgba(255,255,255,0.14)!important;opacity:1;cursor:not-allowed}
+        .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.72)!important;border:1px solid rgba(255,255,255,0.22)!important;opacity:1;cursor:not-allowed}
         .secondary-btn:disabled{opacity:0.42;cursor:not-allowed}
         .error{margin-top:18px;padding:14px 16px;border-radius:16px;border:1px solid rgba(239,68,68,0.4);background:rgba(127,29,29,0.25);color:#fecaca;font-size:14px}
         .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03)}
@@ -975,20 +1035,22 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                   {!paymentReady ? (
                     <button
                       className="primary-btn"
-                      disabled={creatingIntent || !items.length || !selectedShippingQuoteId}
+                      data-state={reviewButtonState}
+                      disabled={Boolean(reviewPaymentDisabledReason)}
                       style={
-                        creatingIntent || !items.length || !selectedShippingQuoteId
+                        reviewButtonState !== 'ready'
                           ? brandButtonBaseStyle
                           : { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }
                       }
                       type="submit"
                     >
-                      {creatingIntent ? 'Loading payment form...' : 'Review payment'}
+                      {reviewButtonState === 'loading' ? 'Loading payment form...' : 'Review payment'}
                     </button>
                   ) : (
                     <>
                       <button
                         className="primary-btn"
+                        data-state={confirmingPayment ? 'loading' : 'ready'}
                         disabled={confirmingPayment}
                         style={
                           confirmingPayment
@@ -1014,6 +1076,19 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                     </>
                   )}
                 </div>
+                {!paymentReady && reviewPaymentDisabledReason ? (
+                  <p
+                    style={{
+                      marginTop: 8,
+                      marginBottom: 0,
+                      fontSize: 12,
+                      color: checkoutInitializationFailed ? '#fca5a5' : 'rgba(255,255,255,0.56)',
+                      letterSpacing: '0.03em',
+                    }}
+                  >
+                    {reviewPaymentDisabledReason}
+                  </p>
+                ) : null}
               </>
             )}
 

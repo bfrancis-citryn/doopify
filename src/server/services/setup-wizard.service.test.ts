@@ -10,6 +10,8 @@ function allMissingFacts(): SetupWizardFacts {
     ownerExists: false,
     storeNameConfigured: false,
     storeEmailConfigured: false,
+    storeUrlReady: false,
+    storeUrlIssue: 'missing',
     stripeSource: 'none',
     stripeVerified: false,
     stripeHasSecretKey: false,
@@ -31,6 +33,8 @@ function allReadyFacts(): SetupWizardFacts {
     ownerExists: true,
     storeNameConfigured: true,
     storeEmailConfigured: true,
+    storeUrlReady: true,
+    storeUrlIssue: null,
     stripeSource: 'db',
     stripeVerified: true,
     stripeHasSecretKey: true,
@@ -137,6 +141,20 @@ describe('buildSetupWizardSteps', () => {
 
     expect(webhook?.status).toBe('needs_setup')
     expect(webhook?.reason).toContain('STRIPE_WEBHOOK_SECRET')
+  })
+
+  it('marks webhook step as needs_setup when store URL is placeholder', () => {
+    const facts = allReadyFacts()
+    facts.storeUrlReady = false
+    facts.storeUrlIssue = 'placeholder'
+
+    const report = buildSetupWizardSteps(facts)
+    const webhook = report.steps.find((s) => s.id === 'stripe-webhook')
+
+    expect(webhook?.status).toBe('needs_setup')
+    expect(webhook?.reason).toContain('placeholder domain')
+    expect(webhook?.ctaRoute).toBe('/settings?section=setup')
+    expect(webhook?.ctaLabel).toBe('Fix store URL')
   })
 
   it('returns CTA routes for missing first-run required steps', () => {

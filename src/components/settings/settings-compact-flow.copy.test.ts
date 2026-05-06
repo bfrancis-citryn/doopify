@@ -86,8 +86,11 @@ describe('settings compact flow', () => {
     expect(workspace).toContain('<strong>API keys:</strong>')
     expect(workspace).toContain('<strong>Runtime:</strong>')
     expect(workspace).toContain('<strong>Webhook:</strong>')
+    expect(workspace).toContain('<strong>Webhook endpoint:</strong>')
     expect(workspace).toContain('<strong>Verified:</strong>')
-    expect(workspace).toContain('Saved secret values are not rendered back.')
+    expect(workspace).toContain('Credentials saved securely. Secret values are encrypted and hidden.')
+    expect(workspace).toContain('Create this endpoint in Stripe and paste the whsec signing secret here. Orders are only created after this webhook succeeds.')
+    expect(workspace).toContain('Store URL needs setup')
   })
 
   it('keeps PayPal and SendLayer drawers honest without fake editable credential forms', () => {
@@ -133,6 +136,18 @@ describe('settings compact flow', () => {
     expect(workspace).toContain("fetch('/api/settings/brand-kit'")
     expect(workspace).toContain('async function handleBrandKitSave()')
     expect(workspace).toContain("activeSection === 'brand-kit' ? handleBrandKitSave : undefined")
+  })
+
+  it('clarifies Brand & appearance preview labels and usage copy', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain('<h4>Storefront preview</h4>')
+    expect(workspace).toContain('<h4>Checkout preview</h4>')
+    expect(workspace).toContain('<h4>Email preview</h4>')
+    expect(workspace).toContain('Controls storefront page colors, fonts, and buttons.')
+    expect(workspace).toContain('Controls checkout header/logo/button styling where supported.')
+    expect(workspace).toContain('Controls customer email logo/header/footer styling.')
+    expect(workspace).toContain('Used for storefront logo, favicon, packing slips, and default email branding.')
   })
 
   it('maps friendly webhook groups only to real typed events', () => {

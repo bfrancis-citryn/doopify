@@ -1,4 +1,5 @@
 import { err, ok } from '@/lib/api'
+import { resolveStripeWebhookEndpoint } from '@/lib/public-store-url'
 import {
   getStripeRuntimeConnection,
   getStripeWebhookSecretSelection,
@@ -20,6 +21,18 @@ export async function GET(req: Request) {
   try {
     const stripeRuntime = await getStripeRuntimeConnection()
     const webhookSecretSelection = await getStripeWebhookSecretSelection()
+    const requestOrigin = (() => {
+      try {
+        return new URL(req.url).origin
+      } catch {
+        return null
+      }
+    })()
+    const webhookEndpoint = resolveStripeWebhookEndpoint({
+      nextPublicStoreUrl: process.env.NEXT_PUBLIC_STORE_URL,
+      currentOrigin: requestOrigin,
+      nodeEnv: process.env.NODE_ENV,
+    })
 
     return ok({
       source: stripeRuntime.source,
@@ -32,6 +45,11 @@ export async function GET(req: Request) {
       accountId: stripeRuntime.accountId,
       chargesEnabled: stripeRuntime.chargesEnabled,
       payoutsEnabled: stripeRuntime.payoutsEnabled,
+      webhookEndpoint: webhookEndpoint.endpointUrl,
+      webhookEndpointSource: webhookEndpoint.endpointSource,
+      webhookEndpointReady: webhookEndpoint.ready,
+      webhookEndpointIssue: webhookEndpoint.issue,
+      webhookEndpointMessage: webhookEndpoint.message,
       message: buildMessage(stripeRuntime.source),
     })
   } catch (error) {

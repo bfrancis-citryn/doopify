@@ -23,6 +23,8 @@ export type SetupWizardFacts = {
   ownerExists: boolean
   storeNameConfigured: boolean
   storeEmailConfigured: boolean
+  storeUrlReady: boolean
+  storeUrlIssue: 'missing' | 'invalid' | 'placeholder' | 'localhost_production' | null
   stripeSource: 'db' | 'env' | 'none'
   stripeVerified: boolean
   stripeHasSecretKey: boolean
@@ -109,7 +111,15 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
   let webhookStatus: WizardStepStatus
   let webhookReason: string
 
-  if (!facts.stripeHasWebhookSecret) {
+  if (!facts.storeUrlReady) {
+    webhookStatus = 'needs_setup'
+    webhookReason =
+      facts.storeUrlIssue === 'placeholder'
+        ? 'Store URL needs setup. NEXT_PUBLIC_STORE_URL is still using a placeholder domain; set it to the deployed storefront URL before configuring Stripe webhooks.'
+        : facts.storeUrlIssue === 'localhost_production'
+          ? 'Store URL needs setup. NEXT_PUBLIC_STORE_URL cannot use localhost in production.'
+          : 'Store URL needs setup. Configure NEXT_PUBLIC_STORE_URL with the deployed storefront domain before configuring Stripe webhooks.'
+  } else if (!facts.stripeHasWebhookSecret) {
     webhookStatus = 'needs_setup'
     webhookReason =
       'STRIPE_WEBHOOK_SECRET is not set. Orders are created by verified webhook, not browser redirect. Set the secret and register the endpoint.'
@@ -129,8 +139,18 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     isRequired: true,
     status: webhookStatus,
     reason: webhookReason,
-    ctaRoute: webhookStatus !== 'ready' ? '/admin/webhooks' : undefined,
-    ctaLabel: webhookStatus !== 'ready' ? 'View delivery logs' : undefined,
+    ctaRoute:
+      webhookStatus !== 'ready'
+        ? !facts.storeUrlReady
+          ? '/settings?section=setup'
+          : '/admin/webhooks'
+        : undefined,
+    ctaLabel:
+      webhookStatus !== 'ready'
+        ? !facts.storeUrlReady
+          ? 'Fix store URL'
+          : 'View delivery logs'
+        : undefined,
     docsLink: '/docs/setup/stripe',
   })
 

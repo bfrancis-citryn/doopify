@@ -51,8 +51,8 @@ describe('checkout button copy and state', () => {
 
   it('guards "Review payment" / "Place order" button with disabled when required fields are missing', () => {
     const source = read(PAGE)
-    // Disabled when creatingIntent or no items or no shipping selected
-    expect(source).toContain('disabled={creatingIntent || !items.length || !selectedShippingQuoteId}')
+    // Disabled when any blocker reason exists (address, shipping method, loading, checkout init failure)
+    expect(source).toContain('disabled={Boolean(reviewPaymentDisabledReason)}')
     // Disabled during payment confirmation
     expect(source).toContain('disabled={confirmingPayment}')
   })
@@ -60,7 +60,7 @@ describe('checkout button copy and state', () => {
   it('does not apply primaryStyle inline when the button is disabled', () => {
     const source = read(PAGE)
     // When disabled, only brandButtonBaseStyle is applied (no primaryStyle that carries color: #080808)
-    expect(source).toContain('creatingIntent || !items.length || !selectedShippingQuoteId')
+    expect(source).toContain("reviewButtonState !== 'ready'")
     expect(source).toContain('? brandButtonBaseStyle')
     expect(source).toContain(': { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }')
     // primaryStyle must NOT be spread unconditionally onto a button that can be disabled
@@ -74,8 +74,24 @@ describe('checkout button copy and state', () => {
   it('uses !important on disabled CSS to guard against accent-color inline style leakage', () => {
     const source = read(PAGE)
     expect(source).toContain('.primary-btn:disabled{')
-    expect(source).toContain('color:rgba(255,255,255,0.50)!important')
+    expect(source).toContain('color:rgba(255,255,255,0.72)!important')
     expect(source).toContain('background:rgba(255,255,255,0.10)!important')
+  })
+
+  it('defines explicit primary button states for ready, disabled, loading, and error-blocked', () => {
+    const source = read(PAGE)
+    expect(source).toContain("data-state={reviewButtonState}")
+    expect(source).toContain(".primary-btn[data-state='ready']")
+    expect(source).toContain(".primary-btn[data-state='loading']")
+    expect(source).toContain(".primary-btn[data-state='error-blocked']")
+  })
+
+  it('renders disabled helper text for address, shipping, payment readiness, and initialization failures', () => {
+    const source = read(PAGE)
+    expect(source).toContain('Enter a valid shipping and billing address before continuing.')
+    expect(source).toContain('Select a shipping method before continuing.')
+    expect(source).toContain('Payment form is still loading. Please wait a moment.')
+    expect(source).toContain('Checkout initialization failed. Fix the error above and try again.')
   })
 
   it('reads accent color from Brand Kit (accentColor, primaryColor) with a safe fallback', () => {

@@ -258,6 +258,22 @@ describe('GET /api/setup/status', () => {
     expect(resendApiCheck?.status).toBe('WARN')
   })
 
+  it('fails NEXT_PUBLIC_STORE_URL check when placeholder deployment domain is configured', async () => {
+    process.env.NEXT_PUBLIC_STORE_URL = 'https://your-doopify-beta-domain.vercel.app'
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+
+    const publicUrlCheck = payload.data.requiredChecks.find(
+      (check: { id: string }) => check.id === 'next-public-store-url'
+    )
+    expect(publicUrlCheck?.status).toBe('FAIL')
+    expect(publicUrlCheck?.summary).toContain('placeholder domain')
+  })
+
   it('sanitizes database connectivity failures and still returns useful diagnostics', async () => {
     mocks.queryRaw.mockRejectedValueOnce(
       new Error('connect ECONNREFUSED postgresql://db_user:raw-password@localhost:5432/doopify')

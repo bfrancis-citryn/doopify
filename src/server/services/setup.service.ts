@@ -1,3 +1,5 @@
+import { evaluatePublicStoreUrl } from '@/lib/public-store-url'
+
 export type SetupCheckStatus = 'PASS' | 'WARN' | 'FAIL'
 export type SetupProfile = 'cli' | 'app'
 
@@ -135,34 +137,22 @@ function evaluateWebhookRetrySecret(secret: string | undefined) {
 }
 
 function evaluateStoreUrl(urlValue: string | undefined) {
-  if (!urlValue) {
-    return {
-      status: 'FAIL' as const,
-      summary: 'NEXT_PUBLIC_STORE_URL is missing.',
-      fix: 'Set NEXT_PUBLIC_STORE_URL in .env.local to your storefront base URL (for example https://shop.example.com).',
-    }
-  }
+  const evaluation = evaluatePublicStoreUrl({
+    value: urlValue,
+    nodeEnv: process.env.NODE_ENV,
+  })
 
-  try {
-    const parsed = new URL(urlValue)
-    if (!['http:', 'https:'].includes(parsed.protocol)) {
-      return {
-        status: 'FAIL' as const,
-        summary: 'NEXT_PUBLIC_STORE_URL must use http:// or https://.',
-        fix: 'Update NEXT_PUBLIC_STORE_URL to a valid HTTP(S) URL.',
-      }
-    }
-
+  if (evaluation.ready) {
     return {
       status: 'PASS' as const,
       summary: 'NEXT_PUBLIC_STORE_URL is present and valid.',
     }
-  } catch {
-    return {
-      status: 'FAIL' as const,
-      summary: 'NEXT_PUBLIC_STORE_URL is not a valid URL.',
-      fix: 'Update NEXT_PUBLIC_STORE_URL to a valid HTTP(S) URL.',
-    }
+  }
+
+  return {
+    status: 'FAIL' as const,
+    summary: evaluation.message,
+    fix: 'Set NEXT_PUBLIC_STORE_URL to your deployed storefront base URL (for example https://store.example.com).',
   }
 }
 

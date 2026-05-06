@@ -111,4 +111,15 @@ describe('buildSetupDoctorReport', () => {
     expect(actions.length).toBeGreaterThan(0)
     expect(actions.some((action) => action.includes('JWT_SECRET'))).toBe(true)
   })
+
+  it('fails public URL check when NEXT_PUBLIC_STORE_URL uses placeholder domain', () => {
+    const facts = baseFacts()
+    facts.nextPublicStoreUrl = 'https://your-doopify-beta-domain.vercel.app'
+
+    const report = buildSetupDoctorReport(facts, { profile: 'app' })
+    const urlCheck = report.checks.find((check) => check.id === 'next-public-store-url')
+
+    expect(urlCheck?.status).toBe('FAIL')
+    expect(urlCheck?.summary).toContain('placeholder domain')
+  })
 })

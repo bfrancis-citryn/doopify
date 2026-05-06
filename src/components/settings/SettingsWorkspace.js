@@ -1319,6 +1319,11 @@ export default function SettingsWorkspace() {
     STRIPE_WEBHOOK_SOURCE_LABEL[stripeRuntimeStatus?.webhookSource] || STRIPE_WEBHOOK_SOURCE_LABEL.none;
   const stripeRuntimeModeLabel = stripeRuntimeStatus?.mode || 'unknown';
   const stripeRuntimeReady = Boolean(stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'none');
+  const stripeWebhookEndpoint = stripeRuntimeStatus?.webhookEndpoint || '';
+  const stripeWebhookEndpointReady = Boolean(stripeRuntimeStatus?.webhookEndpointReady);
+  const stripeWebhookEndpointIssue = stripeRuntimeStatus?.webhookEndpointIssue || null;
+  const stripeWebhookEndpointMessage = stripeRuntimeStatus?.webhookEndpointMessage || '';
+  const stripeWebhookEndpointStatusLabel = stripeWebhookEndpointReady ? 'Ready' : 'Store URL needs setup';
   const stripeMethodChips = useMemo(() => getStripeMethodChips(stripeRuntimeStatus), [stripeRuntimeStatus]);
   const showStripeRuntimeMismatchWarning =
     stripeProviderStatus?.state === 'VERIFIED' && stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'db';
@@ -2098,7 +2103,7 @@ export default function SettingsWorkspace() {
 
   async function handleCopyStripeWebhookEndpoint() {
     if (typeof window === 'undefined') return;
-    const endpoint = `${window.location.origin}/api/webhooks/stripe`;
+    const endpoint = stripeWebhookEndpoint || `${window.location.origin}/api/webhooks/stripe`;
     await handleCopyCommand('stripe-webhook-endpoint', endpoint);
   }
 
@@ -2689,7 +2694,7 @@ export default function SettingsWorkspace() {
                     <section className={styles.brandPreviewGrid}>
                       <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                          <h4>Storefront header preview</h4>
+                          <h4>Storefront preview</h4>
                         </div>
                         <div className={styles.brandPreviewFrame}>
                           <div className={styles.brandPreviewHeader} style={{ backgroundColor: storefrontPrimaryColor, color: storefrontTextColor }}>
@@ -2700,7 +2705,7 @@ export default function SettingsWorkspace() {
                       </AdminCard>
                       <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                          <h4>Checkout header preview</h4>
+                          <h4>Checkout preview</h4>
                         </div>
                         <div className={styles.brandPreviewFrame}>
                           <div className={styles.brandPreviewHeader} style={{ backgroundColor: storefrontPrimaryColor, color: storefrontTextColor }}>
@@ -2711,7 +2716,7 @@ export default function SettingsWorkspace() {
                       </AdminCard>
                       <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.brandPreviewCard}`} variant="card">
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                          <h4>Email header preview</h4>
+                          <h4>Email preview</h4>
                         </div>
                         <div className={styles.brandPreviewFrame}>
                           <div className={styles.brandPreviewHeader} style={{ backgroundColor: emailHeaderColor, color: '#ffffff' }}>
@@ -2727,7 +2732,7 @@ export default function SettingsWorkspace() {
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                           <h4>Global brand assets</h4>
                         </div>
-                        <p className={styles.compactRowDescription}>Identity assets used across storefront, checkout, and default documents.</p>
+                        <p className={styles.compactRowDescription}>Used for storefront logo, favicon, packing slips, and default email branding.</p>
                         <div className={styles.compactDrawerGrid}>
                           <p className={styles.compactMeta}>
                             <strong>Store logo:</strong> {brandKit.logoUrl ? 'Configured' : 'Not set'}
@@ -2749,12 +2754,12 @@ export default function SettingsWorkspace() {
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                           <h4>Storefront theme</h4>
                         </div>
-                        <p className={styles.compactRowDescription}>Default visual tokens for storefront pages.</p>
+                        <p className={styles.compactRowDescription}>Controls storefront page colors, fonts, and buttons.</p>
                         <div className={styles.compactDrawerGrid}>
                           <p className={styles.compactMeta}>
                             <strong>Primary color:</strong> {brandKit.primaryColor || 'Not set'}
                           </p>
-                          <p className={styles.compactMeta}>Used in storefront theme.</p>
+                          <p className={styles.compactMeta}>Applied to storefront theme tokens.</p>
                           <p className={styles.compactMeta}>
                             <strong>Button style:</strong> {brandKit.buttonStyle || 'solid'}
                           </p>
@@ -2773,12 +2778,12 @@ export default function SettingsWorkspace() {
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                           <h4>Checkout branding</h4>
                         </div>
-                        <p className={styles.compactRowDescription}>Settings that only affect checkout presentation.</p>
+                        <p className={styles.compactRowDescription}>Controls checkout header/logo/button styling where supported.</p>
                         <div className={styles.compactDrawerGrid}>
                           <p className={styles.compactMeta}>
                             <strong>Checkout logo:</strong> {brandKit.checkoutLogoUrl ? 'Configured' : 'Not set'}
                           </p>
-                          <p className={styles.compactMeta}>Used in checkout only.</p>
+                          <p className={styles.compactMeta}>Used in checkout header.</p>
                         </div>
                         <div className={styles.compactActionRow}>
                           <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.CHECKOUT_BRANDING)} size="sm" variant="secondary">
@@ -2791,7 +2796,7 @@ export default function SettingsWorkspace() {
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                           <h4>Email branding</h4>
                         </div>
-                        <p className={styles.compactRowDescription}>Visual defaults for customer emails.</p>
+                        <p className={styles.compactRowDescription}>Controls customer email logo/header/footer styling.</p>
                         <div className={styles.compactDrawerGrid}>
                           <p className={styles.compactMeta}>
                             <strong>Email logo:</strong> {brandKit.emailLogoUrl ? 'Configured' : 'Not set'}
@@ -4079,6 +4084,9 @@ export default function SettingsWorkspace() {
                   <strong>Webhook:</strong> {stripeWebhookSourceLabel}
                 </p>
                 <p className={styles.compactMeta}>
+                  <strong>Webhook endpoint:</strong> {stripeWebhookEndpointStatusLabel}
+                </p>
+                <p className={styles.compactMeta}>
                   <strong>Verified:</strong>{' '}
                   {stripeSetupStatus.lastVerifiedAt ? new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString() : 'Not verified yet'}
                 </p>
@@ -4165,6 +4173,22 @@ export default function SettingsWorkspace() {
                   {setupCopiedCommandId === 'stripe-webhook-endpoint' ? 'Copied endpoint' : 'Copy webhook endpoint'}
                 </AdminButton>
               </div>
+              <p className={styles.compactMeta}>
+                Create this endpoint in Stripe and paste the whsec signing secret here. Orders are only created after this webhook succeeds.
+              </p>
+              <p className={styles.compactMeta}>
+                <strong>Endpoint URL:</strong> {stripeWebhookEndpoint || 'Unavailable until this page has a valid origin'}
+              </p>
+              {!stripeWebhookEndpointReady ? (
+                <p className={styles.setupFixText}>
+                  Store URL needs setup. {stripeWebhookEndpointMessage} Set NEXT_PUBLIC_STORE_URL to the deployed domain and redeploy before relying on webhook readiness.
+                </p>
+              ) : null}
+              {stripeWebhookEndpointIssue === 'placeholder' ? (
+                <p className={styles.setupFixText}>
+                  Placeholder domains are not accepted for webhook readiness.
+                </p>
+              ) : null}
               {stripeSavedCredentialMeta.length ? (
                 <p className={styles.compactMeta}>
                   Credentials saved securely. Secret values are encrypted and hidden.
@@ -4616,13 +4640,13 @@ export default function SettingsWorkspace() {
         open={Boolean(activeBrandDrawer)}
         subtitle={
           activeBrandDrawer === BRAND_DRAWER.GLOBAL_ASSETS
-            ? 'Manage logo, favicon, and default brand identity fields.'
+            ? 'Used for storefront logo, favicon, packing slips, and default email branding.'
             : activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME
-              ? 'Manage storefront visual tokens and button defaults.'
+              ? 'Controls storefront page colors, fonts, and buttons.'
               : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
-                ? 'Manage assets that apply only to checkout.'
+                ? 'Controls checkout header/logo/button styling where supported.'
                 : activeBrandDrawer === BRAND_DRAWER.EMAIL_BRANDING
-                  ? 'Manage logo and header/footer styling for customer emails.'
+                  ? 'Controls customer email logo/header/footer styling.'
                   : activeBrandDrawer === BRAND_DRAWER.SOCIAL_LINKS
                     ? 'Manage social profile destinations used in supported surfaces.'
                     : 'Brand settings details.'
@@ -4652,12 +4676,14 @@ export default function SettingsWorkspace() {
                   <span>Brand name</span>
                   <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ name: event.target.value })} value={brandKit?.name || ''} />
                 </label>
+                <p className={styles.compactMeta}>Used as fallback display name across storefront, checkout, and emails.</p>
                 <label className={styles.field}>
                   <span>Support email</span>
                   <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
                 </label>
+                <p className={styles.compactMeta}>Customer-facing support/reply email.</p>
               </div>
-              <p className={styles.compactMeta}>Store logo: Used in Storefront, packing slips, default email branding.</p>
+              <p className={styles.compactMeta}>Store logo: Used in storefront header, packing slips, and default customer email branding.</p>
               <p className={styles.compactMeta}>Favicon: Used in browser tabs and storefront metadata.</p>
             </AdminCard>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
@@ -4665,6 +4691,8 @@ export default function SettingsWorkspace() {
                 {renderAssetUploadField({ field: 'logoUrl', label: 'Store logo', refObject: logoUploadRef })}
                 {renderAssetUploadField({ field: 'faviconUrl', label: 'Favicon', refObject: faviconUploadRef })}
               </div>
+              <p className={styles.compactMeta}>Store logo: Used in storefront header, packing slips, and default customer email branding.</p>
+              <p className={styles.compactMeta}>Favicon: Used in browser tabs and storefront metadata.</p>
               <div className={styles.compactActionRow}>
                 <AdminButton className={styles.advancedToggle} onClick={() => setShowAdvancedUrls((current) => !current)} size="sm" variant="secondary">
                   {showAdvancedUrls ? 'Hide URL fallback' : 'Use URL fallback instead'}
@@ -4757,6 +4785,7 @@ export default function SettingsWorkspace() {
                 {renderAssetUploadField({ field: 'checkoutLogoUrl', label: 'Checkout logo', refObject: checkoutLogoUploadRef })}
               </div>
               <p className={styles.compactMeta}>Checkout logo: Used in checkout only.</p>
+              <p className={styles.compactMeta}>Button colors/radius are inherited from Storefront theme controls.</p>
             </AdminCard>
           </div>
         ) : null}
