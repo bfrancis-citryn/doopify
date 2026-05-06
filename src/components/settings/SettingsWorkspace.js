@@ -90,20 +90,27 @@ const SETUP_COMMANDS = [
 const SETUP_FOUNDATION_HINTS = [
   'Provider setup now lives in Payments, Shipping, and Email.',
   'Setup checks app foundation only: database, bootstrap, env hygiene, and deployment readiness.',
+  'For private beta, configure Stripe and email from Settings instead of relying on env fallback values.',
   'Use CLI commands for local writes and provider webhook automation.',
 ];
 
 const SETUP_ENV_TEMPLATE = [
   '# Doopify setup template',
+  '# 1) cp .env.example .env.local',
+  '# 2) fill real values before running the app',
   'DATABASE_URL=',
+  'DIRECT_URL=',
   'JWT_SECRET="generate-a-random-32-character-secret"',
+  'ENCRYPTION_KEY="generate-a-random-32-character-secret"',
+  'NEXT_PUBLIC_STORE_URL="http://localhost:3000"',
   'STRIPE_SECRET_KEY=',
   'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=',
   'STRIPE_WEBHOOK_SECRET=',
   'WEBHOOK_RETRY_SECRET="generate-a-random-32-character-secret"',
   'RESEND_API_KEY=',
   'RESEND_WEBHOOK_SECRET=',
-  'NEXT_PUBLIC_STORE_URL=',
+  '# SETUP_TOKEN is optional in local dev; required in production first-owner bootstrap',
+  'SETUP_TOKEN=',
 ].join('\n');
 
 const PROVIDER_STATE_TONE = {
@@ -3514,9 +3521,9 @@ export default function SettingsWorkspace() {
                 <AdminCard className={styles.setupSummaryCard} variant="card">
                   <h4>Setup mode</h4>
                   <p className={styles.statusText}>
-                    This page checks runtime setup status. It does not save secrets or run local setup commands from
-                    the browser. Use the CLI commands below to write <code>.env.local</code>, run Prisma setup, and
-                    configure provider webhooks.
+                    This page reports setup status only. It does not save secrets or run local commands from the browser.
+                    Required for checkout: store profile, Stripe in Settings -&gt; Payments, shipping, one active product,
+                    and a paid test checkout. Optional: email, team access, and owner MFA.
                   </p>
                 </AdminCard>
 
@@ -3542,7 +3549,7 @@ export default function SettingsWorkspace() {
                     <AdminCard className={styles.setupSummaryCard} variant="card">
                       <div className={styles.setupCardHeader}>
                         <div>
-                          <p className={styles.eyebrow}>Getting started</p>
+                          <p className={styles.eyebrow}>First-run checklist</p>
                           <h3 className={styles.setupHeadline}>
                             {wizardSteps.wizardComplete ? 'Store ready for pilot' : 'Setup in progress'}
                           </h3>
@@ -3904,11 +3911,11 @@ export default function SettingsWorkspace() {
                       <AdminCard as="article" className={styles.setupColumnCard} variant="card">
                         <h4>Setup docs checklist</h4>
                         <ul className={styles.setupList}>
-                          <li>1. Set required env values in your local runtime.</li>
-                          <li>2. Run Prisma generate/push and seed bootstrap.</li>
-                          <li>3. Verify owner login and storefront URL.</li>
-                          <li>4. Configure providers from Payments, Shipping, and Email tabs.</li>
-                          <li>5. Review deployment env readiness before launch.</li>
+                          <li>1. Copy <code>.env.example</code> to <code>.env.local</code>.</li>
+                          <li>2. Set <code>DATABASE_URL</code> and <code>DIRECT_URL</code> before app boot.</li>
+                          <li>3. Create the first owner at <code>/create-owner</code> (SETUP_TOKEN is local-optional).</li>
+                          <li>4. Configure Stripe, shipping, and optional email in Settings tabs.</li>
+                          <li>5. Run a paid test checkout and confirm the order in admin.</li>
                         </ul>
                       </AdminCard>
                     </section>

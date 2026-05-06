@@ -3,7 +3,8 @@
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
   grid-template-areas:
     "activity health"
-    "activity links";
+    "activity links"
+    "activity guide";
   gap: 0.78rem;
 }
 
@@ -21,12 +22,16 @@
   gap: 0.62rem;
 }
 
-.sideCard:nth-of-type(2) {
+.healthCard {
   grid-area: health;
 }
 
-.sideCard:nth-of-type(3) {
+.linksCard {
   grid-area: links;
+}
+
+.guideCard {
+  grid-area: guide;
 }
 
 .cardHeader {
@@ -142,12 +147,73 @@
   background: color-mix(in srgb, var(--surface-container-low) 78%, transparent);
 }
 
+.guideIntro {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--on-surface-variant);
+}
+
+.guideSectionTitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+}
+
+.setupGuideList {
+  display: grid;
+}
+
+.setupGuideItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-top: 1px solid var(--glass-border);
+  padding: 0.5rem 0;
+}
+
+.setupGuideItem:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.stepMeta {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.stepMeta strong {
+  font-size: 0.79rem;
+}
+
+.stepMeta small {
+  font-size: 0.72rem;
+  color: var(--on-surface-variant);
+}
+
+.stepActions {
+  display: grid;
+  justify-items: end;
+  gap: 0.16rem;
+  text-align: right;
+}
+
+.stepActions a {
+  font-size: 0.73rem;
+  color: var(--primary);
+}
+
+.stepStatus {
+  font-size: 0.69rem;
+  color: var(--on-surface-variant);
+}
+
 @media (max-width: 1000px) {
   .grid {
     grid-template-columns: 1fr;
     grid-template-areas:
       "activity"
       "health"
-      "links";
+      "links"
+      "guide";
   }
 }

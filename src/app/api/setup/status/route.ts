@@ -13,6 +13,7 @@ import {
   type SetupCheckCategory,
   type SetupDoctorFacts,
 } from '@/server/services/setup.service'
+import { hasRealCredential } from '@/server/services/credential-readiness'
 
 export const runtime = 'nodejs'
 
@@ -257,13 +258,13 @@ export async function GET(req: Request) {
       storeConfigured: databaseFacts.storeConfigured,
       storeContactConfigured: databaseFacts.storeContactConfigured,
       jwtSecret: process.env.JWT_SECRET,
-      stripeSecretKeyPresent: Boolean(process.env.STRIPE_SECRET_KEY),
-      stripePublishableKeyPresent: Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY),
-      stripeWebhookSecretPresent: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+      stripeSecretKeyPresent: hasRealCredential(process.env.STRIPE_SECRET_KEY),
+      stripePublishableKeyPresent: hasRealCredential(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY),
+      stripeWebhookSecretPresent: hasRealCredential(process.env.STRIPE_WEBHOOK_SECRET),
       webhookRetrySecret: process.env.WEBHOOK_RETRY_SECRET,
-      resendApiKeyPresent: Boolean(process.env.RESEND_API_KEY),
-      resendWebhookSecretPresent: Boolean(process.env.RESEND_WEBHOOK_SECRET),
-      emailProviderWebhooksEnabled: Boolean(process.env.RESEND_API_KEY || process.env.RESEND_WEBHOOK_SECRET),
+      resendApiKeyPresent: hasRealCredential(process.env.RESEND_API_KEY),
+      resendWebhookSecretPresent: hasRealCredential(process.env.RESEND_WEBHOOK_SECRET),
+      emailProviderWebhooksEnabled: hasRealCredential(process.env.RESEND_API_KEY) || hasRealCredential(process.env.RESEND_WEBHOOK_SECRET),
       nextPublicStoreUrl: process.env.NEXT_PUBLIC_STORE_URL,
       vercelEnvironmentDetected: Boolean(process.env.VERCEL || process.env.VERCEL_ENV),
       vercelUrlPresent: Boolean(process.env.VERCEL_URL),

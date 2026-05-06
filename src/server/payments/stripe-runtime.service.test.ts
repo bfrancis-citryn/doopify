@@ -189,4 +189,21 @@ describe('stripe runtime service', () => {
       webhookSecret: null,
     })
   })
+
+  it('returns none when env webhook secret is placeholder', async () => {
+    mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_replace_me'
+    mocks.getRuntimeProviderConnection.mockResolvedValue({
+      source: 'none',
+      provider: 'STRIPE',
+      verified: false,
+      credentials: null,
+    })
+
+    const selection = await getStripeWebhookSecretSelection()
+
+    expect(selection).toEqual({
+      source: 'none',
+      webhookSecret: null,
+    })
+  })
 })

@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 const SettingsContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
-  storeName: 'Doopify',
+  storeName: 'Doopify Store',
   supportEmail: 'support@doopify.com',
   phone: '',
   address: '',

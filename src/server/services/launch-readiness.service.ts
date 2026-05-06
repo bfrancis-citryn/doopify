@@ -75,16 +75,17 @@ export function buildLaunchReadinessReport(facts: LaunchReadinessFacts): LaunchR
     stripeStatus = 'needs_setup'
     stripeSummary = 'Stripe is not configured. Payments cannot be processed.'
     stripeFix = 'Add Stripe keys in Settings -> Payments.'
-  } else if (facts.stripeSource === 'db' && !facts.stripeVerified) {
+  } else if (facts.stripeSource === 'env') {
+    stripeStatus = 'needs_setup'
+    stripeSummary = 'Stripe is running from environment fallback credentials. Save and verify Stripe in Settings -> Payments.'
+    stripeFix = 'Open Settings -> Payments and verify Stripe from the admin.'
+  } else if (!facts.stripeVerified) {
     stripeStatus = 'needs_setup'
     stripeSummary = 'Stripe credentials are saved but have not been verified. Run verification in Settings -> Payments.'
     stripeFix = 'Open Settings -> Payments and run Stripe verification.'
   } else {
     stripeStatus = 'ready'
-    stripeSummary =
-      facts.stripeSource === 'db'
-        ? 'Stripe is runtime-verified and ready for checkout.'
-        : 'Stripe keys are present in env and ready for checkout.'
+    stripeSummary = 'Stripe is runtime-verified and ready for checkout.'
   }
 
   checks.push({
@@ -215,15 +216,17 @@ export function buildLaunchReadinessReport(facts: LaunchReadinessFacts): LaunchR
   })
 
   // Email provider (optional)
-  const emailReady = facts.emailProviderSource !== 'none'
+  const emailReady = facts.emailProviderSource === 'db'
   checks.push({
     id: 'email-provider',
     title: 'Email provider',
     optional: true,
     status: emailReady ? 'ready' : 'optional',
     summary: emailReady
-      ? `Email provider configured (source: ${facts.emailProviderSource}). Transactional emails are enabled.`
-      : 'No email provider configured. Transactional emails will be skipped. This does not block launch.',
+      ? 'Email provider is configured and verified in Settings -> Email.'
+      : facts.emailProviderSource === 'env'
+        ? 'Email is using environment fallback credentials. Configure and verify a provider in Settings -> Email.'
+        : 'No email provider configured. Transactional emails are optional for private beta.',
     fix: emailReady
       ? undefined
       : 'Add Resend credentials in Settings -> Email to enable transactional emails.',

@@ -25,10 +25,10 @@ npm install
 Copy the example file:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-Edit `.env` and fill in:
+Edit `.env.local` and fill in:
 
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/doopify_dev"
@@ -49,6 +49,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ---
+
+`DATABASE_URL` and `DIRECT_URL` must be set before the app boots.
 
 ## 3. Bootstrap the database
 
@@ -85,6 +87,8 @@ Open `http://localhost:3000`.
 Visit `http://localhost:3000/create-owner`.
 
 In development (`NODE_ENV` not `production`), no `SETUP_TOKEN` is required.
+If `SETUP_TOKEN` is set locally, the entered token must match.
+After the first active `OWNER` is created, `/create-owner` is permanently closed.
 
 ---
 
@@ -96,7 +100,9 @@ Use the [Stripe CLI](https://stripe.com/docs/stripe-cli) to forward webhooks to 
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 
-Copy the output webhook signing secret and set it as `STRIPE_WEBHOOK_SECRET` in `.env`.
+Copy the output webhook signing secret and set it as `STRIPE_WEBHOOK_SECRET` in `.env.local`.
+
+For private beta, save and verify Stripe in **Settings -> Payments** after login.
 
 ---
 

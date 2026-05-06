@@ -62,20 +62,22 @@ export default function Sidebar() {
     router.push('/login');
   }
 
+  const storeName = (settings.storeName || 'Doopify Store').trim() || 'Doopify Store';
+
   return (
     <aside className={`${styles.sidebar} glass-panel refraction-edge admin-spotlight`}>
       <div className={styles.brand}>
         <div className={styles.brandLockup}>
           {settings.logoUrl ? (
-            <img alt={settings.storeName} className={styles.brandLogo} src={settings.logoUrl} />
+            <img alt={storeName} className={styles.brandLogo} src={settings.logoUrl} />
           ) : (
-            <div className={`font-headline ${styles.brandBadge}`}>{settings.storeName.slice(0, 2).toUpperCase()}</div>
+            <div className={`font-headline ${styles.brandBadge}`}>{storeName.slice(0, 2).toUpperCase()}</div>
           )}
 
           <div className={styles.brandCopy}>
-            <p className={`text-xs font-headline tracking-widest ${styles.brandEyebrow}`}>Obsidian Glass</p>
-            <h1 className={`font-headline ${styles.brandTitle}`}>{settings.storeName}</h1>
-            <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Commerce command layer</p>
+            <p className={`text-xs font-headline tracking-widest ${styles.brandEyebrow}`}>Doopify</p>
+            <h1 className={`font-headline ${styles.brandTitle}`}>{storeName}</h1>
+            <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Commerce admin</p>
           </div>
         </div>
       </div>

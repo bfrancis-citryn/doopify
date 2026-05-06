@@ -114,7 +114,13 @@ The endpoint to register manually if preferred:
 
 Visit `https://<your-domain>/create-owner`.
 
-In production, `SETUP_TOKEN` is required. Set it as a Vercel environment variable before visiting, then revoke it after account creation. See [docs/setup/first-owner.md](../setup/first-owner.md).
+In production, `SETUP_TOKEN` is required for first-owner bootstrap. Set it as a Vercel environment variable before visiting, then revoke it after account creation. See [docs/setup/first-owner.md](../setup/first-owner.md).
+
+`/create-owner` accepts the token only while no active `OWNER` exists. Once the first owner is created, bootstrap closes permanently.
+
+For private beta, configure Stripe and email in the admin Settings UI after owner creation:
+- **Settings -> Payments** for Stripe
+- **Settings -> Email** for Resend/SMTP
 
 ---
 

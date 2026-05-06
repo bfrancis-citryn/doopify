@@ -1,76 +1,67 @@
-# First-Owner Setup
+# First-owner setup
 
 Create the initial owner account for a fresh Doopify installation.
 
 ---
 
-## How owner bootstrap works
+## Bootstrap rules
 
-The `/create-owner` page and `POST /api/bootstrap/owner` endpoint are open only when:
+`/create-owner` and `POST /api/bootstrap/owner` are available only while no active `OWNER` exists.
 
-- No owner account exists in the database
-- In production (`NODE_ENV=production`): `SETUP_TOKEN` must match
+Token behavior:
 
-Once an owner exists, the bootstrap route returns `409 Conflict` and the page is no longer usable.
+- If `SETUP_TOKEN` is set, the submitted token must match.
+- In production (`NODE_ENV=production`), `SETUP_TOKEN` must be set.
+- In local development, `SETUP_TOKEN` is optional.
+
+After the first active owner is created, bootstrap closes permanently and returns `409 Conflict`.
 
 ---
 
-## Development
+## Local development
 
-No `SETUP_TOKEN` required. Visit `http://localhost:3000/create-owner` and create the account.
+1. Start the app.
+2. Open `http://localhost:3000/create-owner`.
+3. Create the owner account.
+
+If you set `SETUP_TOKEN` locally, enter that value on the form.
 
 ---
 
 ## Production (Vercel or any host)
 
-**Step 1 — Set SETUP_TOKEN before deploying**
+1. Set `SETUP_TOKEN` before deploy:
 
-Add `SETUP_TOKEN` as an environment variable in Vercel (or your host):
-
-```
+```bash
 SETUP_TOKEN=some-random-32-char-token
 ```
 
-**Step 2 — Visit the bootstrap page**
-
-Open `https://<your-domain>/create-owner`.
-
-Enter the store name, your email, your password, and paste the `SETUP_TOKEN` value.
-
-**Step 3 — Revoke SETUP_TOKEN after creation**
-
-Remove or change `SETUP_TOKEN` in Vercel environment variables and redeploy (or force-redeploy) so the token no longer works. This prevents replay attacks.
-
----
-
-## Recovery: owner locked out or forgot password
-
-Use the CLI recovery tool:
-
-```bash
-npm run doopify:reset-owner
-```
-
-This connects via `DATABASE_URL`, creates the first OWNER if none exists, or resets any existing OWNER's password. Revokes all active sessions. Does not log hashes or secrets.
-
-For full recovery procedures, see [docs/ADMIN_USER_RECOVERY_GUIDE.md](../ADMIN_USER_RECOVERY_GUIDE.md).
+2. Open `https://<your-domain>/create-owner`.
+3. Create the owner account with the token.
+4. Revoke the token (remove or rotate `SETUP_TOKEN`) and redeploy.
 
 ---
 
 ## After owner creation
 
-1. Log in at `/login`
-2. Go to **Settings → Payments** and connect Stripe
-3. Go to **Settings → Shipping & delivery** and configure rates
-4. Create products in **Products**
-5. Run a test checkout
+1. Log in at `/login`.
+2. Configure Stripe in **Settings -> Payments**.
+3. Configure shipping in **Settings -> Shipping & delivery**.
+4. Create products in **Products**.
+5. Run a paid test checkout.
 
-See [docs/quickstart.md](../quickstart.md) for the full path.
+Email is optional for private beta and can be configured later in **Settings -> Email**.
 
 ---
 
-## SETUP_TOKEN security notes
+## Recovery
 
-- `SETUP_TOKEN` only gates the bootstrap route. Once an owner exists it has no effect.
-- Do not reuse `SETUP_TOKEN` as `JWT_SECRET`, `ENCRYPTION_KEY`, or `WEBHOOK_RETRY_SECRET`.
-- Revoke it after first-owner creation.
+If owner access is lost:
+
+```bash
+npm run doopify:reset-owner
+```
+
+This connects via `DATABASE_URL`, creates a first owner if none exists, or resets an existing owner password and revokes sessions.
+
+See [docs/ADMIN_USER_RECOVERY_GUIDE.md](../ADMIN_USER_RECOVERY_GUIDE.md) for full recovery procedures.

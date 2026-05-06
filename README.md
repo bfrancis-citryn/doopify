@@ -36,6 +36,17 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 
 **Local setup:** [docs/deployment/local.md](./docs/deployment/local.md)
 
+### Setup essentials
+
+- Copy `.env.example` to `.env.local` before first boot.
+- `DATABASE_URL` and `DIRECT_URL` are required before the app can boot.
+- `SETUP_TOKEN` behavior:
+  - Local development: optional.
+  - Deployed production first-owner bootstrap: required.
+  - `/create-owner` requires a token only when `SETUP_TOKEN` is set (and production enforces that it must be set).
+- `/create-owner` closes permanently after the first active `OWNER` account exists.
+- For private beta onboarding, configure Stripe and email from **Settings -> Payments** and **Settings -> Email** (do not rely on placeholder env values).
+
 ---
 
 ## Setup guides

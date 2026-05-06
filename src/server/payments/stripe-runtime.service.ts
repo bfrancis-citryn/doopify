@@ -1,4 +1,5 @@
 import { env } from '@/lib/env'
+import { hasRealCredential } from '@/server/services/credential-readiness'
 import {
   getProviderStatus,
   getRuntimeProviderConnection,
@@ -108,7 +109,7 @@ export async function getStripeWebhookSecretSelection(): Promise<StripeWebhookSe
   }
 
   const envWebhookSecret = normalizeString(env.STRIPE_WEBHOOK_SECRET)
-  if (envWebhookSecret) {
+  if (hasRealCredential(envWebhookSecret)) {
     return {
       source: 'env',
       webhookSecret: envWebhookSecret,

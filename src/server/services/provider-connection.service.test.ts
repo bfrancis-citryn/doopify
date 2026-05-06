@@ -70,6 +70,11 @@ describe('provider connection service', () => {
     mocks.prisma.$transaction.mockImplementation(async (callback: any) => callback(mocks.prisma))
     mocks.prisma.integration.updateMany.mockResolvedValue({ count: 0 })
     mocks.prisma.integrationSecret.deleteMany.mockResolvedValue({ count: 0 })
+    mocks.env.RESEND_API_KEY = 're_env_key'
+    mocks.env.RESEND_WEBHOOK_SECRET = undefined
+    mocks.env.STRIPE_SECRET_KEY = undefined
+    mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = undefined
+    mocks.env.STRIPE_WEBHOOK_SECRET = undefined
   })
 
   it('prefers verified db credentials over env fallback', async () => {
@@ -106,6 +111,19 @@ describe('provider connection service', () => {
       credentials: {
         API_KEY: 're_env_key',
       },
+    })
+  })
+
+  it('treats placeholder Resend env credentials as missing', async () => {
+    mocks.env.RESEND_API_KEY = 're_replace_me'
+    mocks.prisma.integration.findFirst.mockResolvedValue(null)
+
+    const runtime = await getRuntimeProviderConnection('RESEND')
+
+    expect(runtime).toMatchObject({
+      source: 'none',
+      verified: false,
+      credentials: null,
     })
   })
 
@@ -200,6 +218,21 @@ describe('provider connection service', () => {
         WEBHOOK_SECRET: 'whsec_env_runtime',
         MODE: 'test',
       },
+    })
+  })
+
+  it('treats placeholder Stripe env credentials as missing', async () => {
+    mocks.env.STRIPE_SECRET_KEY = 'sk_test_replace_me'
+    mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_replace_me'
+    mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_replace_me'
+    mocks.prisma.integration.findFirst.mockResolvedValue(null)
+
+    const runtime = await getRuntimeProviderConnection('STRIPE')
+
+    expect(runtime).toMatchObject({
+      source: 'none',
+      verified: false,
+      credentials: null,
     })
   })
 

@@ -6,6 +6,7 @@ import {
   getShippingProviderConnectionStatus,
   testShippingProviderConnection,
 } from '@/server/shipping/shipping-provider.service'
+import { hasRealCredential, normalizeCredential } from '@/server/services/credential-readiness'
 import { decrypt, encrypt } from '@/server/utils/crypto'
 
 export type SupportedProvider = 'SHIPPO' | 'EASYPOST' | 'RESEND' | 'SMTP' | 'STRIPE'
@@ -76,9 +77,7 @@ function sanitizeProviderError(error: unknown) {
 }
 
 function trimToNull(value: unknown) {
-  if (typeof value !== 'string') return null
-  const normalized = value.trim()
-  return normalized ? normalized : null
+  return normalizeCredential(value)
 }
 
 function normalizeProviderKey(input: string) {
@@ -159,7 +158,7 @@ function extractVerificationMeta(secretMap: Map<string, string>) {
 
 function hasRequiredSecrets(provider: SupportedProvider, secretMap: Map<string, string>) {
   const required = PROVIDER_CONFIG[provider].requiredSecretKeys
-  return required.every((key) => Boolean(extractDecryptedSecret(secretMap, key)))
+  return required.every((key) => hasRealCredential(extractDecryptedSecret(secretMap, key)))
 }
 
 function deriveConnectionState(input: {
@@ -470,22 +469,30 @@ type RuntimeConnection = {
 
 function getEnvFallback(provider: SupportedProvider): Record<string, string> | null {
   if (provider === 'STRIPE') {
-    if (!env.STRIPE_SECRET_KEY || !env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) return null
+    const secretKey = normalizeCredential(env.STRIPE_SECRET_KEY)
+    const publishableKey = normalizeCredential(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+    const webhookSecret = normalizeCredential(env.STRIPE_WEBHOOK_SECRET)
+
+    if (!secretKey || !publishableKey || !hasRealCredential(secretKey) || !hasRealCredential(publishableKey)) {
+      return null
+    }
 
     return {
-      SECRET_KEY: env.STRIPE_SECRET_KEY,
-      PUBLISHABLE_KEY: env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-      WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET || '',
-      MODE: env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'test',
+      SECRET_KEY: secretKey,
+      PUBLISHABLE_KEY: publishableKey,
+      WEBHOOK_SECRET: hasRealCredential(webhookSecret) ? String(webhookSecret) : '',
+      MODE: secretKey.startsWith('sk_live_') ? 'live' : 'test',
     }
   }
 
   if (provider === 'RESEND') {
-    if (!env.RESEND_API_KEY) return null
+    const apiKey = normalizeCredential(env.RESEND_API_KEY)
+    const webhookSecret = normalizeCredential(env.RESEND_WEBHOOK_SECRET)
+    if (!apiKey || !hasRealCredential(apiKey)) return null
 
     return {
-      API_KEY: env.RESEND_API_KEY,
-      WEBHOOK_SECRET: env.RESEND_WEBHOOK_SECRET || '',
+      API_KEY: apiKey,
+      WEBHOOK_SECRET: hasRealCredential(webhookSecret) ? String(webhookSecret) : '',
     }
   }
 

@@ -41,7 +41,7 @@ export type SetupWizardFacts = {
 export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardReport {
   const steps: WizardStep[] = []
 
-  // Step 1 — Owner account
+  // Step 1 - Owner account
   steps.push({
     id: 'owner-account',
     step: 1,
@@ -56,7 +56,7 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/setup/first-owner',
   })
 
-  // Step 2 — Store profile
+  // Step 2 - Store profile
   const storeProfileReady = facts.storeNameConfigured && facts.storeEmailConfigured
   steps.push({
     id: 'store-profile',
@@ -72,7 +72,7 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/quickstart',
   })
 
-  // Step 3 — Stripe connection
+  // Step 3 - Stripe connection
   const stripeHasKeys = facts.stripeHasSecretKey && facts.stripeHasPublishableKey
   const stripeUsable = facts.stripeSource !== 'none' && stripeHasKeys
   let stripeStatus: WizardStepStatus
@@ -81,15 +81,16 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
   if (!stripeUsable) {
     stripeStatus = 'needs_setup'
     stripeReason = 'Stripe API keys are not configured. Checkout cannot process payments.'
-  } else if (facts.stripeSource === 'db' && !facts.stripeVerified) {
+  } else if (facts.stripeSource === 'env') {
     stripeStatus = 'needs_setup'
-    stripeReason = 'Stripe credentials are saved but have not been verified. Run verification in Settings → Payments.'
+    stripeReason =
+      'Stripe is using environment fallback credentials. Save and verify Stripe in Settings -> Payments for private beta readiness.'
+  } else if (!facts.stripeVerified) {
+    stripeStatus = 'needs_setup'
+    stripeReason = 'Stripe credentials are saved but have not been verified. Run verification in Settings -> Payments.'
   } else {
     stripeStatus = 'ready'
-    stripeReason =
-      facts.stripeSource === 'db'
-        ? 'Stripe credentials are saved and verified.'
-        : 'Stripe keys are present in environment variables.'
+    stripeReason = 'Stripe credentials are saved and verified.'
   }
 
   steps.push({
@@ -104,7 +105,7 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/setup/stripe',
   })
 
-  // Step 4 — Stripe webhook
+  // Step 4 - Stripe webhook
   let webhookStatus: WizardStepStatus
   let webhookReason: string
 
@@ -133,7 +134,7 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/setup/stripe',
   })
 
-  // Step 5 — Shipping rate
+  // Step 5 - Shipping rate
   const shippingReady = facts.shippingCanUseManualRates || facts.shippingCanUseLiveRates
   steps.push({
     id: 'shipping',
@@ -151,8 +152,8 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/setup/shipping',
   })
 
-  // Step 6 — Email provider (optional)
-  const emailReady = facts.emailProviderSource !== 'none'
+  // Step 6 - Email provider (optional)
+  const emailReady = facts.emailProviderSource === 'db'
   steps.push({
     id: 'email-provider',
     step: 6,
@@ -160,14 +161,16 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     isRequired: false,
     status: emailReady ? 'ready' : 'optional',
     reason: emailReady
-      ? `Email provider configured (${facts.emailProviderSource}). Order confirmations will be sent.`
-      : 'No email provider configured. Order confirmation emails will be skipped. This does not block checkout.',
+      ? 'Email provider is configured and verified in Settings -> Email.'
+      : facts.emailProviderSource === 'env'
+        ? 'Email is using environment fallback credentials. Configure and verify a provider in Settings -> Email.'
+        : 'No email provider configured. Order confirmation emails are optional for private beta.',
     ctaRoute: emailReady ? undefined : '/settings?section=email',
     ctaLabel: emailReady ? undefined : 'Configure email',
     docsLink: '/docs/setup/email',
   })
 
-  // Step 7 — Product
+  // Step 7 - Product
   const hasActiveProduct = facts.activeProductCount > 0
   const hasValidPrice = facts.activeProductsWithValidPrice > 0
   const hasInventory = facts.activeProductsWithInventory > 0
@@ -200,7 +203,7 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/quickstart',
   })
 
-  // Step 8 — Test checkout
+  // Step 8 - Test checkout
   steps.push({
     id: 'test-checkout',
     step: 8,
@@ -215,7 +218,7 @@ export function buildSetupWizardSteps(facts: SetupWizardFacts): SetupWizardRepor
     docsLink: '/docs/operations/pilot-smoke-checklist',
   })
 
-  // Step 9 — Pilot readiness (aggregate)
+  // Step 9 - Pilot readiness (aggregate)
   const requiredSteps = steps.filter((s) => s.isRequired)
   const failingRequired = requiredSteps.filter((s) => s.status === 'needs_setup')
   const pilotReady = failingRequired.length === 0

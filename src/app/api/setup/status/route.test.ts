@@ -232,6 +232,32 @@ describe('GET /api/setup/status', () => {
     )
   })
 
+  it('treats placeholder Stripe and Resend env values as missing', async () => {
+    process.env.STRIPE_SECRET_KEY = 'sk_test_replace_me'
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_replace_me'
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_replace_me'
+    process.env.RESEND_API_KEY = 're_replace_me'
+    process.env.RESEND_WEBHOOK_SECRET = 'whsec_replace_me'
+
+    const response = await GET(new Request('http://localhost/api/setup/status'))
+    const payload = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(payload.success).toBe(true)
+
+    const stripeKeysCheck = payload.data.requiredChecks.find((check: { id: string }) => check.id === 'stripe-keys')
+    const stripeWebhookCheck = payload.data.requiredChecks.find(
+      (check: { id: string }) => check.id === 'stripe-webhook-secret'
+    )
+    const resendApiCheck = payload.data.recommendedChecks.find(
+      (check: { id: string }) => check.id === 'resend-api-or-preview'
+    )
+
+    expect(stripeKeysCheck?.status).toBe('FAIL')
+    expect(stripeWebhookCheck?.status).toBe('FAIL')
+    expect(resendApiCheck?.status).toBe('WARN')
+  })
+
   it('sanitizes database connectivity failures and still returns useful diagnostics', async () => {
     mocks.queryRaw.mockRejectedValueOnce(
       new Error('connect ECONNREFUSED postgresql://db_user:raw-password@localhost:5432/doopify')

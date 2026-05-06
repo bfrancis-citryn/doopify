@@ -13,6 +13,7 @@ import { useCustomers } from '../../context/CustomersContext';
 import { useOrders } from '../../context/OrdersContext';
 import { useProducts } from '../../context/ProductsContext';
 import { useSettings } from '../../context/SettingsContext';
+import { buildDashboardFirstRunGuide } from './dashboard-first-run-guide.helpers';
 import styles from './AdminDashboardWorkspace.module.css';
 
 function formatCompactNumber(value) {
@@ -71,6 +72,7 @@ export default function AdminDashboardWorkspace() {
   const { customers, loading: customersLoading } = useCustomers();
   const { settings } = useSettings();
   const [sessionUser, setSessionUser] = useState(null);
+  const [setupWizard, setSetupWizard] = useState(null);
 
   useEffect(() => {
     let ignore = false;
@@ -87,6 +89,28 @@ export default function AdminDashboardWorkspace() {
     }
 
     loadSession();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSetupWizard() {
+      try {
+        const response = await fetch('/api/setup/wizard', { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const payload = await response.json().catch(() => null);
+        if (!ignore && payload?.success) {
+          setSetupWizard(payload.data || null);
+        }
+      } catch {}
+    }
+
+    loadSetupWizard();
 
     return () => {
       ignore = true;
@@ -142,6 +166,7 @@ export default function AdminDashboardWorkspace() {
 
   const recentActivity = overview.activity.length ? overview.activity : FALLBACK_ACTIVITY;
   const loading = ordersLoading || productsLoading || customersLoading;
+  const firstRunGuide = useMemo(() => buildDashboardFirstRunGuide(setupWizard), [setupWizard]);
 
   const userName =
     [sessionUser?.firstName, sessionUser?.lastName].filter(Boolean).join(' ') ||
@@ -158,7 +183,7 @@ export default function AdminDashboardWorkspace() {
               : `${settings.storeName} is live. Welcome back, ${userName}.`
           }
           eyebrow="Dashboard"
-          title="Admin command center"
+          title="Commerce admin"
           actions={<AdminStatusChip tone="success">Live</AdminStatusChip>}
         />
 
@@ -196,7 +221,7 @@ export default function AdminDashboardWorkspace() {
             )}
           </AdminCard>
 
-          <AdminCard className={styles.sideCard} variant="card">
+          <AdminCard className={`${styles.sideCard} ${styles.healthCard}`} variant="card">
             <div className={styles.cardHeader}>
               <h2 className="font-headline">Commerce health</h2>
             </div>
@@ -207,7 +232,7 @@ export default function AdminDashboardWorkspace() {
             </div>
           </AdminCard>
 
-          <AdminCard className={styles.sideCard} variant="card">
+          <AdminCard className={`${styles.sideCard} ${styles.linksCard}`} variant="card">
             <div className={styles.cardHeader}>
               <h2 className="font-headline">Quick links</h2>
             </div>
@@ -218,6 +243,48 @@ export default function AdminDashboardWorkspace() {
               <Link href="/draft-orders?new=1">Create draft order</Link>
             </div>
           </AdminCard>
+
+          {firstRunGuide ? (
+            <AdminCard className={`${styles.sideCard} ${styles.guideCard}`} variant="card">
+              <div className={styles.cardHeader}>
+                <h2 className="font-headline">First-run setup</h2>
+                <AdminStatusChip tone="warning">In progress</AdminStatusChip>
+              </div>
+              <p className={styles.guideIntro}>Complete these steps to unlock a safe private beta checkout flow.</p>
+
+              <h3 className={styles.guideSectionTitle}>Required</h3>
+              <div className={styles.setupGuideList}>
+                {firstRunGuide.requiredSteps.map((step, index) => (
+                  <div className={styles.setupGuideItem} key={step.id}>
+                    <div className={styles.stepMeta}>
+                      <strong>{index + 1}. {step.title}</strong>
+                      <small>{step.description}</small>
+                    </div>
+                    <div className={styles.stepActions}>
+                      <span className={styles.stepStatus}>{step.statusLabel}</span>
+                      <Link href={step.route}>{step.ctaLabel}</Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h3 className={styles.guideSectionTitle}>Optional</h3>
+              <div className={styles.setupGuideList}>
+                {firstRunGuide.optionalSteps.map((step, index) => (
+                  <div className={styles.setupGuideItem} key={step.id}>
+                    <div className={styles.stepMeta}>
+                      <strong>{index + 1}. {step.title}</strong>
+                      <small>{step.description}</small>
+                    </div>
+                    <div className={styles.stepActions}>
+                      <span className={styles.stepStatus}>{step.statusLabel}</span>
+                      <Link href={step.route}>{step.ctaLabel}</Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </AdminCard>
+          ) : null}
         </div>
       </AdminPage>
     </AppShell>

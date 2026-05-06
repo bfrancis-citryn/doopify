@@ -170,7 +170,7 @@ describe('buildLaunchReadinessReport', () => {
     expect(report.launchReady).toBe(false)
   })
 
-  it('marks stripe as ready when env keys are present', () => {
+  it('marks stripe as needs_setup when env fallback is active', () => {
     const facts = baseFacts()
     facts.stripeSource = 'env'
     facts.stripeVerified = false
@@ -178,7 +178,19 @@ describe('buildLaunchReadinessReport', () => {
     const report = buildLaunchReadinessReport(facts)
 
     const stripe = report.checks.find((c) => c.id === 'stripe-runtime')
-    expect(stripe?.status).toBe('ready')
+    expect(stripe?.status).toBe('needs_setup')
+    expect(stripe?.summary).toContain('environment fallback')
+  })
+
+  it('keeps email optional when env fallback is active', () => {
+    const facts = baseFacts()
+    facts.emailProviderSource = 'env'
+
+    const report = buildLaunchReadinessReport(facts)
+
+    const email = report.checks.find((c) => c.id === 'email-provider')
+    expect(email?.status).toBe('optional')
+    expect(email?.summary).toContain('environment fallback')
   })
 
   it('counts checks correctly', () => {

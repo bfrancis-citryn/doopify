@@ -7,7 +7,7 @@ Get a working store running in under 15 minutes.
 ## Prerequisites
 
 - Node.js 20+
-- PostgreSQL database (Neon recommended — free tier works)
+- PostgreSQL database (Neon recommended, free tier works)
 - Stripe account (test mode)
 - npm
 
@@ -25,10 +25,10 @@ npm install
 
 ## 2. Set environment variables
 
-Copy `.env.example` to `.env` and `.env.local`:
+Copy `.env.example` to `.env.local`:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 Fill in the required values:
@@ -40,19 +40,21 @@ Fill in the required values:
 | `JWT_SECRET` | Run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `ENCRYPTION_KEY` | Same command as above |
 | `NEXT_PUBLIC_STORE_URL` | `http://localhost:3000` for local dev |
-| `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API Keys |
+| `STRIPE_SECRET_KEY` | Stripe Dashboard -> Developers -> API Keys |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Same page, publishable key |
-| `STRIPE_WEBHOOK_SECRET` | Set after step 4 |
+| `STRIPE_WEBHOOK_SECRET` | Set after step 5 |
 | `WEBHOOK_RETRY_SECRET` | Any random 32-char string |
+
+`DATABASE_URL` and `DIRECT_URL` must be configured before the app can boot.
 
 ---
 
 ## 3. Set up the database
 
 ```bash
-npm run db:generate    # generate Prisma client
-npm run db:push        # apply schema to your database
-npm run db:seed:bootstrap  # create the initial store record
+npm run db:generate
+npm run db:push
+npm run db:seed:bootstrap
 ```
 
 Verify the connection:
@@ -73,13 +75,19 @@ npm run dev
 
 Open `http://localhost:3000/create-owner` and create the first admin account.
 
-> If `NODE_ENV=production`, set `SETUP_TOKEN` before visiting this page. See [docs/setup/first-owner.md](./setup/first-owner.md).
+`SETUP_TOKEN` behavior:
+- Local development: optional.
+- Production: required.
+- `/create-owner` requires a token only when `SETUP_TOKEN` is set.
+- After the first active owner exists, `/create-owner` closes permanently.
+
+See [docs/setup/first-owner.md](./setup/first-owner.md).
 
 ---
 
 ## 5. Configure Stripe
 
-In the admin, go to **Settings → Payments**, open the Stripe drawer, and save your API keys.
+In the admin, go to **Settings -> Payments**, open the Stripe drawer, and save your API keys.
 
 Then register the webhook endpoint:
 
@@ -87,15 +95,15 @@ Then register the webhook endpoint:
 npm run doopify:stripe:webhook
 ```
 
-Copy the output `STRIPE_WEBHOOK_SECRET` into your `.env` file and restart the server.
+Copy the output `STRIPE_WEBHOOK_SECRET` into `.env.local` and restart the server.
 
 ---
 
 ## 6. Configure shipping
 
-Go to **Settings → Shipping & delivery** in the admin.
+Go to **Settings -> Shipping & delivery** in the admin.
 
-For a quick setup, choose **Manual rates** and add a flat-rate for your target destination.
+For a quick setup, choose **Manual rates** and add a flat rate for your target destination.
 
 See [docs/setup/shipping.md](./setup/shipping.md) for full options.
 
@@ -121,6 +129,14 @@ Go to **Products** in the admin and create at least one product:
 6. Use Stripe test card `4242 4242 4242 4242`, any future expiry, any CVC
 7. Complete the order
 8. Verify the order appears in **Orders** in the admin
+
+---
+
+## 9. Optional next steps
+
+- Configure email in **Settings -> Email**
+- Invite team members in **Settings -> Team**
+- Enable MFA in **Settings -> My account**
 
 ---
 
