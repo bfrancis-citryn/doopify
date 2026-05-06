@@ -6,6 +6,7 @@ import { requireAdmin } from '@/server/auth/require-auth'
 import {
   createShippingManualRate,
   getShippingDeliveryStore,
+  ShippingSettingsStoreNotConfiguredError,
 } from '@/server/shipping/shipping-delivery-settings.service'
 
 const createManualRateSchema = z.object({
@@ -51,7 +52,11 @@ export async function POST(req: Request) {
 
   const parsed = createManualRateSchema.safeParse(body)
   if (!parsed.success) {
-    return unprocessable('Manual shipping rate payload is invalid', parsed.error.flatten())
+    const flattened = parsed.error.flatten()
+    return unprocessable('Manual shipping rate payload is invalid', {
+      formErrors: flattened.formErrors,
+      fieldErrors: flattened.fieldErrors,
+    })
   }
 
   try {
@@ -76,7 +81,18 @@ export async function POST(req: Request) {
     })
     return ok(created, 201)
   } catch (error) {
-    console.error('[POST /api/settings/shipping/manual-rates]', error)
-    return err(error instanceof Error ? error.message : 'Failed to create manual shipping rate', 400)
+    console.error('[POST /api/settings/shipping/manual-rates] create failed', {
+      error,
+      payload: parsed.data,
+    })
+
+    if (error instanceof ShippingSettingsStoreNotConfiguredError) {
+      return err(
+        'Shipping settings are not initialized. Open Settings > Shipping and save once to create your store profile.',
+        409
+      )
+    }
+
+    return err('Failed to create manual shipping rate. Check shipping configuration and try again.', 500)
   }
 }

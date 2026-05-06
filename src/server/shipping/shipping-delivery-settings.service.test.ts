@@ -4,12 +4,16 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     store: {
       findFirst: vi.fn(),
+      create: vi.fn(),
     },
     shippingPackage: {
       create: vi.fn(),
       updateMany: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+    },
+    shippingManualRate: {
+      create: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -19,7 +23,11 @@ vi.mock('@/lib/prisma', () => ({
   prisma: mocks.prisma,
 }))
 
-import { createShippingPackage, updateShippingPackage } from './shipping-delivery-settings.service'
+import {
+  createShippingManualRate,
+  createShippingPackage,
+  updateShippingPackage,
+} from './shipping-delivery-settings.service'
 
 describe('shipping-delivery-settings.service', () => {
   beforeEach(() => {
@@ -124,5 +132,46 @@ describe('shipping-delivery-settings.service', () => {
         name: 'Nope',
       })
     ).rejects.toThrow('Package not found')
+  })
+
+  it('createShippingManualRate bootstraps a store when one does not exist', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValueOnce(null)
+    mocks.prisma.store.create.mockResolvedValue({ id: 'store_bootstrap' })
+    mocks.prisma.shippingManualRate.create.mockResolvedValue({
+      id: 'rate_1',
+      storeId: 'store_bootstrap',
+      name: 'Standard',
+      amountCents: 1000,
+      rateType: 'FLAT',
+    })
+
+    await createShippingManualRate({
+      name: 'Standard',
+      regionCountry: 'US',
+      regionStateProvince: null,
+      rateType: 'FLAT',
+      amountCents: 1000,
+      minWeight: null,
+      maxWeight: null,
+      minSubtotalCents: null,
+      maxSubtotalCents: null,
+      freeOverAmountCents: null,
+      estimatedDeliveryText: '3-5 days',
+      isActive: true,
+    })
+
+    expect(mocks.prisma.store.create).toHaveBeenCalledWith({
+      data: {
+        name: 'Doopify Store',
+      },
+      select: { id: true },
+    })
+    expect(mocks.prisma.shippingManualRate.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        storeId: 'store_bootstrap',
+        name: 'Standard',
+        amountCents: 1000,
+      }),
+    })
   })
 })

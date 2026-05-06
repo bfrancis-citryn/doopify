@@ -5,6 +5,7 @@ import { requireAdmin } from '@/server/auth/require-auth'
 import {
   createShippingPackage,
   getShippingDeliveryStore,
+  ShippingSettingsStoreNotConfiguredError,
 } from '@/server/shipping/shipping-delivery-settings.service'
 
 const createPackageSchema = z.object({
@@ -42,14 +43,29 @@ export async function POST(req: Request) {
 
   const parsed = createPackageSchema.safeParse(body)
   if (!parsed.success) {
-    return unprocessable('Shipping package payload is invalid', parsed.error.flatten())
+    const flattened = parsed.error.flatten()
+    return unprocessable('Shipping package payload is invalid', {
+      formErrors: flattened.formErrors,
+      fieldErrors: flattened.fieldErrors,
+    })
   }
 
   try {
     const created = await createShippingPackage(parsed.data)
     return ok(created, 201)
   } catch (error) {
-    console.error('[POST /api/settings/shipping/packages]', error)
-    return err(error instanceof Error ? error.message : 'Failed to create shipping package', 400)
+    console.error('[POST /api/settings/shipping/packages] create failed', {
+      error,
+      payload: parsed.data,
+    })
+
+    if (error instanceof ShippingSettingsStoreNotConfiguredError) {
+      return err(
+        'Shipping settings are not initialized. Open Settings > Shipping and save once to create your store profile.',
+        409
+      )
+    }
+
+    return err('Failed to create shipping package. Check package dimensions and try again.', 500)
   }
 }

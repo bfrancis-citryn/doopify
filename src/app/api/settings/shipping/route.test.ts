@@ -51,6 +51,10 @@ function storeFixture(overrides: Record<string, unknown> = {}) {
     packingSlipShowSku: true,
     packingSlipShowProductImages: false,
     packingSlipFooterNote: null,
+    shippingPackages: [],
+    shippingLocations: [],
+    shippingManualRates: [],
+    shippingFallbackRates: [],
     shippingZones: [
       {
         id: 'zone_1',
@@ -185,6 +189,50 @@ describe('settings shipping route', () => {
         shippingZones: [
           {
             rates: [{ amount: 12.99 }],
+          },
+        ],
+      },
+    })
+  })
+
+  it('GET includes persisted shipping packages in settings response', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+    mocks.getShippingSettingsStore.mockResolvedValue(
+      storeFixture({
+        shippingPackages: [
+          {
+            id: 'pkg_1',
+            name: 'Small box',
+            type: 'BOX',
+            length: 10,
+            width: 8,
+            height: 4,
+            dimensionUnit: 'IN',
+            emptyPackageWeight: 6,
+            weightUnit: 'OZ',
+            isDefault: true,
+            isActive: true,
+            createdAt: '2026-05-06T00:00:00.000Z',
+            updatedAt: '2026-05-06T00:00:00.000Z',
+          },
+        ],
+      })
+    )
+
+    const response = await GET(new Request('http://localhost/api/settings/shipping'))
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        shippingPackages: [
+          {
+            id: 'pkg_1',
+            name: 'Small box',
+            type: 'BOX',
           },
         ],
       },

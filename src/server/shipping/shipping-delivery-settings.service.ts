@@ -13,6 +13,13 @@ import type {
 
 import { prisma } from '@/lib/prisma'
 
+export class ShippingSettingsStoreNotConfiguredError extends Error {
+  constructor(message = 'Store not configured') {
+    super(message)
+    this.name = 'ShippingSettingsStoreNotConfiguredError'
+  }
+}
+
 type ShippingStoreWithConfig = Prisma.StoreGetPayload<{
   include: {
     shippingPackages: true
@@ -137,12 +144,36 @@ const SHIPPING_CONFIG_INCLUDE = {
   },
 }
 
+async function findPrimaryStoreId() {
+  const store = await prisma.store.findFirst({
+    select: { id: true },
+    orderBy: [{ createdAt: 'asc' }],
+  })
+  return store?.id || null
+}
+
 async function getExistingStoreId() {
-  const store = await prisma.store.findFirst({ select: { id: true } })
-  if (!store) {
-    throw new Error('Store not configured')
+  const storeId = await findPrimaryStoreId()
+  if (!storeId) {
+    throw new ShippingSettingsStoreNotConfiguredError()
   }
-  return store.id
+  return storeId
+}
+
+async function getOrCreateShippingStoreId() {
+  const existingStoreId = await findPrimaryStoreId()
+  if (existingStoreId) {
+    return existingStoreId
+  }
+
+  const createdStore = await prisma.store.create({
+    data: {
+      name: 'Doopify Store',
+    },
+    select: { id: true },
+  })
+
+  return createdStore.id
 }
 
 async function enforceSingleDefaultPackage(tx: Prisma.TransactionClient, storeId: string, packageId: string) {
@@ -174,10 +205,11 @@ async function enforceSingleDefaultLocation(tx: Prisma.TransactionClient, storeI
 export async function getShippingDeliveryStore(): Promise<ShippingStoreWithConfig> {
   const store = await prisma.store.findFirst({
     include: SHIPPING_CONFIG_INCLUDE,
+    orderBy: [{ createdAt: 'asc' }],
   })
 
   if (!store) {
-    throw new Error('Store not configured')
+    throw new ShippingSettingsStoreNotConfiguredError()
   }
 
   return store
@@ -193,7 +225,7 @@ export async function updateShippingDeliverySettings(input: ShippingSettingsPatc
 }
 
 export async function createShippingPackage(input: ShippingPackageCreateInput) {
-  const storeId = await getExistingStoreId()
+  const storeId = await getOrCreateShippingStoreId()
 
   return prisma.$transaction(async (tx) => {
     const created = await tx.shippingPackage.create({
@@ -261,7 +293,7 @@ export async function deleteShippingPackage(packageId: string) {
 }
 
 export async function createShippingLocation(input: ShippingLocationCreateInput) {
-  const storeId = await getExistingStoreId()
+  const storeId = await getOrCreateShippingStoreId()
 
   return prisma.$transaction(async (tx) => {
     const created = await tx.shippingLocation.create({
@@ -328,7 +360,7 @@ export async function deleteShippingLocation(locationId: string) {
 }
 
 export async function createShippingManualRate(input: ShippingManualRateCreateInput) {
-  const storeId = await getExistingStoreId()
+  const storeId = await getOrCreateShippingStoreId()
 
   return prisma.shippingManualRate.create({
     data: {
@@ -382,7 +414,7 @@ export async function deleteShippingManualRate(rateId: string) {
 }
 
 export async function createShippingFallbackRate(input: ShippingFallbackRateCreateInput) {
-  const storeId = await getExistingStoreId()
+  const storeId = await getOrCreateShippingStoreId()
 
   return prisma.shippingFallbackRate.create({
     data: {

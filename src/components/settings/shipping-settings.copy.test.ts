@@ -40,15 +40,10 @@ describe('shipping settings UX copy and validation', () => {
     expect(source).toContain('Leave blank or enter 0 for no maximum')
   })
 
-  it('shows freeOverAmount only for FREE rate type in an advanced conditions section', () => {
+  it('removes advanced free-over conditions from the first-run manual rate drawer', () => {
     const source = read(WORKSPACE)
-    // The field exists for FREE rate type
-    expect(source).toContain('Advanced conditions')
-    expect(source).toContain("manualForm.rateType === \"FREE\"")
-    expect(source).toContain('freeOverAmount')
-    // freeOverAmount is in the advanced/collapsible toggle section
-    expect(source).toContain('showAdvancedConditions')
-    expect(source).toContain("setShowAdvancedConditions((v) => !v)")
+    expect(source).not.toContain('Advanced conditions')
+    expect(source).not.toContain('showAdvancedConditions')
   })
 
   it('resets conditions when rate type changes to avoid stale field values', () => {
@@ -72,10 +67,9 @@ describe('shipping settings UX copy and validation', () => {
     expect(source).toContain('manualDrawerError')
   })
 
-  it('resets manualDrawerError and showAdvancedConditions when drawer opens', () => {
+  it('resets manualDrawerError when drawer opens', () => {
     const source = read(WORKSPACE)
     expect(source).toContain('setManualDrawerError("")')
-    expect(source).toContain('setShowAdvancedConditions(false)')
   })
 
   it('improves weight-based warning to mention setting min weight to 0', () => {
@@ -99,5 +93,27 @@ describe('shipping settings UX copy and validation', () => {
   it('keeps DEFAULT_MANUAL_RATE_FORM defaulting to FLAT rate type', () => {
     const source = read(WORKSPACE)
     expect(source).toContain('rateType: "FLAT"')
+  })
+
+  it('sends amount 0 for FREE rates so save does not fail validation', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('amount: manualForm.rateType === "FREE" ? 0 : parseNumber(manualForm.amount)')
+  })
+
+  it('keeps price and weight condition fields scoped to their own rate types', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('manualForm.rateType === "PRICE_BASED"')
+    expect(source).toContain('manualForm.rateType === "WEIGHT_BASED"')
+  })
+
+  it('saves manual rates through the manual-rates API route', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('"/api/settings/shipping/manual-rates"')
+  })
+
+  it('only closes manual drawer after a successful save response', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('if (result.success)')
+    expect(source).toContain('setManualDrawerOpen(false)')
   })
 })

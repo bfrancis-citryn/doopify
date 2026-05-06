@@ -148,10 +148,42 @@ function normalizeCountry(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+class ApiRequestError extends Error {
+  constructor(message, details) {
+    super(message || "Request failed");
+    this.name = "ApiRequestError";
+    this.details = details;
+  }
+}
+
+function formatFieldErrors(details) {
+  const fieldErrors = details?.fieldErrors;
+  if (!fieldErrors || typeof fieldErrors !== "object") {
+    return "";
+  }
+
+  const entries = Object.entries(fieldErrors)
+    .filter(([, value]) => Array.isArray(value) && value.length > 0)
+    .map(([field, value]) => `${field}: ${value.join(", ")}`);
+
+  return entries.length ? entries.join(" | ") : "";
+}
+
+function getErrorMessage(error, fallback = "Request failed") {
+  if (error instanceof ApiRequestError) {
+    const fieldErrorText = formatFieldErrors(error.details);
+    return fieldErrorText ? `${error.message} (${fieldErrorText})` : error.message;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 async function parseApiJson(response) {
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.success) {
-    throw new Error(payload?.error || "Request failed");
+    throw new ApiRequestError(payload?.error || "Request failed", payload?.details);
   }
   return payload.data;
 }
@@ -225,7 +257,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   const [pickupForm, setPickupForm] = useState(DEFAULT_PICKUP_FORM);
   const [packingSlipForm, setPackingSlipForm] = useState(DEFAULT_PACKING_SLIP_FORM);
   const [locationValidationMessage, setLocationValidationMessage] = useState("");
-  const [showAdvancedConditions, setShowAdvancedConditions] = useState(false);
+  const [packageDrawerError, setPackageDrawerError] = useState("");
   const [manualDrawerError, setManualDrawerError] = useState("");
 
   const packages = settings?.shippingPackages || [];
@@ -336,7 +368,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       setNotice(message || "Saved.");
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save shipping settings");
+      setError(getErrorMessage(saveError, "Failed to save shipping settings"));
     } finally {
       setSaving(false);
     }
@@ -354,8 +386,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       }).then(parseApiJson);
       setNotice(successMessage);
       await load();
+      return { success: true };
     } catch (persistError) {
-      setError(persistError instanceof Error ? persistError.message : "Save failed");
+      const message = getErrorMessage(persistError, "Save failed");
+      setError(message);
+      return { success: false, message };
     } finally {
       setSaving(false);
     }
@@ -521,6 +556,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   }
 
   function openPackageDrawer(entry) {
+    setPackageDrawerError("");
     if (!entry) {
       setPackageForm({ ...DEFAULT_PACKAGE_FORM });
     } else {
@@ -567,7 +603,6 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
 
   function openManualRateDrawer(entry) {
     setManualDrawerError("");
-    setShowAdvancedConditions(false);
     if (!entry) {
       setManualForm({ ...DEFAULT_MANUAL_RATE_FORM });
     } else {
@@ -618,6 +653,31 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
     return null;
   }
 
+  function validatePackageForm() {
+    if (!packageForm.name.trim()) {
+      return "Package name is required.";
+    }
+    const length = parseNumber(packageForm.length);
+    const width = parseNumber(packageForm.width);
+    const height = parseNumber(packageForm.height);
+    const emptyWeight = parseNumber(packageForm.emptyPackageWeight);
+
+    if (length == null || length <= 0) {
+      return "Length must be greater than 0.";
+    }
+    if (width == null || width <= 0) {
+      return "Width must be greater than 0.";
+    }
+    if (height == null || height <= 0) {
+      return "Height must be greater than 0.";
+    }
+    if (emptyWeight == null || emptyWeight <= 0) {
+      return "Empty package weight must be greater than 0.";
+    }
+
+    return null;
+  }
+
   function openFallbackRateDrawer(entry) {
     if (!entry) {
       setFallbackForm({ ...DEFAULT_FALLBACK_RATE_FORM });
@@ -660,7 +720,14 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   }
 
   async function savePackage() {
-    await persistEntity(
+    setPackageDrawerError("");
+    const packageValidationError = validatePackageForm();
+    if (packageValidationError) {
+      setPackageDrawerError(packageValidationError);
+      return;
+    }
+
+    const result = await persistEntity(
       packageForm.id ? `/api/settings/shipping/packages/${packageForm.id}` : "/api/settings/shipping/packages",
       packageForm.id ? "PATCH" : "POST",
       {
@@ -677,7 +744,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       },
       packageForm.id ? "Package updated." : "Package added."
     );
-    setPackageDrawerOpen(false);
+    if (result.success) {
+      setPackageDrawerOpen(false);
+      return;
+    }
+    setPackageDrawerError(result.message || "Failed to save package.");
   }
 
   async function saveLocation() {
@@ -710,7 +781,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       setManualDrawerError(validationError);
       return;
     }
-    await persistEntity(
+    const result = await persistEntity(
       manualForm.id ? `/api/settings/shipping/manual-rates/${manualForm.id}` : "/api/settings/shipping/manual-rates",
       manualForm.id ? "PATCH" : "POST",
       {
@@ -718,18 +789,21 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         regionCountry: normalizeOptional(manualForm.regionCountry)?.toUpperCase() || null,
         regionStateProvince: normalizeOptional(manualForm.regionStateProvince),
         rateType: manualForm.rateType,
-        amount: parseNumber(manualForm.amount),
+        amount: manualForm.rateType === "FREE" ? 0 : parseNumber(manualForm.amount),
         minWeight: parseNumber(manualForm.minWeight),
         maxWeight: parseNumber(manualForm.maxWeight),
         minSubtotal: parseNumber(manualForm.minSubtotal),
         maxSubtotal: parseNumber(manualForm.maxSubtotal),
-        freeOverAmount: parseNumber(manualForm.freeOverAmount),
         estimatedDeliveryText: normalizeOptional(manualForm.estimatedDeliveryText),
         isActive: Boolean(manualForm.isActive),
       },
       manualForm.id ? "Manual rate updated." : "Manual rate added."
     );
-    setManualDrawerOpen(false);
+    if (result.success) {
+      setManualDrawerOpen(false);
+      return;
+    }
+    setManualDrawerError(result.message || "Failed to save manual rate.");
   }
 
   async function saveFallbackRate() {
@@ -1355,6 +1429,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
           <AdminInput checked={Boolean(packageForm.isActive)} onChange={(event) => setPackageForm((current) => ({ ...current, isActive: event.target.checked }))} className={styles.settingsCheckbox} type="checkbox" />
           <span>Active</span>
         </label>
+        {packageDrawerError ? (
+          <p className={styles.statusText} style={{ color: "var(--destructive, #ef4444)", marginTop: 8 }}>
+            {packageDrawerError}
+          </p>
+        ) : null}
         <div className={styles.actionRow}>
           <AdminButton disabled={saving} size="sm" onClick={savePackage}>
             Save package
@@ -1366,26 +1445,26 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         open={manualDrawerOpen}
         onClose={() => setManualDrawerOpen(false)}
         title={manualForm.id ? "Edit manual checkout rate" : "Add manual checkout rate"}
-        subtitle="Controls what customers pay at checkout — not postage."
+        subtitle="Controls what customers pay at checkout - not postage."
       >
         <AdminField label="Rate name">
           <AdminInput value={manualForm.name} onChange={(event) => setManualForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Standard shipping" />
         </AdminField>
         <AdminField label="Destination country" hint="Two-letter ISO code, e.g. US, CA, GB. Leave blank to match all countries.">
-          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} placeholder="e.g. US — leave blank for all countries" />
+          <AdminInput value={manualForm.regionCountry} onChange={(event) => setManualForm((current) => ({ ...current, regionCountry: event.target.value }))} placeholder="e.g. US - leave blank for all countries" />
         </AdminField>
         <AdminField label="State / province (optional)" hint="Leave blank to match all states or provinces in the selected country.">
-          <AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} placeholder="e.g. CA — leave blank for all states" />
+          <AdminInput value={manualForm.regionStateProvince} onChange={(event) => setManualForm((current) => ({ ...current, regionStateProvince: event.target.value }))} placeholder="e.g. CA - leave blank for all states" />
         </AdminField>
         <AdminField label="Rate type">
           <AdminSelect
             value={manualForm.rateType}
             onChange={(value) => setManualForm((current) => ({ ...current, rateType: value, minWeight: "", maxWeight: "", minSubtotal: "", maxSubtotal: "", freeOverAmount: "" }))}
             options={[
-              { value: "FLAT", label: "Flat rate — fixed charge for any order" },
-              { value: "FREE", label: "Free shipping — no charge" },
-              { value: "PRICE_BASED", label: "Order total range — different rates by cart value" },
-              { value: "WEIGHT_BASED", label: "Weight-based — requires product weights" },
+              { value: "FLAT", label: "Flat rate - fixed charge for any order" },
+              { value: "FREE", label: "Free shipping - no charge" },
+              { value: "PRICE_BASED", label: "Order total range - different rates by cart value" },
+              { value: "WEIGHT_BASED", label: "Weight-based - requires product weights" },
             ]}
           />
         </AdminField>
@@ -1421,27 +1500,8 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
           </>
         ) : null}
 
-        {manualForm.rateType === "FREE" ? (
-          <div style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedConditions((v) => !v)}
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--muted-foreground, rgba(255,255,255,0.55))", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 4 }}
-            >
-              {showAdvancedConditions ? "▾" : "▸"} Advanced conditions
-            </button>
-            {showAdvancedConditions ? (
-              <div style={{ marginTop: 10 }}>
-                <AdminField label="Apply only when order is at least ($)" hint="Leave blank for always-free shipping. Enter an amount to make this a 'free shipping over $X' rule.">
-                  <AdminInput type="number" value={manualForm.freeOverAmount} onChange={(event) => setManualForm((current) => ({ ...current, freeOverAmount: event.target.value }))} placeholder="Leave blank for always free" />
-                </AdminField>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <AdminField label="Estimated delivery (optional)" hint="Shown to customers at checkout, e.g. 3–5 business days.">
-          <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} placeholder="e.g. 3–5 business days" />
+        <AdminField label="Estimated delivery (optional)" hint="Shown to customers at checkout, e.g. 3-5 business days.">
+          <AdminInput value={manualForm.estimatedDeliveryText} onChange={(event) => setManualForm((current) => ({ ...current, estimatedDeliveryText: event.target.value }))} placeholder="e.g. 3-5 business days" />
         </AdminField>
         <label className={styles.checkboxField}>
           <AdminInput checked={Boolean(manualForm.isActive)} onChange={(event) => setManualForm((current) => ({ ...current, isActive: event.target.checked }))} className={styles.settingsCheckbox} type="checkbox" />
@@ -1602,5 +1662,7 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
 
   return <AppShell>{content}</AppShell>;
 }
+
+
 
 

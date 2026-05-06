@@ -37,6 +37,7 @@ type ShippingSettingsUpdate = Partial<{
 
 export async function getShippingSettingsStore() {
   return prisma.store.findFirst({
+    orderBy: [{ createdAt: 'asc' }],
     include: {
       shippingPackages: {
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
