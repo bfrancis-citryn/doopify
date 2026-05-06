@@ -177,6 +177,28 @@ describe('buildShippingSetupStatus', () => {
     expect(status.canBuyLabels).toBe(true)
   })
 
+  it('treats LABELS_ONLY usage as label-ready but not live-rate-ready', async () => {
+    const store = storeFixture({
+      shippingMode: 'HYBRID',
+      shippingLiveProvider: 'SHIPPO',
+      shippingProviderUsage: 'LABELS_ONLY',
+      activeRateProvider: 'NONE',
+      labelProvider: 'SHIPPO',
+    })
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
+      provider: 'SHIPPO',
+      connected: true,
+    })
+
+    const status = await buildShippingSetupStatus(store)
+
+    expect(status.hasProvider).toBe(false)
+    expect(status.liveProviderConnected).toBe(false)
+    expect(status.labelProviderConnected).toBe(true)
+    expect(status.canUseLiveRates).toBe(false)
+    expect(status.canBuyLabels).toBe(true)
+  })
+
   it('reports correct nextSteps when provider is selected but not connected', async () => {
     const store = storeFixture({
       shippingMode: 'LIVE_RATES',

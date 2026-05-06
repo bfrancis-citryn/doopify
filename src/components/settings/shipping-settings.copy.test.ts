@@ -116,4 +116,19 @@ describe('shipping settings UX copy and validation', () => {
     expect(source).toContain('if (result.success)')
     expect(source).toContain('setManualDrawerOpen(false)')
   })
+
+  it('explains provider usage options with explicit live-rate vs label-buying behavior', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('Live rates and label buying: checkout live rates + label purchase.')
+    expect(source).toContain('Label buying only: labels only, no')
+    expect(source).toContain('checkout live rates.')
+    expect(source).toContain('Live rates only: checkout live rates only, no label purchase.')
+  })
+
+  it('uses non-fatal address pre-validation guidance in the location drawer', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('Address pre-validation is not available yet.')
+    expect(source).toContain('verify it by loading live checkout')
+    expect(source).toContain('rates or purchasing a test label.')
+  })
 })

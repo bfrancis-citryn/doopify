@@ -523,6 +523,7 @@ async function resolveLiveQuotes(input: {
   store: NonNullable<ShippingRateStore>
   provider: ShippingLiveProvider
   shippingAddress: ShippingRateAddress
+  totalWeightOz: number
 }): Promise<ShippingRateQuote[]> {
   const apiKey = await getShippingProviderApiKey(input.provider)
   if (!apiKey) {
@@ -554,7 +555,14 @@ async function resolveLiveQuotes(input: {
   })
 
   if (!quotes.length) {
-    throw new ShippingRateSetupError(`${input.provider} returned no live rates for this shipment.`, 'PROVIDER_ERROR')
+    const weightHint =
+      input.totalWeightOz <= 0
+        ? ' Product weights may be missing. Add weight to product variants and try again.'
+        : ''
+    throw new ShippingRateSetupError(
+      `${input.provider} returned no live rates for this shipment.${weightHint}`,
+      'PROVIDER_ERROR'
+    )
   }
 
   return quotes.map((quote) => ({
@@ -643,6 +651,17 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
   }
 
   if (!provider) {
+    const legacyLiveProviderConfigured = Boolean(store.shippingLiveProvider)
+    if (
+      legacyLiveProviderConfigured &&
+      (store.shippingProviderUsage ?? 'LIVE_AND_LABELS') === 'LABELS_ONLY' &&
+      (mode === 'LIVE_RATES' || mode === 'HYBRID')
+    ) {
+      throw new ShippingRateSetupError(
+        'Provider is configured for labels only. Enable live-rate usage to quote checkout rates.'
+      )
+    }
+
     if (mode === 'HYBRID') {
       const manual = manualQuotes()
       if (manual.length) return manual
@@ -669,6 +688,7 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
         store,
         provider,
         shippingAddress: input.shippingAddress,
+        totalWeightOz,
       })
     } catch (error) {
       if (fallbackBehavior !== 'HIDE_SHIPPING') {
@@ -685,32 +705,34 @@ export async function getShippingRatesForCheckout(input: GetShippingRatesForChec
     }
   }
 
-  // HYBRID mode: include manual rates when configured and prefer live rates when available.
+  // HYBRID mode: prefer live rates; only use manual/fallback rates when live rates are unavailable.
   const manual = manualQuotes()
   try {
-    const live = await resolveLiveQuotes({
+    return await resolveLiveQuotes({
       store,
       provider,
       shippingAddress: input.shippingAddress,
+      totalWeightOz,
     })
-
-    return [...live, ...manual]
-  } catch {
+  } catch (liveError) {
     if (fallbackBehavior !== 'HIDE_SHIPPING') {
       const fallback = fallbackQuotes()
       if (fallback.length) {
-        return [...fallback, ...manual]
+        return fallback
+      }
+
+      if (manual.length) {
+        return manual
       }
     }
 
     if (fallbackBehavior === 'MANUAL_QUOTE') {
-      return [buildManualQuoteFallback(store), ...manual]
+      return [buildManualQuoteFallback(store)]
     }
 
-    if (manual.length) {
-      return manual
+    if (liveError instanceof ShippingRateSetupError) {
+      throw liveError
     }
-
     throw new ShippingRateSetupError('Live rates are unavailable and no fallback/manual rates are configured.')
   }
 }

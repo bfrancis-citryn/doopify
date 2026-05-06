@@ -238,4 +238,98 @@ describe('settings shipping route', () => {
       },
     })
   })
+
+  it('PATCH persists shipping mode LIVE_RATES and returns it on subsequent GET', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(storeFixture())
+    mocks.updateShippingSettings.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+      })
+    )
+
+    const patchResponse = await PATCH(
+      new Request('http://localhost/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shippingMode: 'LIVE_RATES' }),
+      })
+    )
+    expect(patchResponse.status).toBe(200)
+    expect(mocks.updateShippingSettings).toHaveBeenCalledWith('store_1', {
+      shippingMode: 'LIVE_RATES',
+    })
+
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+      })
+    )
+    const getResponse = await GET(new Request('http://localhost/api/settings/shipping'))
+    expect(getResponse.status).toBe(200)
+    const payload = await getResponse.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        shippingMode: 'LIVE_RATES',
+      },
+    })
+  })
+
+  it('PATCH persists shipping mode HYBRID and provider usage mapping for labels-only usage', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+
+    mocks.getShippingSettingsStore.mockResolvedValue(storeFixture())
+    mocks.updateShippingSettings.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'HYBRID',
+        shippingLiveProvider: 'SHIPPO',
+        shippingProviderUsage: 'LABELS_ONLY',
+        activeRateProvider: 'NONE',
+        labelProvider: 'SHIPPO',
+      })
+    )
+
+    const response = await PATCH(
+      new Request('http://localhost/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shippingMode: 'HYBRID',
+          shippingLiveProvider: 'SHIPPO',
+          shippingProviderUsage: 'LABELS_ONLY',
+        }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.updateShippingSettings).toHaveBeenCalledWith(
+      'store_1',
+      expect.objectContaining({
+        shippingMode: 'HYBRID',
+        shippingLiveProvider: 'SHIPPO',
+        shippingProviderUsage: 'LABELS_ONLY',
+        activeRateProvider: 'NONE',
+        labelProvider: 'SHIPPO',
+      })
+    )
+
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        shippingMode: 'HYBRID',
+        shippingProviderUsage: 'LABELS_ONLY',
+        activeRateProvider: 'NONE',
+        labelProvider: 'SHIPPO',
+      },
+    })
+  })
 })

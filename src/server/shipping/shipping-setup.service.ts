@@ -14,6 +14,8 @@ export type ShippingSetupStatus = {
   hasManualRates: boolean
   hasProvider: boolean
   providerConnected: boolean
+  liveProviderConnected: boolean
+  labelProviderConnected: boolean
   canUseManualRates: boolean
   canUseLiveRates: boolean
   canBuyLabels: boolean
@@ -147,11 +149,22 @@ export async function buildShippingSetupStatus(store: any) {
   const labelProvider = resolveLabelProvider(store)
   const hasProvider = Boolean(activeRateProvider)
 
-  let providerConnected = false
+  let liveProviderConnected = false
   if (activeRateProvider) {
     const providerStatus = await getShippingProviderConnectionStatus(activeRateProvider)
-    providerConnected = providerStatus.connected
+    liveProviderConnected = providerStatus.connected
   }
+
+  let labelProviderConnected = false
+  if (labelProvider) {
+    if (labelProvider === activeRateProvider) {
+      labelProviderConnected = liveProviderConnected
+    } else {
+      const labelStatus = await getShippingProviderConnectionStatus(labelProvider)
+      labelProviderConnected = labelStatus.connected
+    }
+  }
+  const providerConnected = liveProviderConnected || labelProviderConnected
 
   const originReady = hasOriginAddress(store)
   const packageReady = hasDefaultPackage(store)
@@ -161,10 +174,10 @@ export async function buildShippingSetupStatus(store: any) {
   const canUseLiveRates =
     (mode === 'LIVE_RATES' || mode === 'HYBRID') &&
     hasProvider &&
-    providerConnected &&
+    liveProviderConnected &&
     originReady &&
     packageReady
-  const canBuyLabels = originReady && packageReady && Boolean(labelProvider) && providerConnected
+  const canBuyLabels = originReady && packageReady && Boolean(labelProvider) && labelProviderConnected
 
   const warnings: string[] = []
   const nextSteps: string[] = []
@@ -186,7 +199,7 @@ export async function buildShippingSetupStatus(store: any) {
     warnings.push('Live shipping mode is selected but no provider is chosen.')
     nextSteps.push('Choose a live provider in setup step 5.')
   }
-  if ((mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && !providerConnected) {
+  if ((mode === 'LIVE_RATES' || mode === 'HYBRID') && hasProvider && !liveProviderConnected) {
     warnings.push('Selected shipping provider is not connected yet.')
     nextSteps.push('Connect and test the provider credentials in setup step 5.')
   }
@@ -206,6 +219,8 @@ export async function buildShippingSetupStatus(store: any) {
     hasManualRates: manualReady,
     hasProvider,
     providerConnected,
+    liveProviderConnected,
+    labelProviderConnected,
     canUseManualRates,
     canUseLiveRates,
     canBuyLabels,

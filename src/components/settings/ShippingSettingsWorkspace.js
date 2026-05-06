@@ -44,6 +44,15 @@ const PROVIDER_USAGE_OPTIONS = [
   { value: "LIVE_RATES_ONLY", label: "Live rates only" },
 ];
 
+const PROVIDER_USAGE_HELPER_COPY = {
+  LIVE_AND_LABELS:
+    "Checkout uses live carrier rates and Doopify can also buy labels after orders are paid.",
+  LABELS_ONLY:
+    "Checkout does not request live carrier rates. Doopify can buy labels only after orders are paid.",
+  LIVE_RATES_ONLY:
+    "Checkout uses live carrier rates, but label purchase remains disabled for this provider.",
+};
+
 const DEFAULT_PACKAGE_FORM = {
   id: "",
   name: "",
@@ -282,7 +291,12 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
     () => packages.find((entry) => entry.isDefault && entry.isActive) || packages[0] || null,
     [packages]
   );
-  const hasProviderConnection = Boolean(setupStatus?.providerConnected);
+  const hasProviderConnection = Boolean(
+    setupStatus?.liveProviderConnected ?? setupStatus?.providerConnected
+  );
+  const hasLabelProviderConnection = Boolean(
+    setupStatus?.labelProviderConnected ?? setupStatus?.providerConnected
+  );
   const hasFallbackRate = useMemo(() => fallbackRates.some((entry) => entry.isActive), [fallbackRates]);
   const shippoInUse = activeRateProvider === "SHIPPO" || labelProvider === "SHIPPO";
   const easypostInUse = activeRateProvider === "EASYPOST" || labelProvider === "EASYPOST";
@@ -290,16 +304,21 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
     (manualFulfillmentForm.manualFulfillmentInstructions || "").trim() ||
       (manualFulfillmentForm.manualTrackingBehavior || "").trim()
   );
-  const missingLiveRateRequirements = !hasDefaultLocation || !hasDefaultPackage || !hasProviderConnection;
+  const missingLiveRateRequirements =
+    (mode === "LIVE_RATES" || mode === "HYBRID") &&
+    (!hasDefaultLocation || !hasDefaultPackage || !hasProviderConnection);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [shipping, setup] = await Promise.all([
-        fetch("/api/settings/shipping", { cache: "no-store" }).then(parseApiJson),
-        fetch("/api/settings/shipping/setup-status", { cache: "no-store" }).then(parseApiJson),
-      ]);
+      const shipping = await fetch("/api/settings/shipping", { cache: "no-store" }).then(parseApiJson);
+      let setup = null;
+      try {
+        setup = await fetch("/api/settings/shipping/setup-status", { cache: "no-store" }).then(parseApiJson);
+      } catch {
+        setup = null;
+      }
 
       setSettings(shipping);
       setSetupStatus(setup);
@@ -397,6 +416,13 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   }
 
   async function saveCheckoutMethod() {
+    if ((mode === "LIVE_RATES" || mode === "HYBRID") && activeRateProvider === "NONE" && labelProvider !== "NONE") {
+      setError(
+        "Checkout is set to live/hybrid, but provider usage is currently label buying only. Enable live-rate usage in the provider drawer first."
+      );
+      return;
+    }
+
     const legacyUsage = providerSelectionToLegacyUsage(activeRateProvider, labelProvider);
     const legacyProvider =
       activeRateProvider !== "NONE"
@@ -1056,7 +1082,9 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
                 <div className={styles.requirementRow}>
                   <div className={styles.requirementMain}>
                     <p className={styles.compactRowTitle}>Provider connection</p>
-                    <p className={styles.compactRowDescription}>Live rates and labels require an active provider.</p>
+                    <p className={styles.compactRowDescription}>
+                      Live rates need a verified live-rate provider. Labels need a verified label provider.
+                    </p>
                   </div>
                   <div className={styles.shippingProviderActions}>
                     <AdminStatusChip tone={hasProviderConnection ? "success" : "warning"}>
@@ -1096,6 +1124,9 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
               </div>
               {missingLiveRateRequirements ? (
                 <p className={styles.statusText}>Finish the missing items before live rates or label buying can work.</p>
+              ) : null}
+              {!missingLiveRateRequirements && !hasLabelProviderConnection ? (
+                <p className={styles.statusText}>Label purchase remains unavailable until a label provider is connected.</p>
               ) : null}
             </section>
 
@@ -1281,6 +1312,13 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
                   options={PROVIDER_USAGE_OPTIONS}
                 />
               </AdminField>
+              <p className={styles.statusText}>
+                {PROVIDER_USAGE_HELPER_COPY[providerForm.usage] || PROVIDER_USAGE_HELPER_COPY.LIVE_AND_LABELS}
+              </p>
+              <p className={styles.compactMeta}>
+                Live rates and label buying: checkout live rates + label purchase. Label buying only: labels only, no
+                checkout live rates. Live rates only: checkout live rates only, no label purchase.
+              </p>
               <AdminField label="API token">
                 <AdminInput
                   type="password"
@@ -1366,6 +1404,10 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
             Validate address
           </AdminButton>
         </div>
+        <p className={styles.compactMeta}>
+          Address pre-validation is not available yet. Save this address, then verify it by loading live checkout
+          rates or purchasing a test label.
+        </p>
         {locationValidationMessage ? <p className={styles.statusText}>{locationValidationMessage}</p> : null}
       </AdminDrawer>
 

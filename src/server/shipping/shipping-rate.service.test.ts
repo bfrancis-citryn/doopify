@@ -323,7 +323,101 @@ describe('shipping-rate service', () => {
     })
   })
 
-  it('returns live + manual quotes in HYBRID mode, and fallback + manual when live fails', async () => {
+  it('returns a clear setup error in LIVE_RATES mode when ship-from location is missing', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        shippingLiveProvider: 'SHIPPO',
+        activeRateProvider: 'SHIPPO',
+        shippingLocations: [],
+        shippingOriginAddress1: null,
+        shippingOriginCity: null,
+        shippingOriginPostalCode: null,
+        shippingOriginCountry: null,
+      })
+    )
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({ connected: true })
+    mocks.getShippingProviderApiKey.mockResolvedValue('shippo_test_123')
+
+    await expect(
+      getShippingRatesForCheckout({
+        subtotalCents: 4200,
+        shippingAddress: {
+          country: 'US',
+          province: 'CA',
+          address1: '123 Main St',
+          city: 'Los Angeles',
+          postalCode: '90001',
+        },
+      })
+    ).rejects.toMatchObject({
+      name: 'ShippingRateSetupError',
+      message: expect.stringContaining('Ship-from location is incomplete'),
+    })
+  })
+
+  it('returns a clear setup error in LIVE_RATES mode when default package is missing', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        shippingLiveProvider: 'SHIPPO',
+        activeRateProvider: 'SHIPPO',
+        shippingPackages: [],
+        defaultPackageWeightOz: null,
+        defaultPackageLengthIn: null,
+        defaultPackageWidthIn: null,
+        defaultPackageHeightIn: null,
+      })
+    )
+    mocks.getShippingProviderConnectionStatus.mockResolvedValue({ connected: true })
+    mocks.getShippingProviderApiKey.mockResolvedValue('shippo_test_123')
+
+    await expect(
+      getShippingRatesForCheckout({
+        subtotalCents: 4200,
+        shippingAddress: {
+          country: 'US',
+          province: 'CA',
+          address1: '123 Main St',
+          city: 'Los Angeles',
+          postalCode: '90001',
+        },
+      })
+    ).rejects.toMatchObject({
+      name: 'ShippingRateSetupError',
+      message: expect.stringContaining('Default package is incomplete'),
+    })
+  })
+
+  it('returns a clear setup error when provider usage is labels-only in LIVE_RATES mode', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        shippingLiveProvider: 'SHIPPO',
+        shippingProviderUsage: 'LABELS_ONLY',
+        activeRateProvider: 'NONE',
+        labelProvider: 'SHIPPO',
+      })
+    )
+
+    await expect(
+      getShippingRatesForCheckout({
+        subtotalCents: 4200,
+        shippingAddress: {
+          country: 'US',
+          province: 'CA',
+          address1: '123 Main St',
+          city: 'Los Angeles',
+          postalCode: '90001',
+        },
+      })
+    ).rejects.toMatchObject({
+      name: 'ShippingRateSetupError',
+      message: expect.stringContaining('Provider is configured for labels only'),
+    })
+  })
+
+  it('returns live-only quotes in HYBRID mode, then fallback/manual only when live rates fail', async () => {
     mocks.prisma.store.findFirst.mockResolvedValue(
       storeFixture({
         shippingMode: 'HYBRID',
@@ -385,9 +479,8 @@ describe('shipping-rate service', () => {
       },
     })
 
-    expect(liveQuotes).toHaveLength(2)
+    expect(liveQuotes).toHaveLength(1)
     expect(liveQuotes[0]).toMatchObject({ source: 'EASYPOST', rateType: 'LIVE_RATE' })
-    expect(liveQuotes[1]).toMatchObject({ id: 'manual-rate:manual_hybrid', source: 'MANUAL' })
 
     mocks.getShippingProviderLiveRates.mockRejectedValueOnce(new Error('timeout'))
     const fallbackQuotes = await getShippingRatesForCheckout({
@@ -401,9 +494,8 @@ describe('shipping-rate service', () => {
       },
     })
 
-    expect(fallbackQuotes).toHaveLength(2)
+    expect(fallbackQuotes).toHaveLength(1)
     expect(fallbackQuotes[0]).toMatchObject({ id: 'fallback:fallback_hybrid', rateType: 'FALLBACK' })
-    expect(fallbackQuotes[1]).toMatchObject({ id: 'manual-rate:manual_hybrid' })
   })
 
   it('returns manual-quote fallback when fallback behavior is MANUAL_QUOTE and live provider fails', async () => {

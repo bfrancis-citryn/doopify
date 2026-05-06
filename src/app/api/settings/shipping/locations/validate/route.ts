@@ -35,8 +35,8 @@ export async function POST(req: Request) {
       normalizedAddress: null,
       message:
         provider
-          ? `${provider} address validation is not wired yet in this build. Save the location and validate with carrier labels during test purchases.`
-          : 'No live provider is configured. Address validation is unavailable.',
+          ? 'Address pre-validation is not available yet. Save this address, then verify it by loading live checkout rates or purchasing a test label.'
+          : 'Address pre-validation is not available yet. Save this address, then verify it by loading live checkout rates or purchasing a test label.',
     })
   } catch (error) {
     console.error('[POST /api/settings/shipping/locations/validate]', error)
