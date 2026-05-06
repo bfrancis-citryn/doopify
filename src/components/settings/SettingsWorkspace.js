@@ -22,6 +22,8 @@ import AdminTooltip from '../admin/ui/AdminTooltip';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
+import { buildMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
+import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
 import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
 import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
 
@@ -746,6 +748,7 @@ function extractEnvVariableHints(checks) {
 export default function SettingsWorkspace() {
   const [activeSection, setActiveSection] = useState('general');
   const { settings, updateSettings, loading, error } = useSettings();
+  const [sessionUser, setSessionUser] = useState(null);
   const [shippingConfigLoading, setShippingConfigLoading] = useState(false);
   const [shippingConfigError, setShippingConfigError] = useState('');
   const [shippingConfigLoaded, setShippingConfigLoaded] = useState(false);
@@ -837,6 +840,31 @@ export default function SettingsWorkspace() {
     if (section && SETTINGS_SECTIONS.some((entry) => entry.id === section)) {
       setActiveSection(section);
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSessionUser() {
+      try {
+        const response = await fetch('/api/auth/me', { cache: 'no-store' });
+        const payload = await response.json().catch(() => null);
+        const normalizedSessionUser = normalizeSettingsSessionUser(payload?.data);
+        if (!cancelled && response.ok && payload?.success && normalizedSessionUser) {
+          setSessionUser(normalizedSessionUser);
+        }
+      } catch {
+        if (!cancelled) {
+          setSessionUser(null);
+        }
+      }
+    }
+
+    loadSessionUser();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1384,6 +1412,37 @@ export default function SettingsWorkspace() {
   );
   const stripeCredentialMeta = stripeProviderStatus?.credentialMeta || [];
   const stripeSavedCredentialMeta = stripeCredentialMeta.filter((entry) => entry.present);
+  const stripeCredentialMaskMap = useMemo(
+    () => buildMaskedCredentialMap(stripeSavedCredentialMeta),
+    [stripeSavedCredentialMeta]
+  );
+  const stripePublishablePlaceholder = useMemo(
+    () =>
+      resolveMaskedInputPlaceholder({
+        draftValue: providerForms.STRIPE.publishableKey,
+        fallbackPlaceholder: 'pk_test_...',
+        savedMaskedValue: stripeCredentialMaskMap.PUBLISHABLE_KEY,
+      }),
+    [providerForms.STRIPE.publishableKey, stripeCredentialMaskMap.PUBLISHABLE_KEY]
+  );
+  const stripeSecretPlaceholder = useMemo(
+    () =>
+      resolveMaskedInputPlaceholder({
+        draftValue: providerForms.STRIPE.secretKey,
+        fallbackPlaceholder: 'sk_test_...',
+        savedMaskedValue: stripeCredentialMaskMap.SECRET_KEY,
+      }),
+    [providerForms.STRIPE.secretKey, stripeCredentialMaskMap.SECRET_KEY]
+  );
+  const stripeWebhookPlaceholder = useMemo(
+    () =>
+      resolveMaskedInputPlaceholder({
+        draftValue: providerForms.STRIPE.webhookSecret,
+        fallbackPlaceholder: 'whsec_...',
+        savedMaskedValue: stripeCredentialMaskMap.WEBHOOK_SECRET,
+      }),
+    [providerForms.STRIPE.webhookSecret, stripeCredentialMaskMap.WEBHOOK_SECRET]
+  );
   const resendCredentialMeta = resendProviderStatus?.credentialMeta || [];
   const smtpCredentialMeta = smtpProviderStatus?.credentialMeta || [];
   const resendSavedCredentialMeta = resendCredentialMeta.filter((entry) => entry.present);
@@ -2098,7 +2157,11 @@ export default function SettingsWorkspace() {
         await refreshProviderStatuses();
       }
       resetProviderForm(provider);
-      setProviderNotice(`${provider} credentials saved. Run verification to confirm connectivity.`);
+      setProviderNotice(
+        provider === 'STRIPE'
+          ? 'Credentials saved securely. Secret values are encrypted and hidden. Run "Verify Stripe API" to confirm DB-backed runtime connectivity.'
+          : `${provider} credentials saved. Run verification to confirm connectivity.`
+      );
     } catch (saveError) {
       setProviderStatusError(saveError instanceof Error ? saveError.message : 'Failed to save provider credentials');
     } finally {
@@ -3509,11 +3572,11 @@ export default function SettingsWorkspace() {
             ) : null}
 
             {!loading && !error && activeSection === 'account' ? (
-              <AccountSettingsPanel currentUser={user} />
+              <AccountSettingsPanel currentUser={sessionUser} />
             ) : null}
 
             {!loading && !error && activeSection === 'team' ? (
-              <TeamSettingsPanel currentUserRole={user?.role} />
+              <TeamSettingsPanel currentUserRole={sessionUser?.role} />
             ) : null}
 
             {!loading && !error && activeSection === 'setup' ? (
@@ -4013,13 +4076,13 @@ export default function SettingsWorkspace() {
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Credentials</h4>
-                <AdminTooltip content="Saved secret values are not rendered back. Fields clear after save and masked metadata remains." />
+                <AdminTooltip content="Credentials are encrypted at rest. Inputs clear after save and show masked placeholders from saved metadata." />
               </div>
               <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField hint="pk_test_... or pk_live_..." label="Publishable key">
                   <AdminInput
                     onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
-                    placeholder="pk_test_..."
+                    placeholder={stripePublishablePlaceholder}
                     type="password"
                     value={providerForms.STRIPE.publishableKey}
                   />
@@ -4027,7 +4090,7 @@ export default function SettingsWorkspace() {
                 <AdminField hint="sk_test_... or sk_live_..." label="Secret key">
                   <AdminInput
                     onChange={(event) => patchProviderForm('STRIPE', { secretKey: event.target.value })}
-                    placeholder="sk_test_..."
+                    placeholder={stripeSecretPlaceholder}
                     type="password"
                     value={providerForms.STRIPE.secretKey}
                   />
@@ -4035,7 +4098,7 @@ export default function SettingsWorkspace() {
                 <AdminField hint="Optional but recommended for DB runtime verification." label="Webhook secret">
                   <AdminInput
                     onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
-                    placeholder="whsec_..."
+                    placeholder={stripeWebhookPlaceholder}
                     type="password"
                     value={providerForms.STRIPE.webhookSecret}
                   />
@@ -4082,6 +4145,11 @@ export default function SettingsWorkspace() {
                   {setupCopiedCommandId === 'stripe-webhook-endpoint' ? 'Copied endpoint' : 'Copy webhook endpoint'}
                 </AdminButton>
               </div>
+              {stripeSavedCredentialMeta.length ? (
+                <p className={styles.compactMeta}>
+                  Credentials saved securely. Secret values are encrypted and hidden.
+                </p>
+              ) : null}
               {stripeSavedCredentialMeta.length ? (
                 <div className={styles.maskedSecretList}>
                   {stripeSavedCredentialMeta.map((entry) => (

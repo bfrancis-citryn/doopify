@@ -9,6 +9,7 @@ import AdminInput from '../admin/ui/AdminInput';
 import AdminSelect from '../admin/ui/AdminSelect';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import styles from './SettingsWorkspace.module.css';
+import { getTeamAccessNotice, isKnownNonOwnerRole, isOwnerRole } from './team-settings.helpers';
 
 const ROLE_OPTIONS = [
   { value: 'OWNER', label: 'Owner' },
@@ -40,21 +41,15 @@ function formatDate(dateStr) {
   }
 }
 
-function EmptyInvitesState() {
-  return (
-    <p style={{ color: 'var(--color-text-secondary, #888)', fontSize: 13, margin: '8px 0 0' }}>
-      No pending invites.
-    </p>
-  );
-}
-
 export default function TeamSettingsPanel({ currentUserRole }) {
-  const isOwner = currentUserRole === 'OWNER';
+  const isOwner = isOwnerRole(currentUserRole);
+  const isKnownNonOwner = isKnownNonOwnerRole(currentUserRole);
 
   const [users, setUsers] = useState([]);
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [accessNotice, setAccessNotice] = useState('');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState('invite'); // invite | create
@@ -69,8 +64,25 @@ export default function TeamSettingsPanel({ currentUserRole }) {
   const [editRoleValue, setEditRoleValue] = useState('STAFF');
 
   const loadTeam = useCallback(async () => {
+    if (!currentUserRole) {
+      setUsers([]);
+      setInvites([]);
+      setError('');
+      setAccessNotice('');
+      return;
+    }
+
+    if (!isOwner) {
+      setUsers([]);
+      setInvites([]);
+      setError('');
+      setAccessNotice(getTeamAccessNotice(currentUserRole));
+      return;
+    }
+
     setLoading(true);
     setError('');
+    setAccessNotice('');
     try {
       const [usersRes, invitesRes] = await Promise.all([
         fetch('/api/team/users', { cache: 'no-store' }),
@@ -78,14 +90,27 @@ export default function TeamSettingsPanel({ currentUserRole }) {
       ]);
       const usersPayload = await usersRes.json().catch(() => ({}));
       const invitesPayload = await invitesRes.json().catch(() => ({}));
+
+      if (usersRes.status === 403 || invitesRes.status === 403) {
+        setUsers([]);
+        setInvites([]);
+        setAccessNotice('Team management is owner-only in private beta. Ask an owner to manage invites, roles, and account status.');
+        return;
+      }
+
+      if (!usersRes.ok || !invitesRes.ok) {
+        const message = usersPayload?.error || invitesPayload?.error || 'Failed to load team data.';
+        throw new Error(message);
+      }
+
       setUsers(usersPayload?.data?.users || []);
       setInvites(invitesPayload?.data?.invites || []);
-    } catch {
-      setError('Failed to load team data.');
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load team data.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUserRole, isOwner]);
 
   useEffect(() => {
     loadTeam();
@@ -251,6 +276,20 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         </AdminCard>
       </section>
 
+      {isKnownNonOwner ? (
+        <AdminCard variant="card" className={styles.compactSettingsCard}>
+          <p className={styles.statusText}>
+            Team access is restricted for your role. Owners can manage invites, role changes, and account status.
+          </p>
+        </AdminCard>
+      ) : null}
+
+      {accessNotice ? (
+        <AdminCard variant="card" className={styles.compactSettingsCard}>
+          <p className={styles.statusText}>{accessNotice}</p>
+        </AdminCard>
+      ) : null}
+
       {loading ? (
         <div className={styles.statusBlock}>
           <div className={styles.loadingLine} />
@@ -280,7 +319,9 @@ export default function TeamSettingsPanel({ currentUserRole }) {
 
             {users.length === 0 ? (
               <AdminCard variant="card" className={styles.compactSettingsCard}>
-                <p className={styles.statusText}>No team members yet.</p>
+                <p className={styles.statusText}>
+                  No team members yet. Invite your first teammate to share access and keep ownership recovery-safe.
+                </p>
               </AdminCard>
             ) : (
               users.map((user) => (
@@ -373,7 +414,9 @@ export default function TeamSettingsPanel({ currentUserRole }) {
               </div>
               {invites.length === 0 ? (
                 <AdminCard variant="card" className={styles.compactSettingsCard}>
-                  <EmptyInvitesState />
+                  <p className={styles.statusText}>
+                    No pending invites. Use Invite member to create a single-use join link.
+                  </p>
                 </AdminCard>
               ) : (
                 invites.map((invite) => (

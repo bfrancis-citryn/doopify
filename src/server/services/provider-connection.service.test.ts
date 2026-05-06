@@ -62,12 +62,15 @@ vi.mock('@/server/shipping/shipping-provider.service', () => ({
 import {
   getRuntimeProviderConnection,
   saveProviderCredentials,
+  verifyProviderConnection,
 } from './provider-connection.service'
 
 describe('provider connection service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.prisma.$transaction.mockImplementation(async (callback: any) => callback(mocks.prisma))
+    mocks.prisma.integration.update.mockResolvedValue({ id: 'int_existing' })
+    mocks.prisma.integration.create.mockResolvedValue({ id: 'int_created' })
     mocks.prisma.integration.updateMany.mockResolvedValue({ count: 0 })
     mocks.prisma.integrationSecret.deleteMany.mockResolvedValue({ count: 0 })
     mocks.env.RESEND_API_KEY = 're_env_key'
@@ -75,6 +78,7 @@ describe('provider connection service', () => {
     mocks.env.STRIPE_SECRET_KEY = undefined
     mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = undefined
     mocks.env.STRIPE_WEBHOOK_SECRET = undefined
+    vi.unstubAllGlobals()
   })
 
   it('prefers verified db credentials over env fallback', async () => {
@@ -278,6 +282,77 @@ describe('provider connection service', () => {
     expect(webhookUpsert![0].create.value).toBe('enc:whsec_live_new_secret')
 
     expect(status.state).toBe('CREDENTIALS_SAVED')
+  })
+
+  it('uses DB-saved Stripe credentials for verification instead of env fallback secrets', async () => {
+    mocks.env.STRIPE_SECRET_KEY = 'sk_test_env_fallback_should_not_be_used'
+    mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_env_fallback_should_not_be_used'
+    mocks.prisma.integration.findFirst.mockResolvedValue({
+      id: 'int_stripe_verify',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-05-06T00:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_verify_1234' },
+        { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_verify_1234' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:live' },
+      ],
+    })
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          id: 'acct_123',
+          country: 'US',
+          default_currency: 'usd',
+          charges_enabled: true,
+          payouts_enabled: true,
+        }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await verifyProviderConnection('STRIPE')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.stripe.com/v1/account',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk_live_db_verify_1234',
+        }),
+      })
+    )
+    expect(result.verification.ok).toBe(true)
+  })
+
+  it('returns Stripe masked metadata with prefix and last4 only', async () => {
+    mocks.prisma.integration.findFirst.mockResolvedValue({
+      id: 'int_stripe_mask',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      updatedAt: new Date('2026-05-06T00:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_abcdefghijklmnopqrstuvwxyz1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_abcdefghijklmnopqrstuvwxyz5678' },
+        { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_abcdefghijklmnopqrstuvwxyz9012' },
+        { id: 'sec_4', key: 'MODE', value: 'enc:test' },
+      ],
+    })
+
+    const status = await saveProviderCredentials('STRIPE', {
+      publishableKey: 'pk_test_abcdefghijklmnopqrstuvwxyz1234',
+      secretKey: 'sk_test_abcdefghijklmnopqrstuvwxyz5678',
+      webhookSecret: 'whsec_abcdefghijklmnopqrstuvwxyz9012',
+      mode: 'test',
+    })
+
+    const publishableMask = status.credentialMeta.find((entry) => entry.key === 'PUBLISHABLE_KEY')?.maskedValue
+    const secretMask = status.credentialMeta.find((entry) => entry.key === 'SECRET_KEY')?.maskedValue
+    const webhookMask = status.credentialMeta.find((entry) => entry.key === 'WEBHOOK_SECRET')?.maskedValue
+
+    expect(publishableMask).toBe('pk_test_••••••1234')
+    expect(secretMask).toBe('sk_test_••••••5678')
+    expect(webhookMask).toBe('whsec_••••••9012')
   })
 })
 

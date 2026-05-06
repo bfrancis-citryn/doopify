@@ -182,8 +182,29 @@ function maskCredential(provider: SupportedProvider, key: string, value: string 
   if (key === 'FROM_EMAIL') return value
   if (key === 'HOST') return value
 
-  if (value.length <= 8) return '••••'
-  return `${value.slice(0, 4)}••••${value.slice(-2)}`
+  const suffix = value.length >= 4 ? value.slice(-4) : value
+  if (key === 'PUBLISHABLE_KEY' && provider === 'STRIPE') {
+    if (value.startsWith('pk_test_')) return `pk_test_••••••${suffix}`
+    if (value.startsWith('pk_live_')) return `pk_live_••••••${suffix}`
+    return `pk_••••••${suffix}`
+  }
+
+  if (key === 'SECRET_KEY' && provider === 'STRIPE') {
+    if (value.startsWith('sk_test_')) return `sk_test_••••••${suffix}`
+    if (value.startsWith('sk_live_')) return `sk_live_••••••${suffix}`
+    return `sk_••••••${suffix}`
+  }
+
+  if (key === 'WEBHOOK_SECRET' && value.startsWith('whsec_')) {
+    return `whsec_••••••${suffix}`
+  }
+
+  if (key === 'API_KEY' && provider === 'RESEND' && value.startsWith('re_')) {
+    return `re_••••••${suffix}`
+  }
+
+  if (value.length <= 6) return '••••'
+  return `${value.slice(0, 4)}••••••${suffix}`
 }
 
 function safeCredentialMetadata(provider: SupportedProvider, secretMap: Map<string, string>) {
