@@ -19,6 +19,7 @@ import AdminInput from '../admin/ui/AdminInput';
 import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
+import { getCatalogViewState, PRODUCT_CATALOG_EMPTY_STATE } from './product-catalog-view.helpers';
 import styles from './ProductCatalog.module.css';
 
 const FILTERS = [
@@ -31,7 +32,7 @@ const FILTERS = [
 ];
 
 export default function ProductCatalog() {
-  const { products, selectedProductId, searchQuery, activeFilter, editor, formatMoney, actions } = useProductStore();
+  const { products, selectedProductId, searchQuery, activeFilter, catalogLoaded, editor, formatMoney, actions } = useProductStore();
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const visibleProducts = useMemo(
@@ -44,7 +45,12 @@ export default function ProductCatalog() {
     [activeFilter, deferredSearchQuery, products]
   );
 
-  const isLoading = !editor.draftProduct && products.length === 0;
+  const viewState = getCatalogViewState({
+    catalogLoaded,
+    hasDraftProduct: Boolean(editor.draftProduct),
+    totalProducts: products.length,
+    visibleProducts: visibleProducts.length,
+  });
 
   const columns = [
     {
@@ -179,19 +185,19 @@ export default function ProductCatalog() {
       </div>
 
       <div className={`custom-scrollbar ${styles.listArea}`}>
-        {isLoading ? <AdminSkeleton rows={6} variant="table" /> : null}
+        {viewState === 'loading' ? <AdminSkeleton rows={6} variant="table" /> : null}
 
-        {!isLoading && !products.length ? (
+        {viewState === 'empty' ? (
           <AdminEmptyState
-            actionLabel="Create product"
-            description="Create your first product to start managing inventory in the slide-in editor."
+            actionLabel={PRODUCT_CATALOG_EMPTY_STATE.actionLabel}
+            description={PRODUCT_CATALOG_EMPTY_STATE.description}
             icon="inventory_2"
             onAction={() => actions.requestCreateProduct()}
-            title="No products yet"
+            title={PRODUCT_CATALOG_EMPTY_STATE.title}
           />
         ) : null}
 
-        {!isLoading && products.length > 0 && !visibleProducts.length ? (
+        {viewState === 'filtered-empty' ? (
           <AdminEmptyState
             actionLabel="Clear filters"
             description="Try a broader search or switch filters to explore the rest of the catalog."
@@ -201,7 +207,7 @@ export default function ProductCatalog() {
           />
         ) : null}
 
-        {!isLoading && visibleProducts.length > 0 ? (
+        {viewState === 'table' ? (
           <AdminTable
             columns={columns}
             emptyDescription="Try changing filters or creating a new product."

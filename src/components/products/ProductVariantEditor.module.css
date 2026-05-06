@@ -395,9 +395,11 @@
 }
 
 .weightInput {
-  width: 100%;
+  width: 6.5rem;
+  min-width: 6.5rem;
   padding: 0.7rem 0.8rem;
   transition: box-shadow 140ms ease;
+  font-variant-numeric: tabular-nums;
 }
 
 .weightInput:focus {
@@ -406,10 +408,12 @@
 
 .weightUnitSelect {
   flex-shrink: 0;
-  width: 4rem;
-  padding: 0.7rem 0.4rem;
+  width: 4.75rem;
+  min-width: 4.75rem;
+  padding: 0.7rem 0.55rem;
   font-size: 0.8rem;
   text-align: center;
+  font-weight: 700;
 }
 
 .matrixFooter {

@@ -226,17 +226,16 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
                     <div className={styles.weightCell}>
                       <div className={styles.weightInputWrap}>
                         <input
-                          className={styles.weightInput}
+                          className={`admin-input ${styles.weightInput}`}
                           min="0"
                           onChange={event => actions.updateVariantField(variant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
                           placeholder="0"
                           step="0.01"
-                          style={{ maxWidth: '4.5rem' }}
                           type="number"
                           value={variant.weight ?? ''}
                         />
                         <select
-                          className={styles.weightUnitSelect}
+                          className={`admin-input ${styles.weightUnitSelect}`}
                           onChange={event => actions.updateVariantField(variant.id, 'weightUnit', event.target.value)}
                           value={variant.weightUnit || 'kg'}
                         >
@@ -295,17 +294,16 @@ function BasicInventoryCard({ draftProduct, actions }) {
           <span>Weight (for shipping)</span>
           <div className={styles.weightInputWrap}>
             <input
-              className={styles.weightInput}
+              className={`admin-input ${styles.weightInput}`}
               min="0"
               onChange={event => actions.updateVariantField(baseVariant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
               placeholder="0"
               step="0.01"
-              style={{ maxWidth: '5.5rem' }}
               type="number"
               value={weight ?? ''}
             />
             <select
-              className={styles.weightUnitSelect}
+              className={`admin-input ${styles.weightUnitSelect}`}
               onChange={event => actions.updateVariantField(baseVariant.id, 'weightUnit', event.target.value)}
               value={weightUnit}
             >
@@ -464,17 +462,16 @@ export default function ProductVariantEditor() {
                     <div className={styles.weightCell}>
                       <div className={styles.weightInputWrap}>
                         <input
-                          className={styles.weightInput}
+                          className={`admin-input ${styles.weightInput}`}
                           min="0"
                           onChange={event => actions.updateVariantField(variant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
                           placeholder="0"
                           step="0.01"
-                          style={{ maxWidth: '4.5rem' }}
                           type="number"
                           value={variant.weight ?? ''}
                         />
                         <select
-                          className={styles.weightUnitSelect}
+                          className={`admin-input ${styles.weightUnitSelect}`}
                           onChange={event => actions.updateVariantField(variant.id, 'weightUnit', event.target.value)}
                           value={variant.weightUnit || 'kg'}
                         >

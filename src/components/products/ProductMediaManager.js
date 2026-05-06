@@ -46,7 +46,8 @@ function formatAssetDate(value) {
 
 export default function ProductMediaManager() {
   const { editor, actions } = useProductStore();
-  const uploadInputRef = useRef(null);
+  const galleryUploadInputRef = useRef(null);
+  const libraryUploadInputRef = useRef(null);
   const draggedImageIdRef = useRef(null);
   const [activeTab, setActiveTab] = useState('gallery');
   const [libraryAssets, setLibraryAssets] = useState([]);
@@ -108,43 +109,50 @@ export default function ProductMediaManager() {
     return null;
   }
 
-  const handleUploadSelection = async event => {
-    const files = event.target.files;
-    const uploadedAssets = await actions.addImagesFromFiles(files);
+  const mergeUploadedAssetsIntoLibrary = uploadedAssets => {
+    if (!uploadedAssets?.length) {
+      return;
+    }
+    setLibraryAssets(currentAssets =>
+      mergeLibraryAssets(
+        currentAssets,
+        uploadedAssets.map(asset => ({
+          ...asset,
+          createdAt: asset.createdAt || new Date().toISOString(),
+          linkedProducts: asset.linkedProducts || 0,
+        }))
+      )
+    );
+  };
 
+  const handleGalleryUploadSelection = async event => {
+    const files = event.target.files;
+    const uploadedAssets = await actions.addImagesFromFiles(files, { attachToDraft: true });
+    mergeUploadedAssetsIntoLibrary(uploadedAssets);
     if (uploadedAssets?.length) {
-      setLibraryAssets(currentAssets =>
-        mergeLibraryAssets(
-          currentAssets,
-          uploadedAssets.map(asset => ({
-            ...asset,
-            createdAt: asset.createdAt || new Date().toISOString(),
-            linkedProducts: asset.linkedProducts || 0,
-          }))
-        )
-      );
       setActiveTab('gallery');
     }
-
     event.target.value = '';
   };
 
-  const handleDropzoneUpload = async files => {
-    const uploadedAssets = await actions.addImagesFromFiles(files);
+  const handleLibraryUploadSelection = async event => {
+    const files = event.target.files;
+    const uploadedAssets = await actions.addImagesFromFiles(files, { attachToDraft: false });
+    mergeUploadedAssetsIntoLibrary(uploadedAssets);
+    event.target.value = '';
+  };
 
+  const handleGalleryDropzoneUpload = async files => {
+    const uploadedAssets = await actions.addImagesFromFiles(files, { attachToDraft: true });
+    mergeUploadedAssetsIntoLibrary(uploadedAssets);
     if (uploadedAssets?.length) {
-      setLibraryAssets(currentAssets =>
-        mergeLibraryAssets(
-          currentAssets,
-          uploadedAssets.map(asset => ({
-            ...asset,
-            createdAt: asset.createdAt || new Date().toISOString(),
-            linkedProducts: asset.linkedProducts || 0,
-          }))
-        )
-      );
       setActiveTab('gallery');
     }
+  };
+
+  const handleLibraryDropzoneUpload = async files => {
+    const uploadedAssets = await actions.addImagesFromFiles(files, { attachToDraft: false });
+    mergeUploadedAssetsIntoLibrary(uploadedAssets);
   };
 
   const renderGalleryTab = () => (
@@ -152,12 +160,15 @@ export default function ProductMediaManager() {
       <AdminUploadDropzone
         className={styles.uploadZone}
         description="Drop files to upload and attach directly to this product gallery."
-        onFilesSelected={handleDropzoneUpload}
+        onFilesSelected={handleGalleryDropzoneUpload}
         title="Drag and drop product media"
       />
 
       <div className={styles.actionRow}>
-        <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => uploadInputRef.current?.click()} size="sm" variant="primary">
+        <AdminButton leftIcon={<span className="material-symbols-outlined">add_photo_alternate</span>} onClick={() => galleryUploadInputRef.current?.click()} size="sm" variant="primary">
+          Add photos
+        </AdminButton>
+        <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => libraryUploadInputRef.current?.click()} size="sm" variant="secondary">
           Upload to library
         </AdminButton>
         <AdminButton leftIcon={<span className="material-symbols-outlined">photo_library</span>} onClick={() => setActiveTab('library')} size="sm" variant="secondary">
@@ -238,7 +249,7 @@ export default function ProductMediaManager() {
           />
         ))}
 
-        <button className={styles.addTile} onClick={() => uploadInputRef.current?.click()} type="button">
+        <button className={styles.addTile} onClick={() => galleryUploadInputRef.current?.click()} type="button">
           <span className="material-symbols-outlined">add</span>
         </button>
       </div>
@@ -253,7 +264,7 @@ export default function ProductMediaManager() {
           <p className={styles.libraryText}>Uploads live in Prisma-backed storage so you can reuse them across products or manage everything on the dedicated Media page.</p>
         </div>
         <div className={styles.actionRow}>
-          <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => uploadInputRef.current?.click()} size="sm" variant="primary">
+          <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => libraryUploadInputRef.current?.click()} size="sm" variant="primary">
             Upload image
           </AdminButton>
           <AdminButton
@@ -294,7 +305,7 @@ export default function ProductMediaManager() {
       <AdminUploadDropzone
         className={styles.uploadZone}
         description="Drop files here to upload, then add them into this product's gallery."
-        onFilesSelected={handleDropzoneUpload}
+        onFilesSelected={handleLibraryDropzoneUpload}
         title="Drag and drop to media library"
       />
 
@@ -376,14 +387,8 @@ export default function ProductMediaManager() {
         </AdminButton>
       </div>
 
-      <input
-        accept="image/*"
-        hidden
-        multiple
-        onChange={handleUploadSelection}
-        ref={uploadInputRef}
-        type="file"
-      />
+      <input accept="image/*" hidden multiple onChange={handleGalleryUploadSelection} ref={galleryUploadInputRef} type="file" />
+      <input accept="image/*" hidden multiple onChange={handleLibraryUploadSelection} ref={libraryUploadInputRef} type="file" />
 
       {activeTab === 'gallery' ? renderGalleryTab() : renderLibraryTab()}
     </div>

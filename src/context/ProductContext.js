@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import {
@@ -22,6 +22,7 @@ import {
   transformApiProductSummary,
   validateProduct,
 } from '../lib/productUtils';
+import { buildProductMediaPayload, resolveMediaUploadStrategy } from './product-media-upload.helpers';
 
 const ProductContext = createContext(null);
 
@@ -31,6 +32,7 @@ const initialState = {
   catalog: {
     searchQuery: '',
     activeFilter: 'all',
+    hasLoaded: false,
   },
   editor: {
     isOpen: false,
@@ -47,7 +49,7 @@ const initialState = {
   toasts: [],
 };
 
-// ── Transform API product → UI shape ─────────────────────────────────────────
+// â”€â”€ Transform API product â†’ UI shape â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function transformApiProduct(product) {
   const images = (product.media || []).map(m => ({
     id: m.id,
@@ -331,9 +333,21 @@ function productReducer(state, action) {
       return {
         ...state,
         products: action.products,
+        catalog: {
+          ...state.catalog,
+          hasLoaded: true,
+        },
         selectedProductId: hasSelectedProduct ? state.selectedProductId : null,
       };
     }
+    case 'SET_CATALOG_LOADED':
+      return {
+        ...state,
+        catalog: {
+          ...state.catalog,
+          hasLoaded: true,
+        },
+      };
     case 'SET_SEARCH_QUERY':
       return {
         ...state,
@@ -494,7 +508,7 @@ function productReducer(state, action) {
 export function ProductProvider({ children }) {
   const [state, dispatch] = useReducer(productReducer, initialState);
 
-  // ── Fetch products from API on mount ────────────────────────────────────────
+  // â”€â”€ Fetch products from API on mount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Load lightweight summaries for the catalog list, then fetch full detail
   // for the editor if a product id is present in the URL.
   useEffect(() => {
@@ -504,7 +518,11 @@ export function ProductProvider({ children }) {
       try {
         const r = await fetch('/api/products?pageSize=100');
         const json = await r.json();
-        if (!isActive || !json.success) return;
+        if (!isActive) return;
+        if (!json.success) {
+          dispatch({ type: 'SET_CATALOG_LOADED' });
+          return;
+        }
 
         const products = (json.data.products || []).map(transformApiProductSummary);
         dispatch({ type: 'LOAD_PRODUCTS', products });
@@ -523,7 +541,7 @@ export function ProductProvider({ children }) {
         }
 
         if (locationState.productId) {
-          // Fetch full detail before opening the editor — summaries lack options/all media/all variants.
+          // Fetch full detail before opening the editor â€” summaries lack options/all media/all variants.
           try {
             const detailRes = await fetch(`/api/products/${locationState.productId}`);
             const detailJson = await detailRes.json();
@@ -548,6 +566,9 @@ export function ProductProvider({ children }) {
         syncEditorLocation({}, 'replace');
       } catch (err) {
         console.error('[ProductContext] fetch failed', err);
+        if (isActive) {
+          dispatch({ type: 'SET_CATALOG_LOADED' });
+        }
       }
     }
 
@@ -625,7 +646,7 @@ export function ProductProvider({ children }) {
   };
 
   // Fetches full product detail from the API before opening the editor so that
-  // the editor always has options, all media, and all variants — not a summary.
+  // the editor always has options, all media, and all variants â€” not a summary.
   const openExistingProduct = async (productId) => {
     try {
       const res = await fetch(`/api/products/${productId}`);
@@ -769,13 +790,7 @@ export function ProductProvider({ children }) {
             position: valueIndex,
           })),
         })),
-        media: (preparedProduct.images || [])
-          .filter(image => image.assetId)
-          .map((image, imageIndex) => ({
-            assetId: image.assetId,
-            position: image.sortOrder ?? imageIndex,
-            isFeatured: image.id === preparedProduct.featuredImageId,
-          })),
+        media: buildProductMediaPayload(preparedProduct.images, preparedProduct.featuredImageId),
         variants: (preparedProduct.variants || []).map(v => ({
           id: v.id,
           title: v.title || 'Default Title',
@@ -815,7 +830,7 @@ export function ProductProvider({ children }) {
       }
     } catch (e) {
       console.error('[ProductContext] save failed', e);
-      pushToast('Save failed — check your connection', 'error');
+      pushToast('Save failed â€” check your connection', 'error');
       dispatch({ type: 'SET_SAVING', value: false });
       return false;
     }
@@ -965,34 +980,41 @@ export function ProductProvider({ children }) {
     });
   };
 
-  const addImagesFromFiles = async fileList => {
+  const addImagesFromFiles = async (fileList, { attachToDraft = true } = {}) => {
     const files = Array.from(fileList || []);
     if (!files.length) return [];
+    const uploadStrategy = resolveMediaUploadStrategy({
+      editorMode: state.editor.mode,
+      draftProductId: state.editor.draftProduct?.id || null,
+      attachToDraft,
+    });
     dispatch({ type: 'ADJUST_MEDIA_UPLOADS', delta: files.length });
 
     const optimisticImages = [];
 
-    // Optimistic preview using blob URLs while upload is in flight
-    updateDraftProduct(draftProduct => {
-      optimisticImages.push(
-        ...files.map((file, index) =>
-          createImageAsset(
-            URL.createObjectURL(file),
-            file.name || `${draftProduct.title || 'Product'} image ${draftProduct.images.length + index + 1}`,
-            draftProduct.images.length + index
+    // Optimistic preview using blob URLs while upload is in flight.
+    if (uploadStrategy.shouldAttachToDraft) {
+      updateDraftProduct(draftProduct => {
+        optimisticImages.push(
+          ...files.map((file, index) =>
+            createImageAsset(
+              URL.createObjectURL(file),
+              file.name || `${draftProduct.title || 'Product'} image ${draftProduct.images.length + index + 1}`,
+              draftProduct.images.length + index
+            )
           )
-        )
-      );
-      const mediaState = ensureMediaState(
-        [...draftProduct.images, ...optimisticImages],
-        draftProduct.featuredImageId || optimisticImages[0]?.id || null
-      );
-      return {
-        ...draftProduct,
-        images: mediaState.images,
-        featuredImageId: mediaState.featuredImageId,
-      };
-    });
+        );
+        const mediaState = ensureMediaState(
+          [...draftProduct.images, ...optimisticImages],
+          draftProduct.featuredImageId || optimisticImages[0]?.id || null
+        );
+        return {
+          ...draftProduct,
+          images: mediaState.images,
+          featuredImageId: mediaState.featuredImageId,
+        };
+      });
+    }
 
     const uploadedAssets = [];
 
@@ -1002,32 +1024,60 @@ export function ProductProvider({ children }) {
         const form = new FormData();
         form.append('file', file);
         form.append('altText', file.name);
+        if (uploadStrategy.shouldIncludeProductId && uploadStrategy.productId) {
+          form.append('productId', uploadStrategy.productId);
+        }
 
         const res = await fetch('/api/media/upload', { method: 'POST', body: form });
         const json = await res.json();
 
         if (json.success) {
           uploadedAssets.push(json.data);
-          updateDraftProduct(draftProduct => {
-            const nextImages = draftProduct.images.map(image =>
-              image.id === optimisticImage.id
-                ? {
-                    ...image,
-                    assetId: json.data.id,
-                    src: json.data.url,
-                    alt: json.data.altText || image.alt,
-                  }
-                : image
-            );
-            const mediaState = ensureMediaState(nextImages, draftProduct.featuredImageId || optimisticImage.id);
+          if (uploadStrategy.shouldAttachToDraft && optimisticImage?.id) {
+            updateDraftProduct(draftProduct => {
+              const nextImages = draftProduct.images.map(image =>
+                image.id === optimisticImage.id
+                  ? {
+                      ...image,
+                      assetId: json.data.id,
+                      src: json.data.url,
+                      alt: json.data.altText || image.alt,
+                    }
+                  : image
+              );
+              const mediaState = ensureMediaState(nextImages, draftProduct.featuredImageId || optimisticImage.id);
 
-            return {
-              ...draftProduct,
-              images: mediaState.images,
-              featuredImageId: mediaState.featuredImageId,
-            };
-          });
+              return {
+                ...draftProduct,
+                images: mediaState.images,
+                featuredImageId: mediaState.featuredImageId,
+              };
+            });
+          }
+          if (uploadStrategy.shouldIncludeProductId && Number(json.data?.linkedProducts || 0) < 1) {
+            pushToast('Image uploaded, but could not attach automatically. Save to sync product media.', 'warning');
+          }
         } else {
+          if (uploadStrategy.shouldAttachToDraft && optimisticImage?.id) {
+            updateDraftProduct(draftProduct => {
+              const nextImages = draftProduct.images.filter(image => image.id !== optimisticImage.id);
+              const mediaState = ensureMediaState(
+                nextImages,
+                draftProduct.featuredImageId === optimisticImage.id ? null : draftProduct.featuredImageId
+              );
+
+              return {
+                ...draftProduct,
+                images: mediaState.images,
+                featuredImageId: mediaState.featuredImageId,
+              };
+            });
+          }
+          pushToast(json.error || 'Upload failed', 'error');
+        }
+      } catch (e) {
+        console.error('[addImagesFromFiles] upload error', e);
+        if (uploadStrategy.shouldAttachToDraft && optimisticImage?.id) {
           updateDraftProduct(draftProduct => {
             const nextImages = draftProduct.images.filter(image => image.id !== optimisticImage.id);
             const mediaState = ensureMediaState(
@@ -1041,23 +1091,7 @@ export function ProductProvider({ children }) {
               featuredImageId: mediaState.featuredImageId,
             };
           });
-          pushToast(json.error || 'Upload failed', 'error');
         }
-      } catch (e) {
-        console.error('[addImagesFromFiles] upload error', e);
-        updateDraftProduct(draftProduct => {
-          const nextImages = draftProduct.images.filter(image => image.id !== optimisticImage.id);
-          const mediaState = ensureMediaState(
-            nextImages,
-            draftProduct.featuredImageId === optimisticImage.id ? null : draftProduct.featuredImageId
-          );
-
-          return {
-            ...draftProduct,
-            images: mediaState.images,
-            featuredImageId: mediaState.featuredImageId,
-          };
-        });
         pushToast('Upload failed — check Cloudinary credentials', 'error');
       } finally {
         dispatch({ type: 'ADJUST_MEDIA_UPLOADS', delta: -1 });
@@ -1065,7 +1099,10 @@ export function ProductProvider({ children }) {
     }
 
     if (uploadedAssets.length) {
-      pushToast(`${uploadedAssets.length} image${uploadedAssets.length > 1 ? 's' : ''} uploaded`, 'success');
+      const successMessage = uploadStrategy.shouldAttachToDraft
+        ? `${uploadedAssets.length} image${uploadedAssets.length > 1 ? 's' : ''} uploaded`
+        : `${uploadedAssets.length} image${uploadedAssets.length > 1 ? 's' : ''} uploaded to media library`;
+      pushToast(successMessage, 'success');
     }
 
     return uploadedAssets;
@@ -1523,7 +1560,7 @@ export function ProductProvider({ children }) {
         dispatch({ type: 'DELETE_PRODUCT', productId: dialog.productId });
         pushToast('Product deleted', 'success');
 
-        // Open the fallback product via a fresh API fetch — state.products contains
+        // Open the fallback product via a fresh API fetch â€” state.products contains
         // lightweight summaries, not full products safe to open in the editor.
         if (fallbackProduct) {
           await openExistingProduct(fallbackProduct.id);
@@ -1562,6 +1599,7 @@ export function ProductProvider({ children }) {
     selectedProduct,
     searchQuery: state.catalog.searchQuery,
     activeFilter: state.catalog.activeFilter,
+    catalogLoaded: state.catalog.hasLoaded,
     editor: {
       ...state.editor,
       draftInventorySummary,
@@ -1624,3 +1662,5 @@ export function useProductStore() {
 
   return context;
 }
+
+
