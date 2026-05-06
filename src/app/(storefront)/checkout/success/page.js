@@ -20,7 +20,7 @@ function SuccessFallback() {
         fontFamily: 'var(--font-body), sans-serif',
       }}
     >
-      Finalizing your order...
+      Processing your order...
     </div>
   );
 }

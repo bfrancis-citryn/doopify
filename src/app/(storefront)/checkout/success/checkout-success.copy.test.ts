@@ -9,16 +9,37 @@ function read(relativePath: string) {
 const PAGE = 'src/app/(storefront)/checkout/success/CheckoutSuccessClientPage.tsx'
 
 describe('checkout success waiting-state copy', () => {
-  it('times out polling and explains webhook-delay confirmation state', () => {
+  it('renders customer-friendly processing copy with loading and no internal terminology', () => {
     const source = read(PAGE)
-    expect(source).toContain('WEBHOOK_WAIT_TIMEOUT_MS')
-    expect(source).toContain('Payment succeeded, but order confirmation is waiting on Stripe webhook delivery.')
+    expect(source).toContain('Processing your order')
+    expect(source).toContain('We&apos;re confirming your payment and preparing your order. This usually only takes a few seconds.')
+    expect(source).toContain('Please don&apos;t close or refresh this page.')
+    expect(source).toContain('className="spinner"')
+    expect(source).not.toContain('webhook')
+    expect(source).not.toContain('order record')
+    expect(source).not.toContain('payment intent')
+    expect(source).not.toContain('polling')
   })
 
-  it('includes owner/development debugging hint and retry action', () => {
+  it('renders processing, success, pending, and failure state copy', () => {
     const source = read(PAGE)
-    expect(source).toContain('If you manage this store, check Stripe webhook endpoint URL and delivery logs.')
-    expect(source).toContain('Retry status check')
-    expect(source).toContain('handleRetryStatusCheck')
+    expect(source).toContain('Thank you for your order')
+    expect(source).toContain('Your payment was successful and your order has been received.')
+    expect(source).toContain('Order #')
+    expect(source).toContain('We&apos;re still processing your order')
+    expect(source).toContain('Your payment was submitted, but confirmation is taking longer than expected. You may receive your confirmation shortly.')
+    expect(source).toContain('Payment could not be completed')
+    expect(source).toContain('Please return to checkout and try another payment method.')
+  })
+
+  it('includes support contact and pending actions', () => {
+    const source = read(PAGE)
+    expect(source).toContain('Questions? Contact')
+    expect(source).toContain('Contact the store for help with your order.')
+    expect(source).toContain('supportEmail')
+    expect(source).toContain('supportPhone')
+    expect(source).toContain('Check again')
+    expect(source).toContain('Continue shopping')
+    expect(source).toContain('Contact support')
   })
 })

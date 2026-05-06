@@ -680,6 +680,9 @@ export async function markCheckoutSessionFailed(input: {
 export async function getCheckoutStatus(paymentIntentId: string): Promise<{
   status: 'processing' | 'paid' | 'failed'
   orderNumber?: number
+  total?: number
+  currency?: string
+  estimatedDeliveryText?: string | null
   reason?: string | null
   checkoutStatus?: CheckoutSessionStatus
 }> {
@@ -688,6 +691,9 @@ export async function getCheckoutStatus(paymentIntentId: string): Promise<{
     return {
       status: 'paid',
       orderNumber: existingOrder.orderNumber,
+      total: centsToDollars(existingOrder.totalCents),
+      currency: existingOrder.currency,
+      estimatedDeliveryText: existingOrder.estimatedDeliveryText,
       checkoutStatus: 'COMPLETED',
     }
   }

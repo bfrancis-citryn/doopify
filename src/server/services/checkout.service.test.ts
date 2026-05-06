@@ -71,6 +71,7 @@ vi.mock('@/server/payments/stripe-runtime.service', () => ({
 import {
   completeCheckoutFromPaymentIntent,
   createCheckoutPaymentIntent,
+  getCheckoutStatus,
   markCheckoutSessionFailed,
 } from './checkout.service'
 
@@ -865,5 +866,60 @@ describe('checkout service', () => {
         amountCents: 3000,
       },
     })
+  })
+
+  it('returns confirmed status with order summary fields when a paid order exists', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValueOnce({
+      id: 'order_1',
+      orderNumber: 1001,
+      totalCents: 5499,
+      currency: 'USD',
+      estimatedDeliveryText: '3-5 business days',
+    })
+
+    const status = await getCheckoutStatus('pi_paid_status')
+
+    expect(status).toEqual({
+      status: 'paid',
+      orderNumber: 1001,
+      total: 54.99,
+      currency: 'USD',
+      estimatedDeliveryText: '3-5 business days',
+      checkoutStatus: 'COMPLETED',
+    })
+    expect(mocks.createOrder).not.toHaveBeenCalled()
+  })
+
+  it('returns processing status from checkout session and does not create orders', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValueOnce(null)
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValueOnce({
+      status: 'PENDING',
+      failureReason: null,
+    })
+
+    const status = await getCheckoutStatus('pi_processing_status')
+
+    expect(status).toEqual({
+      status: 'processing',
+      checkoutStatus: 'PENDING',
+    })
+    expect(mocks.createOrder).not.toHaveBeenCalled()
+  })
+
+  it('returns failed status with sanitized customer-safe reason path and no order creation', async () => {
+    mocks.getOrderByPaymentIntentId.mockResolvedValueOnce(null)
+    mocks.prisma.checkoutSession.findUnique.mockResolvedValueOnce({
+      status: 'FAILED',
+      failureReason: 'Card declined',
+    })
+
+    const status = await getCheckoutStatus('pi_failed_status')
+
+    expect(status).toEqual({
+      status: 'failed',
+      reason: 'Card declined',
+      checkoutStatus: 'FAILED',
+    })
+    expect(mocks.createOrder).not.toHaveBeenCalled()
   })
 })

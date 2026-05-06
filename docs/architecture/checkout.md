@@ -103,6 +103,23 @@ Abandoned checkouts are detected by background job. Recovery emails contain a to
 
 ---
 
+## Customer-facing checkout status UX
+
+`/checkout/success` now presents customer-safe states while checkout finalization continues server-side:
+
+- **Processing:** "Processing your order" with a loading indicator.
+- **Confirmed:** "Thank you for your order" with order number and support contact details.
+- **Delayed confirmation:** "We’re still processing your order" with retry and support actions.
+- **Failed payment:** customer-safe retry guidance.
+
+Commerce invariants are unchanged:
+
+- browser redirect does not create orders
+- paid orders are created only after verified Stripe webhook success
+- status polling is read-only and does not finalize orders
+
+---
+
 ## Files
 
 | File | Purpose |
