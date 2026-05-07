@@ -748,5 +748,34 @@ describe('provider connection service', () => {
     expect(String(webhookMask || '')).toContain('whsec_')
     expect(String(webhookMask || '')).toContain('2222')
   })
+
+  it('returns configured Stripe provider snapshot after db save', async () => {
+    mocks.prisma.integration.findMany.mockResolvedValue([
+      {
+        id: 'int_stripe_snapshot_after_save',
+        type: 'PAYMENT_STRIPE',
+        status: 'ACTIVE',
+        createdAt: new Date('2026-05-07T11:00:00.000Z'),
+        updatedAt: new Date('2026-05-07T11:00:00.000Z'),
+        secrets: [
+          { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_saved_1234' },
+          { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_saved_5678' },
+          { id: 'sec_3', key: 'MODE', value: 'enc:test' },
+          { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_saved_9012' },
+        ],
+      },
+    ])
+
+    const snapshot = await getStripeProviderStatusSnapshot()
+
+    expect(snapshot.configured).toBe(true)
+    expect(snapshot.source).toBe('db')
+    expect(snapshot.hasPublishableKey).toBe(true)
+    expect(snapshot.hasSecretKey).toBe(true)
+    expect(snapshot.hasWebhookSecret).toBe(true)
+    expect(String(snapshot.publishableKeyMasked || '')).toContain('pk_test_')
+    expect(String(snapshot.secretKeyMasked || '')).toContain('sk_test_')
+    expect(String(snapshot.webhookSecretMasked || '')).toContain('whsec_')
+  })
 })
 

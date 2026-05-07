@@ -1549,6 +1549,23 @@ export default function SettingsWorkspace() {
   const stripeHasSavedRequiredKeys = Boolean(
     stripeCredentialMaskMap.PUBLISHABLE_KEY && stripeCredentialMaskMap.SECRET_KEY
   );
+  const stripeSavePayload = useMemo(() => {
+    const publishableKey = providerForms.STRIPE.publishableKey.trim();
+    const secretKey = providerForms.STRIPE.secretKey.trim();
+    const webhookSecret = providerForms.STRIPE.webhookSecret.trim();
+
+    return {
+      publishableKey: publishableKey || undefined,
+      secretKey: secretKey || undefined,
+      webhookSecret: webhookSecret || undefined,
+      mode: providerForms.STRIPE.mode,
+    };
+  }, [
+    providerForms.STRIPE.mode,
+    providerForms.STRIPE.publishableKey,
+    providerForms.STRIPE.secretKey,
+    providerForms.STRIPE.webhookSecret,
+  ]);
   const stripeConnectionPresentation = useMemo(() => {
     const state = stripeProviderStatus?.state || (stripeHasSavedRequiredKeys ? 'CREDENTIALS_SAVED' : 'NOT_CONFIGURED');
 
@@ -4390,29 +4407,11 @@ export default function SettingsWorkspace() {
                       (!providerForms.STRIPE.publishableKey.trim() ||
                         !providerForms.STRIPE.secretKey.trim()))
                   }
-                  onClick={() =>
-                    handleSaveProviderCredentials('STRIPE', {
-                      publishableKey: providerForms.STRIPE.publishableKey.trim() || undefined,
-                      secretKey: providerForms.STRIPE.secretKey.trim() || undefined,
-                      mode: providerForms.STRIPE.mode,
-                    })
-                  }
+                  onClick={() => handleSaveProviderCredentials('STRIPE', stripeSavePayload)}
                   size="sm"
-                  variant="secondary"
+                  variant="primary"
                 >
-                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save API keys'}
-                </AdminButton>
-                <AdminButton
-                  disabled={providerActionById.STRIPE === 'saving' || !providerForms.STRIPE.webhookSecret.trim()}
-                  onClick={() =>
-                    handleSaveProviderCredentials('STRIPE', {
-                      webhookSecret: providerForms.STRIPE.webhookSecret.trim() || undefined,
-                    })
-                  }
-                  size="sm"
-                  variant="secondary"
-                >
-                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save webhook secret'}
+                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save Stripe settings'}
                 </AdminButton>
                 <AdminButton
                   disabled={providerActionById.STRIPE === 'verifying'}
@@ -4420,7 +4419,7 @@ export default function SettingsWorkspace() {
                   size="sm"
                   variant="secondary"
                 >
-                  {providerActionById.STRIPE === 'verifying' ? 'Verifying...' : 'Verify Stripe API'}
+                  {providerActionById.STRIPE === 'verifying' ? 'Verifying...' : 'Verify connection'}
                 </AdminButton>
                 <AdminButton onClick={handleCopyStripeWebhookEndpoint} size="sm" variant="ghost">
                   {setupCopiedCommandId === 'stripe-webhook-endpoint' ? 'Copied endpoint' : 'Copy webhook endpoint'}
