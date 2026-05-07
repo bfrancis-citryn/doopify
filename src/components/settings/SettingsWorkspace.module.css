@@ -1129,6 +1129,36 @@
   color: var(--on-surface-variant);
 }
 
+.toastViewport {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 70;
+  display: grid;
+  gap: 0.5rem;
+  width: min(340px, calc(100vw - 2rem));
+}
+
+.toastCard {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.7rem;
+  background: color-mix(in srgb, var(--surface-container-high) 88%, transparent);
+  color: var(--on-surface);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toastSuccess {
+  border-color: color-mix(in srgb, var(--emerald-500) 45%, var(--glass-border));
+}
+
+.toastError {
+  border-color: color-mix(in srgb, var(--rose-500) 45%, var(--glass-border));
+}
+
 @media (max-width: 1200px) {
   .page,
   .formGrid,

@@ -149,7 +149,7 @@ describe('shipping settings UX copy and validation', () => {
     const source = read(WORKSPACE)
     expect(source).toContain('onModeSaveStateChange')
     expect(source).toContain('onRegisterSaveAction')
-    expect(source).toContain('onRegisterSaveAction(() => saveCheckoutMethod())')
+    expect(source).toContain('onRegisterSaveAction(() => saveCheckoutMethodRef.current?.())')
     expect(source).toContain('onModeSaveStateChange(modeSaveState')
   })
 

@@ -190,10 +190,12 @@ describe('settings compact flow', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 
     expect(workspace).toContain('shippingModeSavedState')
+    expect(workspace).toContain('shippingModeDirty')
     expect(workspace).toContain('shippingModeSaveError')
     expect(workspace).toContain('shippingModeSaveActionRef')
-    expect(workspace).toContain('Retry save')
+    expect(workspace).toContain('getShippingHeaderSaveButtonState')
     expect(workspace).toContain("setShippingModeSavedState((current) => (current === 'saved_just_now' ? 'saved' : current))")
+    expect(workspace).toContain("? () => void shippingModeSaveActionRef.current?.()")
   })
 
   it('clarifies Brand & appearance preview labels and usage copy', () => {

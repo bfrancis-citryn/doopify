@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AppShell from "../AppShell";
 import AdminButton from "../admin/ui/AdminButton";
@@ -12,6 +12,12 @@ import AdminInput from "../admin/ui/AdminInput";
 import AdminSelect from "../admin/ui/AdminSelect";
 import AdminStatusChip from "../admin/ui/AdminStatusChip";
 import AdminTextarea from "../admin/ui/AdminTextarea";
+import {
+  buildCheckoutMethodDraft,
+  buildCheckoutMethodPatch,
+  isCheckoutMethodEqual,
+  providerSelectionToLegacyUsage,
+} from "./shipping-checkout-method.helpers";
 import styles from "./SettingsWorkspace.module.css";
 
 const PROVIDER_OPTIONS = [
@@ -222,37 +228,6 @@ function renderRateSummary(rate, currency) {
   return formatMoney(rate.amount, currency);
 }
 
-function providerSelectionToLegacyUsage(activeRateProvider, labelProvider) {
-  if (activeRateProvider !== "NONE" && labelProvider !== "NONE" && activeRateProvider === labelProvider) {
-    return "LIVE_AND_LABELS";
-  }
-  if (activeRateProvider !== "NONE" && labelProvider === "NONE") {
-    return "LIVE_RATES_ONLY";
-  }
-  if (activeRateProvider === "NONE" && labelProvider !== "NONE") {
-    return "LABELS_ONLY";
-  }
-  return "LIVE_AND_LABELS";
-}
-
-function buildCheckoutMethodDraft(mode, activeRateProvider, labelProvider, fallbackBehavior) {
-  return {
-    mode: mode || "MANUAL",
-    activeRateProvider: activeRateProvider || "NONE",
-    labelProvider: labelProvider || "NONE",
-    fallbackBehavior: fallbackBehavior || "SHOW_FALLBACK",
-  };
-}
-
-function isCheckoutMethodEqual(left, right) {
-  return (
-    left?.mode === right?.mode &&
-    left?.activeRateProvider === right?.activeRateProvider &&
-    left?.labelProvider === right?.labelProvider &&
-    left?.fallbackBehavior === right?.fallbackBehavior
-  );
-}
-
 export default function ShippingSettingsWorkspace({
   embedded = false,
   onModeSaveStateChange,
@@ -264,6 +239,7 @@ export default function ShippingSettingsWorkspace({
   const [notice, setNotice] = useState("");
   const [modeSaveState, setModeSaveState] = useState("saved");
   const [modeSaveError, setModeSaveError] = useState("");
+  const saveCheckoutMethodRef = useRef(null);
 
   const [settings, setSettings] = useState(null);
   const [setupStatus, setSetupStatus] = useState(null);
@@ -497,24 +473,10 @@ export default function ShippingSettingsWorkspace({
       return { success: false, message: blockedMessage };
     }
 
-    const legacyUsage = providerSelectionToLegacyUsage(activeRateProvider, labelProvider);
-    const legacyProvider =
-      activeRateProvider !== "NONE"
-        ? activeRateProvider
-        : labelProvider !== "NONE"
-          ? labelProvider
-          : null;
     setModeSaveState("saving");
     setModeSaveError("");
     const result = await persistSettings(
-      {
-        shippingMode: mode,
-        activeRateProvider,
-        labelProvider,
-        fallbackBehavior,
-        shippingLiveProvider: legacyProvider,
-        shippingProviderUsage: legacyUsage,
-      },
+      buildCheckoutMethodPatch(mode, activeRateProvider, labelProvider, fallbackBehavior),
       "Checkout shipping method saved."
     );
     if (result.success) {
@@ -530,10 +492,14 @@ export default function ShippingSettingsWorkspace({
   }, [mode, activeRateProvider, labelProvider, fallbackBehavior]);
 
   useEffect(() => {
+    saveCheckoutMethodRef.current = saveCheckoutMethod;
+  }, [saveCheckoutMethod]);
+
+  useEffect(() => {
     if (typeof onRegisterSaveAction !== "function") return;
-    onRegisterSaveAction(() => saveCheckoutMethod());
+    onRegisterSaveAction(() => saveCheckoutMethodRef.current?.());
     return () => onRegisterSaveAction(null);
-  }, [onRegisterSaveAction, saveCheckoutMethod]);
+  }, [onRegisterSaveAction]);
 
   async function saveProviderSettings() {
     const provider = providerForm.provider;

@@ -24,6 +24,7 @@ import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
 import { buildMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
 import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
+import { getShippingHeaderSaveButtonState } from './shipping-save-button.helpers';
 import { calculateTaxPreview } from './tax-preview.helpers';
 
 const SETTINGS_SECTIONS = [
@@ -831,6 +832,7 @@ export default function SettingsWorkspace() {
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
   const [shippingModeSavedState, setShippingModeSavedState] = useState('saved');
+  const [shippingModeDirty, setShippingModeDirty] = useState(false);
   const [shippingModeSaveError, setShippingModeSaveError] = useState('');
   const [shippingModeLastSavedAt, setShippingModeLastSavedAt] = useState(Date.now());
   const [saveClock, setSaveClock] = useState(Date.now());
@@ -2200,6 +2202,9 @@ export default function SettingsWorkspace() {
   const handleShippingModeSaveStateChange = useCallback((state, context = {}) => {
     setShippingModeSavedState(state || 'saved');
     setShippingModeSaveError(context?.errorCopy || '');
+    setShippingModeDirty(
+      typeof context?.dirty === 'boolean' ? context.dirty : state === 'dirty' || state === 'error'
+    );
     if (state === 'saved' || state === 'saved_just_now') {
       setShippingModeLastSavedAt(Date.now());
     }
@@ -2215,23 +2220,25 @@ export default function SettingsWorkspace() {
     activeSection === 'shipping' ? shippingModeSaveError : activeSection === 'brand-kit' ? brandKitError : '';
 
   const showHeaderSaveButton = activeSection === 'brand-kit' || activeSection === 'shipping';
+  const shippingHeaderSaveState =
+    activeSection === 'shipping'
+      ? getShippingHeaderSaveButtonState({
+          loading,
+          hasError: Boolean(error),
+          shippingConfigLoading,
+          hasSaveAction: Boolean(shippingModeSaveActionRef.current),
+          shippingModeSavedState,
+          shippingModeDirty,
+        })
+      : null;
   const headerSaveButtonDisabled =
     loading ||
     Boolean(error) ||
     (activeSection === 'brand-kit' && brandKitLoading) ||
-    (activeSection === 'shipping' &&
-      (shippingConfigLoading ||
-        !shippingModeSaveActionRef.current ||
-        shippingModeSavedState === 'saving' ||
-        shippingModeSavedState === 'saved' ||
-        shippingModeSavedState === 'saved_just_now'));
+    (activeSection === 'shipping' && Boolean(shippingHeaderSaveState?.disabled));
   const headerSaveButtonLabel =
     activeSection === 'shipping'
-      ? shippingModeSavedState === 'saving'
-        ? 'Saving...'
-        : shippingModeSavedState === 'error'
-          ? 'Retry save'
-          : 'Save changes'
+      ? shippingHeaderSaveState?.label || 'Save changes'
       : activeSection === 'brand-kit'
         ? 'Save changes'
         : 'Auto-saved';

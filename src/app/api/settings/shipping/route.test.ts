@@ -401,4 +401,131 @@ describe('settings shipping route', () => {
       },
     })
   })
+
+  it('PATCH persists shipping mode MANUAL and returns it on subsequent GET', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        activeRateProvider: 'SHIPPO',
+        labelProvider: 'SHIPPO',
+        shippingLiveProvider: 'SHIPPO',
+        shippingProviderUsage: 'LIVE_AND_LABELS',
+      })
+    )
+    mocks.updateShippingSettings.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        activeRateProvider: 'NONE',
+        labelProvider: 'NONE',
+        shippingLiveProvider: null,
+        shippingProviderUsage: 'LIVE_AND_LABELS',
+      })
+    )
+
+    const patchResponse = await PATCH(
+      new Request('http://localhost/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shippingMode: 'MANUAL',
+          activeRateProvider: 'NONE',
+          labelProvider: 'NONE',
+          fallbackBehavior: 'SHOW_FALLBACK',
+          shippingLiveProvider: null,
+          shippingProviderUsage: 'LIVE_AND_LABELS',
+        }),
+      })
+    )
+    expect(patchResponse.status).toBe(200)
+
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'MANUAL',
+      })
+    )
+    const getResponse = await GET(new Request('http://localhost/api/settings/shipping'))
+    expect(getResponse.status).toBe(200)
+    const payload = await getResponse.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        shippingMode: 'MANUAL',
+      },
+    })
+  })
+
+  it('PATCH keeps LIVE_RATES instead of silently resetting to MANUAL when requirements are missing', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'MANUAL',
+        shippingPackages: [],
+        shippingLocations: [],
+        activeRateProvider: 'NONE',
+        labelProvider: 'NONE',
+      })
+    )
+    mocks.updateShippingSettings.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'LIVE_RATES',
+        shippingPackages: [],
+        shippingLocations: [],
+        activeRateProvider: 'NONE',
+        labelProvider: 'NONE',
+      })
+    )
+
+    const response = await PATCH(
+      new Request('http://localhost/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shippingMode: 'LIVE_RATES' }),
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.updateShippingSettings).toHaveBeenCalledWith('store_1', {
+      shippingMode: 'LIVE_RATES',
+    })
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        shippingMode: 'LIVE_RATES',
+      },
+    })
+  })
+
+  it('PATCH returns a clear save error when persistence fails', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(storeFixture())
+    mocks.updateShippingSettings.mockRejectedValueOnce(new Error('Failed to save shipping mode'))
+
+    const response = await PATCH(
+      new Request('http://localhost/api/settings/shipping', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shippingMode: 'HYBRID' }),
+      })
+    )
+
+    expect(response.status).toBe(400)
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      success: false,
+      error: 'Failed to save shipping mode',
+    })
+  })
 })
