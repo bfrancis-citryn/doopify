@@ -297,6 +297,7 @@ These invariants should not be broken by future work:
 - Core commerce truth such as payment success, order creation, inventory decrement, refunds, returns, and discount usage must not depend on background job success.
 - Abandoned checkout recovery can send recovery emails and rebuild checkout intent, but it must never create orders, mark payments paid, decrement inventory, or trust saved/client totals. Verified Stripe webhook success remains the only paid-order finalization path.
 - Brand Kit public payloads must expose only safe branding fields. Brand Kit changes must not affect checkout/payment/order correctness.
+- For private beta, storefront and checkout readability must not depend on admin theme values; frontend-owned checkout tokens and Stripe appearance settings are the active safety baseline.
 
 ## Transactional Email Hardening Target
 

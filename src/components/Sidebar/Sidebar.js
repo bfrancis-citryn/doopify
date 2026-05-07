@@ -75,7 +75,6 @@ export default function Sidebar() {
           )}
 
           <div className={styles.brandCopy}>
-            <p className={`text-xs font-headline tracking-widest ${styles.brandEyebrow}`}>Doopify</p>
             <h1 className={`font-headline ${styles.brandTitle}`}>{storeName}</h1>
             <p className={`text-xs font-headline tracking-tight ${styles.brandSubtitle}`}>Commerce admin</p>
           </div>

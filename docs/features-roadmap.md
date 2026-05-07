@@ -67,6 +67,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Prisma-backed background job abstraction for side effects with claiming, retries/backoff, exhaustion, and cron-compatible runner API
 - Abandoned checkout recovery foundation with persisted checkout recovery fields, admin review APIs/UI, safe tokenized recovery payload API, and secret-protected due-send processing
 - Brand Kit foundation with centralized Store branding fields, admin Brand Kit screen/API, and safe storefront/checkout/email branding defaults
+- private-beta storefront/checkout theme lock: Brand settings currently expose assets/support identity fields while frontend CSS owns checkout/storefront color and Stripe Payment Element readability
 - Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
 - Admin customer data export API at `GET /api/customers/[id]/export` with audit emission
 - Public storefront settings endpoint for branding-safe store data
@@ -267,6 +268,7 @@ Status: active; refund/return, outbound webhook, transactional email observabili
 - Store branding fields persist logo/favicon, colors, fonts, button settings, email branding, checkout branding, and social links in Prisma/Postgres
 - admin Brand Kit APIs at `GET/PATCH /api/settings/brand-kit` enforce route-level admin authorization and validation
 - admin Brand Kit workspace at `/admin/brand-kit` provides visual identity editing with a live preview
+- private beta currently locks incomplete storefront theme controls in admin; logo/support identity fields remain editable while theme DB fields are preserved for later phases
 - public storefront settings now include safe Brand Kit fields for storefront and checkout visual theming
 - transactional email templates consume Brand Kit branding with safe fallbacks that do not block delivery
 

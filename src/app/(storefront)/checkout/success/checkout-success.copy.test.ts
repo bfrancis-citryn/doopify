@@ -46,10 +46,11 @@ describe('checkout success waiting-state copy', () => {
     expect(source).toContain('Contact support')
   })
 
-  it('matches success-state primary CTA styling to checkout button presentation', () => {
+  it('uses frontend-owned checkout CTA tokens instead of Brand Kit theme controls', () => {
     const source = read(PAGE)
-    expect(source).toContain('resolveButtonPresentation')
-    expect(source).toContain('primaryActionStyle')
+    expect(source).toContain('CHECKOUT_RESULT_PRIMARY_ACTION_STYLE')
+    expect(source).toContain("background: 'var(--checkout-button-bg)'")
+    expect(source).toContain("color: 'var(--checkout-button-text)'")
     expect(source).toContain('style={primaryActionStyle}')
   })
 })

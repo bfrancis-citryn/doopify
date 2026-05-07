@@ -1,14 +1,34 @@
 :root {
   --storefront-background: #080808;
-  --storefront-text: #f2ede4;
-  --brand-primary: #c9a86c;
-  --brand-secondary: #f2ede4;
-  --brand-accent: #c9a86c;
-  --brand-text: #f2ede4;
+  --storefront-surface: #15171d;
+  --storefront-text: #f3efe7;
+  --storefront-muted: #b7b4ae;
+  --storefront-primary: #c9a86c;
+  --storefront-secondary: #f2ede4;
+  --brand-primary: var(--storefront-primary);
+  --brand-secondary: var(--storefront-secondary);
+  --brand-accent: var(--storefront-primary);
+  --brand-text: var(--storefront-text);
   --brand-heading-font: var(--font-headline), sans-serif;
   --brand-body-font: var(--font-body), sans-serif;
   --brand-button-radius: 12px;
   --brand-button-transform: none;
+  --checkout-bg: #080808;
+  --checkout-surface: #15171d;
+  --checkout-surface-strong: #111319;
+  --checkout-border: #303545;
+  --checkout-text: #f8f8fb;
+  --checkout-muted: #b5bcc9;
+  --checkout-accent: #9fb4ff;
+  --checkout-success: #34d399;
+  --checkout-danger: #ef4444;
+  --checkout-input-bg: #0f1117;
+  --checkout-input-border: #3b4051;
+  --checkout-button-bg: #f3efe7;
+  --checkout-button-text: #0f1117;
+  --checkout-button-border: #f3efe7;
+  --checkout-button-radius: 9999px;
+  --checkout-button-transform: uppercase;
 }
 
 html {

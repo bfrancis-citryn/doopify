@@ -22,12 +22,6 @@ type PublicStoreSettings = {
   supportEmail?: string | null
   email?: string | null
   phone?: string | null
-  secondaryColor?: string | null
-  buttonStyle?: 'solid' | 'outline' | 'soft' | string | null
-  buttonTextTransform?: 'uppercase' | 'none' | string | null
-  buttonRadius?: 'none' | 'sm' | 'md' | 'lg' | 'full' | string | null
-  accentColor?: string | null
-  primaryColor?: string | null
 }
 
 type ApiSuccess<TData> = {
@@ -65,83 +59,13 @@ function formatMoney(amount: number | null | undefined, currency = 'USD'): strin
   }).format(amount)
 }
 
-function parseHexColor(value: string | null | undefined) {
-  if (typeof value !== 'string') return null
-  const normalized = value.trim()
-  const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized)
-  if (!match) return null
-  const hex = match[1]
-  return {
-    r: parseInt(hex.slice(0, 2), 16),
-    g: parseInt(hex.slice(2, 4), 16),
-    b: parseInt(hex.slice(4, 6), 16),
-  }
-}
-
-function colorDistance(left: { r: number; g: number; b: number }, right: { r: number; g: number; b: number }) {
-  return Math.abs(left.r - right.r) + Math.abs(left.g - right.g) + Math.abs(left.b - right.b)
-}
-
-function isNearCheckoutBackground(hexColor: string | null | undefined) {
-  const color = parseHexColor(hexColor)
-  const background = parseHexColor('#080808')
-  if (!color || !background) return false
-  return colorDistance(color, background) < 80
-}
-
-function isDarkColor(hexColor: string | null | undefined) {
-  const color = parseHexColor(hexColor)
-  if (!color) return false
-  const luminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255
-  return luminance < 0.5
-}
-
-function resolveButtonPresentation(store: PublicStoreSettings | null) {
-  const style = store?.buttonStyle || 'solid'
-  const transform = store?.buttonTextTransform === 'uppercase' ? 'uppercase' : 'none'
-  const radius = (() => {
-    switch (store?.buttonRadius) {
-      case 'none':
-        return '0px'
-      case 'sm':
-        return '6px'
-      case 'md':
-        return '12px'
-      case 'lg':
-        return '18px'
-      case 'full':
-        return '9999px'
-      default:
-        return '9999px'
-    }
-  })()
-
-  const accent = store?.accentColor || store?.primaryColor || '#c9a86c'
-  const fallbackSurface = store?.secondaryColor || '#f3efe7'
-  const solidBackground = isNearCheckoutBackground(accent) ? fallbackSurface : accent
-  const solidText = isDarkColor(solidBackground) ? '#f3efe7' : '#080808'
-
-  const primaryStyle =
-    style === 'outline'
-      ? {
-          background: 'transparent',
-          color: isNearCheckoutBackground(accent) ? '#f3efe7' : accent,
-          border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}`,
-        }
-      : style === 'soft'
-        ? {
-            background: `${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}33`,
-            color: '#f3efe7',
-            border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}66`,
-          }
-        : {
-            background: solidBackground,
-            color: solidText,
-            border: 'none',
-          }
-
-  return { transform, radius, primaryStyle }
-}
+const CHECKOUT_RESULT_PRIMARY_ACTION_STYLE = {
+  background: 'var(--checkout-button-bg)',
+  color: 'var(--checkout-button-text)',
+  border: '1px solid var(--checkout-button-border)',
+  borderRadius: 'var(--checkout-button-radius)',
+  textTransform: 'var(--checkout-button-transform)',
+} as const
 
 function buildPhoneHref(rawPhone: string) {
   const normalized = rawPhone.replace(/[^\d+]/g, '')
@@ -280,15 +204,7 @@ export default function CheckoutSuccessClientPage() {
   }, [clearCart, paymentIntentId, pollCycle]);
 
   const support = useMemo(() => resolveSupportSummary(store), [store]);
-  const buttonPresentation = useMemo(() => resolveButtonPresentation(store), [store]);
-  const primaryActionStyle = useMemo(
-    () => ({
-      ...buttonPresentation.primaryStyle,
-      borderRadius: buttonPresentation.radius,
-      textTransform: buttonPresentation.transform,
-    }),
-    [buttonPresentation]
-  );
+  const primaryActionStyle = CHECKOUT_RESULT_PRIMARY_ACTION_STYLE;
   const viewState: ViewState =
     status === 'paid'
       ? 'confirmed'
@@ -308,23 +224,23 @@ export default function CheckoutSuccessClientPage() {
     <>
       <style>{`
         *,*::before,*::after{box-sizing:border-box}
-        .checkout-result-root{min-height:100vh;background:#080808;color:#f3efe7;font-family:var(--font-body),sans-serif;display:flex;align-items:center;justify-content:center;padding:28px}
+        .checkout-result-root{min-height:100vh;background:var(--checkout-bg);color:var(--checkout-text);font-family:var(--font-body),sans-serif;display:flex;align-items:center;justify-content:center;padding:28px}
         .checkout-result-shell{width:min(640px,100%);display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center}
-        .badge{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.52)}
+        .badge{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--checkout-muted)}
         .title{margin:0;font-family:var(--font-headline),sans-serif;font-size:clamp(34px,7vw,54px);line-height:0.96;letter-spacing:-0.04em}
-        .body{margin:0;color:rgba(255,255,255,0.74);font-size:15px;line-height:1.75;max-width:58ch}
-        .spinner{width:56px;height:56px;border-radius:999px;border:3px solid rgba(255,255,255,0.22);border-top-color:var(--store-primary,#c9a86c);animation:spin .9s linear infinite}
-        .order-pill{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+        .body{margin:0;color:var(--checkout-muted);font-size:15px;line-height:1.75;max-width:58ch}
+        .spinner{width:56px;height:56px;border-radius:999px;border:3px solid color-mix(in srgb, var(--checkout-text) 22%, transparent);border-top-color:var(--checkout-accent);animation:spin .9s linear infinite}
+        .order-pill{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;background:color-mix(in srgb, var(--checkout-text) 6%, transparent);border:1px solid color-mix(in srgb, var(--checkout-text) 14%, transparent);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
         .meta{display:flex;flex-direction:column;gap:8px;align-items:center}
         .actions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:6px}
         .btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 18px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;border:none;cursor:pointer;font-family:inherit}
-        .btn-primary{background:var(--store-primary,#c9a86c);color:#080808}
-        .btn-secondary{background:transparent;color:#f3efe7;border:1px solid rgba(255,255,255,0.2)}
-        .btn-tertiary{background:rgba(255,255,255,0.08);color:#f3efe7;border:1px solid rgba(255,255,255,0.12)}
-        .support{font-size:15px;color:rgba(255,255,255,0.78)}
-        .support-subtle{font-size:13px;color:rgba(255,255,255,0.62)}
+        .btn-primary{background:var(--checkout-button-bg);color:var(--checkout-button-text);border:1px solid var(--checkout-button-border)}
+        .btn-secondary{background:transparent;color:var(--checkout-text);border:1px solid color-mix(in srgb, var(--checkout-text) 20%, transparent)}
+        .btn-tertiary{background:color-mix(in srgb, var(--checkout-text) 8%, transparent);color:var(--checkout-text);border:1px solid color-mix(in srgb, var(--checkout-text) 12%, transparent)}
+        .support{font-size:15px;color:color-mix(in srgb, var(--checkout-text) 78%, transparent)}
+        .support-subtle{font-size:13px;color:var(--checkout-muted)}
         .support-links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px}
-        .support-link{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:999px;border:1px solid rgba(255,255,255,0.22);background:rgba(255,255,255,0.08);color:#f3efe7;font-size:14px;line-height:1;text-decoration:none}
+        .support-link{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:999px;border:1px solid color-mix(in srgb, var(--checkout-text) 22%, transparent);background:color-mix(in srgb, var(--checkout-text) 8%, transparent);color:var(--checkout-text);font-size:14px;line-height:1;text-decoration:none}
         @keyframes spin{to{transform:rotate(360deg)}}
       `}</style>
 

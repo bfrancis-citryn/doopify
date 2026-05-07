@@ -24,8 +24,7 @@ import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
 import { buildMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
 import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
-import { BRAND_FONT_VALUES, BUTTON_RADIUS_VALUES, BUTTON_STYLE_VALUES, BUTTON_TEXT_TRANSFORM_VALUES } from '@/lib/brand-kit';
-import { buildCheckoutPricingWithDecisionsCents } from '@/lib/checkout/pricing';
+import { calculateTaxPreview } from './tax-preview.helpers';
 
 const SETTINGS_SECTIONS = [
   { id: 'general', label: 'General' },
@@ -154,7 +153,6 @@ const EMAIL_PROVIDER_DRAWER = {
 
 const BRAND_DRAWER = {
   GLOBAL_ASSETS: 'GLOBAL_ASSETS',
-  STOREFRONT_THEME: 'STOREFRONT_THEME',
   CHECKOUT_BRANDING: 'CHECKOUT_BRANDING',
   EMAIL_BRANDING: 'EMAIL_BRANDING',
   SOCIAL_LINKS: 'SOCIAL_LINKS',
@@ -163,7 +161,6 @@ const BRAND_DRAWER = {
 const TAX_DRAWER = {
   COLLECTION: 'COLLECTION',
   REGIONS: 'REGIONS',
-  CUSTOMS: 'CUSTOMS',
 };
 
 const EMAIL_TEMPLATE_SUMMARY = [
@@ -241,11 +238,6 @@ const EMPTY_PROVIDER_FORMS = {
   EASYPOST: { apiKey: '' },
 };
 
-const FONT_OPTIONS = BRAND_FONT_VALUES.map((value) => ({ value, label: value }));
-const BUTTON_RADIUS_OPTIONS = BUTTON_RADIUS_VALUES.map((value) => ({ value, label: value }));
-const BUTTON_STYLE_OPTIONS = BUTTON_STYLE_VALUES.map((value) => ({ value, label: value }));
-const BUTTON_TEXT_TRANSFORM_OPTIONS = BUTTON_TEXT_TRANSFORM_VALUES.map((value) => ({ value, label: value }));
-
 const EMPTY_ZONE_FORM = {
   name: '',
   countryCode: '',
@@ -275,7 +267,7 @@ const EMPTY_TAX_FORM = {
 
 const EMPTY_TAX_SETTINGS = {
   enabled: false,
-  strategy: 'NONE',
+  strategy: 'MANUAL',
   defaultTaxRatePercent: '0',
   taxShipping: false,
   pricesIncludeTax: false,
@@ -286,9 +278,19 @@ const EMPTY_TAX_SETTINGS = {
 
 const EMPTY_SHIPPING_TAX_PREVIEW = {
   subtotal: '75',
+  shippingAmount: '0',
   country: 'US',
   province: '',
-  selectedRateId: '',
+};
+
+const EMPTY_TAX_PREVIEW_RESULT = {
+  subtotal: 0,
+  shippingAmount: 0,
+  taxableBase: 0,
+  estimatedTax: 0,
+  totalWithTax: 0,
+  sourceUsed: '',
+  note: '',
 };
 
 const EMPTY_BRAND_KIT = Object.freeze({
@@ -327,7 +329,6 @@ const LEGACY_RATE_METHOD_OPTIONS = [
 ];
 
 const TAX_STRATEGY_OPTIONS = [
-  { value: 'NONE', label: 'No tax' },
   { value: 'MANUAL', label: 'Manual' },
 ];
 
@@ -540,6 +541,16 @@ function formatDisplayCurrency(cents, currency = 'USD') {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format((Number(cents) || 0) / 100);
+}
+
+function formatTaxPreviewCurrency(amount, currency = 'USD') {
+  const normalizedCurrency = String(currency || 'USD').toUpperCase();
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: normalizedCurrency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0);
 }
 
 function formatProviderLabel(value) {
@@ -759,7 +770,12 @@ export default function SettingsWorkspace() {
   const [shippingSetupStatus, setShippingSetupStatus] = useState(null);
   const [shippingModeSaving, setShippingModeSaving] = useState(false);
   const [taxSettingsSaving, setTaxSettingsSaving] = useState(false);
+  const [taxSettingsSaveState, setTaxSettingsSaveState] = useState('idle');
+  const [taxSettingsFormError, setTaxSettingsFormError] = useState('');
   const [shippingTaxPreview, setShippingTaxPreview] = useState(EMPTY_SHIPPING_TAX_PREVIEW);
+  const [taxPreviewResult, setTaxPreviewResult] = useState(EMPTY_TAX_PREVIEW_RESULT);
+  const [taxPreviewError, setTaxPreviewError] = useState('');
+  const [taxPreviewCalculating, setTaxPreviewCalculating] = useState(false);
   const [newZone, setNewZone] = useState(EMPTY_ZONE_FORM);
   const [newTaxRule, setNewTaxRule] = useState(EMPTY_TAX_FORM);
   const [newRateByZoneId, setNewRateByZoneId] = useState({});
@@ -826,11 +842,24 @@ export default function SettingsWorkspace() {
   const [brandKitNotice, setBrandKitNotice] = useState('');
   const [showAdvancedUrls, setShowAdvancedUrls] = useState(false);
   const [uploadingField, setUploadingField] = useState('');
+  const [settingsToasts, setSettingsToasts] = useState([]);
   const logoUploadRef = useRef(null);
   const faviconUploadRef = useRef(null);
   const emailLogoUploadRef = useRef(null);
   const checkoutLogoUploadRef = useRef(null);
   const shippingModeSaveActionRef = useRef(null);
+
+  function dismissSettingsToast(toastId) {
+    setSettingsToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }
+
+  function pushSettingsToast(message, tone = 'info') {
+    const toastId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setSettingsToasts((current) => [...current, { id: toastId, message, tone }]);
+    window.setTimeout(() => {
+      setSettingsToasts((current) => current.filter((toast) => toast.id !== toastId));
+    }, 3600);
+  }
 
   const activeTitle = useMemo(
     () => SETTINGS_SECTIONS.find((section) => section.id === activeSection)?.label || 'Settings',
@@ -947,7 +976,7 @@ export default function SettingsWorkspace() {
         setTaxRules((taxRulesData || []).map(toTaxForm));
         setTaxSettings({
           enabled: Boolean(taxSettingsData?.enabled),
-          strategy: taxSettingsData?.strategy || 'NONE',
+          strategy: taxSettingsData?.strategy || 'MANUAL',
           defaultTaxRatePercent: String(Number(taxSettingsData?.defaultTaxRatePercent ?? 0)),
           taxShipping: Boolean(taxSettingsData?.taxShipping),
           pricesIncludeTax: Boolean(taxSettingsData?.pricesIncludeTax),
@@ -1589,11 +1618,11 @@ export default function SettingsWorkspace() {
     [activeEmailTemplateId]
   );
   const brandDisplayName = String(brandKit?.name || settings.storeName || 'Your store').trim();
-  const storefrontPrimaryColor = brandKit?.primaryColor || settings.brandPrimary || '#0f172a';
-  const storefrontTextColor = brandKit?.textColor || '#0f172a';
+  const storefrontPrimaryColor = 'var(--checkout-surface)';
+  const storefrontTextColor = 'var(--checkout-text)';
   const checkoutPreviewLogo = brandKit?.checkoutLogoUrl || brandKit?.logoUrl || '';
   const emailPreviewLogo = brandKit?.emailLogoUrl || brandKit?.logoUrl || '';
-  const emailHeaderColor = brandKit?.emailHeaderColor || brandKit?.primaryColor || '#111827';
+  const emailHeaderColor = 'var(--checkout-surface-strong)';
   const shippingMode = shippingSettingsProfile?.shippingMode || 'MANUAL';
   const shippingProvider = shippingSettingsProfile?.shippingLiveProvider || null;
 
@@ -1770,7 +1799,7 @@ export default function SettingsWorkspace() {
     setTaxRules((taxRulesData || []).map(toTaxForm));
     setTaxSettings({
       enabled: Boolean(taxSettingsData?.enabled),
-      strategy: taxSettingsData?.strategy || 'NONE',
+      strategy: taxSettingsData?.strategy || 'MANUAL',
       defaultTaxRatePercent: String(Number(taxSettingsData?.defaultTaxRatePercent ?? 0)),
       taxShipping: Boolean(taxSettingsData?.taxShipping),
       pricesIncludeTax: Boolean(taxSettingsData?.pricesIncludeTax),
@@ -1783,111 +1812,45 @@ export default function SettingsWorkspace() {
     setShippingConfigLoaded(true);
   }
 
-  const shippingTaxPreviewPricing = useMemo(() => {
-    const subtotalDollars = parseNumberOrUndefined(shippingTaxPreview.subtotal) ?? 0;
-    const subtotalCents = Math.max(0, Math.round(subtotalDollars * 100));
-    const shippingThresholdDollars = parseNumberOrUndefined(settings.freeShippingThreshold);
-    const shippingThresholdCents =
-      shippingThresholdDollars == null ? null : Math.max(0, Math.round(shippingThresholdDollars * 100));
-    const domesticCents = Math.max(0, Math.round((parseNumberOrUndefined(settings.domesticShippingRate) ?? 0) * 100));
-    const internationalCents = Math.max(
-      0,
-      Math.round((parseNumberOrUndefined(settings.internationalShippingRate) ?? 0) * 100)
-    );
-    const defaultTaxRateBps = Math.max(
-      0,
-      Math.round((parseNumberOrUndefined(taxSettings.defaultTaxRatePercent) ?? 0) * 100)
-    );
-
-    return buildCheckoutPricingWithDecisionsCents(
-      [{ priceCents: subtotalCents, quantity: 1 }],
-      shippingThresholdCents,
-      {
-        shippingAddress: {
-          country: shippingTaxPreview.country,
-          province: shippingTaxPreview.province,
-        },
-        storeCountry: taxSettings.originCountry || settings.taxOriginCountry || 'US',
-        shippingRates: {
-          domesticCents,
-          internationalCents,
-        },
-        shippingZones: shippingZones.map((zone) => ({
-          id: zone.id,
-          name: zone.name,
-          countryCode: zone.countryCode,
-          provinceCode: zone.provinceCode || null,
-          isActive: zone.isActive,
-          priority: parseNumberOrUndefined(zone.priority) ?? 100,
-          rates: zone.rates.map((rate) => ({
-            id: rate.id,
-            name: rate.name,
-            method: rate.method,
-            amountCents: Math.max(0, Math.round((parseNumberOrUndefined(rate.amount) ?? 0) * 100)),
-            minSubtotalCents:
-              rate.minSubtotal === '' ? null : Math.max(0, Math.round((parseNumberOrUndefined(rate.minSubtotal) ?? 0) * 100)),
-            maxSubtotalCents:
-              rate.maxSubtotal === '' ? null : Math.max(0, Math.round((parseNumberOrUndefined(rate.maxSubtotal) ?? 0) * 100)),
-            isActive: rate.isActive,
-            priority: parseNumberOrUndefined(rate.priority) ?? 100,
-          })),
-        })),
-        taxSettings: {
-          enabled: taxSettings.enabled,
-          strategy: taxSettings.strategy,
-          defaultTaxRateBps,
-          taxShipping: taxSettings.taxShipping,
-          pricesIncludeTax: taxSettings.pricesIncludeTax,
-        },
-        selectedShippingRateId: shippingTaxPreview.selectedRateId || undefined,
-      }
-    );
-  }, [settings, shippingTaxPreview, shippingZones, taxSettings]);
-
   const taxRegionSummaryRows = useMemo(() => {
     const defaultRatePercent = parseNumberOrUndefined(taxSettings.defaultTaxRatePercent) ?? 0;
-    const defaultSource = `Manual default (${defaultRatePercent.toFixed(2)}%)`;
-
-    const activeRules = taxRules.filter((rule) => rule.isActive);
-    const usRule = activeRules.find((rule) => String(rule.countryCode || '').toUpperCase() === 'US') || null;
-    const restRule = activeRules.find((rule) => String(rule.countryCode || '').toUpperCase() !== 'US') || null;
-
-    const baseRows = [
-      {
-        id: 'region-us',
-        region: 'United States',
-        collectingStatus: taxSettings.enabled && (usRule || defaultRatePercent > 0) ? 'Collecting' : 'Not collecting',
-        source: usRule ? `Manual rule (${parseNumberOrUndefined(usRule.ratePercent)?.toFixed(2) || '0.00'}%)` : defaultSource,
-      },
-      {
-        id: 'region-row',
-        region: 'Rest of world',
-        collectingStatus: taxSettings.enabled && (restRule || defaultRatePercent > 0) ? 'Collecting' : 'Not collecting',
-        source: restRule ? `Manual rule (${parseNumberOrUndefined(restRule.ratePercent)?.toFixed(2) || '0.00'}%)` : defaultSource,
-      },
-    ];
-
     const configuredRows = taxRules.map((rule) => {
       const regionParts = [rule.name, rule.countryCode, rule.provinceCode].filter(Boolean);
+      const ratePercent = parseNumberOrUndefined(rule.ratePercent) ?? 0;
       return {
         id: `configured-${rule.id}`,
         region: regionParts.join(' - ') || 'Configured region',
-        collectingStatus: taxSettings.enabled && rule.isActive ? 'Collecting' : 'Not collecting',
-        source: `Manual rule (${parseNumberOrUndefined(rule.ratePercent)?.toFixed(2) || '0.00'}%)`,
+        rateLabel: `${ratePercent.toFixed(2)}%`,
+        activeLabel: rule.isActive ? 'Active' : 'Inactive',
+        source: 'Manual',
       };
     });
 
-    return [...baseRows, ...configuredRows];
+    return [
+      ...configuredRows,
+      {
+        id: 'fallback-default-rate',
+        region: 'Rest of world fallback',
+        rateLabel: `${defaultRatePercent.toFixed(2)}%`,
+        activeLabel: taxSettings.enabled && defaultRatePercent > 0 ? 'Active fallback' : 'Inactive fallback',
+        source: 'Manual default',
+      },
+    ];
   }, [taxRules, taxSettings.defaultTaxRatePercent, taxSettings.enabled]);
 
   async function handleSaveTaxSettings() {
     const ratePercent = parseNumberOrUndefined(taxSettings.defaultTaxRatePercent);
     if (ratePercent == null || ratePercent < 0 || ratePercent > 100) {
+      setTaxSettingsFormError('Manual tax rate must be between 0 and 100%.');
       setShippingConfigError('Manual tax rate must be between 0 and 100%.');
+      setTaxSettingsSaveState('failed');
+      pushSettingsToast('Tax settings failed. Manual tax rate must be between 0 and 100%.', 'error');
       return;
     }
 
     try {
+      setTaxSettingsSaveState('saving');
+      setTaxSettingsFormError('');
       setShippingConfigError('');
       setTaxSettingsSaving(true);
       const updated = await fetch('/api/settings/tax', {
@@ -1895,7 +1858,7 @@ export default function SettingsWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           enabled: taxSettings.enabled,
-          strategy: taxSettings.strategy,
+          strategy: 'MANUAL',
           defaultTaxRatePercent: ratePercent,
           taxShipping: taxSettings.taxShipping,
           pricesIncludeTax: taxSettings.pricesIncludeTax,
@@ -1907,7 +1870,7 @@ export default function SettingsWorkspace() {
 
       setTaxSettings({
         enabled: Boolean(updated?.enabled),
-        strategy: updated?.strategy || 'NONE',
+        strategy: updated?.strategy || 'MANUAL',
         defaultTaxRatePercent: String(Number(updated?.defaultTaxRatePercent ?? 0)),
         taxShipping: Boolean(updated?.taxShipping),
         pricesIncludeTax: Boolean(updated?.pricesIncludeTax),
@@ -1915,10 +1878,49 @@ export default function SettingsWorkspace() {
         originState: updated?.originState || '',
         originPostalCode: updated?.originPostalCode || '',
       });
+      setTaxPreviewError('');
+      setTaxSettingsSaveState('saved');
+      closeTaxDrawer();
+      pushSettingsToast('Tax settings saved', 'success');
     } catch (saveError) {
-      setShippingConfigError(saveError instanceof Error ? saveError.message : 'Failed to save tax settings');
+      const message = saveError instanceof Error ? saveError.message : 'Failed to save tax settings';
+      setTaxSettingsFormError(message);
+      setShippingConfigError(message);
+      setTaxSettingsSaveState('failed');
+      pushSettingsToast(`Tax settings failed: ${message}`, 'error');
     } finally {
       setTaxSettingsSaving(false);
+    }
+  }
+
+  async function handleCalculateTaxPreview() {
+    try {
+      setTaxPreviewCalculating(true);
+      setTaxPreviewError('');
+      setTaxSettingsFormError('');
+      const result = calculateTaxPreview(
+        {
+          subtotal: shippingTaxPreview.subtotal,
+          shippingAmount: shippingTaxPreview.shippingAmount,
+          country: shippingTaxPreview.country,
+          province: shippingTaxPreview.province,
+        },
+        {
+          enabled: taxSettings.enabled,
+          defaultTaxRatePercent: taxSettings.defaultTaxRatePercent,
+          taxShipping: taxSettings.taxShipping,
+        },
+        taxRules
+      );
+      setTaxPreviewResult(result);
+      pushSettingsToast('Tax preview calculated', 'success');
+    } catch (previewError) {
+      const message = previewError instanceof Error ? previewError.message : 'Failed to calculate tax preview';
+      setTaxPreviewError(message);
+      setTaxPreviewResult(EMPTY_TAX_PREVIEW_RESULT);
+      pushSettingsToast(`Tax preview failed: ${message}`, 'error');
+    } finally {
+      setTaxPreviewCalculating(false);
     }
   }
 
@@ -2060,11 +2062,20 @@ export default function SettingsWorkspace() {
     setActiveBrandDrawer(null);
   }
 
+  function patchTaxSettings(nextPatch) {
+    setTaxSettingsSaveState('idle');
+    setTaxSettingsFormError('');
+    setTaxSettings((current) => ({ ...current, ...nextPatch }));
+  }
+
   function openTaxDrawer(drawerId) {
+    setTaxSettingsFormError('');
+    setTaxSettingsSaveState('idle');
     setActiveTaxDrawer(drawerId);
   }
 
   function closeTaxDrawer() {
+    setTaxSettingsFormError('');
     setActiveTaxDrawer(null);
   }
 
@@ -2823,9 +2834,9 @@ export default function SettingsWorkspace() {
             {!loading && !error && activeSection === 'brand-kit' ? (
               <div className={styles.brandKitLayout}>
                 <div className={styles.brandKitHeading}>
-                  <h3>Brand & appearance</h3>
+                  <h3>Brand assets</h3>
                   <p>
-                    Brand settings control the default look of your storefront, checkout, customer emails, and printed documents.
+                    Theme customization is locked for private beta. Logos and support details are used across storefront, checkout, customer emails, and documents.
                     Email wording is edited in Settings -&gt; Email.
                   </p>
                 </div>
@@ -2890,27 +2901,6 @@ export default function SettingsWorkspace() {
                         </div>
                       </AdminCard>
 
-                      <AdminCard as="section" className={`${styles.setupColumnCard} ${styles.compactSettingsCard}`} variant="card">
-                        <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                          <h4>Storefront theme</h4>
-                        </div>
-                        <p className={styles.compactRowDescription}>Controls storefront page colors, fonts, and buttons.</p>
-                        <div className={styles.compactDrawerGrid}>
-                          <p className={styles.compactMeta}>
-                            <strong>Primary color:</strong> {brandKit.primaryColor || 'Not set'}
-                          </p>
-                          <p className={styles.compactMeta}>Applied to storefront theme tokens.</p>
-                          <p className={styles.compactMeta}>
-                            <strong>Button style:</strong> {brandKit.buttonStyle || 'solid'}
-                          </p>
-                          <p className={styles.compactMeta}>Used in storefront and checkout buttons where supported.</p>
-                        </div>
-                        <div className={styles.compactActionRow}>
-                          <AdminButton onClick={() => openBrandDrawer(BRAND_DRAWER.STOREFRONT_THEME)} size="sm" variant="secondary">
-                            Edit
-                          </AdminButton>
-                        </div>
-                      </AdminCard>
                     </section>
 
                     <section className={styles.setupColumns}>
@@ -2918,7 +2908,7 @@ export default function SettingsWorkspace() {
                         <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                           <h4>Checkout branding</h4>
                         </div>
-                        <p className={styles.compactRowDescription}>Controls checkout header/logo/button styling where supported.</p>
+                        <p className={styles.compactRowDescription}>Controls checkout identity assets used in customer-facing surfaces.</p>
                         <div className={styles.compactDrawerGrid}>
                           <p className={styles.compactMeta}>
                             <strong>Checkout logo:</strong> {brandKit.checkoutLogoUrl ? 'Configured' : 'Not set'}
@@ -2940,10 +2930,6 @@ export default function SettingsWorkspace() {
                         <div className={styles.compactDrawerGrid}>
                           <p className={styles.compactMeta}>
                             <strong>Email logo:</strong> {brandKit.emailLogoUrl ? 'Configured' : 'Not set'}
-                          </p>
-                          <p className={styles.compactMeta}>Used in customer emails only.</p>
-                          <p className={styles.compactMeta}>
-                            <strong>Email header color:</strong> {brandKit.emailHeaderColor || 'Not set'}
                           </p>
                           <p className={styles.compactMeta}>Used in customer emails only.</p>
                         </div>
@@ -3018,7 +3004,7 @@ export default function SettingsWorkspace() {
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
-                    <h3>Tax collection</h3>
+                    <h3>Tax status</h3>
                   </div>
                   <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
                     <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
@@ -3029,13 +3015,14 @@ export default function SettingsWorkspace() {
                     </div>
                     <div className={styles.taxSummaryList}>
                       <p className={styles.taxSummaryRow}><strong>Status:</strong> {taxSettings.enabled ? 'On' : 'Off'}</p>
-                      <p className={styles.taxSummaryRow}><strong>Strategy:</strong> {taxSettings.strategy}</p>
+                      <p className={styles.taxSummaryRow}><strong>Strategy:</strong> Manual</p>
                       <p className={styles.taxSummaryRow}>
                         <strong>Manual tax rate:</strong> {(parseNumberOrUndefined(taxSettings.defaultTaxRatePercent) ?? 0).toFixed(2)}%
                       </p>
                       <p className={styles.taxSummaryRow}><strong>Tax shipping:</strong> {taxSettings.taxShipping ? 'Yes' : 'No'}</p>
                       <p className={styles.taxSummaryRow}><strong>Prices include tax:</strong> {taxSettings.pricesIncludeTax ? 'Yes' : 'No'}</p>
                     </div>
+                    <p className={styles.compactMeta}>Configure how Doopify calculates tax at checkout.</p>
                     <div className={styles.compactActionRow}>
                       <AdminButton onClick={() => openTaxDrawer(TAX_DRAWER.COLLECTION)} size="sm" variant="secondary">
                         Manage
@@ -3063,16 +3050,22 @@ export default function SettingsWorkspace() {
                     <h3>Tax regions</h3>
                   </div>
                   <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
+                    <p className={styles.compactMeta}>
+                      Tax regions override the default manual rate for matching destinations.
+                    </p>
                     <div className={styles.taxRegionList}>
                       {taxRegionSummaryRows.map((row) => (
                         <div className={styles.taxRegionRow} key={row.id}>
                           <div>
                             <p className={styles.taxRegionTitle}>{row.region}</p>
                             <p className={styles.compactMeta}>
-                              <strong>Status:</strong> {row.collectingStatus}
+                              <strong>Rate:</strong> {row.rateLabel}
                             </p>
                             <p className={styles.compactMeta}>
-                              <strong>Tax source:</strong> {row.source}
+                              <strong>Status:</strong> {row.activeLabel}
+                            </p>
+                            <p className={styles.compactMeta}>
+                              <strong>Source:</strong> {row.source}
                             </p>
                           </div>
                           <AdminButton onClick={() => openTaxDrawer(TAX_DRAWER.REGIONS)} size="sm" variant="secondary">
@@ -3086,41 +3079,16 @@ export default function SettingsWorkspace() {
 
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
-                    <h3>Duties & import taxes</h3>
+                    <h3>International duties & import taxes</h3>
                   </div>
                   <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
                     <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                      <h4>Duties & import taxes</h4>
-                      <AdminStatusChip tone="warning">Not configured</AdminStatusChip>
+                      <h4>Coming later</h4>
+                      <AdminStatusChip tone="warning">Private beta</AdminStatusChip>
                     </div>
                     <p className={styles.compactMeta}>
-                      Duties automation and import-tax workflows will be added after the current manual tax foundation.
+                      International customs support is coming later.
                     </p>
-                    <div className={styles.compactActionRow}>
-                      <AdminButton disabled size="sm" variant="ghost">
-                        Set up later (Coming soon)
-                      </AdminButton>
-                    </div>
-                  </AdminCard>
-                </section>
-
-                <section className={styles.configSection}>
-                  <div className={styles.sectionHeading}>
-                    <h3>Customs information</h3>
-                  </div>
-                  <AdminCard as="article" className={`${styles.compactSettingsCard} ${styles.taxSummaryCard}`} variant="card">
-                    <div className={styles.taxSummaryList}>
-                      <p className={styles.taxSummaryRow}><strong>Origin country:</strong> {taxSettings.originCountry || 'Not set'}</p>
-                      <p className={styles.taxSummaryRow}><strong>Origin state:</strong> {taxSettings.originState || 'Not set'}</p>
-                      <p className={styles.taxSummaryRow}><strong>Origin postal code:</strong> {taxSettings.originPostalCode || 'Not set'}</p>
-                      <p className={styles.taxSummaryRow}><strong>Country of origin:</strong> Not supported yet</p>
-                      <p className={styles.taxSummaryRow}><strong>HS codes:</strong> Not supported yet</p>
-                    </div>
-                    <div className={styles.compactActionRow}>
-                      <AdminButton onClick={() => openTaxDrawer(TAX_DRAWER.CUSTOMS)} size="sm" variant="secondary">
-                        Manage
-                      </AdminButton>
-                    </div>
                   </AdminCard>
                 </section>
 
@@ -3128,6 +3096,9 @@ export default function SettingsWorkspace() {
                   <div className={styles.sectionHeading}>
                     <h3>Tax preview</h3>
                   </div>
+                  <p className={styles.compactMeta}>
+                    Estimate checkout tax using your current manual tax settings.
+                  </p>
 
                   <div className={styles.inlineGrid}>
                     <label className={styles.field}>
@@ -3138,6 +3109,18 @@ export default function SettingsWorkspace() {
                           setShippingTaxPreview((current) => ({ ...current, subtotal: event.target.value }))
                         }
                         value={shippingTaxPreview.subtotal}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Shipping amount (USD)</span>
+                      <AdminInput
+                        className={styles.input}
+                        disabled={!taxSettings.taxShipping}
+                        onChange={(event) =>
+                          setShippingTaxPreview((current) => ({ ...current, shippingAmount: event.target.value }))
+                        }
+                        placeholder={taxSettings.taxShipping ? '0.00' : 'Tax shipping disabled'}
+                        value={shippingTaxPreview.shippingAmount}
                       />
                     </label>
                     <label className={styles.field}>
@@ -3162,21 +3145,25 @@ export default function SettingsWorkspace() {
                     </label>
                   </div>
 
+                  <div className={styles.compactActionRow}>
+                    <AdminButton disabled={taxPreviewCalculating} onClick={handleCalculateTaxPreview} size="sm" variant="secondary">
+                      {taxPreviewCalculating ? 'Calculating preview...' : 'Calculate preview'}
+                    </AdminButton>
+                  </div>
+
+                  {taxPreviewError ? (
+                    <div className={styles.statusBlock}>
+                      <p className={styles.statusTitle}>Preview error</p>
+                      <p className={styles.statusText}>{taxPreviewError}</p>
+                    </div>
+                  ) : null}
+
                   <div className={styles.statusBlock}>
-                    <p className={styles.statusTitle}>
-                      Subtotal ${((shippingTaxPreviewPricing.subtotalCents || 0) / 100).toFixed(2)} - Tax $
-                      {((shippingTaxPreviewPricing.taxAmountCents || 0) / 100).toFixed(2)}
-                    </p>
-                    <p className={styles.statusText}>
-                      Total (tax only): $
-                      {(((shippingTaxPreviewPricing.subtotalCents || 0) + (shippingTaxPreviewPricing.taxAmountCents || 0)) / 100).toFixed(2)}
-                    </p>
-                    <p className={styles.statusText}>
-                      Tax source: {shippingTaxPreviewPricing.taxDecision?.source || 'none'}
-                    </p>
-                    {shippingTaxPreviewPricing.taxDecision?.warning ? (
-                      <p className={styles.statusText}>{shippingTaxPreviewPricing.taxDecision.warning}</p>
-                    ) : null}
+                    <p className={styles.statusTitle}>Preview result</p>
+                    <p className={styles.statusText}><strong>Estimated tax:</strong> {formatTaxPreviewCurrency(taxPreviewResult.estimatedTax)}</p>
+                    <p className={styles.statusText}><strong>Total with tax:</strong> {formatTaxPreviewCurrency(taxPreviewResult.totalWithTax)}</p>
+                    <p className={styles.statusText}><strong>Rule/source:</strong> {taxPreviewResult.sourceUsed || 'Not calculated yet'}</p>
+                    <p className={styles.statusText}>{taxPreviewResult.note || 'Run a preview to see the matching tax source.'}</p>
                   </div>
                 </section>
               </div>
@@ -4788,10 +4775,8 @@ export default function SettingsWorkspace() {
         subtitle={
           activeBrandDrawer === BRAND_DRAWER.GLOBAL_ASSETS
             ? 'Used for storefront logo, favicon, packing slips, and default email branding.'
-            : activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME
-              ? 'Controls storefront page colors, fonts, and buttons.'
-              : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
-                ? 'Controls checkout header/logo/button styling where supported.'
+            : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
+                ? 'Controls checkout identity assets and support details used in customer-facing surfaces.'
                 : activeBrandDrawer === BRAND_DRAWER.EMAIL_BRANDING
                   ? 'Controls customer email logo/header/footer styling.'
                   : activeBrandDrawer === BRAND_DRAWER.SOCIAL_LINKS
@@ -4801,9 +4786,7 @@ export default function SettingsWorkspace() {
         title={
           activeBrandDrawer === BRAND_DRAWER.GLOBAL_ASSETS
             ? 'Global brand assets'
-            : activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME
-              ? 'Storefront theme'
-              : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
+            : activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING
                 ? 'Checkout branding'
                 : activeBrandDrawer === BRAND_DRAWER.EMAIL_BRANDING
                   ? 'Email branding'
@@ -4829,9 +4812,14 @@ export default function SettingsWorkspace() {
                   <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ supportEmail: event.target.value })} value={brandKit?.supportEmail || ''} />
                 </label>
                 <p className={styles.compactMeta}>Customer-facing support/reply email.</p>
+                <p className={styles.compactMeta}>
+                  <strong>Support phone:</strong> {settings.phone ? settings.phone : 'Not set'}
+                </p>
+                <p className={styles.compactMeta}>Optional customer-facing phone number used in checkout and customer communications.</p>
               </div>
               <p className={styles.compactMeta}>Store logo: Used in storefront header, packing slips, and default customer email branding.</p>
               <p className={styles.compactMeta}>Favicon: Used in browser tabs and storefront metadata.</p>
+              <p className={styles.compactMeta}>Theme customization is locked for private beta.</p>
             </AdminCard>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={styles.brandFieldGrid}>
@@ -4861,67 +4849,6 @@ export default function SettingsWorkspace() {
           </div>
         ) : null}
 
-        {activeBrandDrawer === BRAND_DRAWER.STOREFRONT_THEME ? (
-          <div className={styles.drawerStack}>
-            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                <h4>Storefront color and typography</h4>
-              </div>
-              <div className={styles.brandFieldGrid}>
-                <label className={styles.field}>
-                  <span>Primary color</span>
-                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ primaryColor: event.target.value })} value={brandKit?.primaryColor || ''} />
-                </label>
-                <label className={styles.field}>
-                  <span>Secondary color</span>
-                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ secondaryColor: event.target.value })} value={brandKit?.secondaryColor || ''} />
-                </label>
-                <label className={styles.field}>
-                  <span>Accent color</span>
-                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ accentColor: event.target.value })} value={brandKit?.accentColor || ''} />
-                </label>
-                <label className={styles.field}>
-                  <span>Text color</span>
-                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ textColor: event.target.value })} value={brandKit?.textColor || ''} />
-                </label>
-                <label className={styles.field}>
-                  <span>Heading font</span>
-                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ headingFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.headingFont || 'system'} />
-                </label>
-                <label className={styles.field}>
-                  <span>Body font</span>
-                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ bodyFont: nextValue })} options={FONT_OPTIONS} value={brandKit?.bodyFont || 'system'} />
-                </label>
-              </div>
-              <p className={styles.compactMeta}>Primary color: Used in storefront theme.</p>
-            </AdminCard>
-            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                <h4>Buttons</h4>
-              </div>
-              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
-                <label className={styles.field}>
-                  <span>Button radius</span>
-                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonRadius: nextValue })} options={BUTTON_RADIUS_OPTIONS} value={brandKit?.buttonRadius || 'md'} />
-                </label>
-                <label className={styles.field}>
-                  <span>Button style</span>
-                  <AdminSelect onChange={(nextValue) => handleBrandKitPatch({ buttonStyle: nextValue })} options={BUTTON_STYLE_OPTIONS} value={brandKit?.buttonStyle || 'solid'} />
-                </label>
-                <label className={styles.field}>
-                  <span>Button text transform</span>
-                  <AdminSelect
-                    onChange={(nextValue) => handleBrandKitPatch({ buttonTextTransform: nextValue })}
-                    options={BUTTON_TEXT_TRANSFORM_OPTIONS}
-                    value={brandKit?.buttonTextTransform || 'normal'}
-                  />
-                </label>
-              </div>
-              <p className={styles.compactMeta}>Button style: Used in storefront and checkout buttons where supported.</p>
-            </AdminCard>
-          </div>
-        ) : null}
-
         {activeBrandDrawer === BRAND_DRAWER.CHECKOUT_BRANDING ? (
           <div className={styles.drawerStack}>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
@@ -4932,7 +4859,7 @@ export default function SettingsWorkspace() {
                 {renderAssetUploadField({ field: 'checkoutLogoUrl', label: 'Checkout logo', refObject: checkoutLogoUploadRef })}
               </div>
               <p className={styles.compactMeta}>Checkout logo: Used in checkout only.</p>
-              <p className={styles.compactMeta}>Button colors/radius are inherited from Storefront theme controls.</p>
+              <p className={styles.compactMeta}>Checkout colors are locked to frontend beta-safe tokens for readability.</p>
             </AdminCard>
           </div>
         ) : null}
@@ -4946,16 +4873,11 @@ export default function SettingsWorkspace() {
               <div className={styles.brandFieldGrid}>
                 {renderAssetUploadField({ field: 'emailLogoUrl', label: 'Email logo', refObject: emailLogoUploadRef })}
                 <label className={styles.field}>
-                  <span>Email header color</span>
-                  <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ emailHeaderColor: event.target.value })} value={brandKit?.emailHeaderColor || ''} />
-                </label>
-                <label className={styles.field}>
                   <span>Email footer text</span>
                   <AdminInput className={styles.input} onChange={(event) => handleBrandKitPatch({ emailFooterText: event.target.value })} value={brandKit?.emailFooterText || ''} />
                 </label>
               </div>
               <p className={styles.compactMeta}>Email logo: Used in customer emails only.</p>
-              <p className={styles.compactMeta}>Email header color: Used in customer emails only.</p>
               <div className={styles.compactActionRow}>
                 <AdminButton asChild size="sm" variant="ghost">
                   <Link href="/admin/settings?section=email">Open email templates</Link>
@@ -4999,88 +4921,85 @@ export default function SettingsWorkspace() {
         open={Boolean(activeTaxDrawer)}
         subtitle={
           activeTaxDrawer === TAX_DRAWER.COLLECTION
-            ? 'Configure collection behavior and manual strategy settings.'
+            ? 'Configure how Doopify calculates tax at checkout.'
             : activeTaxDrawer === TAX_DRAWER.REGIONS
               ? 'Manage manual tax regions and rule-level overrides.'
-              : activeTaxDrawer === TAX_DRAWER.CUSTOMS
-                ? 'Manage origin details used for tax and customs decisioning.'
-                : 'Tax settings details.'
+              : 'Tax settings details.'
         }
         title={
           activeTaxDrawer === TAX_DRAWER.COLLECTION
             ? 'Tax collection'
             : activeTaxDrawer === TAX_DRAWER.REGIONS
               ? 'Tax regions'
-              : activeTaxDrawer === TAX_DRAWER.CUSTOMS
-                ? 'Customs information'
-                : 'Taxes & duties'
+              : 'Taxes & duties'
         }
       >
         {activeTaxDrawer === TAX_DRAWER.COLLECTION ? (
           <div className={styles.drawerStack}>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                <h4>Collection settings</h4>
+                <h4>Tax collection</h4>
               </div>
+              <p className={styles.compactMeta}>Configure how Doopify calculates tax at checkout.</p>
               <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <label className={styles.checkboxField}>
                   <AdminInput
                     checked={taxSettings.enabled}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({ ...current, enabled: event.target.checked }))
-                    }
+                    onChange={(event) => patchTaxSettings({ enabled: event.target.checked })}
                     className={styles.settingsCheckbox} type="checkbox"
                   />
                   <span>Enable tax collection</span>
                 </label>
+                <p className={styles.compactMeta}>Adds tax during checkout using your manual tax rules.</p>
                 <label className={styles.field}>
                   <span>Strategy</span>
                   <AdminSelect
                     className={styles.input}
-                    onChange={(nextValue) =>
-                      setTaxSettings((current) => ({ ...current, strategy: nextValue }))
-                    }
+                    disabled
+                    onChange={(nextValue) => patchTaxSettings({ strategy: nextValue })}
                     options={TAX_STRATEGY_OPTIONS}
                     value={taxSettings.strategy}
                   />
                 </label>
+                <p className={styles.compactMeta}>Manual uses the rates you configure in Doopify. Automated tax is coming later.</p>
                 <label className={styles.field}>
                   <span>Manual tax rate (%)</span>
                   <AdminInput
                     className={styles.input}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({
-                        ...current,
-                        defaultTaxRatePercent: event.target.value,
-                      }))
-                    }
+                    onChange={(event) => patchTaxSettings({ defaultTaxRatePercent: event.target.value })}
                     value={taxSettings.defaultTaxRatePercent}
                   />
                 </label>
+                <p className={styles.compactMeta}>Default rate used when no region-specific rule matches.</p>
                 <label className={styles.checkboxField}>
                   <AdminInput
                     checked={taxSettings.taxShipping}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({ ...current, taxShipping: event.target.checked }))
-                    }
+                    onChange={(event) => patchTaxSettings({ taxShipping: event.target.checked })}
                     className={styles.settingsCheckbox} type="checkbox"
                   />
                   <span>Tax shipping</span>
                 </label>
+                <p className={styles.compactMeta}>Applies tax to shipping charges when enabled.</p>
                 <label className={styles.checkboxField}>
                   <AdminInput
                     checked={taxSettings.pricesIncludeTax}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({ ...current, pricesIncludeTax: event.target.checked }))
-                    }
+                    onChange={(event) => patchTaxSettings({ pricesIncludeTax: event.target.checked })}
                     className={styles.settingsCheckbox} type="checkbox"
                   />
                   <span>Prices include tax</span>
                 </label>
+                <p className={styles.compactMeta}>Use only if product prices already include tax.</p>
               </div>
+              {taxSettingsFormError ? <p className={styles.statusText}>{taxSettingsFormError}</p> : null}
               <div className={styles.compactActionRow}>
                 <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
-                  {taxSettingsSaving ? 'Saving tax settings...' : 'Save tax collection'}
+                  {taxSettingsSaveState === 'saving'
+                    ? 'Saving...'
+                    : taxSettingsSaveState === 'saved'
+                      ? 'Saved'
+                      : taxSettingsSaveState === 'failed'
+                        ? 'Failed'
+                        : 'Save tax collection'}
                 </AdminButton>
               </div>
             </AdminCard>
@@ -5167,61 +5086,6 @@ export default function SettingsWorkspace() {
                 </div>
               </AdminCard>
             ))}
-          </div>
-        ) : null}
-
-        {activeTaxDrawer === TAX_DRAWER.CUSTOMS ? (
-          <div className={styles.drawerStack}>
-            <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
-              <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                <h4>Origin details</h4>
-              </div>
-              <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
-                <label className={styles.field}>
-                  <span>Origin country</span>
-                  <AdminInput
-                    className={styles.input}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({ ...current, originCountry: event.target.value }))
-                    }
-                    value={taxSettings.originCountry}
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>Origin state</span>
-                  <AdminInput
-                    className={styles.input}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({ ...current, originState: event.target.value }))
-                    }
-                    value={taxSettings.originState}
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>Origin postal code</span>
-                  <AdminInput
-                    className={styles.input}
-                    onChange={(event) =>
-                      setTaxSettings((current) => ({ ...current, originPostalCode: event.target.value }))
-                    }
-                    value={taxSettings.originPostalCode}
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>Country of origin</span>
-                  <AdminInput className={styles.input} disabled placeholder="Not supported yet" value="" />
-                </label>
-                <label className={styles.field}>
-                  <span>HS codes</span>
-                  <AdminInput className={styles.input} disabled placeholder="Not supported yet" value="" />
-                </label>
-              </div>
-              <div className={styles.compactActionRow}>
-                <AdminButton disabled={taxSettingsSaving} onClick={handleSaveTaxSettings} size="sm" variant="secondary">
-                  {taxSettingsSaving ? 'Saving customs settings...' : 'Save customs information'}
-                </AdminButton>
-              </div>
-            </AdminCard>
           </div>
         ) : null}
       </AdminDrawer>
@@ -5422,6 +5286,20 @@ export default function SettingsWorkspace() {
           </div>
         ) : null}
       </AdminDrawer>
+      {settingsToasts.length ? (
+        <div aria-live="polite" className={styles.toastViewport}>
+          {settingsToasts.map((toast) => (
+            <button
+              className={`${styles.toastCard} ${toast.tone === 'success' ? styles.toastSuccess : ''} ${toast.tone === 'error' ? styles.toastError : ''}`}
+              key={toast.id}
+              onClick={() => dismissSettingsToast(toast.id)}
+              type="button"
+            >
+              {toast.message}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </AppShell>
   );
 }

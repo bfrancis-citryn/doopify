@@ -37,9 +37,10 @@ describe('settings compact flow', () => {
 
     expect(taxesBlock).toContain('Tax collection')
     expect(taxesBlock).toContain('Tax regions')
-    expect(taxesBlock).toContain('Duties & import taxes')
-    expect(taxesBlock).toContain('Customs information')
+    expect(taxesBlock).toContain('International duties & import taxes')
+    expect(taxesBlock).toContain('International customs support is coming later.')
     expect(taxesBlock).toContain('Tax preview')
+    expect(taxesBlock).toContain('Calculate preview')
 
     expect(taxesBlock).not.toContain('Shipping provider setup')
     expect(taxesBlock).not.toContain('Shippo')
@@ -48,13 +49,16 @@ describe('settings compact flow', () => {
     expect(taxesBlock).not.toContain('Live rates mode')
     expect(taxesBlock).not.toContain('Shipping zones')
     expect(taxesBlock).not.toContain('Shipping rate')
+    expect(taxesBlock).not.toContain('HS codes')
+    expect(taxesBlock).not.toContain('Country of origin')
+    expect(taxesBlock).not.toContain('Origin postal code')
   })
 
   it('renames Storefront / brand to Brand & appearance and explains scope clearly', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 
     expect(workspace).toContain("{ id: 'brand-kit', label: 'Brand & appearance' }")
-    expect(workspace).toContain('Brand settings control the default look of your storefront, checkout, customer emails, and printed documents.')
+    expect(workspace).toContain('Theme customization is locked for private beta. Logos and support details are used across storefront, checkout, customer emails, and documents.')
     expect(workspace).toContain('Email wording is edited in Settings -&gt; Email.')
   })
 
@@ -93,6 +97,21 @@ describe('settings compact flow', () => {
     expect(workspace).toContain('Credentials saved securely. Secret values are encrypted and hidden.')
     expect(workspace).toContain('Create this endpoint in Stripe and paste the whsec signing secret here. Orders are only created after this webhook succeeds.')
     expect(workspace).toContain('Store URL needs setup')
+  })
+
+  it('uses the new tax collection drawer copy and save feedback labels', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain('Configure how Doopify calculates tax at checkout.')
+    expect(workspace).toContain('Adds tax during checkout using your manual tax rules.')
+    expect(workspace).toContain('Manual uses the rates you configure in Doopify. Automated tax is coming later.')
+    expect(workspace).toContain('Default rate used when no region-specific rule matches.')
+    expect(workspace).toContain('Applies tax to shipping charges when enabled.')
+    expect(workspace).toContain('Use only if product prices already include tax.')
+    expect(workspace).toContain("'Saving...'")
+    expect(workspace).toContain("'Saved'")
+    expect(workspace).toContain("'Failed'")
+    expect(workspace).toContain('pushSettingsToast(\'Tax settings saved\', \'success\')')
   })
 
   it('keeps PayPal and SendLayer drawers honest without fake editable credential forms', () => {
@@ -153,6 +172,20 @@ describe('settings compact flow', () => {
     expect(workspace).toContain('headerSaveButtonLabel')
   })
 
+  it('hides incomplete storefront theme controls in private beta brand settings', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).not.toContain('<span>Primary color</span>')
+    expect(workspace).not.toContain('<span>Secondary color</span>')
+    expect(workspace).not.toContain('<span>Accent color</span>')
+    expect(workspace).not.toContain('<span>Text color</span>')
+    expect(workspace).not.toContain('<span>Heading font</span>')
+    expect(workspace).not.toContain('<span>Body font</span>')
+    expect(workspace).not.toContain('<span>Button radius</span>')
+    expect(workspace).not.toContain('<span>Button style</span>')
+    expect(workspace).not.toContain('<span>Button text transform</span>')
+  })
+
   it('supports visible shipping save states in the top-right header', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 
@@ -169,10 +202,13 @@ describe('settings compact flow', () => {
     expect(workspace).toContain('<h4>Storefront preview</h4>')
     expect(workspace).toContain('<h4>Checkout preview</h4>')
     expect(workspace).toContain('<h4>Email preview</h4>')
-    expect(workspace).toContain('Controls storefront page colors, fonts, and buttons.')
-    expect(workspace).toContain('Controls checkout header/logo/button styling where supported.')
+    expect(workspace).not.toContain('Controls storefront page colors, fonts, and buttons.')
+    expect(workspace).toContain('Controls checkout identity assets used in customer-facing surfaces.')
     expect(workspace).toContain('Controls customer email logo/header/footer styling.')
     expect(workspace).toContain('Used for storefront logo, favicon, packing slips, and default email branding.')
+    expect(workspace).not.toContain('Storefront theme')
+    expect(workspace).not.toContain('Primary color')
+    expect(workspace).not.toContain('Button style')
   })
 
   it('maps friendly webhook groups only to real typed events', () => {

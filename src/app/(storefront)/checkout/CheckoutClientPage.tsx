@@ -62,12 +62,6 @@ type CheckoutStoreSettings = {
   currency?: string
   logoUrl?: string
   checkoutLogoUrl?: string
-  secondaryColor?: string
-  buttonStyle?: 'solid' | 'outline' | 'soft' | string
-  buttonTextTransform?: 'uppercase' | 'none' | string
-  buttonRadius?: 'none' | 'sm' | 'md' | 'lg' | 'full' | string
-  accentColor?: string
-  primaryColor?: string
 }
 
 type DiscountApplication = {
@@ -112,7 +106,7 @@ type StripePaymentResult = {
 }
 
 type StripePaymentElement = {
-  mount: (selector: string) => void
+  mount: (selectorOrElement: string | Element) => void
   unmount: () => void
 }
 
@@ -257,92 +251,76 @@ function resolveCheckoutLogo(store: CheckoutStoreSettings | null): string {
   return store?.checkoutLogoUrl || store?.logoUrl || '';
 }
 
-function parseHexColor(value: string | null | undefined) {
-  if (typeof value !== 'string') return null
-  const normalized = value.trim()
-  const match = /^#?([0-9a-fA-F]{6})$/.exec(normalized)
-  if (!match) return null
-  const hex = match[1]
-  return {
-    r: parseInt(hex.slice(0, 2), 16),
-    g: parseInt(hex.slice(2, 4), 16),
-    b: parseInt(hex.slice(4, 6), 16),
-  }
-}
+const CHECKOUT_BUTTON_BASE_STYLE = {
+  borderRadius: 'var(--checkout-button-radius)',
+  textTransform: 'var(--checkout-button-transform)',
+} as const;
 
-function colorDistance(left: { r: number; g: number; b: number }, right: { r: number; g: number; b: number }) {
-  return Math.abs(left.r - right.r) + Math.abs(left.g - right.g) + Math.abs(left.b - right.b)
-}
+const CHECKOUT_BUTTON_READY_STYLE = {
+  background: 'var(--checkout-button-bg)',
+  color: 'var(--checkout-button-text)',
+  border: '1px solid var(--checkout-button-border)',
+} as const;
 
-function isNearCheckoutBackground(hexColor: string | null | undefined) {
-  const color = parseHexColor(hexColor)
-  const background = parseHexColor('#080808')
-  if (!color || !background) return false
-  return colorDistance(color, background) < 80
-}
-
-function isDarkColor(hexColor: string | null | undefined) {
-  const color = parseHexColor(hexColor)
-  if (!color) return false
-  const luminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255
-  return luminance < 0.5
-}
-
-// Checkout buttons inherit Brand & Appearance tokens from the store's Brand Kit settings
-// (accentColor, primaryColor, buttonStyle, buttonTextTransform, buttonRadius). These are
-// the same fields managed in Settings -> Brand & appearance and exposed via the public
-// store settings endpoint. The checkout page is intentionally self-contained (inline CSS
-// + inline styles) so it renders correctly even when the main storefront stylesheet is
-// not loaded, but it defers all visual identity decisions to the Brand Kit values.
-// Disabled and loading states override inline styles via the .primary-btn:disabled CSS
-// rule and by omitting the primaryStyle object from the inline style prop, ensuring
-// readable contrast in dark mode regardless of the accent color.
-function resolveButtonPresentation(store: CheckoutStoreSettings | null) {
-  const style = store?.buttonStyle || 'solid';
-  const transform = store?.buttonTextTransform === 'uppercase' ? 'uppercase' : 'none';
-  const radius = (() => {
-    switch (store?.buttonRadius) {
-      case 'none':
-        return '0px';
-      case 'sm':
-        return '6px';
-      case 'md':
-        return '12px';
-      case 'lg':
-        return '18px';
-      case 'full':
-        return '9999px';
-      default:
-        return '9999px';
-    }
-  })();
-
-  const accent = store?.accentColor || store?.primaryColor || '#c9a86c';
-  const fallbackSurface = store?.secondaryColor || '#f3efe7';
-  const solidBackground = isNearCheckoutBackground(accent) ? fallbackSurface : accent;
-  const solidText = isDarkColor(solidBackground) ? '#f3efe7' : '#080808';
-
-  const primaryStyle =
-    style === 'outline'
-      ? {
-          background: 'transparent',
-          color: isNearCheckoutBackground(accent) ? '#f3efe7' : accent,
-          border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}`,
-        }
-      : style === 'soft'
-        ? {
-            background: `${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}33`,
-            color: '#f3efe7',
-            border: `1px solid ${isNearCheckoutBackground(accent) ? '#f3efe7' : accent}66`,
-          }
-        : {
-            background: solidBackground,
-            color: solidText,
-            border: 'none',
-          };
-
-  return { transform, radius, primaryStyle };
-}
+const STRIPE_BETA_APPEARANCE = {
+  theme: 'night' as const,
+  variables: {
+    colorPrimary: '#9fb4ff',
+    colorBackground: '#15171d',
+    colorText: '#f8f8fb',
+    colorTextSecondary: '#b5bcc9',
+    colorTextPlaceholder: '#949db0',
+    colorIcon: '#d3d9e6',
+    colorIconCardError: '#ef4444',
+    colorDanger: '#ef4444',
+    colorSuccess: '#34d399',
+    colorBorder: '#3b4051',
+    colorInputBackground: '#0f1117',
+    borderRadius: '16px',
+    spacingUnit: '4px',
+    fontSizeBase: '16px',
+  },
+  rules: {
+    '.Label': {
+      color: '#f2f4f8',
+      fontSize: '14px',
+      marginBottom: '6px',
+    },
+    '.Input': {
+      color: '#f8f8fb',
+      backgroundColor: '#0f1117',
+      border: '1px solid #3b4051',
+      boxShadow: 'none',
+    },
+    '.Input::placeholder': {
+      color: '#949db0',
+    },
+    '.Input:focus': {
+      border: '1px solid #9fb4ff',
+      boxShadow: '0 0 0 1px rgba(159,180,255,0.48)',
+    },
+    '.Tab': {
+      color: '#e9ecf5',
+      backgroundColor: '#111319',
+      border: '1px solid #3b4051',
+    },
+    '.Tab--selected': {
+      color: '#0f1117',
+      backgroundColor: '#dfe5f5',
+      borderColor: '#dfe5f5',
+    },
+    '.AccordionItem': {
+      backgroundColor: '#111319',
+      border: '1px solid #2f3443',
+    },
+    '.AccordionItem:hover': {
+      border: '1px solid #4c5470',
+    },
+    '.Error': {
+      color: '#fca5a5',
+    },
+  },
+} as const;
 
 export default function CheckoutClientPage({ publishableKey, store, recoveryToken }: CheckoutClientPageProps) {
   const router = useRouter();
@@ -368,15 +346,15 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
   const stripeRef = useRef<StripeClient | null>(null);
   const elementsRef = useRef<StripeElements | null>(null);
   const paymentElementRef = useRef<StripePaymentElement | null>(null);
+  const mountedClientSecretRef = useRef<string | null>(null);
   const lastRecoveredTokenRef = useRef<string | null>(null);
+  const lastCartSignatureRef = useRef('');
+  const lastAddressSignatureRef = useRef('');
+  const lastShippingSelectionRef = useRef('');
 
   const currency = checkout?.currency || store?.currency || 'USD';
   const checkoutLogo = resolveCheckoutLogo(store);
-  const buttonPresentation = resolveButtonPresentation(store);
-  const brandButtonBaseStyle = {
-    borderRadius: buttonPresentation.radius,
-    textTransform: buttonPresentation.transform,
-  };
+  const brandButtonBaseStyle = CHECKOUT_BUTTON_BASE_STYLE;
   const lineCount = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
@@ -392,6 +370,26 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
   const previewTotal = checkout?.total ?? (previewSubtotal + (selectedShippingQuote?.amount || 0));
   const shippingAddressValid = isAddressComplete(shippingAddress);
   const billingAddressValid = billingSameAsShipping || isAddressComplete(billingAddress);
+  const cartSignature = useMemo(
+    () =>
+      JSON.stringify(
+        items.map((item) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          price: item.price,
+        }))
+      ),
+    [items]
+  );
+  const addressSignature = useMemo(
+    () =>
+      JSON.stringify({
+        shippingAddress,
+        billingAddress,
+        billingSameAsShipping,
+      }),
+    [billingAddress, billingSameAsShipping, shippingAddress]
+  );
   const checkoutInitializationFailed = Boolean(error && !paymentReady);
   const reviewPaymentDisabledReason = (() => {
     if (creatingIntent) return 'Preparing secure payment form...';
@@ -472,6 +470,42 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     };
   }, [recoveryToken, replaceItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!checkout) {
+      lastCartSignatureRef.current = cartSignature;
+      return;
+    }
+
+    if (lastCartSignatureRef.current && lastCartSignatureRef.current !== cartSignature) {
+      resetPaymentStep();
+    }
+    lastCartSignatureRef.current = cartSignature;
+  }, [cartSignature, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!checkout) {
+      lastAddressSignatureRef.current = addressSignature;
+      return;
+    }
+
+    if (lastAddressSignatureRef.current && lastAddressSignatureRef.current !== addressSignature) {
+      resetPaymentStep();
+    }
+    lastAddressSignatureRef.current = addressSignature;
+  }, [addressSignature, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!checkout) {
+      lastShippingSelectionRef.current = selectedShippingQuoteId;
+      return;
+    }
+
+    if (lastShippingSelectionRef.current && lastShippingSelectionRef.current !== selectedShippingQuoteId) {
+      resetPaymentStep();
+    }
+    lastShippingSelectionRef.current = selectedShippingQuoteId;
+  }, [checkout, selectedShippingQuoteId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function resetPaymentStep() {
     if (paymentElementRef.current) {
       paymentElementRef.current.unmount();
@@ -480,6 +514,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
 
     stripeRef.current = null;
     elementsRef.current = null;
+    mountedClientSecretRef.current = null;
     setCheckout(null);
     setPaymentReady(false);
   }
@@ -590,67 +625,63 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
 
     const elements = stripe.elements({
       clientSecret,
-      appearance: {
-        theme: 'night',
-        variables: {
-          colorPrimary: store?.accentColor || store?.primaryColor || '#c9a86c',
-          colorBackground: '#111114',
-          colorText: '#f8f8f8',
-          colorTextSecondary: '#d5d5d9',
-          colorTextPlaceholder: '#9b9ba1',
-          colorIcon: '#d5d5d9',
-          colorIconCardError: '#ef4444',
-          colorDanger: '#ef4444',
-          colorSuccess: '#34d399',
-          colorBorder: '#3a3a42',
-          colorInputBackground: '#0d0d12',
-          borderRadius: '16px',
-          spacingUnit: '4px',
-          fontSizeBase: '16px',
-        },
-        rules: {
-          '.Label': {
-            color: '#f2f2f4',
-            fontSize: '14px',
-            marginBottom: '6px',
-          },
-          '.Input': {
-            color: '#f8f8f8',
-            backgroundColor: '#0d0d12',
-            border: '1px solid #40404a',
-            boxShadow: 'none',
-          },
-          '.Input::placeholder': {
-            color: '#9b9ba1',
-          },
-          '.Input:focus': {
-            border: '1px solid #e8e8ea',
-            boxShadow: '0 0 0 1px rgba(232,232,234,0.45)',
-          },
-          '.Tab': {
-            color: '#ececf0',
-            backgroundColor: '#131318',
-            border: '1px solid #3a3a42',
-          },
-          '.Tab--selected': {
-            color: '#111114',
-            backgroundColor: '#f1f1f4',
-            borderColor: '#f1f1f4',
-          },
-        },
-      },
+      appearance: STRIPE_BETA_APPEARANCE,
     });
+
+    const paymentContainer = document.getElementById('payment-element');
+    if (!paymentContainer) {
+      throw new Error('Payment form container was not available. Please try again.');
+    }
+
+    if (paymentElementRef.current) {
+      paymentElementRef.current.unmount();
+      paymentElementRef.current = null;
+    }
 
     const paymentElement = elements.create('payment', {
       layout: 'accordion',
     });
 
-    paymentElement.mount('#payment-element');
+    paymentElement.mount(paymentContainer);
     stripeRef.current = stripe;
     elementsRef.current = elements;
     paymentElementRef.current = paymentElement;
+    mountedClientSecretRef.current = clientSecret;
     setPaymentReady(true);
   }
+
+  useEffect(() => {
+    const clientSecret = checkout?.clientSecret;
+    if (typeof clientSecret !== 'string' || !clientSecret || !publishableKey) return;
+    const clientSecretToMount: string = clientSecret;
+    if (mountedClientSecretRef.current === clientSecretToMount && paymentElementRef.current) return;
+
+    let cancelled = false;
+
+    async function mountPaymentElementWhenReady() {
+      if (!document.getElementById('payment-element')) {
+        window.requestAnimationFrame(() => {
+          if (cancelled) return;
+          void mountPaymentElementWhenReady();
+        });
+        return;
+      }
+
+      try {
+        await initializePaymentElement(clientSecretToMount);
+      } catch (mountError) {
+        if (cancelled) return;
+        const message = mountError instanceof Error ? mountError.message : 'Failed to load payment form';
+        setError(message);
+      }
+    }
+
+    void mountPaymentElementWhenReady();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkout?.clientSecret, publishableKey]);
 
   async function handleCreateIntent(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -724,7 +755,6 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
               : Number((Number(quote.amountCents || 0) / 100).toFixed(2)),
         })));
       }
-      await initializePaymentElement(payload.data.clientSecret);
     } catch (checkoutError) {
       const message = checkoutError instanceof Error ? checkoutError.message : 'Failed to start checkout';
       if (message === 'Shipping rates expired. Please refresh shipping options and select a rate again.') {
@@ -792,55 +822,55 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     <>
       <style>{`
         *,*::before,*::after{box-sizing:border-box}
-        .checkout-root{min-height:100vh;background:#080808;color:#f3efe7;font-family:var(--font-body),sans-serif}
-        .checkout-nav{display:flex;align-items:center;justify-content:space-between;padding:24px 32px;border-bottom:1px solid rgba(255,255,255,0.08)}
-        .checkout-logo{color:#f3efe7;text-decoration:none;font-family:var(--font-headline),sans-serif;font-size:20px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
+        .checkout-root{min-height:100vh;background:var(--checkout-bg);color:var(--checkout-text);font-family:var(--font-body),sans-serif}
+        .checkout-nav{display:flex;align-items:center;justify-content:space-between;padding:24px 32px;border-bottom:1px solid color-mix(in srgb, var(--checkout-text) 8%, transparent)}
+        .checkout-logo{color:var(--checkout-text);text-decoration:none;font-family:var(--font-headline),sans-serif;font-size:20px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
         .checkout-shell{max-width:1280px;margin:0 auto;padding:40px 32px 80px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,0.75fr);gap:32px}
-        .checkout-card{padding:28px;border-radius:28px;border:1px solid rgba(255,255,255,0.09);background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025)),rgba(255,255,255,0.02);box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 22px 46px rgba(0,0,0,0.22)}
-        .eyebrow{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:rgba(255,255,255,0.72);margin-bottom:10px}
+        .checkout-card{padding:28px;border-radius:28px;border:1px solid var(--checkout-border);background:linear-gradient(180deg,color-mix(in srgb, var(--checkout-surface) 84%, #ffffff 16%),var(--checkout-surface));box-shadow:inset 0 1px 0 color-mix(in srgb, var(--checkout-text) 8%, transparent),0 22px 46px rgba(0,0,0,0.22)}
+        .eyebrow{font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:var(--checkout-muted);margin-bottom:10px}
         .title{font-family:var(--font-headline),sans-serif;font-size:46px;line-height:0.96;letter-spacing:-0.05em;margin:0 0 14px}
-        .lede{font-size:15px;line-height:1.7;color:rgba(255,255,255,0.78);margin:0 0 32px}
+        .lede{font-size:15px;line-height:1.7;color:var(--checkout-muted);margin:0 0 32px}
         .section{margin-top:28px}
-        .section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.72);margin-bottom:16px}
+        .section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--checkout-muted);margin-bottom:16px}
         .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
         .field{display:flex;flex-direction:column;gap:8px}
-        .field span{font-size:12px;color:rgba(255,255,255,0.56)}
-        .field input{width:100%;padding:14px 16px;border-radius:16px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#f3efe7;font:inherit}
-        .field input:focus{outline:none;border-color:rgba(255,255,255,0.22);background:rgba(255,255,255,0.06)}
+        .field span{font-size:12px;color:var(--checkout-muted)}
+        .field input{width:100%;padding:14px 16px;border-radius:16px;border:1px solid var(--checkout-input-border);background:var(--checkout-input-bg);color:var(--checkout-text);font:inherit}
+        .field input:focus{outline:none;border-color:var(--checkout-accent);box-shadow:0 0 0 1px color-mix(in srgb, var(--checkout-accent) 48%, transparent)}
         .full{grid-column:1 / -1}
-        .checkbox{display:flex;align-items:center;gap:12px;margin-top:18px;font-size:14px;color:rgba(255,255,255,0.7)}
-        .checkbox input{accent-color:var(--store-primary)}
+        .checkbox{display:flex;align-items:center;gap:12px;margin-top:18px;font-size:14px;color:var(--checkout-muted)}
+        .checkbox input{accent-color:var(--checkout-accent)}
         .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
         .primary-btn,.secondary-btn{min-height:48px;padding:0 20px;border-radius:999px;border:none;font:inherit;font-size:12px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer}
-        .primary-btn{background:var(--store-primary);color:#080808}
-        .primary-btn[data-state='ready']{box-shadow:0 0 0 1px rgba(243,239,231,0.12) inset}
-        .primary-btn[data-state='loading']{background:rgba(255,255,255,0.14)!important;color:#f3efe7!important;border:1px solid rgba(255,255,255,0.18)!important}
+        .primary-btn{background:var(--checkout-button-bg);color:var(--checkout-button-text);border:1px solid var(--checkout-button-border)}
+        .primary-btn[data-state='ready']{box-shadow:0 0 0 1px color-mix(in srgb, var(--checkout-button-bg) 12%, transparent) inset}
+        .primary-btn[data-state='loading']{background:color-mix(in srgb, var(--checkout-button-bg) 16%, transparent)!important;color:var(--checkout-text)!important;border:1px solid color-mix(in srgb, var(--checkout-button-bg) 22%, transparent)!important}
         .primary-btn[data-state='error-blocked']{background:rgba(127,29,29,0.28)!important;color:#fecaca!important;border:1px solid rgba(239,68,68,0.52)!important}
-        .secondary-btn{background:transparent;border:1px solid rgba(255,255,255,0.14);color:#f3efe7}
-        .primary-btn:disabled{background:rgba(255,255,255,0.10)!important;color:rgba(255,255,255,0.72)!important;border:1px solid rgba(255,255,255,0.22)!important;opacity:1;cursor:not-allowed}
+        .secondary-btn{background:transparent;border:1px solid color-mix(in srgb, var(--checkout-text) 16%, transparent);color:var(--checkout-text)}
+        .primary-btn:disabled{background:color-mix(in srgb, var(--checkout-button-bg) 10%, transparent)!important;color:color-mix(in srgb, var(--checkout-text) 72%, transparent)!important;border:1px solid color-mix(in srgb, var(--checkout-button-bg) 22%, transparent)!important;opacity:1;cursor:not-allowed}
         .secondary-btn:disabled{opacity:0.42;cursor:not-allowed}
         .error{margin-top:18px;padding:14px 16px;border-radius:16px;border:1px solid rgba(239,68,68,0.4);background:rgba(127,29,29,0.25);color:#fecaca;font-size:14px}
-        .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08)}
+        .payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid var(--checkout-border);background:color-mix(in srgb, var(--checkout-surface-strong) 88%, #ffffff 12%)}
         #payment-element{color-scheme:dark}
         .summary-list{display:flex;flex-direction:column;gap:18px}
         .summary-item{display:flex;gap:14px}
-        .summary-thumb{width:76px;height:76px;border-radius:18px;background:rgba(255,255,255,0.05);overflow:hidden;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.22)}
+        .summary-thumb{width:76px;height:76px;border-radius:18px;background:color-mix(in srgb, var(--checkout-text) 6%, transparent);overflow:hidden;display:flex;align-items:center;justify-content:center;color:color-mix(in srgb, var(--checkout-text) 22%, transparent)}
         .summary-thumb img{width:100%;height:100%;object-fit:cover}
         .summary-meta{flex:1;min-width:0}
-        .summary-title{font-size:15px;color:#f3efe7;margin:0 0 6px}
-        .summary-variant{font-size:12px;color:rgba(255,255,255,0.44);margin:0 0 6px}
-        .summary-qty{font-size:12px;color:rgba(255,255,255,0.72)}
-        .summary-price{font-size:14px;color:#f3efe7;white-space:nowrap}
+        .summary-title{font-size:15px;color:var(--checkout-text);margin:0 0 6px}
+        .summary-variant{font-size:12px;color:color-mix(in srgb, var(--checkout-text) 44%, transparent);margin:0 0 6px}
+        .summary-qty{font-size:12px;color:var(--checkout-muted)}
+        .summary-price{font-size:14px;color:var(--checkout-text);white-space:nowrap}
         .summary-edit-row{display:flex;align-items:center;gap:8px;margin-top:8px}
-        .summary-edit-btn{min-width:30px;height:30px;border-radius:999px;border:1px solid rgba(255,255,255,0.24);background:rgba(255,255,255,0.08);color:#f3efe7;font-size:15px;line-height:1;cursor:pointer}
+        .summary-edit-btn{min-width:30px;height:30px;border-radius:999px;border:1px solid color-mix(in srgb, var(--checkout-text) 24%, transparent);background:color-mix(in srgb, var(--checkout-text) 8%, transparent);color:var(--checkout-text);font-size:15px;line-height:1;cursor:pointer}
         .summary-edit-btn:disabled{opacity:0.45;cursor:not-allowed}
-        .summary-remove-btn{height:30px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:rgba(255,255,255,0.86);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
+        .summary-remove-btn{height:30px;padding:0 10px;border-radius:999px;border:1px solid color-mix(in srgb, var(--checkout-text) 20%, transparent);background:transparent;color:color-mix(in srgb, var(--checkout-text) 86%, transparent);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
         .summary-remove-btn:disabled{opacity:0.45;cursor:not-allowed}
-        .summary-divider{height:1px;background:rgba(255,255,255,0.08);margin:22px 0}
-        .summary-row{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:rgba(255,255,255,0.66);margin-bottom:12px}
-        .summary-row.total{font-size:18px;color:#f3efe7;font-weight:600;margin-top:12px}
+        .summary-divider{height:1px;background:color-mix(in srgb, var(--checkout-text) 8%, transparent);margin:22px 0}
+        .summary-row{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:var(--checkout-muted);margin-bottom:12px}
+        .summary-row.total{font-size:18px;color:var(--checkout-text);font-weight:600;margin-top:12px}
         .empty-state{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
-        .empty-state a{color:#f3efe7}
+        .empty-state a{color:var(--checkout-text)}
         @media (max-width:960px){.checkout-shell{grid-template-columns:1fr}.checkout-card.summary{order:-1}}
         @media (max-width:640px){.checkout-shell{padding:28px 18px 64px}.checkout-nav{padding:20px 18px}.grid{grid-template-columns:1fr}.title{font-size:36px}}
       `}</style>
@@ -1122,7 +1152,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                       style={
                         reviewButtonState !== 'ready'
                           ? brandButtonBaseStyle
-                          : { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }
+                          : { ...brandButtonBaseStyle, ...CHECKOUT_BUTTON_READY_STYLE }
                       }
                       type="submit"
                     >
@@ -1137,7 +1167,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                         style={
                           confirmingPayment
                             ? brandButtonBaseStyle
-                            : { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }
+                            : { ...brandButtonBaseStyle, ...CHECKOUT_BUTTON_READY_STYLE }
                         }
                         type="submit"
                       >

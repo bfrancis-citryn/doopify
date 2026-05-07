@@ -162,6 +162,44 @@ describe('settings.service brand kit', () => {
     expect(mocks.prisma.store.update).not.toHaveBeenCalled()
   })
 
+  it('saving brand assets does not clear hidden storefront theme fields', async () => {
+    mocks.prisma.store.findFirst.mockResolvedValue(storeFixture())
+    mocks.prisma.store.update.mockResolvedValue(
+      storeFixture({
+        name: 'Beta Store',
+        supportEmail: 'help@example.com',
+        logoUrl: 'https://cdn.example.com/new-logo.png',
+        faviconUrl: 'https://cdn.example.com/new-favicon.png',
+      })
+    )
+
+    await updateBrandKit({
+      name: 'Beta Store',
+      supportEmail: 'help@example.com',
+      logoUrl: 'https://cdn.example.com/new-logo.png',
+      faviconUrl: 'https://cdn.example.com/new-favicon.png',
+    })
+
+    const updateCall = mocks.prisma.store.update.mock.calls[0]?.[0]
+    expect(updateCall.data).toEqual(
+      expect.objectContaining({
+        name: 'Beta Store',
+        supportEmail: 'help@example.com',
+        logoUrl: 'https://cdn.example.com/new-logo.png',
+        faviconUrl: 'https://cdn.example.com/new-favicon.png',
+      })
+    )
+    expect(updateCall.data).not.toHaveProperty('primaryColor')
+    expect(updateCall.data).not.toHaveProperty('secondaryColor')
+    expect(updateCall.data).not.toHaveProperty('accentColor')
+    expect(updateCall.data).not.toHaveProperty('textColor')
+    expect(updateCall.data).not.toHaveProperty('headingFont')
+    expect(updateCall.data).not.toHaveProperty('bodyFont')
+    expect(updateCall.data).not.toHaveProperty('buttonRadius')
+    expect(updateCall.data).not.toHaveProperty('buttonStyle')
+    expect(updateCall.data).not.toHaveProperty('buttonTextTransform')
+  })
+
   it('public storefront payload includes safe brand fields only', async () => {
     mocks.prisma.store.findFirst.mockResolvedValue(
       storeFixture({

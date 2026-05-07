@@ -62,7 +62,7 @@ describe('checkout button copy and state', () => {
     // When disabled, only brandButtonBaseStyle is applied (no primaryStyle that carries color: #080808)
     expect(source).toContain("reviewButtonState !== 'ready'")
     expect(source).toContain('? brandButtonBaseStyle')
-    expect(source).toContain(': { ...brandButtonBaseStyle, ...buttonPresentation.primaryStyle }')
+    expect(source).toContain(': { ...brandButtonBaseStyle, ...CHECKOUT_BUTTON_READY_STYLE }')
     // primaryStyle must NOT be spread unconditionally onto a button that can be disabled
     const lines = source.split('\n')
     const primaryBtnLines = lines.filter(
@@ -74,8 +74,8 @@ describe('checkout button copy and state', () => {
   it('uses !important on disabled CSS to guard against accent-color inline style leakage', () => {
     const source = read(PAGE)
     expect(source).toContain('.primary-btn:disabled{')
-    expect(source).toContain('color:rgba(255,255,255,0.72)!important')
-    expect(source).toContain('background:rgba(255,255,255,0.10)!important')
+    expect(source).toContain('color:color-mix(in srgb, var(--checkout-text) 72%, transparent)!important')
+    expect(source).toContain('background:color-mix(in srgb, var(--checkout-button-bg) 10%, transparent)!important')
   })
 
   it('defines explicit primary button states for ready, disabled, loading, and error-blocked', () => {
@@ -94,17 +94,27 @@ describe('checkout button copy and state', () => {
     expect(source).toContain('Checkout initialization failed. Fix the error above and try again.')
   })
 
-  it('reads accent color from Brand Kit (accentColor, primaryColor) with a safe fallback', () => {
+  it('keeps checkout button styling frontend-owned and independent of Brand Kit theme fields', () => {
     const source = read(PAGE)
-    // resolveButtonPresentation reads Brand & Appearance tokens from the store
-    expect(source).toContain("store?.accentColor || store?.primaryColor || '#c9a86c'")
+    expect(source).toContain('CHECKOUT_BUTTON_READY_STYLE')
+    expect(source).toContain("background: 'var(--checkout-button-bg)'")
+    expect(source).toContain("color: 'var(--checkout-button-text)'")
+    expect(source).not.toContain('accentColor')
+    expect(source).not.toContain('primaryColor')
+    expect(source).not.toContain('buttonStyle')
+    expect(source).not.toContain('buttonTextTransform')
+    expect(source).not.toContain('buttonRadius')
   })
 
-  it('documents the Brand & Appearance token relationship in a comment', () => {
+  it('locks Stripe Payment Element appearance to beta-safe readable values', () => {
     const source = read(PAGE)
-    expect(source).toContain('Brand & Appearance tokens')
-    expect(source).toContain('Brand Kit settings')
-    expect(source).toContain('accentColor')
+    expect(source).toContain('STRIPE_BETA_APPEARANCE')
+    expect(source).toContain("colorPrimary: '#9fb4ff'")
+    expect(source).toContain("colorText: '#f8f8fb'")
+    expect(source).toContain("colorTextSecondary: '#b5bcc9'")
+    expect(source).toContain("colorTextPlaceholder: '#949db0'")
+    expect(source).toContain("colorInputBackground: '#0f1117'")
+    expect(source).toContain("'.Tab--selected'")
   })
 
   it('uses "Loading shipping options..." during the shipping rate fetch', () => {
@@ -114,11 +124,11 @@ describe('checkout button copy and state', () => {
 
   it('keeps payment section labels and card form colors readable on dark backgrounds', () => {
     const source = read(PAGE)
-    expect(source).toContain("colorTextSecondary: '#d5d5d9'")
+    expect(source).toContain("colorTextSecondary: '#b5bcc9'")
     expect(source).toContain("'.Label'")
-    expect(source).toContain("color: '#f2f2f4'")
-    expect(source).toContain(".section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.72);margin-bottom:16px}")
-    expect(source).toContain(".payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08)}")
+    expect(source).toContain("color: '#f2f4f8'")
+    expect(source).toContain('.section-title{font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:var(--checkout-muted);margin-bottom:16px}')
+    expect(source).toContain('.payment-shell{margin-top:24px;padding:20px;border-radius:22px;border:1px solid var(--checkout-border);background:color-mix(in srgb, var(--checkout-surface-strong) 88%, #ffffff 12%)}')
   })
 
   it('lets customers edit cart quantities directly from checkout summary', () => {
@@ -137,5 +147,28 @@ describe('checkout button copy and state', () => {
     expect(source).not.toContain('createOrder')
     expect(source).not.toContain('/api/orders')
     expect(source).toContain("router.push(`/checkout/success")
+  })
+
+  it('creates checkout state first and mounts payment element in a follow-up effect', () => {
+    const source = read(PAGE)
+    expect(source).toContain('setCheckout(payload.data)')
+    expect(source).not.toContain('initializePaymentElement(payload.data.clientSecret)')
+    expect(source).toContain('useEffect(() => {')
+    expect(source).toContain("const clientSecret = checkout?.clientSecret")
+    expect(source).toContain("if (!document.getElementById('payment-element'))")
+  })
+
+  it('guards against duplicate payment-element mounts for the same client secret', () => {
+    const source = read(PAGE)
+    expect(source).toContain('mountedClientSecretRef')
+    expect(source).toContain('if (mountedClientSecretRef.current === clientSecretToMount && paymentElementRef.current) return')
+  })
+
+  it('unmounts stale payment element state when checkout is reset', () => {
+    const source = read(PAGE)
+    expect(source).toContain('paymentElementRef.current.unmount()')
+    expect(source).toContain('mountedClientSecretRef.current = null')
+    expect(source).toContain('setCheckout(null)')
+    expect(source).toContain('setPaymentReady(false)')
   })
 })

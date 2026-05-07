@@ -81,6 +81,7 @@ The repo currently includes:
 - Phase 4 background runner observability expansion with durable `JobRunnerHeartbeat` tracking (runner name, last start/success/failure, duration/error summary), admin-safe status API (`GET /api/jobs/runner-status`), and delivery-logs runner visibility compatible with Vercel Cron or external schedulers calling `POST /api/jobs/run`
 - Phase 4 abandoned checkout recovery foundation with persisted recovery metadata, admin review/send controls, safe tokenized recovery payload API, and secret-protected due-send processing
 - Brand Kit foundation with Store-backed branding fields, admin Brand Kit screen/API, safe public brand payloads, and branded checkout/email defaults
+- Private beta brand lock: storefront/checkout theme controls are hidden in admin, while logos/support identity fields remain editable and checkout visual tokens are frontend-owned for consistent readability
 - GitHub Actions CI workflow for push/PR verification plus optional integration workflow gated by `DATABASE_URL_TEST` secret
 - production runbook docs for deployment checklist, environment variables, webhooks/provider setup, backup/restore, and admin recovery
 - Vitest fast test harness plus `DATABASE_URL_TEST`-gated real-DB integration specs
