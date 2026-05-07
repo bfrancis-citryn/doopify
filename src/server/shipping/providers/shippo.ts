@@ -175,6 +175,7 @@ export const shippoProviderAdapter: ShippingProviderAdapter = {
           amountCents,
           currency: String(item.currency ?? input.currency ?? 'USD').toUpperCase(),
           estimatedDays,
+          providerShipmentId: typeof payload?.object_id === 'string' ? payload.object_id : undefined,
           providerRateId,
           metadata: {
             shipmentId: payload?.object_id,

@@ -9,6 +9,13 @@ import {
   type CheckoutPricingShippingDecision,
   type CheckoutPricingTaxDecision,
 } from '@/server/checkout/pricing'
+import {
+  buildCheckoutAddressFingerprint,
+  buildCheckoutCartFingerprint,
+  getStoredCheckoutShippingQuote,
+  isCheckoutShippingQuoteId,
+  storeCheckoutShippingQuote,
+} from '@/server/checkout/shipping-quote-cache'
 import { emitInternalEvent } from '@/server/events/dispatcher'
 import { getStripeRuntimeConnection } from '@/server/payments/stripe-runtime.service'
 import {
@@ -75,6 +82,7 @@ type CheckoutPayload = {
     currency: string
     estimatedDays?: number
     estimatedDeliveryText?: string
+    providerShipmentId?: string
     providerRateId?: string
   }
 }
@@ -157,7 +165,72 @@ function mapShippingQuoteForSnapshot(quote: ShippingRateQuote) {
     currency: quote.currency,
     estimatedDays: quote.estimatedDays,
     estimatedDeliveryText: quote.estimatedDeliveryText,
+    providerShipmentId: quote.providerShipmentId,
     providerRateId: quote.providerRateId,
+  }
+}
+
+function isProviderBackedQuote(quote: ShippingRateQuote) {
+  return quote.source === 'EASYPOST' || quote.source === 'SHIPPO'
+}
+
+const SHIPPING_RATES_EXPIRED_MESSAGE =
+  'Shipping rates expired. Please refresh shipping options and select a rate again.'
+
+function normalizeShippingQuoteForSelection(input: {
+  quote: ShippingRateQuote
+  cartFingerprint: string
+  addressFingerprint: string
+}) {
+  if (!isProviderBackedQuote(input.quote)) {
+    return {
+      ...input.quote,
+      selectedShippingQuoteId: input.quote.id,
+    }
+  }
+
+  const storedQuote = storeCheckoutShippingQuote({
+    quote: input.quote,
+    cartFingerprint: input.cartFingerprint,
+    addressFingerprint: input.addressFingerprint,
+  })
+
+  return {
+    ...input.quote,
+    id: storedQuote.quoteId,
+    selectedShippingQuoteId: storedQuote.quoteId,
+  }
+}
+
+function mapStoredQuoteToShippingRateQuote(input: {
+  quoteId: string
+  source: ShippingRateQuote['source']
+  originalQuoteId: string
+  amountCents: number
+  currency: string
+  carrier?: string
+  service?: string
+  providerRateId?: string
+  providerShipmentId?: string
+  estimatedDeliveryText?: string
+}): ShippingRateQuote {
+  const displayNameParts = [input.carrier, input.service].filter(Boolean)
+  const providerLabel = input.source === 'SHIPPO' ? 'Shippo' : 'EasyPost'
+  return {
+    id: input.quoteId,
+    source: input.source,
+    rateType: 'LIVE_RATE',
+    carrier: input.carrier,
+    service: input.service,
+    displayName: displayNameParts.length ? displayNameParts.join(' - ') : `${providerLabel} rate`,
+    amountCents: input.amountCents,
+    currency: input.currency,
+    estimatedDeliveryText: input.estimatedDeliveryText,
+    providerRateId: input.providerRateId,
+    providerShipmentId: input.providerShipmentId,
+    metadata: {
+      originalQuoteId: input.originalQuoteId,
+    },
   }
 }
 
@@ -223,11 +296,70 @@ function subtotalFromLineItems(lineItems: Array<{ priceCents: number; quantity: 
 }
 
 async function resolveSelectedShippingQuote(input: {
+  shippingMode?: string | null
   storeId?: string
-  lineItems: Array<{ priceCents: number; weightOz?: number; quantity: number }>
+  lineItems: Array<{ variantId: string; priceCents: number; weightOz?: number; quantity: number }>
   shippingAddress: CheckoutAddress
   selectedShippingQuoteId?: string
 }) {
+  const requiresSelection = input.shippingMode === 'LIVE_RATES' || input.shippingMode === 'HYBRID'
+  if (requiresSelection && !input.selectedShippingQuoteId?.trim()) {
+    throw new Error('Select a shipping option before continuing to payment.')
+  }
+
+  const selectedShippingQuoteId = input.selectedShippingQuoteId?.trim()
+  const cartFingerprint = buildCheckoutCartFingerprint(
+    input.lineItems.map((item) => ({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      priceCents: item.priceCents,
+    }))
+  )
+  const addressFingerprint = buildCheckoutAddressFingerprint(input.shippingAddress)
+
+  if (selectedShippingQuoteId) {
+    const storedQuote = getStoredCheckoutShippingQuote(selectedShippingQuoteId)
+    if (storedQuote) {
+      if (
+        storedQuote.cartFingerprint !== cartFingerprint ||
+        storedQuote.addressFingerprint !== addressFingerprint
+      ) {
+        throw new Error(SHIPPING_RATES_EXPIRED_MESSAGE)
+      }
+
+      if (storedQuote.provider) {
+        if (
+          !storedQuote.providerRateId ||
+          !Number.isInteger(storedQuote.amountCents) ||
+          storedQuote.amountCents < 0 ||
+          !storedQuote.currency
+        ) {
+          throw new Error(SHIPPING_RATES_EXPIRED_MESSAGE)
+        }
+
+        const selectedQuote = mapStoredQuoteToShippingRateQuote({
+          quoteId: storedQuote.quoteId,
+          originalQuoteId: storedQuote.originalQuoteId,
+          source: storedQuote.source,
+          amountCents: storedQuote.amountCents,
+          currency: storedQuote.currency,
+          carrier: storedQuote.carrier,
+          service: storedQuote.service,
+          providerRateId: storedQuote.providerRateId,
+          providerShipmentId: storedQuote.providerShipmentId,
+          estimatedDeliveryText: storedQuote.estimatedDeliveryText,
+        })
+
+        return {
+          selectedQuote,
+          quotes: [selectedQuote],
+        }
+      }
+    } else if (isCheckoutShippingQuoteId(selectedShippingQuoteId)) {
+      throw new Error(SHIPPING_RATES_EXPIRED_MESSAGE)
+    }
+  }
+
   const totalWeightOz = totalCartWeightOz(input.lineItems)
 
   const quotes = await getShippingRatesForCheckout({
@@ -241,8 +373,8 @@ async function resolveSelectedShippingQuote(input: {
     throw new Error('No shipping rates are available for this checkout')
   }
 
-  const selectedQuote = input.selectedShippingQuoteId
-    ? quotes.find((quote) => quote.id === input.selectedShippingQuoteId)
+  const selectedQuote = selectedShippingQuoteId
+    ? quotes.find((quote) => quote.id === selectedShippingQuoteId)
     : quotes[0]
 
   if (!selectedQuote) {
@@ -330,6 +462,7 @@ export async function createCheckoutPaymentIntent(input: {
   const discount = await resolveDiscountCode(input.discountCode)
   const currency = (store?.currency || 'USD').toUpperCase()
   const shippingResolution = await resolveSelectedShippingQuote({
+    shippingMode: store?.shippingMode,
     storeId: store?.id,
     lineItems,
     shippingAddress,
@@ -542,6 +675,14 @@ export async function getCheckoutShippingRates(input: {
   const store = await getStoreSettings()
   const lineItems = await resolveLineItems(input.items)
   const shippingAddress = normalizeAddress(input.shippingAddress)
+  const cartFingerprint = buildCheckoutCartFingerprint(
+    lineItems.map((item) => ({
+      variantId: item.variantId,
+      quantity: item.quantity,
+      priceCents: item.priceCents,
+    }))
+  )
+  const addressFingerprint = buildCheckoutAddressFingerprint(shippingAddress)
   const totalWeightOz = lineItems.reduce(
     (sum, item) => sum + Number((item as { weightOz?: number }).weightOz || 0) * Number(item.quantity || 0),
     0
@@ -556,10 +697,19 @@ export async function getCheckoutShippingRates(input: {
 
   return {
     currency: (store?.currency || 'USD').toUpperCase(),
-    quotes: quotes.map((quote) => ({
-      ...mapShippingQuoteForSnapshot(quote),
-      amount: centsToDollars(quote.amountCents),
-    })),
+    quotes: quotes.map((quote) => {
+      const normalizedQuote = normalizeShippingQuoteForSelection({
+        quote,
+        cartFingerprint,
+        addressFingerprint,
+      })
+
+      return {
+        ...mapShippingQuoteForSnapshot(normalizedQuote),
+        selectedShippingQuoteId: normalizedQuote.selectedShippingQuoteId,
+        amount: centsToDollars(normalizedQuote.amountCents),
+      }
+    }),
   }
 }
 

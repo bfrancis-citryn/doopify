@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -46,6 +46,7 @@ type CartItem = {
 
 type ShippingQuote = {
   id: string
+  selectedShippingQuoteId?: string
   displayName: string
   source?: string
   carrier?: string
@@ -381,7 +382,9 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     [items]
   );
   const selectedShippingQuote = useMemo(
-    () => shippingQuotes.find((quote) => quote.id === selectedShippingQuoteId) || null,
+    () =>
+      shippingQuotes.find((quote) => (quote.selectedShippingQuoteId || quote.id) === selectedShippingQuoteId) ||
+      null,
     [shippingQuotes, selectedShippingQuoteId]
   );
   const previewSubtotal = checkout?.subtotal ?? cartSubtotal;
@@ -560,10 +563,10 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
 
       setShippingQuotes(quotes);
       setSelectedShippingQuoteId((current) => {
-        if (current && quotes.some((quote) => quote.id === current)) {
+        if (current && quotes.some((quote) => (quote.selectedShippingQuoteId || quote.id) === current)) {
           return current;
         }
-        return quotes[0].id;
+        return quotes[0].selectedShippingQuoteId || quotes[0].id;
       });
     } catch (shippingError) {
       resetShippingSelection();
@@ -714,6 +717,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       if (Array.isArray(payload.data?.availableShippingRates) && payload.data.availableShippingRates.length) {
         setShippingQuotes(payload.data.availableShippingRates.map((quote) => ({
           ...quote,
+          selectedShippingQuoteId: quote.selectedShippingQuoteId || quote.id,
           amount:
             typeof quote.amount === 'number'
               ? quote.amount
@@ -723,6 +727,12 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       await initializePaymentElement(payload.data.clientSecret);
     } catch (checkoutError) {
       const message = checkoutError instanceof Error ? checkoutError.message : 'Failed to start checkout';
+      if (message === 'Shipping rates expired. Please refresh shipping options and select a rate again.') {
+        setShippingRatesError(message);
+        setSelectedShippingQuoteId('');
+        setError('');
+        return;
+      }
       if (message.toLowerCase().includes('discount')) {
         setDiscountError(message);
       } else {
@@ -968,42 +978,45 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
                     ) : null}
                     {shippingQuotes.length ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {shippingQuotes.map((quote) => (
-                          <label
-                            key={quote.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 10,
-                              border: quote.id === selectedShippingQuoteId ? '1px solid rgba(110,231,183,0.75)' : '1px solid rgba(255,255,255,0.12)',
-                              borderRadius: 14,
-                              padding: '10px 12px',
-                              background: quote.id === selectedShippingQuoteId ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.02)',
-                            }}
-                          >
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <input
-                                checked={quote.id === selectedShippingQuoteId}
-                                name="shipping-rate"
-                                onChange={() => {
-                                  if (checkout) resetPaymentStep();
-                                  setSelectedShippingQuoteId(quote.id);
-                                }}
-                                type="radio"
-                                value={quote.id}
-                              />
-                              <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                <span style={{ fontSize: 14, color: '#f3efe7' }}>{quote.displayName}</span>
-                                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                                  {quote.carrier || quote.source}{quote.service ? ` • ${quote.service}` : ''}
-                                  {Number.isFinite(quote.estimatedDays) ? ` • ${quote.estimatedDays} day${quote.estimatedDays === 1 ? '' : 's'}` : ''}
+                        {shippingQuotes.map((quote) => {
+                          const quoteSelectionId = quote.selectedShippingQuoteId || quote.id;
+                          return (
+                            <label
+                              key={quote.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                border: quoteSelectionId === selectedShippingQuoteId ? '1px solid rgba(110,231,183,0.75)' : '1px solid rgba(255,255,255,0.12)',
+                                borderRadius: 14,
+                                padding: '10px 12px',
+                                background: quoteSelectionId === selectedShippingQuoteId ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.02)',
+                              }}
+                            >
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <input
+                                  checked={quoteSelectionId === selectedShippingQuoteId}
+                                  name="shipping-rate"
+                                  onChange={() => {
+                                    if (checkout) resetPaymentStep();
+                                    setSelectedShippingQuoteId(quoteSelectionId);
+                                  }}
+                                  type="radio"
+                                  value={quoteSelectionId}
+                                />
+                                <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  <span style={{ fontSize: 14, color: '#f3efe7' }}>{quote.displayName}</span>
+                                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                                    {quote.carrier || quote.source}{quote.service ? ` - ${quote.service}` : ''}
+                                    {Number.isFinite(quote.estimatedDays) ? ` - ${quote.estimatedDays} day${quote.estimatedDays === 1 ? '' : 's'}` : ''}
+                                  </span>
                                 </span>
                               </span>
-                            </span>
-                            <strong style={{ fontSize: 14, color: '#f3efe7' }}>{formatMoney(quote.amount, quote.currency || currency)}</strong>
-                          </label>
-                        ))}
+                              <strong style={{ fontSize: 14, color: '#f3efe7' }}>{formatMoney(quote.amount, quote.currency || currency)}</strong>
+                            </label>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.52)' }}>
@@ -1261,3 +1274,5 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
     </>
   );
 }
+
+

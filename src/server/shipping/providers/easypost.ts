@@ -150,6 +150,7 @@ export const easypostProviderAdapter: ShippingProviderAdapter = {
           amountCents,
           currency: String(item.currency ?? input.currency ?? 'USD').toUpperCase(),
           estimatedDays,
+          providerShipmentId: typeof payload?.id === 'string' ? payload.id : undefined,
           providerRateId,
           metadata: {
             shipmentId: payload?.id,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearCheckoutShippingQuoteCache } from '@/server/checkout/shipping-quote-cache'
 
 const mocks = vi.hoisted(() => ({
   prisma: {
@@ -71,6 +72,7 @@ vi.mock('@/server/payments/stripe-runtime.service', () => ({
 import {
   completeCheckoutFromPaymentIntent,
   createCheckoutPaymentIntent,
+  getCheckoutShippingRates,
   getCheckoutStatus,
   markCheckoutSessionFailed,
 } from './checkout.service'
@@ -87,6 +89,7 @@ const address = {
 describe('checkout service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearCheckoutShippingQuoteCache()
     mocks.getStoreSettings.mockResolvedValue({
       currency: 'USD',
       shippingThresholdCents: 7500,
@@ -864,6 +867,295 @@ describe('checkout service', () => {
       selectedShippingRate: {
         id: 'manual:premium',
         amountCents: 3000,
+      },
+    })
+  })
+
+  it('returns stable quote selection ids for live rates and accepts them during checkout creation', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThresholdCents: 7500,
+      shippingMode: 'LIVE_RATES',
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValueOnce([
+      {
+        id: 'shippo_rate_original',
+        source: 'SHIPPO',
+        carrier: 'USPS',
+        service: 'Priority',
+        displayName: 'USPS Priority',
+        amountCents: 1900,
+        currency: 'USD',
+        providerRateId: 'shippo_rate_original',
+        providerShipmentId: 'shippo_shipment_1',
+      },
+    ])
+    mocks.createStripePaymentIntent.mockResolvedValue({
+      id: 'pi_live_quote',
+      client_secret: 'secret_live_quote',
+      amount: 6900,
+      currency: 'usd',
+      status: 'requires_payment_method',
+    })
+    mocks.prisma.checkoutSession.create.mockResolvedValue({
+      id: 'checkout_live_quote',
+    })
+
+    const shippingRates = await getCheckoutShippingRates({
+      items: [{ variantId: 'variant_1', quantity: 2 }],
+      shippingAddress: address,
+    })
+    const selectedShippingQuoteId = shippingRates.quotes[0]?.selectedShippingQuoteId
+
+    expect(selectedShippingQuoteId).toMatch(/^shipping-quote_/)
+
+    const checkout = await createCheckoutPaymentIntent({
+      email: 'ada@example.com',
+      items: [{ variantId: 'variant_1', quantity: 2 }],
+      shippingAddress: address,
+      selectedShippingQuoteId,
+    })
+
+    expect(mocks.getShippingRatesForCheckout).toHaveBeenCalledTimes(1)
+    expect(mocks.createStripePaymentIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 6900,
+      })
+    )
+    expect(checkout.selectedShippingRate).toMatchObject({
+      id: selectedShippingQuoteId,
+      providerRateId: 'shippo_rate_original',
+      providerShipmentId: 'shippo_shipment_1',
+      amountCents: 1900,
+    })
+  })
+
+  it('rejects checkout create when a live quote selection id is expired or missing', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThresholdCents: 7500,
+      shippingMode: 'LIVE_RATES',
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValueOnce([
+      {
+        id: 'easypost_rate_original',
+        source: 'EASYPOST',
+        carrier: 'UPS',
+        service: 'Ground',
+        displayName: 'UPS Ground',
+        amountCents: 1100,
+        currency: 'USD',
+        providerRateId: 'easypost_rate_original',
+        providerShipmentId: 'easypost_shipment_1',
+      },
+    ])
+
+    const shippingRates = await getCheckoutShippingRates({
+      items: [{ variantId: 'variant_1', quantity: 1 }],
+      shippingAddress: address,
+    })
+    const selectedShippingQuoteId = shippingRates.quotes[0]?.selectedShippingQuoteId
+
+    clearCheckoutShippingQuoteCache()
+
+    await expect(
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: 'variant_1', quantity: 1 }],
+        shippingAddress: address,
+        selectedShippingQuoteId,
+      })
+    ).rejects.toThrow('Shipping rates expired. Please refresh shipping options and select a rate again.')
+
+    expect(mocks.createStripePaymentIntent).not.toHaveBeenCalled()
+  })
+
+  it('rejects checkout create when quote cart fingerprint no longer matches', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThresholdCents: 7500,
+      shippingMode: 'LIVE_RATES',
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 6,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValueOnce([
+      {
+        id: 'shippo_rate_cart',
+        source: 'SHIPPO',
+        displayName: 'Shippo Rate',
+        amountCents: 1200,
+        currency: 'USD',
+        providerRateId: 'shippo_rate_cart',
+        providerShipmentId: 'shippo_shipment_cart',
+      },
+    ])
+
+    const shippingRates = await getCheckoutShippingRates({
+      items: [{ variantId: 'variant_1', quantity: 1 }],
+      shippingAddress: address,
+    })
+    const selectedShippingQuoteId = shippingRates.quotes[0]?.selectedShippingQuoteId
+
+    await expect(
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: 'variant_1', quantity: 2 }],
+        shippingAddress: address,
+        selectedShippingQuoteId,
+      })
+    ).rejects.toThrow('Shipping rates expired. Please refresh shipping options and select a rate again.')
+
+    expect(mocks.createStripePaymentIntent).not.toHaveBeenCalled()
+  })
+
+  it('rejects checkout create when quote destination fingerprint no longer matches', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThresholdCents: 7500,
+      shippingMode: 'LIVE_RATES',
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 6,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValueOnce([
+      {
+        id: 'shippo_rate_address',
+        source: 'SHIPPO',
+        displayName: 'Shippo Rate',
+        amountCents: 1200,
+        currency: 'USD',
+        providerRateId: 'shippo_rate_address',
+        providerShipmentId: 'shippo_shipment_address',
+      },
+    ])
+
+    const shippingRates = await getCheckoutShippingRates({
+      items: [{ variantId: 'variant_1', quantity: 1 }],
+      shippingAddress: address,
+    })
+    const selectedShippingQuoteId = shippingRates.quotes[0]?.selectedShippingQuoteId
+
+    await expect(
+      createCheckoutPaymentIntent({
+        email: 'ada@example.com',
+        items: [{ variantId: 'variant_1', quantity: 1 }],
+        shippingAddress: {
+          ...address,
+          postalCode: '90210',
+        },
+        selectedShippingQuoteId,
+      })
+    ).rejects.toThrow('Shipping rates expired. Please refresh shipping options and select a rate again.')
+
+    expect(mocks.createStripePaymentIntent).not.toHaveBeenCalled()
+  })
+
+  it('keeps manual fallback selection behavior in HYBRID mode', async () => {
+    mocks.getStoreSettings.mockResolvedValue({
+      currency: 'USD',
+      shippingThresholdCents: 7500,
+      shippingMode: 'HYBRID',
+    })
+    mocks.prisma.productVariant.findMany.mockResolvedValue([
+      {
+        id: 'variant_1',
+        productId: 'product_1',
+        title: 'Default',
+        sku: 'SKU-1',
+        price: 25,
+        inventory: 3,
+        product: {
+          id: 'product_1',
+          title: 'Test Shirt',
+        },
+      },
+    ])
+    mocks.getShippingRatesForCheckout.mockResolvedValueOnce([
+      {
+        id: 'fallback:manual-hybrid',
+        source: 'MANUAL',
+        rateType: 'FALLBACK',
+        displayName: 'Manual fallback',
+        amountCents: 1600,
+        currency: 'USD',
+      },
+    ])
+    mocks.createStripePaymentIntent.mockResolvedValue({
+      id: 'pi_hybrid_manual',
+      client_secret: 'secret_hybrid_manual',
+      amount: 6600,
+      currency: 'usd',
+      status: 'requires_payment_method',
+    })
+    mocks.prisma.checkoutSession.create.mockResolvedValue({
+      id: 'checkout_hybrid_manual',
+    })
+
+    const checkout = await createCheckoutPaymentIntent({
+      email: 'ada@example.com',
+      items: [{ variantId: 'variant_1', quantity: 2 }],
+      shippingAddress: address,
+      selectedShippingQuoteId: 'fallback:manual-hybrid',
+    })
+
+    expect(mocks.getShippingRatesForCheckout).toHaveBeenCalledTimes(1)
+    expect(checkout).toMatchObject({
+      shippingAmountCents: 1600,
+      totalCents: 6600,
+      selectedShippingRate: {
+        id: 'fallback:manual-hybrid',
+        source: 'MANUAL',
       },
     })
   })

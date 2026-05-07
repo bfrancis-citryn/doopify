@@ -9,6 +9,7 @@ export type ShippingRateQuote = {
   currency: string
   estimatedDays?: number
   estimatedDeliveryText?: string
+  providerShipmentId?: string
   providerRateId?: string
   metadata?: Record<string, unknown>
 }
