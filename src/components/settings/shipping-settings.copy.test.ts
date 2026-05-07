@@ -131,4 +131,32 @@ describe('shipping settings UX copy and validation', () => {
     expect(source).toContain('verify it by loading live checkout')
     expect(source).toContain('rates or purchasing a test label.')
   })
+
+  it('shows requested helper copy for Manual, Live carrier rates, and Hybrid mode cards', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('Customers see your fixed manual rates at checkout.')
+    expect(source).toContain('Customers see real-time rates from your selected provider.')
+    expect(source).toContain('Doopify tries live rates first, then falls back to manual rates if allowed.')
+  })
+
+  it('marks checkout method as dirty when mode or fallback behavior changes', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('setModeSaveState("dirty")')
+    expect(source).toContain('setFallbackBehavior(value)')
+  })
+
+  it('registers shipping mode save callbacks for parent save-state/header actions', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('onModeSaveStateChange')
+    expect(source).toContain('onRegisterSaveAction')
+    expect(source).toContain('onRegisterSaveAction(() => saveCheckoutMethod())')
+    expect(source).toContain('onModeSaveStateChange(modeSaveState')
+  })
+
+  it('uses explicit save-state transitions for checkout method save success and failure', () => {
+    const source = read(WORKSPACE)
+    expect(source).toContain('setModeSaveState("saving")')
+    expect(source).toContain('setModeSaveState("saved_just_now")')
+    expect(source).toContain('setModeSaveState("error")')
+  })
 })

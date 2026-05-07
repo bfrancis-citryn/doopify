@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '../AppShell';
 import { useSettings } from '../../context/SettingsContext';
@@ -814,6 +814,9 @@ export default function SettingsWorkspace() {
   const [setupCopiedCommandId, setSetupCopiedCommandId] = useState('');
   const [savedState, setSavedState] = useState('saved');
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
+  const [shippingModeSavedState, setShippingModeSavedState] = useState('saved');
+  const [shippingModeSaveError, setShippingModeSaveError] = useState('');
+  const [shippingModeLastSavedAt, setShippingModeLastSavedAt] = useState(Date.now());
   const [saveClock, setSaveClock] = useState(Date.now());
   const [brandKit, setBrandKit] = useState(() => normalizeBrandKit(null));
   const [brandKitLoading, setBrandKitLoading] = useState(false);
@@ -827,6 +830,7 @@ export default function SettingsWorkspace() {
   const faviconUploadRef = useRef(null);
   const emailLogoUploadRef = useRef(null);
   const checkoutLogoUploadRef = useRef(null);
+  const shippingModeSaveActionRef = useRef(null);
 
   const activeTitle = useMemo(
     () => SETTINGS_SECTIONS.find((section) => section.id === activeSection)?.label || 'Settings',
@@ -1571,6 +1575,24 @@ export default function SettingsWorkspace() {
     return `${elapsedMinutes}m ago`;
   }, [lastSavedAt, saveClock]);
 
+  const shippingModeSavedAgoText = useMemo(() => {
+    const elapsedSeconds = Math.max(1, Math.round((saveClock - shippingModeLastSavedAt) / 1000));
+    if (elapsedSeconds < 60) {
+      return `${elapsedSeconds}s ago`;
+    }
+
+    const elapsedMinutes = Math.round(elapsedSeconds / 60);
+    return `${elapsedMinutes}m ago`;
+  }, [shippingModeLastSavedAt, saveClock]);
+
+  useEffect(() => {
+    if (shippingModeSavedState !== 'saved_just_now') return;
+    const timer = window.setTimeout(() => {
+      setShippingModeSavedState((current) => (current === 'saved_just_now' ? 'saved' : current));
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [shippingModeSavedState]);
+
   async function handleSettingsPatch(patch) {
     setSavedState('saving');
 
@@ -2107,6 +2129,45 @@ export default function SettingsWorkspace() {
     await handleCopyCommand('stripe-webhook-endpoint', endpoint);
   }
 
+  const handleShippingModeSaveStateChange = useCallback((state, context = {}) => {
+    setShippingModeSavedState(state || 'saved');
+    setShippingModeSaveError(context?.errorCopy || '');
+    if (state === 'saved' || state === 'saved_just_now') {
+      setShippingModeLastSavedAt(Date.now());
+    }
+  }, []);
+
+  const handleRegisterShippingModeSaveAction = useCallback((action) => {
+    shippingModeSaveActionRef.current = typeof action === 'function' ? action : null;
+  }, []);
+
+  const activeSavedState = activeSection === 'shipping' ? shippingModeSavedState : savedState;
+  const activeSavedAgoText = activeSection === 'shipping' ? shippingModeSavedAgoText : savedAgoText;
+  const activeSavedErrorCopy =
+    activeSection === 'shipping' ? shippingModeSaveError : activeSection === 'brand-kit' ? brandKitError : '';
+
+  const showHeaderSaveButton = activeSection === 'brand-kit' || activeSection === 'shipping';
+  const headerSaveButtonDisabled =
+    loading ||
+    Boolean(error) ||
+    (activeSection === 'brand-kit' && brandKitLoading) ||
+    (activeSection === 'shipping' &&
+      (shippingConfigLoading ||
+        !shippingModeSaveActionRef.current ||
+        shippingModeSavedState === 'saving' ||
+        shippingModeSavedState === 'saved' ||
+        shippingModeSavedState === 'saved_just_now'));
+  const headerSaveButtonLabel =
+    activeSection === 'shipping'
+      ? shippingModeSavedState === 'saving'
+        ? 'Saving...'
+        : shippingModeSavedState === 'error'
+          ? 'Retry save'
+          : 'Save changes'
+      : activeSection === 'brand-kit'
+        ? 'Save changes'
+        : 'Auto-saved';
+
   async function refreshProviderStatuses() {
     setProviderStatusLoading(true);
     setProviderStatusError('');
@@ -2562,19 +2623,20 @@ export default function SettingsWorkspace() {
                 </AdminButton>
               ) : (
                 <div className={styles.headerActions}>
-                  <AdminSavedState savedAgoText={savedAgoText} state={savedState} />
+                  <AdminSavedState errorCopy={activeSavedErrorCopy} savedAgoText={activeSavedAgoText} state={activeSavedState} />
                   <AdminButton
-                    disabled={
-                      activeSection !== 'brand-kit' ||
-                      loading ||
-                      Boolean(error) ||
-                      (activeSection === 'brand-kit' && brandKitLoading)
+                    disabled={!showHeaderSaveButton || headerSaveButtonDisabled}
+                    onClick={
+                      activeSection === 'brand-kit'
+                        ? handleBrandKitSave
+                        : activeSection === 'shipping'
+                          ? () => void shippingModeSaveActionRef.current?.()
+                          : undefined
                     }
-                    onClick={activeSection === 'brand-kit' ? handleBrandKitSave : undefined}
                     size="sm"
                     variant="primary"
                   >
-                    {activeSection === 'brand-kit' ? 'Save changes' : 'Auto-saved'}
+                    {headerSaveButtonLabel}
                   </AdminButton>
                 </div>
               )}
@@ -2866,7 +2928,13 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'shipping' ? <ShippingSettingsWorkspace embedded /> : null}
+            {!loading && !error && activeSection === 'shipping' ? (
+              <ShippingSettingsWorkspace
+                embedded
+                onModeSaveStateChange={handleShippingModeSaveStateChange}
+                onRegisterSaveAction={handleRegisterShippingModeSaveAction}
+              />
+            ) : null}
 
             {!loading && !error && activeSection === 'taxes' ? (
               <div className={styles.configStack}>

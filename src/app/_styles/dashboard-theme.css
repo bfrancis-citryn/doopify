@@ -1001,6 +1001,10 @@ body.dashboard-body {
   color: var(--emerald-500);
 }
 
+.admin-saved-state.is-saved_just_now {
+  color: var(--emerald-500);
+}
+
 .admin-saved-state.is-dirty {
   color: var(--amber-500);
 }

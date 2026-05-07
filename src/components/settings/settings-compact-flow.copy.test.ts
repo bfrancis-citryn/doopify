@@ -22,7 +22,9 @@ describe('settings compact flow', () => {
     expect(workspace).toContain("{ id: 'shipping', label: 'Shipping & delivery' }")
     expect(workspace).toContain("{ id: 'taxes', label: 'Taxes & duties' }")
     expect(workspace).not.toContain("{ id: 'shipping', label: 'Shipping & tax' }")
-    expect(workspace).toContain("activeSection === 'shipping' ? <ShippingSettingsWorkspace embedded /> : null")
+    expect(workspace).toContain("activeSection === 'shipping' ? (")
+    expect(workspace).toContain('onModeSaveStateChange={handleShippingModeSaveStateChange}')
+    expect(workspace).toContain('onRegisterSaveAction={handleRegisterShippingModeSaveAction}')
     expect(workspace).toContain("activeSection === 'taxes'")
   })
 
@@ -135,7 +137,20 @@ describe('settings compact flow', () => {
 
     expect(workspace).toContain("fetch('/api/settings/brand-kit'")
     expect(workspace).toContain('async function handleBrandKitSave()')
-    expect(workspace).toContain("activeSection === 'brand-kit' ? handleBrandKitSave : undefined")
+    expect(workspace).toContain("activeSection === 'brand-kit'")
+    expect(workspace).toContain("activeSection === 'shipping'")
+    expect(workspace).toContain('showHeaderSaveButton')
+    expect(workspace).toContain('headerSaveButtonLabel')
+  })
+
+  it('supports visible shipping save states in the top-right header', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain('shippingModeSavedState')
+    expect(workspace).toContain('shippingModeSaveError')
+    expect(workspace).toContain('shippingModeSaveActionRef')
+    expect(workspace).toContain('Retry save')
+    expect(workspace).toContain("setShippingModeSavedState((current) => (current === 'saved_just_now' ? 'saved' : current))")
   })
 
   it('clarifies Brand & appearance preview labels and usage copy', () => {

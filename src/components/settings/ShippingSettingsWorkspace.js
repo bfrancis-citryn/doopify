@@ -27,9 +27,9 @@ const MODE_OPTIONS = [
 ];
 
 const MODE_CARD_DESCRIPTIONS = {
-  LIVE_RATES: "Customers see real-time carrier rates.",
-  MANUAL: "Customers see your fixed manual shipping rates.",
-  HYBRID: "Try live rates first, then use manual and fallback rules.",
+  LIVE_RATES: "Customers see real-time rates from your selected provider.",
+  MANUAL: "Customers see your fixed manual rates at checkout.",
+  HYBRID: "Doopify tries live rates first, then falls back to manual rates if allowed.",
 };
 
 const FALLBACK_BEHAVIOR_OPTIONS = [
@@ -230,11 +230,35 @@ function providerSelectionToLegacyUsage(activeRateProvider, labelProvider) {
   return "LIVE_AND_LABELS";
 }
 
-export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
+function buildCheckoutMethodDraft(mode, activeRateProvider, labelProvider, fallbackBehavior) {
+  return {
+    mode: mode || "MANUAL",
+    activeRateProvider: activeRateProvider || "NONE",
+    labelProvider: labelProvider || "NONE",
+    fallbackBehavior: fallbackBehavior || "SHOW_FALLBACK",
+  };
+}
+
+function isCheckoutMethodEqual(left, right) {
+  return (
+    left?.mode === right?.mode &&
+    left?.activeRateProvider === right?.activeRateProvider &&
+    left?.labelProvider === right?.labelProvider &&
+    left?.fallbackBehavior === right?.fallbackBehavior
+  );
+}
+
+export default function ShippingSettingsWorkspace({
+  embedded = false,
+  onModeSaveStateChange,
+  onRegisterSaveAction,
+} = {}) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [modeSaveState, setModeSaveState] = useState("saved");
+  const [modeSaveError, setModeSaveError] = useState("");
 
   const [settings, setSettings] = useState(null);
   const [setupStatus, setSetupStatus] = useState(null);
@@ -268,6 +292,9 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   const [locationValidationMessage, setLocationValidationMessage] = useState("");
   const [packageDrawerError, setPackageDrawerError] = useState("");
   const [manualDrawerError, setManualDrawerError] = useState("");
+  const [savedCheckoutMethod, setSavedCheckoutMethod] = useState(
+    buildCheckoutMethodDraft("MANUAL", "NONE", "NONE", "SHOW_FALLBACK")
+  );
 
   const packages = settings?.shippingPackages || [];
   const locations = settings?.shippingLocations || [];
@@ -307,6 +334,14 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
   const missingLiveRateRequirements =
     (mode === "LIVE_RATES" || mode === "HYBRID") &&
     (!hasDefaultLocation || !hasDefaultPackage || !hasProviderConnection);
+  const checkoutMethodDraft = useMemo(
+    () => buildCheckoutMethodDraft(mode, activeRateProvider, labelProvider, fallbackBehavior),
+    [mode, activeRateProvider, labelProvider, fallbackBehavior]
+  );
+  const checkoutMethodDirty = useMemo(
+    () => !isCheckoutMethodEqual(checkoutMethodDraft, savedCheckoutMethod),
+    [checkoutMethodDraft, savedCheckoutMethod]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -326,6 +361,16 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       setActiveRateProvider(shipping.activeRateProvider || "NONE");
       setLabelProvider(shipping.labelProvider || "NONE");
       setFallbackBehavior(shipping.fallbackBehavior || "SHOW_FALLBACK");
+      setSavedCheckoutMethod(
+        buildCheckoutMethodDraft(
+          shipping.shippingMode || "MANUAL",
+          shipping.activeRateProvider || "NONE",
+          shipping.labelProvider || "NONE",
+          shipping.fallbackBehavior || "SHOW_FALLBACK"
+        )
+      );
+      setModeSaveState("saved");
+      setModeSaveError("");
       setProviderForm({
         provider:
           shipping.activeRateProvider && shipping.activeRateProvider !== "NONE"
@@ -374,20 +419,36 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (modeSaveState === "saving" || modeSaveState === "error") return;
+    setModeSaveState(checkoutMethodDirty ? "dirty" : "saved");
+  }, [checkoutMethodDirty, modeSaveState]);
+
+  useEffect(() => {
+    if (typeof onModeSaveStateChange !== "function") return;
+    onModeSaveStateChange(modeSaveState, {
+      errorCopy: modeSaveState === "error" ? modeSaveError || "Save failed" : "",
+      dirty: checkoutMethodDirty,
+    });
+  }, [modeSaveState, modeSaveError, checkoutMethodDirty, onModeSaveStateChange]);
+
   async function persistSettings(patch, message) {
     setSaving(true);
     setError("");
     setNotice("");
     try {
-      await fetch("/api/settings/shipping", {
+      const updated = await fetch("/api/settings/shipping", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       }).then(parseApiJson);
       setNotice(message || "Saved.");
       await load();
+      return { success: true, data: updated };
     } catch (saveError) {
-      setError(getErrorMessage(saveError, "Failed to save shipping settings"));
+      const messageText = getErrorMessage(saveError, "Failed to save shipping settings");
+      setError(messageText);
+      return { success: false, message: messageText };
     } finally {
       setSaving(false);
     }
@@ -415,12 +476,14 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
     }
   }
 
-  async function saveCheckoutMethod() {
+  const saveCheckoutMethod = useCallback(async () => {
     if ((mode === "LIVE_RATES" || mode === "HYBRID") && activeRateProvider === "NONE" && labelProvider !== "NONE") {
-      setError(
-        "Checkout is set to live/hybrid, but provider usage is currently label buying only. Enable live-rate usage in the provider drawer first."
-      );
-      return;
+      const blockedMessage =
+        "Checkout is set to live/hybrid, but provider usage is currently label buying only. Enable live-rate usage in the provider drawer first.";
+      setError(blockedMessage);
+      setModeSaveState("error");
+      setModeSaveError(blockedMessage);
+      return { success: false, message: blockedMessage };
     }
 
     const legacyUsage = providerSelectionToLegacyUsage(activeRateProvider, labelProvider);
@@ -430,7 +493,9 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
         : labelProvider !== "NONE"
           ? labelProvider
           : null;
-    await persistSettings(
+    setModeSaveState("saving");
+    setModeSaveError("");
+    const result = await persistSettings(
       {
         shippingMode: mode,
         activeRateProvider,
@@ -441,7 +506,23 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
       },
       "Checkout shipping method saved."
     );
-  }
+    if (result.success) {
+      const persistedDraft = buildCheckoutMethodDraft(mode, activeRateProvider, labelProvider, fallbackBehavior);
+      setSavedCheckoutMethod(persistedDraft);
+      setModeSaveState("saved_just_now");
+      setModeSaveError("");
+    } else {
+      setModeSaveState("error");
+      setModeSaveError(result.message || "Save failed");
+    }
+    return result;
+  }, [mode, activeRateProvider, labelProvider, fallbackBehavior]);
+
+  useEffect(() => {
+    if (typeof onRegisterSaveAction !== "function") return;
+    onRegisterSaveAction(() => saveCheckoutMethod());
+    return () => onRegisterSaveAction(null);
+  }, [onRegisterSaveAction, saveCheckoutMethod]);
 
   async function saveProviderSettings() {
     const provider = providerForm.provider;
@@ -963,7 +1044,11 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
                       type="button"
                       key={option.value}
                       className={`${styles.shippingModeCard} ${selected ? styles.shippingModeCardActive : ""}`}
-                      onClick={() => setMode(option.value)}
+                      onClick={() => {
+                        setMode(option.value);
+                        setModeSaveState("dirty");
+                        setModeSaveError("");
+                      }}
                     >
                       <div className={styles.shippingModeHeader}>
                         <p className={styles.shippingModeTitle}>{option.label}</p>
@@ -978,7 +1063,15 @@ export default function ShippingSettingsWorkspace({ embedded = false } = {}) {
               </div>
               <div className={styles.shippingModeFooter}>
                 <AdminField label="Fallback behavior">
-                  <AdminSelect value={fallbackBehavior} onChange={setFallbackBehavior} options={FALLBACK_BEHAVIOR_OPTIONS} />
+                  <AdminSelect
+                    value={fallbackBehavior}
+                    onChange={(value) => {
+                      setFallbackBehavior(value);
+                      setModeSaveState("dirty");
+                      setModeSaveError("");
+                    }}
+                    options={FALLBACK_BEHAVIOR_OPTIONS}
+                  />
                 </AdminField>
               </div>
               <div className={styles.actionRow}>

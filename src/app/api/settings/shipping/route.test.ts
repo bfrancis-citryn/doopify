@@ -286,8 +286,8 @@ describe('settings shipping route', () => {
       user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
     })
 
-    mocks.getShippingSettingsStore.mockResolvedValue(storeFixture())
-    mocks.updateShippingSettings.mockResolvedValue(
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(storeFixture())
+    mocks.updateShippingSettings.mockResolvedValueOnce(
       storeFixture({
         shippingMode: 'HYBRID',
         shippingLiveProvider: 'SHIPPO',
@@ -323,6 +323,28 @@ describe('settings shipping route', () => {
 
     const payload = await response.json()
     expect(payload).toMatchObject({
+      success: true,
+      data: {
+        shippingMode: 'HYBRID',
+        shippingProviderUsage: 'LABELS_ONLY',
+        activeRateProvider: 'NONE',
+        labelProvider: 'SHIPPO',
+      },
+    })
+
+    mocks.getShippingSettingsStore.mockResolvedValueOnce(
+      storeFixture({
+        shippingMode: 'HYBRID',
+        shippingLiveProvider: 'SHIPPO',
+        shippingProviderUsage: 'LABELS_ONLY',
+        activeRateProvider: 'NONE',
+        labelProvider: 'SHIPPO',
+      })
+    )
+    const getResponse = await GET(new Request('http://localhost/api/settings/shipping'))
+    expect(getResponse.status).toBe(200)
+    const getPayload = await getResponse.json()
+    expect(getPayload).toMatchObject({
       success: true,
       data: {
         shippingMode: 'HYBRID',
