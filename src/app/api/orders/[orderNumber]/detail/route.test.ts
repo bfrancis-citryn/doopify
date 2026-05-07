@@ -90,4 +90,20 @@ describe('GET /api/orders/[orderNumber]/detail', () => {
       error: 'Invalid order identifier',
     })
   })
+
+  it('returns 404 only when order identifier resolves but detail lookup is missing', async () => {
+    mocks.requireAdmin.mockResolvedValue({ ok: true, user: { id: 'admin_1', role: 'OWNER' } })
+    mocks.resolveOrderIdentifier.mockResolvedValue({ orderId: 'ord_1', orderNumber: 1001 })
+    mocks.getAdminOrderDetailByOrderNumber.mockResolvedValue(null)
+
+    const response = await GET(new Request('http://localhost/api/orders/1001/detail'), {
+      params: Promise.resolve({ orderNumber: '1001' }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(await response.json()).toEqual({
+      success: false,
+      error: 'Order not found',
+    })
+  })
 })

@@ -17,8 +17,6 @@ import AdminTable from '../admin/ui/AdminTable';
 import AdminToolbar from '../admin/ui/AdminToolbar';
 import { useOrders } from '../../context/OrdersContext';
 import {
-  ORDER_DELIVERY_STATUSES,
-  ORDER_FULFILLMENT_STATUSES,
   ORDER_PAYMENT_STATUSES,
   ORDER_VIEWS,
   formatOrderMoney,
@@ -28,12 +26,19 @@ import {
 } from '../../lib/ordersData';
 import styles from './OrdersWorkspace.module.css';
 
+const SHIPPING_STATUS_FILTERS = ['not shipped', 'partially shipped', 'shipped', 'delivered'];
+
+function statusLabel(status) {
+  const value = String(status || '').trim();
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : 'Unknown';
+}
+
 function getStatusTone(status) {
   const normalized = String(status || '').toLowerCase();
 
-  if (['paid', 'fulfilled', 'delivered'].includes(normalized)) return 'success';
+  if (['paid', 'fulfilled', 'shipped', 'delivered'].includes(normalized)) return 'success';
   if (['failed', 'returned', 'refunded'].includes(normalized)) return 'danger';
-  if (['pending', 'scheduled', 'packed', 'in-transit', 'out-for-delivery', 'ready-for-pickup', 'partially refunded', 'partially fulfilled'].includes(normalized)) {
+  if (['pending', 'partially refunded', 'partially fulfilled', 'partially shipped'].includes(normalized)) {
     return 'warning';
   }
 
@@ -88,7 +93,7 @@ export default function OrdersWorkspace() {
   );
 
   const inTransitCount = useMemo(
-    () => visibleOrders.filter((order) => ['in-transit', 'out-for-delivery'].includes(order.deliveryStatus)).length,
+    () => visibleOrders.filter((order) => ['partially shipped', 'shipped'].includes(order.deliveryStatus)).length,
     [visibleOrders]
   );
 
@@ -100,12 +105,12 @@ export default function OrdersWorkspace() {
         if (action === 'fulfilled') {
           return {
             ...order,
-            fulfillmentStatus: 'fulfilled',
-            deliveryStatus: order.deliveryStatus === 'not-shipped' ? 'in-transit' : order.deliveryStatus,
+            fulfillmentStatus: 'shipped',
+            deliveryStatus: 'shipped',
           };
         }
 
-        if (action === 'packed') return { ...order, fulfillmentStatus: 'packed' };
+        if (action === 'packed') return { ...order, fulfillmentStatus: 'partially shipped', deliveryStatus: 'partially shipped' };
         if (action === 'tag-priority') return { ...order, tags: [...new Set([...(order.tags || []), 'Priority'])] };
         if (action === 'archive') return { ...order, tags: [...new Set([...(order.tags || []), 'Archived'])] };
 
@@ -190,8 +195,12 @@ export default function OrdersWorkspace() {
       header: 'Status',
       render: (order) => (
         <div className={styles.statusCell}>
-          <AdminStatusChip tone={getStatusTone(order.fulfillmentStatus)}>{order.fulfillmentStatus}</AdminStatusChip>
-          <AdminStatusChip tone={getStatusTone(order.deliveryStatus)}>{order.deliveryStatus}</AdminStatusChip>
+          <AdminStatusChip tone={getStatusTone(order.fulfillmentStatus)}>
+            {statusLabel(order.fulfillmentStatus)}
+          </AdminStatusChip>
+          <AdminStatusChip tone={getStatusTone(order.paymentStatus)}>
+            {statusLabel(order.paymentStatus)}
+          </AdminStatusChip>
         </div>
       ),
     },
@@ -201,7 +210,7 @@ export default function OrdersWorkspace() {
       render: (order) => (
         <div className={styles.statCell}>
           <strong>{formatOrderMoney(order.total)}</strong>
-          <small>{order.paymentStatus}</small>
+          <small>{statusLabel(order.paymentStatus)}</small>
         </div>
       ),
     },
@@ -222,7 +231,7 @@ export default function OrdersWorkspace() {
         <AdminStatsGrid>
           <AdminStatCard label="Total sales" meta={`${summary.orders} orders in view`} value={formatOrderMoney(grossSales)} />
           <AdminStatCard label="Active orders" meta={`${summary.fulfilled} fulfilled so far`} value={String(summary.orders)} />
-          <AdminStatCard label="Pending ship" meta={`${inTransitCount} already in transit`} value={String(summary.toFulfill)} />
+          <AdminStatCard label="Pending ship" meta={`${inTransitCount} already shipped`} value={String(summary.toFulfill)} />
           <AdminStatCard label="Pending payment" meta={`${summary.returns} returns active`} value={String(pendingPayments)} />
         </AdminStatsGrid>
 
@@ -244,8 +253,8 @@ export default function OrdersWorkspace() {
               value={searchQuery}
             />
             <AdminSelect onChange={setPaymentFilter} options={selectOptions('All payments', ORDER_PAYMENT_STATUSES)} value={paymentFilter} />
-            <AdminSelect onChange={setFulfillmentFilter} options={selectOptions('All fulfillment', ORDER_FULFILLMENT_STATUSES)} value={fulfillmentFilter} />
-            <AdminSelect onChange={setDeliveryFilter} options={selectOptions('All delivery', ORDER_DELIVERY_STATUSES)} value={deliveryFilter} />
+            <AdminSelect onChange={setFulfillmentFilter} options={selectOptions('All shipping', SHIPPING_STATUS_FILTERS)} value={fulfillmentFilter} />
+            <AdminSelect onChange={setDeliveryFilter} options={selectOptions('All delivery', SHIPPING_STATUS_FILTERS)} value={deliveryFilter} />
           </AdminToolbar>
 
           <div className={styles.viewRow}>
@@ -265,8 +274,8 @@ export default function OrdersWorkspace() {
             <div className={styles.bulkBar}>
               <span>{selectedIds.length} selected</span>
               <div className={styles.bulkActions}>
-                <AdminButton onClick={() => handleBulkAction('fulfilled')} size="sm" variant="secondary">Mark fulfilled</AdminButton>
-                <AdminButton onClick={() => handleBulkAction('packed')} size="sm" variant="secondary">Mark packed</AdminButton>
+                <AdminButton onClick={() => handleBulkAction('fulfilled')} size="sm" variant="secondary">Mark shipped</AdminButton>
+                <AdminButton onClick={() => handleBulkAction('packed')} size="sm" variant="secondary">Mark partially shipped</AdminButton>
                 <AdminButton onClick={() => handleBulkAction('tag-priority')} size="sm" variant="secondary">Add priority tag</AdminButton>
                 <AdminButton onClick={() => handleBulkAction('archive')} size="sm" variant="secondary">Archive</AdminButton>
               </div>

@@ -1,4 +1,4 @@
-import { Prisma, type FulfillmentStatus, type ShippingLiveProvider } from '@prisma/client'
+import { Prisma, type ShippingLiveProvider } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { emitInternalEvent } from '@/server/events/dispatcher'
@@ -10,6 +10,7 @@ import {
 } from '@/server/shipping/shipping-provider.service'
 import { resolveLabelProvider } from '@/server/shipping/shipping-provider-selection'
 import type { ShippingRateRequest, ShippingRateQuote } from '@/server/shipping/shipping-rate.types'
+import { resolveOrderFulfillmentSnapshot } from '@/server/services/fulfillment-status.service'
 import { getRuntimeProviderConnection } from '@/server/services/provider-connection.service'
 import { getStoreSettings } from '@/server/services/settings.service'
 
@@ -42,51 +43,6 @@ function normalizeCountry(value?: string | null) {
 function normalizeEmail(value?: string | null) {
   const normalized = String(value ?? '').trim()
   return normalized || null
-}
-
-function normalizeFulfilledQuantities(input: {
-  orderItems: Array<{ id: string; quantity: number }>
-  fulfillmentRows: Array<{
-    status: string
-    items: Array<{ orderItemId: string; quantity: number }>
-  }>
-}) {
-  const fulfilledByOrderItemId = new Map<string, number>()
-
-  for (const item of input.orderItems) {
-    fulfilledByOrderItemId.set(item.id, 0)
-  }
-
-  for (const fulfillment of input.fulfillmentRows) {
-    if (['CANCELLED', 'ERROR', 'FAILURE'].includes(String(fulfillment.status).toUpperCase())) {
-      continue
-    }
-
-    for (const item of fulfillment.items) {
-      const current = fulfilledByOrderItemId.get(item.orderItemId) ?? 0
-      fulfilledByOrderItemId.set(item.orderItemId, current + Number(item.quantity))
-    }
-  }
-
-  return fulfilledByOrderItemId
-}
-
-function resolveFulfillmentStatusFromQuantities(input: {
-  orderItems: Array<{ id: string; quantity: number }>
-  fulfilledByOrderItemId: Map<string, number>
-}): FulfillmentStatus {
-  const allUnfulfilled = input.orderItems.every(
-    (item) => (input.fulfilledByOrderItemId.get(item.id) ?? 0) <= 0
-  )
-  if (allUnfulfilled) return 'UNFULFILLED'
-
-  const allFulfilled = input.orderItems.every((item) => {
-    const fulfilled = input.fulfilledByOrderItemId.get(item.id) ?? 0
-    return fulfilled >= Number(item.quantity)
-  })
-  if (allFulfilled) return 'FULFILLED'
-
-  return 'PARTIALLY_FULFILLED'
 }
 
 function validateParcel(input: OrderLabelParcelInput) {
@@ -158,7 +114,7 @@ function resolveSelectedItems(input: {
   }
 
   const orderItemById = new Map(input.order.items.map((item) => [item.id, item]))
-  const fulfilledByOrderItemId = normalizeFulfilledQuantities({
+  const { fulfilledByOrderItemId } = resolveOrderFulfillmentSnapshot({
     orderItems: input.order.items,
     fulfillmentRows: input.order.fulfillments,
   })
@@ -540,7 +496,7 @@ export async function buyOrderShippingLabel(input: {
     },
   })
 
-  const fulfilledByOrderItemId = normalizeFulfilledQuantities({
+  const { fulfilledByOrderItemId } = resolveOrderFulfillmentSnapshot({
     orderItems: order.items,
     fulfillmentRows: order.fulfillments,
   })
@@ -550,10 +506,20 @@ export async function buyOrderShippingLabel(input: {
     fulfilledByOrderItemId.set(item.orderItemId, current + item.quantity)
   }
 
-  const nextFulfillmentStatus = resolveFulfillmentStatusFromQuantities({
+  const nextFulfillmentStatus = resolveOrderFulfillmentSnapshot({
     orderItems: order.items,
-    fulfilledByOrderItemId,
-  })
+    fulfillmentRows: [
+      ...order.fulfillments,
+      {
+        status: 'SUCCESS',
+        deliveredAt: null,
+        items: selectedItems.map((item) => ({
+          orderItemId: item.orderItemId,
+          quantity: item.quantity,
+        })),
+      },
+    ],
+  }).fulfillmentStatus
 
   const currency = (store.currency || 'USD').toUpperCase()
   const hasCustomerEmail = Boolean(order.email)
@@ -628,16 +594,47 @@ export async function buyOrderShippingLabel(input: {
       },
     })
 
-    await tx.orderEvent.create({
-      data: {
+    const timelineEvents: Prisma.OrderEventCreateManyInput[] = [
+      {
         orderId: order.id,
         type: 'SHIPPING_LABEL_PURCHASED',
-        title: purchasedLabel.trackingNumber
-          ? `Shipping label purchased with tracking ${purchasedLabel.trackingNumber}`
-          : 'Shipping label purchased',
+        title: 'Shipping label purchased',
         detail: `${provider} label purchased (${safeProviderRateId})`,
-        actorType: 'STAFF',
+        actorType: 'STAFF' as const,
       },
+      {
+        orderId: order.id,
+        type: 'TRACKING_ADDED',
+        title: 'Tracking added',
+        detail: purchasedLabel.trackingNumber
+          ? `Tracking number ${purchasedLabel.trackingNumber} was saved from the purchased label.`
+          : 'Tracking details were saved from the purchased label.',
+        actorType: 'STAFF' as const,
+      },
+      {
+        orderId: order.id,
+        type: 'ORDER_MARKED_SHIPPED',
+        title: 'Order marked shipped',
+        detail:
+          nextFulfillmentStatus === 'PARTIALLY_FULFILLED'
+            ? 'A partial shipment was created from the purchased label.'
+            : 'All items are now marked as shipped.',
+        actorType: 'STAFF' as const,
+      },
+    ]
+
+    if (shouldQueueTrackingEmail) {
+      timelineEvents.push({
+        orderId: order.id,
+        type: 'TRACKING_EMAIL_QUEUED',
+        title: 'Tracking email queued',
+        detail: 'A shipping confirmation email was queued for delivery.',
+        actorType: 'SYSTEM' as const,
+      })
+    }
+
+    await tx.orderEvent.createMany({
+      data: timelineEvents,
     })
 
     return { fulfillment, shippingLabel }

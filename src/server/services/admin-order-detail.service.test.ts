@@ -237,4 +237,76 @@ describe('getAdminOrderDetailByOrderNumber', () => {
     })
     expect(detail?.availableActions?.canBuyShippingLabel).toBe(true)
   })
+
+  it('derives shipped/delivered status from fulfillment records even when stored status is stale', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue({
+      id: 'ord_3',
+      orderNumber: 1003,
+      channel: 'online',
+      status: 'OPEN',
+      paymentStatus: 'PAID',
+      fulfillmentStatus: 'UNFULFILLED',
+      subtotalCents: 1000,
+      taxAmountCents: 0,
+      shippingAmountCents: 0,
+      discountAmountCents: 0,
+      totalCents: 1000,
+      currency: 'USD',
+      email: 'buyer@example.com',
+      note: null,
+      tags: [],
+      createdAt: new Date('2026-05-01T10:00:00.000Z'),
+      updatedAt: new Date('2026-05-01T10:00:00.000Z'),
+      customer: null,
+      items: [
+        {
+          id: 'item_1',
+          productId: null,
+          variantId: null,
+          title: 'Item',
+          variantTitle: null,
+          sku: null,
+          quantity: 1,
+          priceCents: 1000,
+          totalCents: 1000,
+          totalDiscountCents: 0,
+          product: null,
+          variant: null,
+        },
+      ],
+      addresses: [],
+      payments: [],
+      fulfillments: [
+        {
+          id: 'ful_1',
+          status: 'SUCCESS',
+          carrier: 'USPS',
+          service: 'Priority',
+          trackingNumber: 'TRK-1',
+          trackingUrl: 'https://track.example/TRK-1',
+          labelUrl: null,
+          shippedAt: new Date('2026-05-01T11:00:00.000Z'),
+          deliveredAt: new Date('2026-05-02T11:00:00.000Z'),
+          createdAt: new Date('2026-05-01T11:00:00.000Z'),
+          updatedAt: new Date('2026-05-01T11:00:00.000Z'),
+          items: [{ id: 'fi_1', orderItemId: 'item_1', variantId: null, quantity: 1 }],
+          shippingLabels: [],
+        },
+      ],
+      shippingLabels: [],
+      events: [],
+      refunds: [],
+      returns: [],
+      discountApplications: [],
+    })
+
+    const detail = await getAdminOrderDetailByOrderNumber(1003)
+
+    expect(detail).toMatchObject({
+      fulfillmentStatusRaw: 'FULFILLED',
+      shippingStatusRaw: 'DELIVERED',
+      shippingStatus: 'Delivered',
+      deliveryStatus: 'delivered',
+    })
+  })
 })

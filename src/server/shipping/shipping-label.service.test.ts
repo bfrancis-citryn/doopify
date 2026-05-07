@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
     },
     orderEvent: {
-      create: vi.fn(),
+      createMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -176,7 +176,7 @@ beforeEach(() => {
     labelUrl: 'https://labels.example.com/label_1.pdf',
   })
   mocks.prisma.order.update.mockResolvedValue({})
-  mocks.prisma.orderEvent.create.mockResolvedValue({})
+  mocks.prisma.orderEvent.createMany.mockResolvedValue({ count: 1 })
   mocks.emitInternalEvent.mockResolvedValue(undefined)
 })
 
@@ -233,12 +233,20 @@ describe('buyOrderShippingLabel', () => {
         data: { fulfillmentStatus: 'PARTIALLY_FULFILLED' },
       })
     )
-    expect(mocks.prisma.orderEvent.create).toHaveBeenCalledWith(
+    expect(mocks.prisma.orderEvent.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          orderId: 'order_1',
-          type: 'SHIPPING_LABEL_PURCHASED',
-        }),
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            orderId: 'order_1',
+            type: 'SHIPPING_LABEL_PURCHASED',
+            title: 'Shipping label purchased',
+          }),
+          expect.objectContaining({
+            orderId: 'order_1',
+            type: 'ORDER_MARKED_SHIPPED',
+            title: 'Order marked shipped',
+          }),
+        ]),
       })
     )
     expect(mocks.prisma.order.update).not.toHaveBeenCalledWith(
@@ -495,6 +503,16 @@ describe('buyOrderShippingLabel', () => {
       sendTrackingEmail: true,
     })
 
+    expect(mocks.prisma.orderEvent.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'TRACKING_EMAIL_QUEUED',
+            title: 'Tracking email queued',
+          }),
+        ]),
+      })
+    )
     expect(result).toMatchObject({
       trackingEmail: {
         requested: true,

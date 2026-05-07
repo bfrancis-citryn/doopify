@@ -4,6 +4,7 @@ import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import type { CheckoutAppliedDiscount } from '@/server/checkout/pricing'
 import { emitInternalEvent } from '@/server/events/dispatcher'
+import { resolveOrderFulfillmentSnapshot } from '@/server/services/fulfillment-status.service'
 
 function parseOrderNumberSearch(search?: string) {
   const query = search?.trim()
@@ -121,6 +122,20 @@ export async function getOrders(params: {
         items: true,
         addresses: true,
         payments: true,
+        fulfillments: {
+          select: {
+            status: true,
+            deliveredAt: true,
+            trackingNumber: true,
+            carrier: true,
+            items: {
+              select: {
+                orderItemId: true,
+                quantity: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * pageSize,
@@ -129,8 +144,29 @@ export async function getOrders(params: {
     prisma.order.count({ where }),
   ])
 
+  const normalizedOrders = orders.map((order) => {
+    const derived = resolveOrderFulfillmentSnapshot({
+      orderItems: order.items.map((item) => ({ id: item.id, quantity: item.quantity })),
+      fulfillmentRows: order.fulfillments.map((fulfillment) => ({
+        status: fulfillment.status,
+        deliveredAt: fulfillment.deliveredAt,
+        items: fulfillment.items.map((item) => ({
+          orderItemId: item.orderItemId,
+          quantity: item.quantity,
+        })),
+      })),
+    })
+
+    return {
+      ...order,
+      fulfillmentStatus: derived.fulfillmentStatus,
+      fulfillmentStatusDerived: derived.fulfillmentStatus,
+      shippingStatusDerived: derived.shippingStatus,
+    }
+  })
+
   return {
-    orders,
+    orders: normalizedOrders,
     pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
   }
 }
@@ -551,6 +587,49 @@ export async function createFulfillment(data: {
   trackingNumber?: string
   trackingUrl?: string
 }) {
+  const order = await prisma.order.findUnique({
+    where: { id: data.orderId },
+    select: {
+      id: true,
+      items: {
+        select: {
+          id: true,
+          quantity: true,
+        },
+      },
+      fulfillments: {
+        select: {
+          status: true,
+          items: {
+            select: {
+              orderItemId: true,
+              quantity: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!order) {
+    throw new Error('Order not found')
+  }
+
+  const nextFulfillmentStatus = resolveOrderFulfillmentSnapshot({
+    orderItems: order.items,
+    fulfillmentRows: [
+      ...order.fulfillments,
+      {
+        status: 'SUCCESS',
+        deliveredAt: null,
+        items: data.items.map((item) => ({
+          orderItemId: item.orderItemId,
+          quantity: item.quantity,
+        })),
+      },
+    ],
+  }).fulfillmentStatus
+
   const fulfillment = await prisma.$transaction(async (tx) => {
     const createdFulfillment = await tx.fulfillment.create({
       data: {
@@ -573,7 +652,7 @@ export async function createFulfillment(data: {
 
     await tx.order.update({
       where: { id: data.orderId },
-      data: { fulfillmentStatus: 'FULFILLED' },
+      data: { fulfillmentStatus: nextFulfillmentStatus },
     })
 
     await tx.orderEvent.create({
@@ -604,51 +683,6 @@ type ManualFulfillmentItemInput = {
   orderItemId: string
   variantId?: string
   quantity: number
-}
-
-function normalizeFulfilledQuantities(input: {
-  orderItems: Array<{ id: string; quantity: number }>
-  fulfillmentRows: Array<{
-    status: string
-    items: Array<{ orderItemId: string; quantity: number }>
-  }>
-}) {
-  const fulfilledByOrderItemId = new Map<string, number>()
-
-  for (const item of input.orderItems) {
-    fulfilledByOrderItemId.set(item.id, 0)
-  }
-
-  for (const fulfillment of input.fulfillmentRows) {
-    if (['CANCELLED', 'ERROR', 'FAILURE'].includes(String(fulfillment.status).toUpperCase())) {
-      continue
-    }
-
-    for (const item of fulfillment.items) {
-      const current = fulfilledByOrderItemId.get(item.orderItemId) ?? 0
-      fulfilledByOrderItemId.set(item.orderItemId, current + Number(item.quantity))
-    }
-  }
-
-  return fulfilledByOrderItemId
-}
-
-function resolveFulfillmentStatusFromQuantities(input: {
-  orderItems: Array<{ id: string; quantity: number }>
-  fulfilledByOrderItemId: Map<string, number>
-}): FulfillmentStatus {
-  const allUnfulfilled = input.orderItems.every(
-    (item) => (input.fulfilledByOrderItemId.get(item.id) ?? 0) <= 0
-  )
-  if (allUnfulfilled) return 'UNFULFILLED'
-
-  const allFulfilled = input.orderItems.every((item) => {
-    const fulfilled = input.fulfilledByOrderItemId.get(item.id) ?? 0
-    return fulfilled >= Number(item.quantity)
-  })
-  if (allFulfilled) return 'FULFILLED'
-
-  return 'PARTIALLY_FULFILLED'
 }
 
 export async function createManualFulfillment(data: {
@@ -698,7 +732,7 @@ export async function createManualFulfillment(data: {
   }
 
   const orderItemById = new Map(order.items.map((item) => [item.id, item]))
-  const fulfilledByOrderItemId = normalizeFulfilledQuantities({
+  const { fulfilledByOrderItemId } = resolveOrderFulfillmentSnapshot({
     orderItems: order.items,
     fulfillmentRows: order.fulfillments,
   })
@@ -729,10 +763,20 @@ export async function createManualFulfillment(data: {
     fulfilledByOrderItemId.set(item.orderItemId, alreadyFulfilled + item.quantity)
   }
 
-  const nextFulfillmentStatus = resolveFulfillmentStatusFromQuantities({
+  const nextFulfillmentStatus = resolveOrderFulfillmentSnapshot({
     orderItems: order.items,
-    fulfilledByOrderItemId,
-  })
+    fulfillmentRows: [
+      ...order.fulfillments,
+      {
+        status: 'SUCCESS',
+        deliveredAt: null,
+        items: data.items.map((item) => ({
+          orderItemId: item.orderItemId,
+          quantity: item.quantity,
+        })),
+      },
+    ],
+  }).fulfillmentStatus
 
   const fulfillment = await prisma.$transaction(async (tx) => {
     const createdFulfillment = await tx.fulfillment.create({
@@ -764,19 +808,45 @@ export async function createManualFulfillment(data: {
       },
     })
 
-    await tx.orderEvent.create({
-      data: {
+    const timelineEvents = []
+    if (data.trackingNumber || data.trackingUrl) {
+      timelineEvents.push({
         orderId: data.orderId,
-        type: 'MANUAL_FULFILLMENT_CREATED',
-        title: data.trackingNumber
-          ? `Manual fulfillment created with tracking ${data.trackingNumber}`
-          : 'Manual fulfillment created',
-        detail: data.sendTrackingEmail
-          ? 'Tracking email requested from manual fulfillment.'
-          : undefined,
-        actorType: 'STAFF',
-      },
-    })
+        type: 'TRACKING_ADDED',
+        title: 'Tracking added',
+        detail: data.trackingNumber
+          ? `Tracking number ${data.trackingNumber} was added manually.`
+          : 'Tracking details were added manually.',
+        actorType: 'STAFF' as const,
+      })
+    }
+    if (nextFulfillmentStatus !== 'UNFULFILLED') {
+      timelineEvents.push({
+        orderId: data.orderId,
+        type: 'ORDER_MARKED_SHIPPED',
+        title: 'Order marked shipped',
+        detail:
+          nextFulfillmentStatus === 'PARTIALLY_FULFILLED'
+            ? 'A partial shipment was created.'
+            : 'All items are now marked as shipped.',
+        actorType: 'STAFF' as const,
+      })
+    }
+    if (data.sendTrackingEmail) {
+      timelineEvents.push({
+        orderId: data.orderId,
+        type: 'TRACKING_EMAIL_QUEUED',
+        title: 'Tracking email queued',
+        detail: 'A shipping confirmation email was queued for delivery.',
+        actorType: 'SYSTEM' as const,
+      })
+    }
+
+    if (timelineEvents.length) {
+      await tx.orderEvent.createMany({
+        data: timelineEvents,
+      })
+    }
 
     return createdFulfillment
   })

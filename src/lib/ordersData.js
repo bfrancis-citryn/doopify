@@ -9,8 +9,8 @@ export const ORDER_VIEWS = [
 ];
 
 export const ORDER_PAYMENT_STATUSES = ['paid', 'pending', 'refunded', 'partially refunded', 'failed'];
-export const ORDER_FULFILLMENT_STATUSES = ['unfulfilled', 'scheduled', 'packed', 'fulfilled', 'partially fulfilled', 'returned'];
-export const ORDER_DELIVERY_STATUSES = ['not-shipped', 'in-transit', 'out-for-delivery', 'delivered', 'ready-for-pickup', 'returned'];
+export const ORDER_FULFILLMENT_STATUSES = ['unfulfilled', 'not shipped', 'partially shipped', 'shipped', 'delivered'];
+export const ORDER_DELIVERY_STATUSES = ['not shipped', 'partially shipped', 'shipped', 'delivered'];
 export const ORDER_RETURN_STATUSES = ['none', 'requested', 'approved', 'received', 'refunded'];
 
 function timeline(event, detail, createdAt) {
@@ -29,7 +29,7 @@ export function createSeedOrders() {
       itemCount: 3,
       paymentStatus: 'paid',
       fulfillmentStatus: 'unfulfilled',
-      deliveryStatus: 'not-shipped',
+      deliveryStatus: 'not shipped',
       returnStatus: 'none',
       deliveryMethod: 'Standard shipping',
       tags: ['VIP', 'Priority'],
@@ -59,8 +59,8 @@ export function createSeedOrders() {
       total: 349.0,
       itemCount: 1,
       paymentStatus: 'pending',
-      fulfillmentStatus: 'scheduled',
-      deliveryStatus: 'not-shipped',
+      fulfillmentStatus: 'not shipped',
+      deliveryStatus: 'not shipped',
       returnStatus: 'none',
       deliveryMethod: 'Express shipping',
       tags: ['Fraud review'],
@@ -86,7 +86,7 @@ export function createSeedOrders() {
       total: 120.0,
       itemCount: 1,
       paymentStatus: 'paid',
-      fulfillmentStatus: 'fulfilled',
+      fulfillmentStatus: 'shipped',
       deliveryStatus: 'delivered',
       returnStatus: 'none',
       deliveryMethod: 'Local pickup',
@@ -114,8 +114,8 @@ export function createSeedOrders() {
       total: 999.0,
       itemCount: 1,
       paymentStatus: 'paid',
-      fulfillmentStatus: 'fulfilled',
-      deliveryStatus: 'in-transit',
+      fulfillmentStatus: 'shipped',
+      deliveryStatus: 'shipped',
       returnStatus: 'none',
       deliveryMethod: '2-day shipping',
       tags: ['Signature required'],
@@ -175,13 +175,13 @@ export function formatOrderMoney(value) {
 export function getOrderViewMatch(order, viewId) {
   switch (viewId) {
     case 'unfulfilled':
-      return ['unfulfilled', 'scheduled', 'packed'].includes(order.fulfillmentStatus);
+      return ['unfulfilled', 'not shipped'].includes(order.fulfillmentStatus);
     case 'unpaid':
       return ['pending', 'failed'].includes(order.paymentStatus);
     case 'open':
-      return !['delivered', 'returned'].includes(order.deliveryStatus);
+      return !['delivered'].includes(order.deliveryStatus);
     case 'returns':
-      return order.fulfillmentStatus === 'returned' || order.deliveryStatus === 'returned' || order.returnStatus !== 'none';
+      return order.returnStatus !== 'none';
     case 'delivered':
       return order.deliveryStatus === 'delivered';
     case 'local-pickup':
@@ -219,9 +219,9 @@ export function summarizeOrders(orders) {
   return {
     orders: orders.length,
     itemsOrdered: orders.reduce((sum, order) => sum + order.itemCount, 0),
-    returns: orders.filter(order => order.fulfillmentStatus === 'returned' || order.deliveryStatus === 'returned' || order.returnStatus !== 'none').length,
-    fulfilled: orders.filter(order => ['fulfilled', 'partially fulfilled'].includes(order.fulfillmentStatus)).length,
+    returns: orders.filter(order => order.returnStatus !== 'none').length,
+    fulfilled: orders.filter(order => ['shipped', 'delivered', 'partially shipped', 'fulfilled'].includes(order.fulfillmentStatus)).length,
     delivered: orders.filter(order => order.deliveryStatus === 'delivered').length,
-    toFulfill: orders.filter(order => ['unfulfilled', 'scheduled', 'packed'].includes(order.fulfillmentStatus)).length,
+    toFulfill: orders.filter(order => ['unfulfilled', 'not shipped'].includes(order.fulfillmentStatus)).length,
   };
 }

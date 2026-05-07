@@ -110,6 +110,24 @@ function buildOrder(overrides: Record<string, unknown> = {}) {
 }
 
 describe('OrderDetailView', () => {
+  it('renders loading skeleton while order detail is still loading', () => {
+    const html = renderToStaticMarkup(
+      <OrderDetailView order={null} isLoading />
+    )
+
+    expect(html).toContain('data-testid="order-detail-skeleton"')
+    expect(html).not.toContain('Order not found')
+  })
+
+  it('renders not-found state only when a true not-found result is provided', () => {
+    const html = renderToStaticMarkup(
+      <OrderDetailView order={null} isNotFound />
+    )
+
+    expect(html).toContain('Order not found')
+    expect(html).not.toContain('data-testid="order-detail-skeleton"')
+  })
+
   it('renders fulfillment method selector cards', () => {
     const html = renderToStaticMarkup(<OrderDetailView order={buildOrder()} />)
 
@@ -128,7 +146,7 @@ describe('OrderDetailView', () => {
     )
 
     expect(html).toContain('Add tracking manually')
-    expect(html).toContain('Save tracking')
+    expect(html).toContain('Save tracking and mark shipped')
     expect(html).not.toContain('Buy shipping label with Shippo')
     expect(html).not.toContain('Buy shipping label with EasyPost')
   })
@@ -145,7 +163,7 @@ describe('OrderDetailView', () => {
     expect(html).toContain('Buy shipping label with Shippo')
     expect(html).toContain('Get Shippo label rates')
     expect(html).toContain('Email tracking to customer')
-    expect(html).not.toContain('Save tracking and email customer')
+    expect(html).not.toContain('Save tracking and mark shipped')
   })
 
   it('renders shipment card after manual tracking exists', () => {
@@ -236,6 +254,8 @@ describe('OrderDetailView', () => {
   it('maps status chip tones correctly', () => {
     expect(orderStatusChipTone('PAID')).toBe('success')
     expect(orderStatusChipTone('UNFULFILLED')).toBe('warning')
+    expect(orderStatusChipTone('SHIPPED')).toBe('success')
+    expect(orderStatusChipTone('PARTIALLY SHIPPED')).toBe('warning')
     expect(orderStatusChipTone('FAILED')).toBe('danger')
     expect(orderStatusChipTone('UNKNOWN_STATE')).toBe('neutral')
   })

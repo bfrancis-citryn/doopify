@@ -4,6 +4,11 @@ import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { getShippingProviderConnectionStatus } from '@/server/shipping/shipping-provider.service'
 import { resolveLabelProvider } from '@/server/shipping/shipping-provider-selection'
+import {
+  resolveOrderFulfillmentSnapshot,
+  shippingStatusToFilterValue,
+  shippingStatusToUiLabel,
+} from '@/server/services/fulfillment-status.service'
 import { getRuntimeProviderConnection } from '@/server/services/provider-connection.service'
 
 function normalizeStatusLabel(value: string | null | undefined) {
@@ -15,27 +20,6 @@ function joinAddress(parts: Array<string | null | undefined>) {
     .map((part) => String(part || '').trim())
     .filter(Boolean)
     .join(', ')
-}
-
-function resolveDeliveryStatus(input: {
-  fulfillments: Array<{
-    status: string
-    trackingNumber: string | null
-    deliveredAt: Date | null
-  }>
-}) {
-  if (!input.fulfillments.length) return 'not-shipped'
-  if (input.fulfillments.some((entry) => Boolean(entry.deliveredAt))) return 'delivered'
-  if (
-    input.fulfillments.some(
-      (entry) =>
-        ['SUCCESS', 'OPEN'].includes(String(entry.status || '').toUpperCase()) ||
-        Boolean(entry.trackingNumber)
-    )
-  ) {
-    return 'in-transit'
-  }
-  return 'not-shipped'
 }
 
 function resolveReturnStatus(returns: Array<{ status: string }>) {
@@ -276,6 +260,18 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
       actorType: entry.actorType,
     }))
 
+  const derivedFulfillmentSnapshot = resolveOrderFulfillmentSnapshot({
+    orderItems: order.items.map((item) => ({ id: item.id, quantity: item.quantity })),
+    fulfillmentRows: order.fulfillments.map((fulfillment) => ({
+      status: fulfillment.status,
+      deliveredAt: fulfillment.deliveredAt,
+      items: fulfillment.items.map((item) => ({
+        orderItemId: item.orderItemId,
+        quantity: item.quantity,
+      })),
+    })),
+  })
+
   return {
     id: order.id,
     orderId: order.id,
@@ -290,15 +286,11 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
     orderStatus: order.status,
     paymentStatus: normalizeStatusLabel(order.paymentStatus),
     paymentStatusRaw: order.paymentStatus,
-    fulfillmentStatus: normalizeStatusLabel(order.fulfillmentStatus),
-    fulfillmentStatusRaw: order.fulfillmentStatus,
-    deliveryStatus: resolveDeliveryStatus({
-      fulfillments: fulfillments.map((entry) => ({
-        status: entry.status,
-        trackingNumber: entry.trackingNumber,
-        deliveredAt: entry.deliveredAt,
-      })),
-    }),
+    fulfillmentStatus: normalizeStatusLabel(derivedFulfillmentSnapshot.fulfillmentStatus),
+    fulfillmentStatusRaw: derivedFulfillmentSnapshot.fulfillmentStatus,
+    shippingStatus: shippingStatusToUiLabel(derivedFulfillmentSnapshot.shippingStatus),
+    shippingStatusRaw: derivedFulfillmentSnapshot.shippingStatus,
+    deliveryStatus: shippingStatusToFilterValue(derivedFulfillmentSnapshot.shippingStatus),
     returnStatus: resolveReturnStatus(returns),
     customer: order.customer
       ? {
@@ -448,9 +440,11 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
         normalizeStatusLabel(order.paymentStatus)
       ),
       canMarkFulfilled: ['unfulfilled', 'partially fulfilled'].includes(
-        normalizeStatusLabel(order.fulfillmentStatus)
+        normalizeStatusLabel(derivedFulfillmentSnapshot.fulfillmentStatus)
       ),
-      canMarkUnfulfilled: ['fulfilled'].includes(normalizeStatusLabel(order.fulfillmentStatus)),
+      canMarkUnfulfilled: ['fulfilled'].includes(
+        normalizeStatusLabel(derivedFulfillmentSnapshot.fulfillmentStatus)
+      ),
     },
   }
 }

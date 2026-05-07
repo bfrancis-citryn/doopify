@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
       create: vi.fn(),
     },
     orderEvent: {
-      create: vi.fn(),
+      createMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -47,7 +47,7 @@ beforeEach(() => {
     async (fn: (tx: typeof mocks.prisma) => Promise<unknown>) => fn(mocks.prisma)
   )
   mocks.prisma.order.update.mockResolvedValue({})
-  mocks.prisma.orderEvent.create.mockResolvedValue({})
+  mocks.prisma.orderEvent.createMany.mockResolvedValue({ count: 1 })
   mocks.emitInternalEvent.mockResolvedValue(undefined)
 })
 
@@ -88,13 +88,20 @@ describe('createManualFulfillment', () => {
         data: { fulfillmentStatus: 'PARTIALLY_FULFILLED' },
       })
     )
-    expect(mocks.prisma.orderEvent.create).toHaveBeenCalledWith(
+    expect(mocks.prisma.orderEvent.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          orderId: ORDER_ID,
-          type: 'MANUAL_FULFILLMENT_CREATED',
-          title: 'Manual fulfillment created with tracking TRACK123',
-        }),
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            orderId: ORDER_ID,
+            type: 'TRACKING_ADDED',
+            title: 'Tracking added',
+          }),
+          expect.objectContaining({
+            orderId: ORDER_ID,
+            type: 'ORDER_MARKED_SHIPPED',
+            title: 'Order marked shipped',
+          }),
+        ]),
       })
     )
     expect(mocks.emitInternalEvent).toHaveBeenCalledWith(
@@ -125,11 +132,14 @@ describe('createManualFulfillment', () => {
       sendTrackingEmail: true,
     })
 
-    expect(mocks.prisma.orderEvent.create).toHaveBeenCalledWith(
+    expect(mocks.prisma.orderEvent.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          detail: 'Tracking email requested from manual fulfillment.',
-        }),
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'TRACKING_EMAIL_QUEUED',
+            title: 'Tracking email queued',
+          }),
+        ]),
       })
     )
     expect(mocks.emitInternalEvent).toHaveBeenCalledWith(

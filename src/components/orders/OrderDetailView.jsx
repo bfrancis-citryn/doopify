@@ -18,9 +18,9 @@ function normalizeOrderNumber(orderNumber) {
 
 export function orderStatusChipTone(status) {
   const normalized = String(status || "").toUpperCase();
-  if (["PAID", "FULFILLED", "OPEN", "DELIVERED", "SUCCESS"].includes(normalized)) return "success";
+  if (["PAID", "FULFILLED", "SHIPPED", "OPEN", "DELIVERED", "SUCCESS"].includes(normalized)) return "success";
   if (["FAILED", "VOIDED", "CANCELLED", "DECLINED", "EXHAUSTED", "CLOSED"].includes(normalized)) return "danger";
-  if (["PENDING", "PARTIALLY_REFUNDED", "PARTIALLY_FULFILLED", "UNFULFILLED", "IN_TRANSIT", "REQUESTED", "RECEIVED"].includes(normalized)) return "warning";
+  if (["PENDING", "PARTIALLY_REFUNDED", "PARTIALLY_FULFILLED", "PARTIALLY SHIPPED", "UNFULFILLED", "NOT SHIPPED", "IN_TRANSIT", "REQUESTED", "RECEIVED"].includes(normalized)) return "warning";
   return "neutral";
 }
 
@@ -60,6 +60,65 @@ function SectionDivider({ label }) {
   return (
     <div className={styles.sectionDivider}>
       <span className={styles.sectionEyebrow}>{label}</span>
+    </div>
+  );
+}
+
+function SkeletonBlock({ className = "" }) {
+  return <div className={`${styles.skeletonBlock} ${className}`} />;
+}
+
+function OrderDetailSkeleton() {
+  return (
+    <div className={styles.page} data-testid="order-detail-skeleton">
+      <nav className={styles.breadcrumbs}>
+        <span className={styles.inlineLinkButton} aria-hidden="true">&lt;- Orders</span>
+      </nav>
+      <div className={styles.headerCard}>
+        <SkeletonBlock className={styles.skeletonTitle} />
+        <SkeletonBlock className={styles.skeletonMeta} />
+        <div className={styles.chipsRow}>
+          <SkeletonBlock className={styles.skeletonChip} />
+          <SkeletonBlock className={styles.skeletonChip} />
+          <SkeletonBlock className={styles.skeletonChip} />
+        </div>
+      </div>
+      <div className={styles.grid}>
+        <div className={styles.mainColumn}>
+          <AdminCard className={styles.card} variant="panel">
+            <SkeletonBlock className={styles.skeletonCardTitle} />
+            <SkeletonBlock className={styles.skeletonRow} />
+            <SkeletonBlock className={styles.skeletonRow} />
+            <SkeletonBlock className={styles.skeletonRow} />
+          </AdminCard>
+          <AdminCard className={styles.card} variant="panel">
+            <SkeletonBlock className={styles.skeletonCardTitle} />
+            <SkeletonBlock className={styles.skeletonRowTall} />
+            <SkeletonBlock className={styles.skeletonRowTall} />
+          </AdminCard>
+          <AdminCard className={styles.card} variant="panel">
+            <SkeletonBlock className={styles.skeletonCardTitle} />
+            <SkeletonBlock className={styles.skeletonRow} />
+            <SkeletonBlock className={styles.skeletonRow} />
+            <SkeletonBlock className={styles.skeletonRow} />
+          </AdminCard>
+        </div>
+        <div className={styles.sideColumn}>
+          <AdminCard className={styles.sideCard} variant="panel">
+            <SkeletonBlock className={styles.skeletonCardTitle} />
+            <SkeletonBlock className={styles.skeletonRowTall} />
+            <SkeletonBlock className={styles.skeletonRow} />
+          </AdminCard>
+          <AdminCard className={styles.sideCard} variant="panel">
+            <SkeletonBlock className={styles.skeletonCardTitle} />
+            <SkeletonBlock className={styles.skeletonRowTall} />
+          </AdminCard>
+          <AdminCard className={styles.sideCard} variant="panel">
+            <SkeletonBlock className={styles.skeletonCardTitle} />
+            <SkeletonBlock className={styles.skeletonRowTall} />
+          </AdminCard>
+        </div>
+      </div>
     </div>
   );
 }
@@ -131,7 +190,12 @@ function normalizeShipmentCards({ fulfillments, shippingLabels, currency }) {
   });
 }
 
-export default function OrderDetailView({ order }) {
+export default function OrderDetailView({
+  order,
+  isLoading = false,
+  isNotFound = false,
+  onOrderRefreshed = null,
+}) {
   const [liveOrder, setLiveOrder] = useState(order);
   const initialShippingCapabilities = order?.shippingCapabilities || {};
   const initialConnectedProviders = Array.isArray(initialShippingCapabilities.connectedProviders)
@@ -238,9 +302,9 @@ export default function OrderDetailView({ order }) {
         prefix: "Payment",
       },
       {
-        key: "fulfillment",
-        label: currentOrder?.fulfillmentStatusRaw || currentOrder?.fulfillmentStatus || "unknown",
-        prefix: "Fulfillment",
+        key: "shipping",
+        label: currentOrder?.shippingStatus || currentOrder?.fulfillmentStatus || "unknown",
+        prefix: "Shipping",
       },
       {
         key: "order",
@@ -364,6 +428,9 @@ export default function OrderDetailView({ order }) {
       const json = await response.json();
       if (json?.success) {
         setLiveOrder(json.data);
+        if (typeof onOrderRefreshed === "function") {
+          await onOrderRefreshed();
+        }
         return;
       }
       setPageError(parseErrorMessage(json, "Failed to refresh order details."));
@@ -441,13 +508,13 @@ export default function OrderDetailView({ order }) {
       if (duplicate) {
         showToast("Label already existed for this rate. Existing shipment was reused.", "info");
       } else if (trackingEmail?.queued) {
-        showToast("Label purchased. Tracking was saved and customer email queued.", "success");
+        showToast("Label purchased. Order marked shipped. Tracking email queued.", "success");
       } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "EMAIL_PROVIDER_NOT_CONFIGURED") {
-        showToast("Label purchased. Tracking was saved. Email was not sent because no email provider is configured.", "info");
+        showToast("Label purchased. Order marked shipped. Email was not sent because no email provider is configured.", "info");
       } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "MISSING_CUSTOMER_EMAIL") {
-        showToast("Label purchased. Tracking was saved. Customer email is missing, so no email was sent.", "info");
+        showToast("Label purchased. Order marked shipped. Customer email is missing, so no email was sent.", "info");
       } else {
-        showToast("Label purchased. Tracking was saved.", "success");
+        showToast("Label purchased. Order marked shipped.", "success");
       }
       await refreshOrder();
     } catch (error) {
@@ -484,13 +551,13 @@ export default function OrderDetailView({ order }) {
       if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to add manual tracking."));
       const trackingEmail = json.data?.trackingEmail || null;
       if (trackingEmail?.queued) {
-        showToast("Tracking saved and customer email queued.", "success");
+        showToast("Tracking saved, order marked shipped, and customer email queued.", "success");
       } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "EMAIL_PROVIDER_NOT_CONFIGURED") {
-        showToast("Tracking saved. Email was not sent because no email provider is configured.", "info");
+        showToast("Tracking saved and order marked shipped. Email was not sent because no email provider is configured.", "info");
       } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "MISSING_CUSTOMER_EMAIL") {
-        showToast("Tracking saved. Customer email is missing, so no email was sent.", "info");
+        showToast("Tracking saved and order marked shipped. Customer email is missing, so no email was sent.", "info");
       } else {
-        showToast("Tracking saved.", "success");
+        showToast("Tracking saved and order marked shipped.", "success");
       }
       setManualForm((prev) => ({ ...prev, trackingNumber: "", trackingUrl: "" }));
       await refreshOrder();
@@ -583,7 +650,11 @@ export default function OrderDetailView({ order }) {
     }
   }
 
-  if (!currentOrder) {
+  if (isLoading) {
+    return <OrderDetailSkeleton />;
+  }
+
+  if (isNotFound && !currentOrder) {
     return (
       <div className={styles.page}>
         <nav className={styles.breadcrumbs}>
@@ -592,6 +663,20 @@ export default function OrderDetailView({ order }) {
         <AdminEmptyState
           description="This order may have been removed or the identifier may be invalid."
           title="Order not found"
+        />
+      </div>
+    );
+  }
+
+  if (!currentOrder) {
+    return (
+      <div className={styles.page}>
+        <nav className={styles.breadcrumbs}>
+          <Link className={styles.inlineLinkButton} href="/orders">&lt;- Orders</Link>
+        </nav>
+        <AdminEmptyState
+          description="We could not load this order right now. Try again in a moment."
+          title="Unable to load order"
         />
       </div>
     );
@@ -671,21 +756,21 @@ export default function OrderDetailView({ order }) {
             {currentOrder?.availableActions?.canMarkFulfilled ? (
               <AdminButton
                 loading={statusActionLoading === "markFulfilled"}
-                onClick={() => updateOrderStatusPatch({ fulfillmentStatus: "FULFILLED" }, "markFulfilled", "Fulfillment status updated to FULFILLED.")}
+                onClick={() => updateOrderStatusPatch({ fulfillmentStatus: "FULFILLED" }, "markFulfilled", "Order marked shipped.")}
                 size="sm"
                 variant="secondary"
               >
-                Mark fulfilled
+                Mark shipped
               </AdminButton>
             ) : null}
             {currentOrder?.availableActions?.canMarkUnfulfilled ? (
               <AdminButton
                 loading={statusActionLoading === "markUnfulfilled"}
-                onClick={() => updateOrderStatusPatch({ fulfillmentStatus: "UNFULFILLED" }, "markUnfulfilled", "Fulfillment status updated to UNFULFILLED.")}
+                onClick={() => updateOrderStatusPatch({ fulfillmentStatus: "UNFULFILLED" }, "markUnfulfilled", "Order marked as not shipped.")}
                 size="sm"
                 variant="secondary"
               >
-                Mark unfulfilled
+                Mark not shipped
               </AdminButton>
             ) : null}
           </div>
@@ -1008,7 +1093,9 @@ export default function OrderDetailView({ order }) {
 
                 <div className={styles.actionRow}>
                   <AdminButton loading={creatingManual} onClick={createManualTrackingFulfillment} size="sm">
-                    {manualSendTrackingEmail ? "Save tracking and email customer" : "Save tracking"}
+                    {manualSendTrackingEmail
+                      ? "Save tracking, mark shipped, and email customer"
+                      : "Save tracking and mark shipped"}
                   </AdminButton>
                 </div>
                 <p className={styles.emailLogHint}>
