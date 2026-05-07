@@ -850,6 +850,7 @@ export default function SettingsWorkspace() {
   const [brandKitError, setBrandKitError] = useState('');
   const [brandKitNotice, setBrandKitNotice] = useState('');
   const [showAdvancedUrls, setShowAdvancedUrls] = useState(false);
+  const [showStripeAdvanced, setShowStripeAdvanced] = useState(false);
   const [uploadingField, setUploadingField] = useState('');
   const [settingsToasts, setSettingsToasts] = useState([]);
   const logoUploadRef = useRef(null);
@@ -1526,6 +1527,61 @@ export default function SettingsWorkspace() {
   }, [stripeCredentialMaskMap.MODE, stripeRuntimeStatus?.mode, stripeRuntimeStatus?.providerStatus?.mode]);
   const stripeHasSavedRequiredKeys = Boolean(
     stripeCredentialMaskMap.PUBLISHABLE_KEY && stripeCredentialMaskMap.SECRET_KEY
+  );
+  const stripeConnectionPresentation = useMemo(() => {
+    const state = stripeProviderStatus?.state || (stripeHasSavedRequiredKeys ? 'CREDENTIALS_SAVED' : 'NOT_CONFIGURED');
+
+    if (state === 'VERIFIED') {
+      return {
+        heading: 'Stripe is connected',
+        badgeLabel: 'Verified',
+        badgeTone: 'success',
+        copy: 'Checkout can use your saved Stripe credentials.',
+      };
+    }
+
+    if (state === 'CREDENTIALS_SAVED') {
+      return {
+        heading: 'Stripe credentials saved',
+        badgeLabel: 'Needs verification',
+        badgeTone: 'warning',
+        copy: 'Verify your Stripe API connection to enable checkout.',
+      };
+    }
+
+    if (state === 'ERROR') {
+      return {
+        heading: 'Stripe needs attention',
+        badgeLabel: 'Error',
+        badgeTone: 'danger',
+        copy: stripeProviderStatus?.lastError || 'Provider verification failed. Review credentials and retry.',
+      };
+    }
+
+    return {
+      heading: 'Stripe is not configured',
+      badgeLabel: 'Not configured',
+      badgeTone: 'warning',
+      copy: 'Save your Stripe API credentials to configure checkout.',
+    };
+  }, [stripeHasSavedRequiredKeys, stripeProviderStatus?.lastError, stripeProviderStatus?.state]);
+  const stripeConnectionSummaryRows = useMemo(
+    () => [
+      { label: 'Status', value: stripeConnectionPresentation.badgeLabel },
+      { label: 'Mode', value: stripeRuntimeModeLabel },
+      { label: 'Credentials source', value: stripeCheckoutSourceLabel },
+      { label: 'API keys', value: stripeHasSavedRequiredKeys ? 'Saved' : 'Missing required keys' },
+      { label: 'Webhook', value: stripeWebhookSourceLabel },
+      { label: 'Last verified', value: formatDateTime(stripeSetupStatus.lastVerifiedAt) },
+    ],
+    [
+      stripeConnectionPresentation.badgeLabel,
+      stripeRuntimeModeLabel,
+      stripeCheckoutSourceLabel,
+      stripeHasSavedRequiredKeys,
+      stripeWebhookSourceLabel,
+      stripeSetupStatus.lastVerifiedAt,
+    ]
   );
 
   useEffect(() => {
@@ -4206,7 +4262,7 @@ export default function SettingsWorkspace() {
         open={Boolean(activePaymentDrawer)}
         subtitle={
           activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.STRIPE
-            ? 'Configure credentials, checkout methods, and Stripe safety checks.'
+            ? 'Connect Stripe and manage checkout credentials.'
             : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.PAYPAL
               ? 'Status and rollout notes for PayPal checkout support.'
               : activePaymentDrawer === PAYMENT_PROVIDER_DRAWER.MANUAL
@@ -4227,30 +4283,21 @@ export default function SettingsWorkspace() {
           <div className={styles.drawerStack}>
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
-                <h4>Connection status</h4>
-                <AdminStatusChip tone={stripeSetupStatus.tone}>{stripeSetupStatus.label}</AdminStatusChip>
+                <h4>{stripeConnectionPresentation.heading}</h4>
+                <AdminStatusChip tone={stripeConnectionPresentation.badgeTone}>{stripeConnectionPresentation.badgeLabel}</AdminStatusChip>
               </div>
-              <p className={styles.statusText}>{stripeSetupStatus.detail}</p>
-              <div className={styles.compactDrawerGrid}>
-                <p className={styles.compactMeta}>
-                  <strong>API keys:</strong> {stripeSetupStatus.label}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Runtime:</strong> {stripeCheckoutSourceLabel}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Webhook:</strong> {stripeWebhookSourceLabel}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Webhook endpoint:</strong> {stripeWebhookEndpointStatusLabel}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Verified:</strong>{' '}
-                  {stripeSetupStatus.lastVerifiedAt ? new Date(stripeSetupStatus.lastVerifiedAt).toLocaleString() : 'Not verified yet'}
-                </p>
-                <p className={styles.compactMeta}>
-                  <strong>Mode:</strong> {stripeRuntimeModeLabel}
-                </p>
+              <p className={styles.compactMeta}>{stripeConnectionPresentation.copy}</p>
+              <div className={styles.statusSummaryList}>
+                {stripeConnectionSummaryRows.map((row) => (
+                  <div className={styles.statusSummaryRow} key={`stripe-summary-${row.label}`}>
+                    <span className={styles.statusSummaryLabel}>{row.label}</span>
+                    <span className={styles.statusSummaryValue}>{row.value}</span>
+                  </div>
+                ))}
+                <div className={styles.statusSummaryRow}>
+                  <span className={styles.statusSummaryLabel}>Webhook endpoint</span>
+                  <span className={styles.statusSummaryValue}>{stripeWebhookEndpointStatusLabel}</span>
+                </div>
               </div>
               {showStripeRuntimeMismatchWarning ? (
                 <p className={styles.setupFixText}>
@@ -4264,6 +4311,9 @@ export default function SettingsWorkspace() {
                 <h4>Credentials</h4>
                 <AdminTooltip content="Credentials are encrypted at rest. Inputs clear after save and show masked placeholders from saved metadata." />
               </div>
+              <p className={styles.compactMeta}>
+                Save API keys and webhook secret, then verify Stripe API and add the webhook endpoint in Stripe.
+              </p>
               <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField hint="pk_test_... or pk_live_..." label="Publishable key">
                   <AdminInput
@@ -4272,6 +4322,9 @@ export default function SettingsWorkspace() {
                     type="password"
                     value={providerForms.STRIPE.publishableKey}
                   />
+                  {stripeCredentialMaskMap.PUBLISHABLE_KEY ? (
+                    <p className={styles.credentialSavedHint}>Saved: {stripeCredentialMaskMap.PUBLISHABLE_KEY}</p>
+                  ) : null}
                 </AdminField>
                 <AdminField hint="sk_test_... or sk_live_..." label="Secret key">
                   <AdminInput
@@ -4280,14 +4333,20 @@ export default function SettingsWorkspace() {
                     type="password"
                     value={providerForms.STRIPE.secretKey}
                   />
+                  {stripeCredentialMaskMap.SECRET_KEY ? (
+                    <p className={styles.credentialSavedHint}>Saved: {stripeCredentialMaskMap.SECRET_KEY}</p>
+                  ) : null}
                 </AdminField>
-                <AdminField hint="Optional but recommended for DB runtime verification." label="Webhook secret">
+                <AdminField hint="Used to verify webhook signatures from Stripe." label="Webhook secret">
                   <AdminInput
                     onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
                     placeholder={stripeWebhookPlaceholder}
                     type="password"
                     value={providerForms.STRIPE.webhookSecret}
                   />
+                  {stripeCredentialMaskMap.WEBHOOK_SECRET ? (
+                    <p className={styles.credentialSavedHint}>Saved: {stripeCredentialMaskMap.WEBHOOK_SECRET}</p>
+                  ) : null}
                 </AdminField>
                 <label className={styles.field}>
                   <span>Mode</span>
@@ -4311,14 +4370,25 @@ export default function SettingsWorkspace() {
                     handleSaveProviderCredentials('STRIPE', {
                       publishableKey: providerForms.STRIPE.publishableKey.trim() || undefined,
                       secretKey: providerForms.STRIPE.secretKey.trim() || undefined,
-                      webhookSecret: providerForms.STRIPE.webhookSecret.trim() || undefined,
                       mode: providerForms.STRIPE.mode,
                     })
                   }
                   size="sm"
                   variant="secondary"
                 >
-                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save credentials'}
+                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save API keys'}
+                </AdminButton>
+                <AdminButton
+                  disabled={providerActionById.STRIPE === 'saving' || !providerForms.STRIPE.webhookSecret.trim()}
+                  onClick={() =>
+                    handleSaveProviderCredentials('STRIPE', {
+                      webhookSecret: providerForms.STRIPE.webhookSecret.trim() || undefined,
+                    })
+                  }
+                  size="sm"
+                  variant="secondary"
+                >
+                  {providerActionById.STRIPE === 'saving' ? 'Saving...' : 'Save webhook secret'}
                 </AdminButton>
                 <AdminButton
                   disabled={providerActionById.STRIPE === 'verifying'}
@@ -4332,12 +4402,12 @@ export default function SettingsWorkspace() {
                   {setupCopiedCommandId === 'stripe-webhook-endpoint' ? 'Copied endpoint' : 'Copy webhook endpoint'}
                 </AdminButton>
               </div>
-              <p className={styles.compactMeta}>
-                Create this endpoint in Stripe and paste the whsec signing secret here. Orders are only created after this webhook succeeds.
-              </p>
-              <p className={styles.compactMeta}>
-                <strong>Endpoint URL:</strong> {stripeWebhookEndpoint || 'Unavailable until this page has a valid origin'}
-              </p>
+              <div className={styles.endpointInlineRow}>
+                <span className={styles.statusSummaryLabel}>Endpoint URL</span>
+                <span className={styles.endpointMonospace}>
+                  {stripeWebhookEndpoint || 'Unavailable until this page has a valid origin'}
+                </span>
+              </div>
               {!stripeWebhookEndpointReady ? (
                 <p className={styles.setupFixText}>
                   Store URL needs setup. {stripeWebhookEndpointMessage} Set NEXT_PUBLIC_STORE_URL to the deployed domain and redeploy before relying on webhook readiness.
@@ -4353,17 +4423,21 @@ export default function SettingsWorkspace() {
                   Credentials saved securely. Secret values are encrypted and hidden.
                 </p>
               ) : null}
-              {stripeSavedCredentialMeta.length ? (
-                <div className={styles.maskedSecretList}>
-                  {stripeSavedCredentialMeta.map((entry) => (
-                    <p className={styles.compactMeta} key={entry.key}>
-                      <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
-                    </p>
-                  ))}
-                </div>
-              ) : (
+              {!stripeSavedCredentialMeta.length ? (
                 <p className={styles.compactMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
-              )}
+              ) : null}
+              {stripeSavedCredentialMeta.length ? (
+                <details className={styles.drawerDetails}>
+                  <summary className={styles.drawerDetailsSummary}>Developer details</summary>
+                  <div className={styles.drawerDetailsBody}>
+                    {stripeSavedCredentialMeta.map((entry) => (
+                      <p className={styles.compactMeta} key={entry.key}>
+                        <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
+                      </p>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </AdminCard>
 
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
@@ -4377,29 +4451,42 @@ export default function SettingsWorkspace() {
                   </span>
                 ))}
               </div>
-              <p className={styles.compactMeta}>Wallets depend on HTTPS, live mode, and domain checks.</p>
+              <p className={styles.compactMeta}>Wallet availability depends on HTTPS, live mode, and domain checks.</p>
             </AdminCard>
 
             <AdminCard as="section" className={styles.compactDrawerCard} variant="card">
               <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                 <h4>Advanced</h4>
               </div>
-              <p className={styles.compactMeta}>
-                Disconnecting Stripe removes DB-backed credentials. Env fallback may remain active if env keys still exist.
-              </p>
-              <div className={styles.compactActionRow}>
-                <AdminButton
-                  disabled={providerActionById.STRIPE === 'disconnecting'}
-                  onClick={() => handleDisconnectProvider('STRIPE')}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {providerActionById.STRIPE === 'disconnecting' ? 'Disconnecting...' : 'Disconnect Stripe'}
-                </AdminButton>
-                <AdminButton onClick={() => handleCopyCommand('stripe-webhook-cli', 'npm run doopify:stripe:webhook')} size="sm" variant="ghost">
-                  {setupCopiedCommandId === 'stripe-webhook-cli' ? 'Copied CLI command' : 'Copy webhook CLI command'}
-                </AdminButton>
-              </div>
+              <p className={styles.compactMeta}>Developer tooling and destructive actions.</p>
+              <AdminButton
+                className={styles.advancedToggle}
+                onClick={() => setShowStripeAdvanced((current) => !current)}
+                size="sm"
+                variant="secondary"
+              >
+                {showStripeAdvanced ? 'Hide advanced options' : 'Show advanced options'}
+              </AdminButton>
+              {showStripeAdvanced ? (
+                <div className={styles.compactDrawerGrid}>
+                  <p className={styles.compactMeta}>
+                    Disconnecting Stripe removes DB-backed credentials. Env fallback may remain active if env keys still exist.
+                  </p>
+                  <div className={styles.compactActionRow}>
+                    <AdminButton
+                      disabled={providerActionById.STRIPE === 'disconnecting'}
+                      onClick={() => handleDisconnectProvider('STRIPE')}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      {providerActionById.STRIPE === 'disconnecting' ? 'Disconnecting...' : 'Disconnect Stripe'}
+                    </AdminButton>
+                    <AdminButton onClick={() => handleCopyCommand('stripe-webhook-cli', 'npm run doopify:stripe:webhook')} size="sm" variant="ghost">
+                      {setupCopiedCommandId === 'stripe-webhook-cli' ? 'Copied CLI command' : 'Copy webhook CLI command'}
+                    </AdminButton>
+                  </div>
+                </div>
+              ) : null}
             </AdminCard>
           </div>
         ) : null}

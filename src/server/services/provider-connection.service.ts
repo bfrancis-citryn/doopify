@@ -512,8 +512,10 @@ function normalizeCredentialInput(provider: SupportedProvider, input: Record<str
 async function upsertProviderIntegrationCredentials(input: {
   provider: SupportedProvider
   normalizedCredentials: Record<string, string>
+  clearVerificationMeta?: boolean
 }) {
   const { provider, normalizedCredentials } = input
+  const clearVerificationMeta = input.clearVerificationMeta ?? true
   const config = PROVIDER_CONFIG[provider]
 
   await prisma.$transaction(async (tx) => {
@@ -589,14 +591,16 @@ async function upsertProviderIntegrationCredentials(input: {
       })
     }
 
-    await tx.integrationSecret.deleteMany({
-      where: {
-        integrationId: integration.id,
-        key: {
-          in: [META_VERIFIED_AT, META_LAST_VERIFIED_AT, META_LAST_ERROR, META_VERIFICATION_DATA],
+    if (clearVerificationMeta) {
+      await tx.integrationSecret.deleteMany({
+        where: {
+          integrationId: integration.id,
+          key: {
+            in: [META_VERIFIED_AT, META_LAST_VERIFIED_AT, META_LAST_ERROR, META_VERIFICATION_DATA],
+          },
         },
-      },
-    })
+      })
+    }
 
     await tx.integration.updateMany({
       where: {
@@ -966,6 +970,22 @@ export async function saveProviderCredentials(provider: SupportedProvider, crede
     const existing = await findPreferredProviderIntegration(provider)
     const existingSecretMap = existing ? buildSecretMap(existing.secrets) : new Map<string, string>()
     const existingCredentials = getDecryptedCredentials(provider, existingSecretMap)
+    const existingModeValue =
+      typeof existingCredentials.MODE === 'string' ? existingCredentials.MODE.trim().toLowerCase() : ''
+    const existingMode =
+      existingModeValue === 'test' || existingModeValue === 'live'
+        ? existingModeValue
+        : existingCredentials.SECRET_KEY?.startsWith('sk_live_')
+          ? 'live'
+          : existingCredentials.SECRET_KEY?.startsWith('sk_test_')
+            ? 'test'
+            : null
+
+    const apiCredentialChanged =
+      (typeof normalized.PUBLISHABLE_KEY === 'string' &&
+        normalized.PUBLISHABLE_KEY !== existingCredentials.PUBLISHABLE_KEY) ||
+      (typeof normalized.SECRET_KEY === 'string' && normalized.SECRET_KEY !== existingCredentials.SECRET_KEY) ||
+      (typeof normalized.MODE === 'string' && normalizeStripeMode(normalized.MODE) !== existingMode)
 
     const mergedCredentials: Record<string, string> = {
       ...existingCredentials,
@@ -987,6 +1007,7 @@ export async function saveProviderCredentials(provider: SupportedProvider, crede
     await upsertProviderIntegrationCredentials({
       provider,
       normalizedCredentials: mergedCredentials,
+      clearVerificationMeta: apiCredentialChanged,
     })
   } else {
     await upsertProviderIntegrationCredentials({

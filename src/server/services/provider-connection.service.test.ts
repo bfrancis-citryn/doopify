@@ -415,6 +415,43 @@ describe('provider connection service', () => {
     const serialized = JSON.stringify(status)
     expect(serialized).not.toContain('sk_test_existing_5678')
     expect(serialized).not.toContain('whsec_existing_9012')
+    const metaDeleteCalls = (mocks.prisma.integrationSecret.deleteMany.mock.calls as Array<[any]>).filter(
+      ([arg]) => Array.isArray(arg?.where?.key?.in)
+    )
+    expect(metaDeleteCalls.length).toBe(0)
+  })
+
+  it('keeps Stripe API verification metadata when only webhookSecret is updated', async () => {
+    const existingIntegration = {
+      id: 'int_stripe_webhook_only',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      createdAt: new Date('2026-05-07T06:00:00.000Z'),
+      updatedAt: new Date('2026-05-07T06:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_9012' },
+        { id: 'sec_4', key: 'MODE', value: 'enc:test' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T06:01:00.000Z' },
+      ],
+    }
+
+    mocks.prisma.integration.findMany.mockResolvedValue([existingIntegration])
+
+    const status = await saveProviderCredentials('STRIPE', {
+      webhookSecret: 'whsec_updated_0000',
+    })
+
+    expect(status.state).toBe('VERIFIED')
+    const webhookUpsert = (mocks.prisma.integrationSecret.upsert.mock.calls as Array<[any]>).find(
+      ([arg]) => arg?.create?.key === 'WEBHOOK_SECRET'
+    )
+    expect(webhookUpsert?.[0]?.create?.value).toBe('enc:whsec_updated_0000')
+    const metaDeleteCalls = (mocks.prisma.integrationSecret.deleteMany.mock.calls as Array<[any]>).filter(
+      ([arg]) => Array.isArray(arg?.where?.key?.in)
+    )
+    expect(metaDeleteCalls.length).toBe(0)
   })
 
   it('returns Stripe masked metadata with prefix and last4 only', async () => {
@@ -570,6 +607,57 @@ describe('provider connection service', () => {
           status: 'INACTIVE',
         },
       })
+    )
+    const metaDeleteCalls = (mocks.prisma.integrationSecret.deleteMany.mock.calls as Array<[any]>).filter(
+      ([arg]) => Array.isArray(arg?.where?.key?.in)
+    )
+    expect(metaDeleteCalls.length).toBeGreaterThan(0)
+    expect(metaDeleteCalls[0][0].where.key.in).toEqual(
+      expect.arrayContaining(['META_VERIFIED_AT', 'META_LAST_VERIFIED_AT', 'META_LAST_ERROR', 'META_VERIFICATION_DATA'])
+    )
+  })
+
+  it('clears Stripe verification metadata when publishableKey changes', async () => {
+    const existingIntegration = {
+      id: 'int_stripe_api_key_change',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      createdAt: new Date('2026-05-07T09:00:00.000Z'),
+      updatedAt: new Date('2026-05-07T09:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_9012' },
+        { id: 'sec_4', key: 'MODE', value: 'enc:test' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T09:01:00.000Z' },
+      ],
+    }
+    const postSaveIntegration = {
+      ...existingIntegration,
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_changed_9999' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_9012' },
+        { id: 'sec_4', key: 'MODE', value: 'enc:test' },
+      ],
+    }
+
+    mocks.prisma.integration.findMany
+      .mockResolvedValueOnce([existingIntegration])
+      .mockResolvedValueOnce([existingIntegration])
+      .mockResolvedValue([postSaveIntegration])
+
+    const status = await saveProviderCredentials('STRIPE', {
+      publishableKey: 'pk_test_changed_9999',
+    })
+
+    expect(status.state).toBe('CREDENTIALS_SAVED')
+    const metaDeleteCalls = (mocks.prisma.integrationSecret.deleteMany.mock.calls as Array<[any]>).filter(
+      ([arg]) => Array.isArray(arg?.where?.key?.in)
+    )
+    expect(metaDeleteCalls.length).toBeGreaterThan(0)
+    expect(metaDeleteCalls[0][0].where.key.in).toEqual(
+      expect.arrayContaining(['META_VERIFIED_AT', 'META_LAST_VERIFIED_AT', 'META_LAST_ERROR', 'META_VERIFICATION_DATA'])
     )
   })
 })

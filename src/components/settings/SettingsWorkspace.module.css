@@ -1076,6 +1076,78 @@
   word-break: break-word;
 }
 
+.statusSummaryList {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.statusSummaryRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.56rem;
+  align-items: flex-start;
+  border-bottom: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
+  padding-bottom: 0.3rem;
+}
+
+.statusSummaryLabel {
+  font-size: 0.72rem;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+.statusSummaryValue {
+  font-size: 0.75rem;
+  color: var(--on-surface);
+  text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.credentialSavedHint {
+  margin: 0.24rem 0 0;
+  font-size: 0.7rem;
+  color: var(--on-surface-variant);
+}
+
+.endpointInlineRow {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.72rem;
+  padding: 0.52rem 0.56rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 78%, transparent);
+  display: grid;
+  gap: 0.22rem;
+}
+
+.endpointMonospace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--on-surface);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.drawerDetails {
+  border: 1px solid color-mix(in srgb, var(--glass-border) 80%, transparent);
+  border-radius: 0.72rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 78%, transparent);
+  padding: 0.44rem 0.54rem;
+}
+
+.drawerDetailsSummary {
+  cursor: pointer;
+  font-size: 0.74rem;
+  color: var(--on-surface-variant);
+  user-select: none;
+}
+
+.drawerDetailsBody {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.26rem;
+}
+
 .compactChipRow {
   gap: 0.32rem;
 }
@@ -1098,6 +1170,17 @@
   flex-wrap: wrap;
   gap: 0.36rem;
   align-items: center;
+}
+
+@media (max-width: 640px) {
+  .statusSummaryRow {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .statusSummaryValue {
+    text-align: left;
+  }
 }
 
 .compactInfoStrip {
