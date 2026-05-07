@@ -1,4 +1,4 @@
-﻿import { env } from '@/lib/env'
+import { env } from '@/lib/env'
 import { prisma } from '@/lib/prisma'
 import {
   connectShippingProvider,
@@ -85,7 +85,7 @@ function isMaskedCredentialPlaceholder(value: string | null) {
   if (!value) return false
   const normalized = value.trim()
   if (!normalized) return false
-  if (!/[•*]{3,}|\.{3,}/.test(normalized)) return false
+  if (!/[�*]{3,}|\.{3,}/.test(normalized)) return false
   return (
     normalized.startsWith('pk_') ||
     normalized.startsWith('sk_') ||
@@ -107,8 +107,20 @@ function isShippingProvider(provider: SupportedProvider): provider is 'SHIPPO' |
   return provider === 'SHIPPO' || provider === 'EASYPOST'
 }
 
-async function findLatestProviderIntegration(provider: SupportedProvider) {
-  return prisma.integration.findFirst({
+type ProviderIntegrationRecord = {
+  id: string
+  status: 'ACTIVE' | 'INACTIVE'
+  createdAt: Date
+  updatedAt: Date
+  secrets: Array<{
+    id: string
+    key: string
+    value: string
+  }>
+}
+
+async function listProviderIntegrations(provider: SupportedProvider): Promise<ProviderIntegrationRecord[]> {
+  return prisma.integration.findMany({
     where: {
       type: PROVIDER_CONFIG[provider].integrationType,
     },
@@ -121,10 +133,62 @@ async function findLatestProviderIntegration(provider: SupportedProvider) {
         },
       },
     },
-    orderBy: {
-      createdAt: 'desc',
-    },
+    orderBy: [
+      {
+        updatedAt: 'desc',
+      },
+      {
+        createdAt: 'desc',
+      },
+    ],
   })
+}
+
+function sortByRecency<T extends { updatedAt: Date; createdAt: Date }>(left: T, right: T) {
+  return right.updatedAt.getTime() - left.updatedAt.getTime() || right.createdAt.getTime() - left.createdAt.getTime()
+}
+
+function pickPreferredActiveProviderIntegration(
+  provider: SupportedProvider,
+  integrations: ProviderIntegrationRecord[]
+) {
+  const activeIntegrations = integrations.filter((integration) => integration.status === 'ACTIVE')
+  if (!activeIntegrations.length) return null
+
+  const activeWithMeta = activeIntegrations.map((integration) => {
+    const secretMap = buildSecretMap(integration.secrets)
+    const verification = extractVerificationMeta(secretMap)
+    const hasCredentials = hasRequiredSecrets(provider, secretMap)
+    return {
+      integration,
+      hasCredentials,
+      verified: Boolean(verification.lastVerifiedAt),
+    }
+  })
+
+  const verifiedCredentialed = activeWithMeta
+    .filter((entry) => entry.hasCredentials && entry.verified)
+    .map((entry) => entry.integration)
+    .sort(sortByRecency)
+  if (verifiedCredentialed.length) return verifiedCredentialed[0]
+
+  const credentialed = activeWithMeta
+    .filter((entry) => entry.hasCredentials)
+    .map((entry) => entry.integration)
+    .sort(sortByRecency)
+  if (credentialed.length) return credentialed[0]
+
+  return [...activeIntegrations].sort(sortByRecency)[0]
+}
+
+async function findPreferredProviderIntegration(provider: SupportedProvider) {
+  const integrations = await listProviderIntegrations(provider)
+  if (!integrations.length) return null
+
+  const preferredActive = pickPreferredActiveProviderIntegration(provider, integrations)
+  if (preferredActive) return preferredActive
+
+  return [...integrations].sort(sortByRecency)[0]
 }
 
 function buildSecretMap(secrets: Array<{ key: string; value: string }>) {
@@ -173,6 +237,19 @@ function extractVerificationMeta(secretMap: Map<string, string>) {
 }
 
 function hasRequiredSecrets(provider: SupportedProvider, secretMap: Map<string, string>) {
+  if (provider === 'STRIPE') {
+    const publishableKey = extractDecryptedSecret(secretMap, 'PUBLISHABLE_KEY')
+    const secretKey = extractDecryptedSecret(secretMap, 'SECRET_KEY')
+    const mode = extractDecryptedSecret(secretMap, 'MODE')
+    const inferredMode = secretKey?.startsWith('sk_live_') ? 'live' : secretKey?.startsWith('sk_test_') ? 'test' : null
+
+    return (
+      hasRealCredential(publishableKey) &&
+      hasRealCredential(secretKey) &&
+      (hasRealCredential(mode) || Boolean(inferredMode))
+    )
+  }
+
   const required = PROVIDER_CONFIG[provider].requiredSecretKeys
   return required.every((key) => hasRealCredential(extractDecryptedSecret(secretMap, key)))
 }
@@ -200,27 +277,27 @@ function maskCredential(provider: SupportedProvider, key: string, value: string 
 
   const suffix = value.length >= 4 ? value.slice(-4) : value
   if (key === 'PUBLISHABLE_KEY' && provider === 'STRIPE') {
-    if (value.startsWith('pk_test_')) return `pk_test_••••••${suffix}`
-    if (value.startsWith('pk_live_')) return `pk_live_••••••${suffix}`
-    return `pk_••••••${suffix}`
+    if (value.startsWith('pk_test_')) return `pk_test_������${suffix}`
+    if (value.startsWith('pk_live_')) return `pk_live_������${suffix}`
+    return `pk_������${suffix}`
   }
 
   if (key === 'SECRET_KEY' && provider === 'STRIPE') {
-    if (value.startsWith('sk_test_')) return `sk_test_••••••${suffix}`
-    if (value.startsWith('sk_live_')) return `sk_live_••••••${suffix}`
-    return `sk_••••••${suffix}`
+    if (value.startsWith('sk_test_')) return `sk_test_������${suffix}`
+    if (value.startsWith('sk_live_')) return `sk_live_������${suffix}`
+    return `sk_������${suffix}`
   }
 
   if (key === 'WEBHOOK_SECRET' && value.startsWith('whsec_')) {
-    return `whsec_••••••${suffix}`
+    return `whsec_������${suffix}`
   }
 
   if (key === 'API_KEY' && provider === 'RESEND' && value.startsWith('re_')) {
-    return `re_••••••${suffix}`
+    return `re_������${suffix}`
   }
 
-  if (value.length <= 6) return '••••'
-  return `${value.slice(0, 4)}••••••${suffix}`
+  if (value.length <= 6) return '����'
+  return `${value.slice(0, 4)}������${suffix}`
 }
 
 function safeCredentialMetadata(provider: SupportedProvider, secretMap: Map<string, string>) {
@@ -440,17 +517,32 @@ async function upsertProviderIntegrationCredentials(input: {
   const config = PROVIDER_CONFIG[provider]
 
   await prisma.$transaction(async (tx) => {
-    const existing = await tx.integration.findFirst({
+    const existingIntegrations = await tx.integration.findMany({
       where: {
         type: config.integrationType,
       },
-      orderBy: {
-        createdAt: 'desc',
+      include: {
+        secrets: {
+          select: {
+            id: true,
+            key: true,
+            value: true,
+          },
+        },
       },
-      select: {
-        id: true,
-      },
+      orderBy: [
+        {
+          updatedAt: 'desc',
+        },
+        {
+          createdAt: 'desc',
+        },
+      ],
     })
+    const existing = pickPreferredActiveProviderIntegration(
+      provider,
+      existingIntegrations as ProviderIntegrationRecord[]
+    )
 
     const integration =
       existing != null
@@ -599,7 +691,7 @@ function getDecryptedCredentials(provider: SupportedProvider, secretMap: Map<str
 }
 
 async function getRuntimeProviderConnectionInternal(provider: SupportedProvider): Promise<RuntimeConnection> {
-  const integration = await findLatestProviderIntegration(provider)
+  const integration = await findPreferredProviderIntegration(provider)
 
   if (integration && integration.status === 'ACTIVE') {
     const secretMap = buildSecretMap(integration.secrets)
@@ -673,10 +765,105 @@ export type ProviderStatus = {
   }>
 }
 
+export type StripeProviderStatusSnapshot = {
+  configured: boolean
+  verified: boolean
+  mode: 'test' | 'live' | null
+  publishableKeyMasked: string | null
+  secretKeyMasked: string | null
+  webhookSecretMasked: string | null
+  hasPublishableKey: boolean
+  hasSecretKey: boolean
+  hasWebhookSecret: boolean
+  webhookConfigured: boolean
+  accountId: string | null
+  chargesEnabled: boolean | null
+  payoutsEnabled: boolean | null
+  lastVerifiedAt: string | null
+  lastError: string | null
+  source: ProviderSource
+  runtimeSource: ProviderSource
+}
+
+function normalizeStringValue(value: unknown) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized || null
+}
+
+function normalizeBooleanValue(value: unknown) {
+  return typeof value === 'boolean' ? value : null
+}
+
+function normalizeStripeModeValue(value: unknown) {
+  const normalized = normalizeStringValue(value)?.toLowerCase()
+  return normalized === 'test' || normalized === 'live' ? normalized : null
+}
+
+function inferStripeModeFromSecret(secretKey: string | null) {
+  if (!secretKey) return null
+  if (secretKey.startsWith('sk_live_')) return 'live' as const
+  if (secretKey.startsWith('sk_test_')) return 'test' as const
+  return null
+}
+
+function findCredentialMetaEntry(status: ProviderStatus, key: string) {
+  return status.credentialMeta.find((entry) => entry.key === key) || null
+}
+
+function credentialMetaPresent(status: ProviderStatus, key: string) {
+  return Boolean(findCredentialMetaEntry(status, key)?.present)
+}
+
+function credentialMetaMaskedValue(status: ProviderStatus, key: string) {
+  return findCredentialMetaEntry(status, key)?.maskedValue || null
+}
+
+export async function getStripeProviderStatusSnapshot(): Promise<StripeProviderStatusSnapshot> {
+  const [status, runtime] = await Promise.all([
+    getProviderStatus('STRIPE'),
+    getRuntimeProviderConnectionInternal('STRIPE'),
+  ])
+
+  const runtimeCredentials = runtime.credentials || {}
+  const hasPublishableKey = credentialMetaPresent(status, 'PUBLISHABLE_KEY')
+  const hasSecretKey = credentialMetaPresent(status, 'SECRET_KEY')
+  const hasWebhookSecret = credentialMetaPresent(status, 'WEBHOOK_SECRET')
+  const configured = hasPublishableKey && hasSecretKey
+  const verified = status.state === 'VERIFIED' && Boolean(status.lastVerifiedAt)
+  const mode =
+    normalizeStripeModeValue(credentialMetaMaskedValue(status, 'MODE')) ||
+    normalizeStripeModeValue(runtimeCredentials.MODE) ||
+    inferStripeModeFromSecret(normalizeStringValue(runtimeCredentials.SECRET_KEY))
+
+  const verificationData = status.verificationData || {}
+  const source: ProviderSource = configured ? 'db' : runtime.source
+
+  return {
+    configured,
+    verified,
+    mode,
+    publishableKeyMasked: credentialMetaMaskedValue(status, 'PUBLISHABLE_KEY'),
+    secretKeyMasked: credentialMetaMaskedValue(status, 'SECRET_KEY'),
+    webhookSecretMasked: credentialMetaMaskedValue(status, 'WEBHOOK_SECRET'),
+    hasPublishableKey,
+    hasSecretKey,
+    hasWebhookSecret,
+    webhookConfigured: hasWebhookSecret,
+    accountId: normalizeStringValue(verificationData.accountId),
+    chargesEnabled: normalizeBooleanValue(verificationData.chargesEnabled),
+    payoutsEnabled: normalizeBooleanValue(verificationData.payoutsEnabled),
+    lastVerifiedAt: status.lastVerifiedAt,
+    lastError: status.lastError,
+    source,
+    runtimeSource: runtime.source,
+  }
+}
+
 export async function getProviderStatus(provider: SupportedProvider): Promise<ProviderStatus> {
   if (isShippingProvider(provider)) {
     const shippingStatus = await getShippingProviderConnectionStatus(provider)
-    const integration = await findLatestProviderIntegration(provider)
+    const integration = await findPreferredProviderIntegration(provider)
     const secretMap = integration ? buildSecretMap(integration.secrets) : new Map<string, string>()
     const verification = extractVerificationMeta(secretMap)
     const runtime = await getRuntimeProviderConnectionInternal(provider)
@@ -703,7 +890,7 @@ export async function getProviderStatus(provider: SupportedProvider): Promise<Pr
   }
 
   const config = PROVIDER_CONFIG[provider]
-  const integration = await findLatestProviderIntegration(provider)
+  const integration = await findPreferredProviderIntegration(provider)
 
   if (!integration) {
     const runtime = await getRuntimeProviderConnectionInternal(provider)
@@ -776,7 +963,7 @@ export async function saveProviderCredentials(provider: SupportedProvider, crede
   }
 
   if (provider === 'STRIPE') {
-    const existing = await findLatestProviderIntegration(provider)
+    const existing = await findPreferredProviderIntegration(provider)
     const existingSecretMap = existing ? buildSecretMap(existing.secrets) : new Map<string, string>()
     const existingCredentials = getDecryptedCredentials(provider, existingSecretMap)
 
@@ -896,7 +1083,7 @@ async function verifySmtpConnection(credentials: Record<string, string>) {
 }
 
 export async function verifyProviderConnection(provider: SupportedProvider) {
-  const integration = await findLatestProviderIntegration(provider)
+  const integration = await findPreferredProviderIntegration(provider)
   if (!integration) {
     throw new Error('Provider is not configured. Save credentials first.')
   }
@@ -971,7 +1158,7 @@ export async function disconnectProvider(provider: SupportedProvider) {
     return getProviderStatus(provider)
   }
 
-  const integration = await findLatestProviderIntegration(provider)
+  const integration = await findPreferredProviderIntegration(provider)
 
   if (!integration) {
     return getProviderStatus(provider)

@@ -3,6 +3,7 @@ import { requireOwner } from '@/server/auth/require-auth'
 import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import {
   disconnectProvider,
+  getStripeProviderStatusSnapshot,
   getProviderStatus,
   parseSupportedProvider,
 } from '@/server/services/provider-connection.service'
@@ -25,7 +26,9 @@ export async function GET(req: Request, context: RouteContext) {
 
   try {
     const status = await getProviderStatus(provider)
-    return ok({ provider, status })
+    const stripeProviderStatus =
+      provider === 'STRIPE' ? await getStripeProviderStatusSnapshot() : null
+    return ok({ provider, status, stripeProviderStatus })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load provider status'
     console.error('[GET /api/settings/providers/[provider]]', message)

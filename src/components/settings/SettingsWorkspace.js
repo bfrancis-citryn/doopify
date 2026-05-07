@@ -1139,10 +1139,31 @@ export default function SettingsWorkspace() {
         for (const entry of providerResult.value?.providers || []) {
           nextMap[entry.provider] = entry;
         }
+        const stripeProviderSnapshot = providerResult.value?.stripeProviderStatus || null;
         if (runtimeResult.status === 'fulfilled') {
-          setStripeRuntimeStatus(runtimeResult.value || null);
+          const runtimePayload = runtimeResult.value || null;
+          if (runtimePayload && stripeProviderSnapshot && !runtimePayload.providerStatus) {
+            runtimePayload.providerStatus = stripeProviderSnapshot;
+          }
+          setStripeRuntimeStatus(runtimePayload);
         } else {
-          setStripeRuntimeStatus(null);
+          setStripeRuntimeStatus(
+            stripeProviderSnapshot
+              ? {
+                  source: stripeProviderSnapshot.runtimeSource || stripeProviderSnapshot.source || 'none',
+                  mode: stripeProviderSnapshot.mode || null,
+                  hasPublishableKey: stripeProviderSnapshot.hasPublishableKey,
+                  hasSecretKey: stripeProviderSnapshot.hasSecretKey,
+                  hasWebhookSecret: stripeProviderSnapshot.hasWebhookSecret,
+                  webhookSource: stripeProviderSnapshot.hasWebhookSecret ? stripeProviderSnapshot.source : 'none',
+                  verified: stripeProviderSnapshot.verified,
+                  accountId: stripeProviderSnapshot.accountId,
+                  chargesEnabled: stripeProviderSnapshot.chargesEnabled,
+                  payoutsEnabled: stripeProviderSnapshot.payoutsEnabled,
+                  providerStatus: stripeProviderSnapshot,
+                }
+              : null
+          );
           setProviderStatusError('Stripe runtime status could not be loaded. Provider credential status is still shown from DB.');
         }
         setProviderStatusMap(nextMap);
@@ -1319,9 +1340,14 @@ export default function SettingsWorkspace() {
   );
   const stripeCheckoutSourceLabel =
     STRIPE_CHECKOUT_SOURCE_LABEL[stripeRuntimeStatus?.source] || STRIPE_CHECKOUT_SOURCE_LABEL.none;
+  const stripeResolvedWebhookSource =
+    stripeRuntimeStatus?.providerStatus?.webhookConfigured
+      ? stripeRuntimeStatus?.providerStatus?.source || 'db'
+      : stripeRuntimeStatus?.webhookSource;
   const stripeWebhookSourceLabel =
-    STRIPE_WEBHOOK_SOURCE_LABEL[stripeRuntimeStatus?.webhookSource] || STRIPE_WEBHOOK_SOURCE_LABEL.none;
-  const stripeRuntimeModeLabel = stripeRuntimeStatus?.mode || 'unknown';
+    STRIPE_WEBHOOK_SOURCE_LABEL[stripeResolvedWebhookSource] || STRIPE_WEBHOOK_SOURCE_LABEL.none;
+  const stripeRuntimeModeLabel =
+    stripeRuntimeStatus?.mode || stripeRuntimeStatus?.providerStatus?.mode || 'unknown';
   const stripeRuntimeReady = Boolean(stripeRuntimeStatus?.source && stripeRuntimeStatus.source !== 'none');
   const stripeWebhookEndpoint = stripeRuntimeStatus?.webhookEndpoint || '';
   const stripeWebhookEndpointReady = Boolean(stripeRuntimeStatus?.webhookEndpointReady);
@@ -1462,6 +1488,37 @@ export default function SettingsWorkspace() {
       }),
     [providerForms.STRIPE.webhookSecret, stripeCredentialMaskMap.WEBHOOK_SECRET]
   );
+  const stripeSavedMode = useMemo(() => {
+    const raw = String(stripeCredentialMaskMap.MODE || stripeRuntimeStatus?.providerStatus?.mode || stripeRuntimeStatus?.mode || '')
+      .trim()
+      .toLowerCase();
+    return raw === 'live' ? 'live' : 'test';
+  }, [stripeCredentialMaskMap.MODE, stripeRuntimeStatus?.mode, stripeRuntimeStatus?.providerStatus?.mode]);
+  const stripeHasSavedRequiredKeys = Boolean(
+    stripeCredentialMaskMap.PUBLISHABLE_KEY && stripeCredentialMaskMap.SECRET_KEY
+  );
+
+  useEffect(() => {
+    setProviderForms((current) => {
+      const currentStripe = current.STRIPE || EMPTY_PROVIDER_FORMS.STRIPE;
+      if (
+        currentStripe.mode === stripeSavedMode ||
+        currentStripe.publishableKey.trim() ||
+        currentStripe.secretKey.trim() ||
+        currentStripe.webhookSecret.trim()
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        STRIPE: {
+          ...currentStripe,
+          mode: stripeSavedMode,
+        },
+      };
+    });
+  }, [stripeSavedMode]);
   const resendCredentialMeta = resendProviderStatus?.credentialMeta || [];
   const smtpCredentialMeta = smtpProviderStatus?.credentialMeta || [];
   const resendSavedCredentialMeta = resendCredentialMeta.filter((entry) => entry.present);
@@ -2185,11 +2242,32 @@ export default function SettingsWorkspace() {
       for (const entry of providerResult.value?.providers || []) {
         nextMap[entry.provider] = entry;
       }
+      const stripeProviderSnapshot = providerResult.value?.stripeProviderStatus || null;
       setProviderStatusMap(nextMap);
       if (runtimeResult.status === 'fulfilled') {
-        setStripeRuntimeStatus(runtimeResult.value || null);
+        const runtimePayload = runtimeResult.value || null;
+        if (runtimePayload && stripeProviderSnapshot && !runtimePayload.providerStatus) {
+          runtimePayload.providerStatus = stripeProviderSnapshot;
+        }
+        setStripeRuntimeStatus(runtimePayload);
       } else {
-        setStripeRuntimeStatus(null);
+        setStripeRuntimeStatus(
+          stripeProviderSnapshot
+            ? {
+                source: stripeProviderSnapshot.runtimeSource || stripeProviderSnapshot.source || 'none',
+                mode: stripeProviderSnapshot.mode || null,
+                hasPublishableKey: stripeProviderSnapshot.hasPublishableKey,
+                hasSecretKey: stripeProviderSnapshot.hasSecretKey,
+                hasWebhookSecret: stripeProviderSnapshot.hasWebhookSecret,
+                webhookSource: stripeProviderSnapshot.hasWebhookSecret ? stripeProviderSnapshot.source : 'none',
+                verified: stripeProviderSnapshot.verified,
+                accountId: stripeProviderSnapshot.accountId,
+                chargesEnabled: stripeProviderSnapshot.chargesEnabled,
+                payoutsEnabled: stripeProviderSnapshot.payoutsEnabled,
+                providerStatus: stripeProviderSnapshot,
+              }
+            : null
+        );
         setProviderStatusError('Stripe runtime status could not be loaded. Provider credential status is still shown from DB.');
       }
       setProviderStatusLoaded(true);
@@ -4213,14 +4291,15 @@ export default function SettingsWorkspace() {
                 <AdminButton
                   disabled={
                     providerActionById.STRIPE === 'saving' ||
-                    !providerForms.STRIPE.publishableKey.trim() ||
-                    !providerForms.STRIPE.secretKey.trim()
+                    (!stripeHasSavedRequiredKeys &&
+                      (!providerForms.STRIPE.publishableKey.trim() ||
+                        !providerForms.STRIPE.secretKey.trim()))
                   }
                   onClick={() =>
                     handleSaveProviderCredentials('STRIPE', {
-                      publishableKey: providerForms.STRIPE.publishableKey,
-                      secretKey: providerForms.STRIPE.secretKey,
-                      webhookSecret: providerForms.STRIPE.webhookSecret || undefined,
+                      publishableKey: providerForms.STRIPE.publishableKey.trim() || undefined,
+                      secretKey: providerForms.STRIPE.secretKey.trim() || undefined,
+                      webhookSecret: providerForms.STRIPE.webhookSecret.trim() || undefined,
                       mode: providerForms.STRIPE.mode,
                     })
                   }

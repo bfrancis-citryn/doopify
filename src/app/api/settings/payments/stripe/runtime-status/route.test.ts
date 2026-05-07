@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   requireOwner: vi.fn(),
   getStripeRuntimeConnection: vi.fn(),
   getStripeWebhookSecretSelection: vi.fn(),
+  getStripeProviderStatus: vi.fn(),
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
@@ -13,6 +14,7 @@ vi.mock('@/server/auth/require-auth', () => ({
 vi.mock('@/server/payments/stripe-runtime.service', () => ({
   getStripeRuntimeConnection: mocks.getStripeRuntimeConnection,
   getStripeWebhookSecretSelection: mocks.getStripeWebhookSecretSelection,
+  getStripeProviderStatus: mocks.getStripeProviderStatus,
 }))
 
 import { GET } from './route'
@@ -57,6 +59,25 @@ describe('GET /api/settings/payments/stripe/runtime-status', () => {
       source: 'db',
       webhookSecret: 'whsec_hidden',
     })
+    mocks.getStripeProviderStatus.mockResolvedValue({
+      configured: true,
+      verified: true,
+      mode: 'live',
+      publishableKeyMasked: 'pk_live_••••••1234',
+      secretKeyMasked: 'sk_live_••••••5678',
+      webhookSecretMasked: 'whsec_••••••9012',
+      hasPublishableKey: true,
+      hasSecretKey: true,
+      hasWebhookSecret: true,
+      webhookConfigured: true,
+      accountId: 'acct_live_123',
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      lastVerifiedAt: '2026-05-07T10:00:00.000Z',
+      lastError: null,
+      source: 'db',
+      runtimeSource: 'db',
+    })
 
     const response = await GET(new Request('http://localhost/api/settings/payments/stripe/runtime-status'))
     expect(response.status).toBe(200)
@@ -79,6 +100,10 @@ describe('GET /api/settings/payments/stripe/runtime-status', () => {
         webhookEndpointSource: 'env',
         webhookEndpointReady: true,
         webhookEndpointIssue: null,
+        providerStatus: {
+          configured: true,
+          verified: true,
+        },
       },
     })
 
@@ -107,6 +132,25 @@ describe('GET /api/settings/payments/stripe/runtime-status', () => {
     mocks.getStripeWebhookSecretSelection.mockResolvedValue({
       source: 'db',
       webhookSecret: 'whsec_hidden',
+    })
+    mocks.getStripeProviderStatus.mockResolvedValue({
+      configured: true,
+      verified: true,
+      mode: 'test',
+      publishableKeyMasked: 'pk_test_••••••1234',
+      secretKeyMasked: 'sk_test_••••••5678',
+      webhookSecretMasked: 'whsec_••••••9012',
+      hasPublishableKey: true,
+      hasSecretKey: true,
+      hasWebhookSecret: true,
+      webhookConfigured: true,
+      accountId: 'acct_test_123',
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      lastVerifiedAt: '2026-05-07T10:00:00.000Z',
+      lastError: null,
+      source: 'db',
+      runtimeSource: 'db',
     })
 
     const response = await GET(new Request('https://admin.example.com/api/settings/payments/stripe/runtime-status'))

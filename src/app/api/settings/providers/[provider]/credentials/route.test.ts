@@ -230,5 +230,40 @@ describe('settings providers credentials route', () => {
       })
     )
   })
+
+  it('accepts Stripe mode-only updates so saved masked secrets can remain untouched', async () => {
+    mocks.requireOwner.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+    mocks.parseSupportedProvider.mockReturnValue('STRIPE')
+    mocks.saveProviderCredentials.mockResolvedValue({
+      provider: 'STRIPE',
+      category: 'PAYMENT',
+      integrationType: 'PAYMENT_STRIPE',
+      state: 'CREDENTIALS_SAVED',
+      source: 'db',
+      hasCredentials: true,
+      credentialMeta: [
+        { key: 'PUBLISHABLE_KEY', present: true, maskedValue: 'pk_test_••••••1234' },
+        { key: 'SECRET_KEY', present: true, maskedValue: 'sk_test_••••••5678' },
+        { key: 'MODE', present: true, maskedValue: 'live' },
+      ],
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/settings/providers/stripe/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'live',
+        }),
+      }),
+      { params: Promise.resolve({ provider: 'stripe' }) }
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.saveProviderCredentials).toHaveBeenCalledWith('STRIPE', { mode: 'live' })
+  })
 })
 

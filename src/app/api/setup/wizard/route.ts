@@ -2,7 +2,7 @@ import { err, ok } from '@/lib/api'
 import { evaluatePublicStoreUrl } from '@/lib/public-store-url'
 import { prisma } from '@/lib/prisma'
 import { requireOwner } from '@/server/auth/require-auth'
-import { getStripeRuntimeConnection } from '@/server/payments/stripe-runtime.service'
+import { getStripeProviderStatus } from '@/server/payments/stripe-runtime.service'
 import { getRuntimeProviderConnection } from '@/server/services/provider-connection.service'
 import {
   buildSetupWizardSteps,
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
     const [
       ownerCount,
       store,
-      stripe,
+      stripeProviderStatus,
       emailRuntime,
       shippingStore,
       productFacts,
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
         select: { name: true, email: true },
         orderBy: { createdAt: 'asc' },
       }),
-      getStripeRuntimeConnection(),
+      getStripeProviderStatus(),
       getRuntimeProviderConnection('RESEND'),
       getShippingSetupStore(),
       gatherProductFacts(),
@@ -95,11 +95,11 @@ export async function GET(req: Request) {
       storeUrlReady: publicStoreUrl.ready,
       storeUrlIssue: publicStoreUrl.issue,
 
-      stripeSource: stripe.source,
-      stripeVerified: stripe.verified,
-      stripeHasSecretKey: Boolean(stripe.secretKey),
-      stripeHasPublishableKey: Boolean(stripe.publishableKey),
-      stripeHasWebhookSecret: Boolean(stripe.webhookSecret),
+      stripeSource: stripeProviderStatus.source,
+      stripeVerified: stripeProviderStatus.verified,
+      stripeHasSecretKey: stripeProviderStatus.hasSecretKey,
+      stripeHasPublishableKey: stripeProviderStatus.hasPublishableKey,
+      stripeHasWebhookSecret: stripeProviderStatus.webhookConfigured,
       stripeWebhookDeliveryReceived: stripeWebhookCount > 0,
 
       shippingCanUseManualRates: shippingStatus?.canUseManualRates ?? false,

@@ -14,12 +14,26 @@ type RouteContext = {
   params: Promise<{ provider: string }>
 }
 
-const stripeSchema = z.object({
-  publishableKey: z.string().min(1),
-  secretKey: z.string().min(1),
-  webhookSecret: z.string().min(1).optional(),
-  mode: z.enum(['test', 'live']),
-})
+const stripeSchema = z
+  .object({
+    publishableKey: z.string().min(1).optional(),
+    secretKey: z.string().min(1).optional(),
+    webhookSecret: z.string().min(1).optional(),
+    mode: z.enum(['test', 'live']).optional(),
+  })
+  .refine(
+    (input) =>
+      Boolean(
+        input.publishableKey ||
+          input.secretKey ||
+          input.webhookSecret ||
+          input.mode
+      ),
+    {
+      message: 'At least one Stripe credential field is required',
+      path: ['publishableKey'],
+    }
+  )
 
 const resendSchema = z.object({
   apiKey: z.string().min(1),

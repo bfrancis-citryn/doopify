@@ -26,13 +26,13 @@ const mocks = vi.hoisted(() => ({
     ABANDONED_CHECKOUT_SECRET: undefined,
   },
   getRuntimeProviderConnection: vi.fn(),
-  getProviderStatus: vi.fn(),
+  getStripeProviderStatusSnapshot: vi.fn(),
 }))
 
 vi.mock('@/lib/env', () => ({ env: mocks.env }))
 vi.mock('@/server/services/provider-connection.service', () => ({
   getRuntimeProviderConnection: mocks.getRuntimeProviderConnection,
-  getProviderStatus: mocks.getProviderStatus,
+  getStripeProviderStatusSnapshot: mocks.getStripeProviderStatusSnapshot,
 }))
 
 import {
@@ -58,12 +58,10 @@ describe('stripe runtime service', () => {
         MODE: 'live',
       },
     })
-    mocks.getProviderStatus.mockResolvedValue({
-      verificationData: {
-        accountId: 'acct_live_123',
-        chargesEnabled: true,
-        payoutsEnabled: true,
-      },
+    mocks.getStripeProviderStatusSnapshot.mockResolvedValue({
+      accountId: 'acct_live_123',
+      chargesEnabled: true,
+      payoutsEnabled: true,
     })
 
     const runtime = await getStripeRuntimeConnection()
@@ -104,7 +102,7 @@ describe('stripe runtime service', () => {
       secretKey: 'sk_test_env_runtime',
       webhookSecret: 'whsec_env_runtime',
     })
-    expect(mocks.getProviderStatus).not.toHaveBeenCalled()
+    expect(mocks.getStripeProviderStatusSnapshot).not.toHaveBeenCalled()
   })
 
   it('returns source none when no DB or env Stripe connection exists', async () => {
@@ -142,7 +140,11 @@ describe('stripe runtime service', () => {
         MODE: 'live',
       },
     })
-    mocks.getProviderStatus.mockResolvedValue({ verificationData: {} })
+    mocks.getStripeProviderStatusSnapshot.mockResolvedValue({
+      accountId: null,
+      chargesEnabled: null,
+      payoutsEnabled: null,
+    })
 
     const selection = await getStripeWebhookSecretSelection()
 
@@ -163,7 +165,11 @@ describe('stripe runtime service', () => {
         MODE: 'live',
       },
     })
-    mocks.getProviderStatus.mockResolvedValue({ verificationData: {} })
+    mocks.getStripeProviderStatusSnapshot.mockResolvedValue({
+      accountId: null,
+      chargesEnabled: null,
+      payoutsEnabled: null,
+    })
 
     const selection = await getStripeWebhookSecretSelection()
 

@@ -1,6 +1,7 @@
 import { err, ok } from '@/lib/api'
 import { resolveStripeWebhookEndpoint } from '@/lib/public-store-url'
 import {
+  getStripeProviderStatus,
   getStripeRuntimeConnection,
   getStripeWebhookSecretSelection,
 } from '@/server/payments/stripe-runtime.service'
@@ -19,8 +20,11 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response
 
   try {
-    const stripeRuntime = await getStripeRuntimeConnection()
-    const webhookSecretSelection = await getStripeWebhookSecretSelection()
+    const [stripeRuntime, webhookSecretSelection, stripeProviderStatus] = await Promise.all([
+      getStripeRuntimeConnection(),
+      getStripeWebhookSecretSelection(),
+      getStripeProviderStatus(),
+    ])
     const requestOrigin = (() => {
       try {
         return new URL(req.url).origin
@@ -50,6 +54,7 @@ export async function GET(req: Request) {
       webhookEndpointReady: webhookEndpoint.ready,
       webhookEndpointIssue: webhookEndpoint.issue,
       webhookEndpointMessage: webhookEndpoint.message,
+      providerStatus: stripeProviderStatus,
       message: buildMessage(stripeRuntime.source),
     })
   } catch (error) {

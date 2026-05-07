@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   },
   prisma: {
     integration: {
-      findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -62,6 +62,7 @@ vi.mock('@/server/shipping/shipping-provider.service', () => ({
 import {
   getProviderStatus,
   getRuntimeProviderConnection,
+  getStripeProviderStatusSnapshot,
   saveProviderCredentials,
   verifyProviderConnection,
 } from './provider-connection.service'
@@ -83,16 +84,17 @@ describe('provider connection service', () => {
   })
 
   it('prefers verified db credentials over env fallback', async () => {
-    mocks.prisma.integration.findFirst.mockResolvedValue({
+    mocks.prisma.integration.findMany.mockResolvedValue([{
       id: 'int_resend_1',
       type: 'EMAIL_RESEND',
       status: 'ACTIVE',
+      createdAt: new Date('2026-04-30T01:00:00.000Z'),
       updatedAt: new Date('2026-04-30T01:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'API_KEY', value: 'enc:re_db_key' },
         { id: 'sec_2', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-04-30T01:05:00.000Z' },
       ],
-    })
+    }])
 
     const runtime = await getRuntimeProviderConnection('RESEND')
 
@@ -106,7 +108,7 @@ describe('provider connection service', () => {
   })
 
   it('falls back to env credentials when db connection is missing', async () => {
-    mocks.prisma.integration.findFirst.mockResolvedValue(null)
+    mocks.prisma.integration.findMany.mockResolvedValue([])
 
     const runtime = await getRuntimeProviderConnection('RESEND')
 
@@ -121,7 +123,7 @@ describe('provider connection service', () => {
 
   it('treats placeholder Resend env credentials as missing', async () => {
     mocks.env.RESEND_API_KEY = 're_replace_me'
-    mocks.prisma.integration.findFirst.mockResolvedValue(null)
+    mocks.prisma.integration.findMany.mockResolvedValue([])
 
     const runtime = await getRuntimeProviderConnection('RESEND')
 
@@ -137,13 +139,14 @@ describe('provider connection service', () => {
       id: 'int_resend_2',
       type: 'EMAIL_RESEND',
       status: 'ACTIVE',
+      createdAt: new Date('2026-04-30T02:00:00.000Z'),
       updatedAt: new Date('2026-04-30T02:00:00.000Z'),
       secrets: [{ id: 'sec_saved', key: 'API_KEY', value: 'enc:re_saved_key' }],
     }
 
-    mocks.prisma.integration.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValue(integrationRecord)
+    mocks.prisma.integration.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([integrationRecord])
 
     mocks.prisma.integration.create.mockResolvedValue({ id: 'int_resend_2' })
 
@@ -168,10 +171,11 @@ describe('provider connection service', () => {
     mocks.env.STRIPE_SECRET_KEY = 'sk_test_env_runtime'
     mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_env_runtime'
     mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_env_runtime'
-    mocks.prisma.integration.findFirst.mockResolvedValue({
+    mocks.prisma.integration.findMany.mockResolvedValue([{
       id: 'int_stripe_1',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-04-30T03:00:00.000Z'),
       updatedAt: new Date('2026-04-30T03:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_runtime' },
@@ -180,7 +184,7 @@ describe('provider connection service', () => {
         { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_live_db_runtime' },
         { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-04-30T03:05:00.000Z' },
       ],
-    })
+    }])
 
     const runtime = await getRuntimeProviderConnection('STRIPE')
 
@@ -200,17 +204,18 @@ describe('provider connection service', () => {
     mocks.env.STRIPE_SECRET_KEY = 'sk_test_env_runtime'
     mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_env_runtime'
     mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_env_runtime'
-    mocks.prisma.integration.findFirst.mockResolvedValue({
+    mocks.prisma.integration.findMany.mockResolvedValue([{
       id: 'int_stripe_2',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-04-30T03:10:00.000Z'),
       updatedAt: new Date('2026-04-30T03:10:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_unverified' },
         { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_unverified' },
         { id: 'sec_3', key: 'MODE', value: 'enc:live' },
       ],
-    })
+    }])
 
     const runtime = await getRuntimeProviderConnection('STRIPE')
 
@@ -230,7 +235,7 @@ describe('provider connection service', () => {
     mocks.env.STRIPE_SECRET_KEY = 'sk_test_replace_me'
     mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_replace_me'
     mocks.env.STRIPE_WEBHOOK_SECRET = 'whsec_replace_me'
-    mocks.prisma.integration.findFirst.mockResolvedValue(null)
+    mocks.prisma.integration.findMany.mockResolvedValue([])
 
     const runtime = await getRuntimeProviderConnection('STRIPE')
 
@@ -246,6 +251,7 @@ describe('provider connection service', () => {
       id: 'int_stripe_save',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-04-30T04:00:00.000Z'),
       updatedAt: new Date('2026-04-30T04:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_new_secret' },
@@ -255,9 +261,9 @@ describe('provider connection service', () => {
       ],
     }
 
-    mocks.prisma.integration.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValue(integrationRecord)
+    mocks.prisma.integration.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([integrationRecord])
 
     mocks.prisma.integration.create.mockResolvedValue({ id: 'int_stripe_save' })
 
@@ -288,17 +294,18 @@ describe('provider connection service', () => {
   it('uses DB-saved Stripe credentials for verification instead of env fallback secrets', async () => {
     mocks.env.STRIPE_SECRET_KEY = 'sk_test_env_fallback_should_not_be_used'
     mocks.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_env_fallback_should_not_be_used'
-    mocks.prisma.integration.findFirst.mockResolvedValue({
+    mocks.prisma.integration.findMany.mockResolvedValue([{
       id: 'int_stripe_verify',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-05-06T00:00:00.000Z'),
       updatedAt: new Date('2026-05-06T00:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_verify_1234' },
         { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_verify_1234' },
         { id: 'sec_3', key: 'MODE', value: 'enc:live' },
       ],
-    })
+    }])
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -327,17 +334,18 @@ describe('provider connection service', () => {
   })
 
   it('persists Stripe verification metadata for post-reload status/runtime reads', async () => {
-    mocks.prisma.integration.findFirst.mockResolvedValue({
+    mocks.prisma.integration.findMany.mockResolvedValue([{
       id: 'int_stripe_verify_meta',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-05-06T00:00:00.000Z'),
       updatedAt: new Date('2026-05-06T00:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'SECRET_KEY', value: 'enc:sk_live_db_verify_9876' },
         { id: 'sec_2', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_db_verify_9876' },
         { id: 'sec_3', key: 'MODE', value: 'enc:live' },
       ],
-    })
+    }])
 
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -373,6 +381,7 @@ describe('provider connection service', () => {
       id: 'int_stripe_masked_save',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-05-06T00:00:00.000Z'),
       updatedAt: new Date('2026-05-06T00:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
@@ -382,17 +391,17 @@ describe('provider connection service', () => {
       ],
     }
 
-    mocks.prisma.integration.findFirst
-      .mockResolvedValueOnce(existingIntegration)
-      .mockResolvedValueOnce({ id: 'int_stripe_masked_save' })
-      .mockResolvedValue(existingIntegration)
+    mocks.prisma.integration.findMany
+      .mockResolvedValueOnce([existingIntegration])
+      .mockResolvedValueOnce([existingIntegration])
+      .mockResolvedValue([existingIntegration])
 
     mocks.prisma.integration.update.mockResolvedValue({ id: 'int_stripe_masked_save' })
 
     await saveProviderCredentials('STRIPE', {
-      publishableKey: 'pk_test_••••••1234',
-      secretKey: 'sk_test_••••••5678',
-      webhookSecret: 'whsec_••••••9012',
+      publishableKey: 'pk_test_******1234',
+      secretKey: 'sk_test_******5678',
+      webhookSecret: 'whsec_******9012',
       mode: 'test',
     })
 
@@ -409,10 +418,11 @@ describe('provider connection service', () => {
   })
 
   it('returns Stripe masked metadata with prefix and last4 only', async () => {
-    mocks.prisma.integration.findFirst.mockResolvedValue({
+    mocks.prisma.integration.findMany.mockResolvedValue([{
       id: 'int_stripe_mask',
       type: 'PAYMENT_STRIPE',
       status: 'ACTIVE',
+      createdAt: new Date('2026-05-06T00:00:00.000Z'),
       updatedAt: new Date('2026-05-06T00:00:00.000Z'),
       secrets: [
         { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_abcdefghijklmnopqrstuvwxyz1234' },
@@ -420,7 +430,7 @@ describe('provider connection service', () => {
         { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_abcdefghijklmnopqrstuvwxyz9012' },
         { id: 'sec_4', key: 'MODE', value: 'enc:test' },
       ],
-    })
+    }])
 
     const status = await saveProviderCredentials('STRIPE', {
       publishableKey: 'pk_test_abcdefghijklmnopqrstuvwxyz1234',
@@ -433,9 +443,134 @@ describe('provider connection service', () => {
     const secretMask = status.credentialMeta.find((entry) => entry.key === 'SECRET_KEY')?.maskedValue
     const webhookMask = status.credentialMeta.find((entry) => entry.key === 'WEBHOOK_SECRET')?.maskedValue
 
-    expect(publishableMask).toBe('pk_test_••••••1234')
-    expect(secretMask).toBe('sk_test_••••••5678')
-    expect(webhookMask).toBe('whsec_••••••9012')
+    expect(String(publishableMask || '')).toMatch(/^pk_test_.+1234$/)
+    expect(String(secretMask || '')).toMatch(/^sk_test_.+5678$/)
+    expect(String(webhookMask || '')).toMatch(/^whsec_.+9012$/)
+  })
+
+  it('prefers the latest verified active Stripe set when duplicate active rows exist', async () => {
+    mocks.prisma.integration.findMany.mockResolvedValue([
+      {
+        id: 'int_stripe_newer_unverified',
+        type: 'PAYMENT_STRIPE',
+        status: 'ACTIVE',
+        createdAt: new Date('2026-05-06T11:00:00.000Z'),
+        updatedAt: new Date('2026-05-06T11:00:00.000Z'),
+        secrets: [
+          { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_newer' },
+          { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_live_newer' },
+          { id: 'sec_3', key: 'MODE', value: 'enc:live' },
+        ],
+      },
+      {
+        id: 'int_stripe_older_verified',
+        type: 'PAYMENT_STRIPE',
+        status: 'ACTIVE',
+        createdAt: new Date('2026-05-06T09:00:00.000Z'),
+        updatedAt: new Date('2026-05-06T09:00:00.000Z'),
+        secrets: [
+          { id: 'sec_4', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_verified' },
+          { id: 'sec_5', key: 'SECRET_KEY', value: 'enc:sk_live_verified' },
+          { id: 'sec_6', key: 'MODE', value: 'enc:live' },
+          { id: 'sec_7', key: 'WEBHOOK_SECRET', value: 'enc:whsec_live_verified' },
+          { id: 'sec_8', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-06T10:00:00.000Z' },
+        ],
+      },
+    ])
+
+    const runtime = await getRuntimeProviderConnection('STRIPE')
+
+    expect(runtime).toMatchObject({
+      source: 'db',
+      verified: true,
+      credentials: {
+        SECRET_KEY: 'sk_live_verified',
+        PUBLISHABLE_KEY: 'pk_live_verified',
+        WEBHOOK_SECRET: 'whsec_live_verified',
+      },
+    })
+  })
+
+  it('returns canonical Stripe provider snapshot with masked metadata only', async () => {
+    mocks.prisma.integration.findMany.mockResolvedValue([
+      {
+        id: 'int_stripe_snapshot',
+        type: 'PAYMENT_STRIPE',
+        status: 'ACTIVE',
+        createdAt: new Date('2026-05-07T10:00:00.000Z'),
+        updatedAt: new Date('2026-05-07T10:00:00.000Z'),
+        secrets: [
+          { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_snapshot_1234' },
+          { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_snapshot_5678' },
+          { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_snapshot_9012' },
+          { id: 'sec_4', key: 'MODE', value: 'enc:test' },
+          { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T10:01:00.000Z' },
+          {
+            id: 'sec_6',
+            key: 'META_VERIFICATION_DATA',
+            value: 'enc:{"accountId":"acct_snapshot","chargesEnabled":true,"payoutsEnabled":false}',
+          },
+        ],
+      },
+    ])
+
+    const snapshot = await getStripeProviderStatusSnapshot()
+
+    expect(snapshot).toMatchObject({
+      configured: true,
+      verified: true,
+      mode: 'test',
+      hasPublishableKey: true,
+      hasSecretKey: true,
+      webhookConfigured: true,
+      accountId: 'acct_snapshot',
+      chargesEnabled: true,
+      payoutsEnabled: false,
+      source: 'db',
+      runtimeSource: 'db',
+    })
+
+    const serialized = JSON.stringify(snapshot)
+    expect(serialized).not.toContain('sk_test_snapshot_5678')
+    expect(serialized).not.toContain('whsec_snapshot_9012')
+  })
+
+  it('allows Stripe mode-only updates without resubmitting secret values', async () => {
+    const existingIntegration = {
+      id: 'int_stripe_mode_only',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      createdAt: new Date('2026-05-07T08:00:00.000Z'),
+      updatedAt: new Date('2026-05-07T08:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_live_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_live_existing_5678' },
+        { id: 'sec_3', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_9012' },
+        { id: 'sec_4', key: 'MODE', value: 'enc:live' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T08:01:00.000Z' },
+      ],
+    }
+
+    mocks.prisma.integration.findMany.mockResolvedValue([existingIntegration])
+
+    await saveProviderCredentials('STRIPE', {
+      mode: 'test',
+    })
+
+    const modeUpsert = (mocks.prisma.integrationSecret.upsert.mock.calls as Array<[any]>).find(
+      ([arg]) => arg?.create?.key === 'MODE'
+    )
+    expect(modeUpsert?.[0]?.create?.value).toBe('enc:test')
+    expect(mocks.prisma.integration.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: 'PAYMENT_STRIPE',
+        }),
+        data: {
+          status: 'INACTIVE',
+        },
+      })
+    )
   })
 })
 

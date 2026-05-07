@@ -1,8 +1,9 @@
 import { env } from '@/lib/env'
 import { hasRealCredential } from '@/server/services/credential-readiness'
 import {
-  getProviderStatus,
   getRuntimeProviderConnection,
+  getStripeProviderStatusSnapshot,
+  type StripeProviderStatusSnapshot,
 } from '@/server/services/provider-connection.service'
 
 export type StripeRuntimeSource = 'db' | 'env' | 'none'
@@ -44,20 +45,8 @@ function inferModeFromSecretKey(secretKey: string | null): StripeMode {
   return null
 }
 
-function readVerificationMetadata(verificationData: Record<string, unknown> | null) {
-  if (!verificationData) {
-    return {
-      accountId: null,
-      chargesEnabled: null,
-      payoutsEnabled: null,
-    }
-  }
-
-  return {
-    accountId: normalizeString(verificationData.accountId),
-    chargesEnabled: typeof verificationData.chargesEnabled === 'boolean' ? verificationData.chargesEnabled : null,
-    payoutsEnabled: typeof verificationData.payoutsEnabled === 'boolean' ? verificationData.payoutsEnabled : null,
-  }
+export async function getStripeProviderStatus(): Promise<StripeProviderStatusSnapshot> {
+  return getStripeProviderStatusSnapshot()
 }
 
 export async function getStripeRuntimeConnection(): Promise<StripeRuntimeConnection> {
@@ -83,8 +72,7 @@ export async function getStripeRuntimeConnection(): Promise<StripeRuntimeConnect
     }
   }
 
-  const status = await getProviderStatus('STRIPE')
-  const verificationMetadata = readVerificationMetadata(status.verificationData)
+  const status = await getStripeProviderStatusSnapshot()
 
   return {
     source: 'db',
@@ -93,9 +81,9 @@ export async function getStripeRuntimeConnection(): Promise<StripeRuntimeConnect
     publishableKey,
     secretKey,
     webhookSecret,
-    accountId: verificationMetadata.accountId,
-    chargesEnabled: verificationMetadata.chargesEnabled,
-    payoutsEnabled: verificationMetadata.payoutsEnabled,
+    accountId: normalizeString(status.accountId),
+    chargesEnabled: status.chargesEnabled,
+    payoutsEnabled: status.payoutsEnabled,
   }
 }
 

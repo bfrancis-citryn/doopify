@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   requireOwner: vi.fn(),
   parseSupportedProvider: vi.fn(),
   getProviderStatus: vi.fn(),
+  getStripeProviderStatusSnapshot: vi.fn(),
   disconnectProvider: vi.fn(),
   auditActorFromUser: vi.fn(),
   recordAuditLogBestEffort: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock('@/server/auth/require-auth', () => ({
 vi.mock('@/server/services/provider-connection.service', () => ({
   parseSupportedProvider: mocks.parseSupportedProvider,
   getProviderStatus: mocks.getProviderStatus,
+  getStripeProviderStatusSnapshot: mocks.getStripeProviderStatusSnapshot,
   disconnectProvider: mocks.disconnectProvider,
 }))
 
@@ -78,6 +80,25 @@ describe('settings providers [provider] route', () => {
         { key: 'MODE', present: true, maskedValue: 'test' },
       ],
     })
+    mocks.getStripeProviderStatusSnapshot.mockResolvedValue({
+      configured: true,
+      verified: true,
+      mode: 'test',
+      publishableKeyMasked: 'pk_test_••••••1234',
+      secretKeyMasked: 'sk_test_••••••5678',
+      webhookSecretMasked: 'whsec_••••••9012',
+      hasPublishableKey: true,
+      hasSecretKey: true,
+      hasWebhookSecret: true,
+      webhookConfigured: true,
+      accountId: 'acct_verified_reload',
+      chargesEnabled: true,
+      payoutsEnabled: true,
+      lastVerifiedAt: '2026-05-06T10:00:00.000Z',
+      lastError: null,
+      source: 'db',
+      runtimeSource: 'db',
+    })
 
     const response = await GET(new Request('http://localhost/api/settings/providers/stripe'), {
       params: Promise.resolve({ provider: 'stripe' }),
@@ -95,6 +116,10 @@ describe('settings providers [provider] route', () => {
           hasCredentials: true,
           lastVerifiedAt: '2026-05-06T10:00:00.000Z',
         },
+        stripeProviderStatus: {
+          configured: true,
+          verified: true,
+        },
       },
     })
 
@@ -103,4 +128,3 @@ describe('settings providers [provider] route', () => {
     expect(serialized).not.toContain('whsec_raw')
   })
 })
-

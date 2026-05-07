@@ -1,6 +1,9 @@
 ﻿import { err, ok } from '@/lib/api'
 import { requireOwner } from '@/server/auth/require-auth'
-import { listProviderStatuses } from '@/server/services/provider-connection.service'
+import {
+  getStripeProviderStatusSnapshot,
+  listProviderStatuses,
+} from '@/server/services/provider-connection.service'
 
 export const runtime = 'nodejs'
 
@@ -9,8 +12,11 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response
 
   try {
-    const providers = await listProviderStatuses()
-    return ok({ providers })
+    const [providers, stripeProviderStatus] = await Promise.all([
+      listProviderStatuses(),
+      getStripeProviderStatusSnapshot(),
+    ])
+    return ok({ providers, stripeProviderStatus })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load provider statuses'
     console.error('[GET /api/settings/providers]', message)
