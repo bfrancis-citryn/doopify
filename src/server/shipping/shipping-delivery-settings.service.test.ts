@@ -15,6 +15,12 @@ const mocks = vi.hoisted(() => ({
     shippingManualRate: {
       create: vi.fn(),
     },
+    shippingLocation: {
+      create: vi.fn(),
+      updateMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }))
@@ -24,8 +30,10 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import {
+  createShippingLocation,
   createShippingManualRate,
   createShippingPackage,
+  updateShippingLocation,
   updateShippingPackage,
 } from './shipping-delivery-settings.service'
 
@@ -172,6 +180,73 @@ describe('shipping-delivery-settings.service', () => {
         name: 'Standard',
         amountCents: 1000,
       }),
+    })
+  })
+
+  it('createShippingLocation persists ship-from email and enforces single default', async () => {
+    mocks.prisma.shippingLocation.create.mockResolvedValue({
+      id: 'loc_1',
+      storeId: 'store_1',
+      email: 'shipping@example.com',
+      isDefault: true,
+    })
+    mocks.prisma.shippingLocation.updateMany.mockResolvedValue({ count: 1 })
+
+    await createShippingLocation({
+      name: 'Warehouse',
+      contactName: 'Ops',
+      email: 'shipping@example.com',
+      company: null,
+      address1: '10 Main St',
+      address2: null,
+      city: 'Austin',
+      stateProvince: 'TX',
+      postalCode: '78701',
+      country: 'US',
+      phone: '555-000-0000',
+      isDefault: true,
+      isActive: true,
+    })
+
+    expect(mocks.prisma.shippingLocation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: 'shipping@example.com',
+        }),
+      })
+    )
+    expect(mocks.prisma.shippingLocation.updateMany).toHaveBeenCalledWith({
+      where: {
+        storeId: 'store_1',
+        id: { not: 'loc_1' },
+        isDefault: true,
+      },
+      data: {
+        isDefault: false,
+      },
+    })
+  })
+
+  it('updateShippingLocation persists ship-from email updates', async () => {
+    mocks.prisma.shippingLocation.findFirst.mockResolvedValue({
+      id: 'loc_1',
+      storeId: 'store_1',
+      isDefault: false,
+    })
+    mocks.prisma.shippingLocation.update.mockResolvedValue({
+      id: 'loc_1',
+      storeId: 'store_1',
+      email: 'new-ship@example.com',
+      isDefault: false,
+    })
+
+    await updateShippingLocation('loc_1', {
+      email: 'new-ship@example.com',
+    })
+
+    expect(mocks.prisma.shippingLocation.update).toHaveBeenCalledWith({
+      where: { id: 'loc_1' },
+      data: { email: 'new-ship@example.com' },
     })
   })
 })

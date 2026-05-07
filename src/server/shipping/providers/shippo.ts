@@ -77,6 +77,9 @@ function classifyShippoTransactionFailure(messages: string[]) {
   if (!combined) {
     return 'Provider transaction failed. Try refreshing rates and retrying the label purchase.'
   }
+  if (/(address_from\.email|from\.email|ship-from email|attribute\s*\"address_from\.email\")/.test(combined)) {
+    return 'Ship-from email is missing. Add an email to your shipping location or store profile.'
+  }
   if (/(address|postal|zip|invalid recipient|street|destination|origin)/.test(combined)) {
     return 'Provider rejected the address. Verify destination and ship-from addresses.'
   }
@@ -155,6 +158,7 @@ export const shippoProviderAdapter: ShippingProviderAdapter = {
         address_from: {
           name: input.originAddress.name ?? undefined,
           phone: input.originAddress.phone ?? undefined,
+          email: input.originAddress.email ?? undefined,
           street1: input.originAddress.address1,
           street2: input.originAddress.address2 ?? undefined,
           city: input.originAddress.city,

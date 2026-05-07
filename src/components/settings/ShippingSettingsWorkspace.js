@@ -71,6 +71,7 @@ const DEFAULT_LOCATION_FORM = {
   id: "",
   name: "",
   contactName: "",
+  email: "",
   company: "",
   address1: "",
   address2: "",
@@ -155,6 +156,10 @@ function normalizeOptional(value) {
 
 function normalizeCountry(value) {
   return String(value || "").trim().toUpperCase();
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
 class ApiRequestError extends Error {
@@ -290,6 +295,7 @@ export default function ShippingSettingsWorkspace({
   const [pickupForm, setPickupForm] = useState(DEFAULT_PICKUP_FORM);
   const [packingSlipForm, setPackingSlipForm] = useState(DEFAULT_PACKING_SLIP_FORM);
   const [locationValidationMessage, setLocationValidationMessage] = useState("");
+  const [locationDrawerError, setLocationDrawerError] = useState("");
   const [packageDrawerError, setPackageDrawerError] = useState("");
   const [manualDrawerError, setManualDrawerError] = useState("");
   const [savedCheckoutMethod, setSavedCheckoutMethod] = useState(
@@ -334,6 +340,11 @@ export default function ShippingSettingsWorkspace({
   const missingLiveRateRequirements =
     (mode === "LIVE_RATES" || mode === "HYBRID") &&
     (!hasDefaultLocation || !hasDefaultPackage || !hasProviderConnection);
+  const resolvedShipFromEmail =
+    normalizeOptional(defaultLocationEntry?.email) ||
+    normalizeOptional(settings?.supportEmail) ||
+    normalizeOptional(settings?.email);
+  const missingShipFromEmailForShippo = shippoInUse && !resolvedShipFromEmail;
   const checkoutMethodDraft = useMemo(
     () => buildCheckoutMethodDraft(mode, activeRateProvider, labelProvider, fallbackBehavior),
     [mode, activeRateProvider, labelProvider, fallbackBehavior]
@@ -686,6 +697,7 @@ export default function ShippingSettingsWorkspace({
 
   function openLocationDrawer(entry) {
     setLocationValidationMessage("");
+    setLocationDrawerError("");
     if (!entry) {
       setLocationForm({ ...DEFAULT_LOCATION_FORM });
     } else {
@@ -693,6 +705,7 @@ export default function ShippingSettingsWorkspace({
         id: entry.id,
         name: entry.name || "",
         contactName: entry.contactName || "",
+        email: entry.email || "",
         company: entry.company || "",
         address1: entry.address1 || "",
         address2: entry.address2 || "",
@@ -859,12 +872,20 @@ export default function ShippingSettingsWorkspace({
   }
 
   async function saveLocation() {
+    setLocationDrawerError("");
+    const normalizedEmail = normalizeOptional(locationForm.email);
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+      setLocationDrawerError("Email must be a valid email address.");
+      return;
+    }
+
     await persistEntity(
       locationForm.id ? `/api/settings/shipping/locations/${locationForm.id}` : "/api/settings/shipping/locations",
       locationForm.id ? "PATCH" : "POST",
       {
         name: locationForm.name.trim(),
         contactName: normalizeOptional(locationForm.contactName),
+        email: normalizedEmail,
         company: normalizeOptional(locationForm.company),
         address1: locationForm.address1.trim(),
         address2: normalizeOptional(locationForm.address2),
@@ -1202,6 +1223,26 @@ export default function ShippingSettingsWorkspace({
                 </div>
                 <div className={styles.requirementRow}>
                   <div className={styles.requirementMain}>
+                    <p className={styles.compactRowTitle}>Ship-from email</p>
+                    <p className={styles.compactRowDescription}>
+                      Required by Shippo/USPS when buying labels.
+                    </p>
+                  </div>
+                  <div className={styles.shippingProviderActions}>
+                    <AdminStatusChip tone={missingShipFromEmailForShippo ? "warning" : "success"}>
+                      {missingShipFromEmailForShippo ? "Missing" : "Ready"}
+                    </AdminStatusChip>
+                    <AdminButton
+                      onClick={() => openLocationDrawer(defaultLocationEntry)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      {defaultLocationEntry ? "Edit" : "Set location"}
+                    </AdminButton>
+                  </div>
+                </div>
+                <div className={styles.requirementRow}>
+                  <div className={styles.requirementMain}>
                     <p className={styles.compactRowTitle}>Fallback shipping rate</p>
                     <p className={styles.compactRowDescription}>Shown only if Shippo/EasyPost cannot return rates.</p>
                   </div>
@@ -1217,6 +1258,11 @@ export default function ShippingSettingsWorkspace({
               </div>
               {missingLiveRateRequirements ? (
                 <p className={styles.statusText}>Finish the missing items before live rates or label buying can work.</p>
+              ) : null}
+              {missingShipFromEmailForShippo ? (
+                <p className={styles.statusText}>
+                  Ship-from email is required before buying Shippo labels. Add it to your shipping location or store profile.
+                </p>
               ) : null}
               {!missingLiveRateRequirements && !hasLabelProviderConnection ? (
                 <p className={styles.statusText}>Label purchase remains unavailable until a label provider is connected.</p>
@@ -1457,6 +1503,16 @@ export default function ShippingSettingsWorkspace({
         <AdminField label="Contact name">
           <AdminInput value={locationForm.contactName} onChange={(event) => setLocationForm((current) => ({ ...current, contactName: event.target.value }))} />
         </AdminField>
+        <AdminField
+          label="Email"
+          hint="Used by carriers when buying labels. Required for Shippo/USPS labels."
+        >
+          <AdminInput
+            value={locationForm.email}
+            onChange={(event) => setLocationForm((current) => ({ ...current, email: event.target.value }))}
+            placeholder="shipping@example.com"
+          />
+        </AdminField>
         <AdminField label="Company">
           <AdminInput value={locationForm.company} onChange={(event) => setLocationForm((current) => ({ ...current, company: event.target.value }))} />
         </AdminField>
@@ -1501,6 +1557,16 @@ export default function ShippingSettingsWorkspace({
           Address pre-validation is not available yet. Save this address, then verify it by loading live checkout
           rates or purchasing a test label.
         </p>
+        {shippoInUse && !resolvedShipFromEmail ? (
+          <p className={styles.statusText} style={{ color: "var(--warning, #f59e0b)" }}>
+            Ship-from email is required for Shippo/USPS labels. Add an email here or in your store profile.
+          </p>
+        ) : null}
+        {locationDrawerError ? (
+          <p className={styles.statusText} style={{ color: "var(--destructive, #ef4444)" }}>
+            {locationDrawerError}
+          </p>
+        ) : null}
         {locationValidationMessage ? <p className={styles.statusText}>{locationValidationMessage}</p> : null}
       </AdminDrawer>
 

@@ -59,7 +59,57 @@ describe('shippoProviderAdapter.purchaseLabel', () => {
     })
   })
 
-  it('surfaces merchant-safe reason when Shippo transaction fails', async () => {
+  it('passes origin email in Shippo rate payload when provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      createResponse({
+        object_id: 'shipment_1',
+        rates: [
+          {
+            object_id: 'rate_1',
+            amount: '6.42',
+            currency: 'USD',
+            provider: { carrier: 'USPS' },
+            servicelevel: { name: 'Priority Mail' },
+          },
+        ],
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await shippoProviderAdapter.getRates({
+      apiKey: 'shippo_test_key',
+      currency: 'USD',
+      originAddress: {
+        name: 'Warehouse',
+        phone: '555-000-0000',
+        email: 'shipping@example.com',
+        address1: '10 Main St',
+        city: 'Austin',
+        province: 'TX',
+        postalCode: '78701',
+        country: 'US',
+      },
+      destinationAddress: {
+        name: 'Buyer',
+        address1: '20 Market St',
+        city: 'New York',
+        province: 'NY',
+        postalCode: '10001',
+        country: 'US',
+      },
+      parcel: {
+        weightOz: 12,
+        lengthIn: 10,
+        widthIn: 8,
+        heightIn: 4,
+      },
+    })
+
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(payload.address_from.email).toBe('shipping@example.com')
+  })
+
+  it('maps missing ship-from email provider error to merchant-safe copy without leaking raw payload', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal(
       'fetch',
@@ -67,7 +117,13 @@ describe('shippoProviderAdapter.purchaseLabel', () => {
         createResponse({
           status: 'ERROR',
           shipment: 'shipment_1',
-          messages: [{ code: 'address_invalid', text: 'Destination address is invalid' }],
+          messages: [
+            {
+              code: 'user_input_problem',
+              source: 'USPS',
+              text: 'Attribute "address_from.email" must not be empty.',
+            },
+          ],
         })
       )
     )
@@ -79,8 +135,20 @@ describe('shippoProviderAdapter.purchaseLabel', () => {
         shipmentId: 'shipment_1',
         request: {} as never,
       })
-    ).rejects.toThrow('Shippo label purchase failed: Provider rejected the address.')
+    ).rejects.toThrow(
+      'Shippo label purchase failed: Ship-from email is missing. Add an email to your shipping location or store profile.'
+    )
 
     expect(errorSpy).toHaveBeenCalled()
+    const thrown = await shippoProviderAdapter
+      .purchaseLabel({
+        apiKey: 'shippo_test_key',
+        rateId: 'rate_1',
+        shipmentId: 'shipment_1',
+        request: {} as never,
+      })
+      .catch((error: Error) => error.message)
+    expect(String(thrown)).not.toContain('shippo_test_key')
+    expect(String(thrown)).not.toContain('address_from.email')
   })
 })

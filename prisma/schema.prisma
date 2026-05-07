@@ -367,6 +367,7 @@ model ShippingLocation {
   storeId       String
   name          String
   contactName   String?
+  email         String?
   company       String?
   address1      String
   address2      String?

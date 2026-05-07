@@ -27,6 +27,8 @@ import { GET, PATCH } from './route'
 function storeFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: 'store_1',
+    email: 'store@example.com',
+    supportEmail: 'support@example.com',
     shippingMode: 'MANUAL',
     shippingLiveProvider: null,
     shippingProviderUsage: 'LIVE_AND_LABELS',
@@ -235,6 +237,51 @@ describe('settings shipping route', () => {
             type: 'BOX',
           },
         ],
+      },
+    })
+  })
+
+  it('GET includes ship-from location email and store support email', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' },
+    })
+    mocks.getShippingSettingsStore.mockResolvedValue(
+      storeFixture({
+        email: 'store@example.com',
+        supportEmail: 'support@example.com',
+        shippingLocations: [
+          {
+            id: 'loc_1',
+            name: 'Warehouse',
+            contactName: 'Ops',
+            email: 'shipping@example.com',
+            company: null,
+            address1: '10 Main St',
+            address2: null,
+            city: 'Austin',
+            stateProvince: 'TX',
+            postalCode: '78701',
+            country: 'US',
+            phone: null,
+            isDefault: true,
+            isActive: true,
+            createdAt: '2026-05-06T00:00:00.000Z',
+            updatedAt: '2026-05-06T00:00:00.000Z',
+          },
+        ],
+      })
+    )
+
+    const response = await GET(new Request('http://localhost/api/settings/shipping'))
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload).toMatchObject({
+      success: true,
+      data: {
+        email: 'store@example.com',
+        supportEmail: 'support@example.com',
+        shippingLocations: [{ id: 'loc_1', email: 'shipping@example.com' }],
       },
     })
   })

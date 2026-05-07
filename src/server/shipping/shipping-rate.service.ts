@@ -57,6 +57,11 @@ function normalizeProvince(value?: string | null) {
     .toUpperCase()
 }
 
+function normalizeOptionalEmail(value?: string | null) {
+  const normalized = String(value ?? '').trim()
+  return normalized || null
+}
+
 function normalizeAddress(value: ShippingRateAddress) {
   return {
     name: value.name?.trim() || null,
@@ -215,6 +220,10 @@ function buildRateRequestFromStore(input: {
     originAddress: {
       name: location?.contactName || location?.name || store.shippingOriginName,
       phone: location?.phone || store.shippingOriginPhone,
+      email:
+        normalizeOptionalEmail(location?.email) ||
+        normalizeOptionalEmail(store.supportEmail) ||
+        normalizeOptionalEmail(store.email),
       address1: location?.address1 || store.shippingOriginAddress1,
       address2: location?.address2 || store.shippingOriginAddress2,
       city: location?.city || store.shippingOriginCity,
@@ -545,6 +554,11 @@ async function resolveLiveQuotes(input: {
     store: input.store,
     shippingAddress: input.shippingAddress,
   })
+  if (input.provider === 'SHIPPO' && !rateRequest.originAddress.email) {
+    throw new ShippingRateSetupError(
+      'Ship-from email is required for Shippo live rates. Add an email to your shipping location or store profile.'
+    )
+  }
 
   const quotes = await getShippingProviderLiveRates({
     provider: input.provider,

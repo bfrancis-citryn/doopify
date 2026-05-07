@@ -132,6 +132,16 @@ describe('settings compact flow', () => {
     expect(shippingWorkspace).toContain('<h4>Advanced</h4>')
   })
 
+  it('includes ship-from email field and helper copy in location drawer', () => {
+    const shippingWorkspace = read('src/components/settings/ShippingSettingsWorkspace.js')
+
+    expect(shippingWorkspace).toContain('label="Email"')
+    expect(shippingWorkspace).toContain('Used by carriers when buying labels. Required for Shippo/USPS labels.')
+    expect(shippingWorkspace).toContain('const normalizedEmail = normalizeOptional(locationForm.email);')
+    expect(shippingWorkspace).toContain('email: normalizedEmail,')
+    expect(shippingWorkspace).toContain('Ship-from email is required for Shippo/USPS labels.')
+  })
+
   it('keeps brand save behavior with API-backed patching', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 

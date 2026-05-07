@@ -79,6 +79,7 @@ type ShippingPackageUpdateInput = Partial<ShippingPackageCreateInput>
 type ShippingLocationCreateInput = {
   name: string
   contactName: string | null
+  email: string | null
   company: string | null
   address1: string
   address2: string | null

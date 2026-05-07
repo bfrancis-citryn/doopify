@@ -39,6 +39,11 @@ function normalizeCountry(value?: string | null) {
     .toUpperCase()
 }
 
+function normalizeEmail(value?: string | null) {
+  const normalized = String(value ?? '').trim()
+  return normalized || null
+}
+
 function normalizeFulfilledQuantities(input: {
   orderItems: Array<{ id: string; quantity: number }>
   fulfillmentRows: Array<{
@@ -243,12 +248,18 @@ function buildShippingRateRequest(input: {
     throw new Error('Order shipping address is incomplete for label rates')
   }
 
+  const resolvedShipFromEmail =
+    normalizeEmail(defaultLocation.email) ||
+    normalizeEmail(input.store.supportEmail) ||
+    normalizeEmail(input.store.email)
+
   return {
     apiKey: '',
     currency: (input.store.currency || 'USD').toUpperCase(),
     originAddress: {
       name: defaultLocation.contactName || defaultLocation.name || input.store.shippingOriginName,
       phone: defaultLocation.phone || input.store.shippingOriginPhone,
+      email: resolvedShipFromEmail,
       address1: defaultLocation.address1,
       address2: defaultLocation.address2,
       city: defaultLocation.city,
@@ -404,6 +415,12 @@ export async function getOrderShippingRatesForLabel(input: {
     parcel: input.parcel,
   })
 
+  if (provider === 'SHIPPO' && !request.originAddress.email) {
+    throw new Error(
+      'Ship-from email is required before buying a Shippo label. Add an email to your shipping location or store profile.'
+    )
+  }
+
   const quotes = await getShippingProviderLiveRates({
     provider,
     request: {
@@ -470,6 +487,11 @@ export async function buyOrderShippingLabel(input: {
   // Build the rate request for the provider call and for persisting shipment context.
   // This validates the ship-from location and destination address are present.
   const request = buildShippingRateRequest({ store, order, parcel: input.parcel })
+  if (provider === 'SHIPPO' && !request.originAddress.email) {
+    throw new Error(
+      'Ship-from email is required before buying a Shippo label. Add an email to your shipping location or store profile.'
+    )
+  }
 
   const safeProviderRateId = input.providerRateId.trim()
   const safeShipmentId = input.shipmentId?.trim()

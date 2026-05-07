@@ -10,6 +10,7 @@ import {
 const createLocationSchema = z.object({
   name: z.string().trim().min(1).max(120),
   contactName: z.string().trim().max(120).nullable().optional(),
+  email: z.string().trim().email().max(320).nullable().optional(),
   company: z.string().trim().max(120).nullable().optional(),
   address1: z.string().trim().min(1).max(160),
   address2: z.string().trim().max(160).nullable().optional(),
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
     const created = await createShippingLocation({
       ...parsed.data,
       contactName: normalizeOptional(parsed.data.contactName),
+      email: normalizeOptional(parsed.data.email),
       company: normalizeOptional(parsed.data.company),
       address2: normalizeOptional(parsed.data.address2),
       stateProvince: normalizeOptional(parsed.data.stateProvince),

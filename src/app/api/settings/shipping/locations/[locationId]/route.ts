@@ -14,6 +14,7 @@ interface Params {
 const updateLocationSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   contactName: z.string().trim().max(120).nullable().optional(),
+  email: z.string().trim().email().max(320).nullable().optional(),
   company: z.string().trim().max(120).nullable().optional(),
   address1: z.string().trim().min(1).max(160).optional(),
   address2: z.string().trim().max(160).nullable().optional(),
@@ -50,6 +51,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const updated = await updateShippingLocation(locationId, {
       ...parsed.data,
       ...(parsed.data.contactName !== undefined ? { contactName: normalizeOptional(parsed.data.contactName) } : {}),
+      ...(parsed.data.email !== undefined ? { email: normalizeOptional(parsed.data.email) } : {}),
       ...(parsed.data.company !== undefined ? { company: normalizeOptional(parsed.data.company) } : {}),
       ...(parsed.data.address2 !== undefined ? { address2: normalizeOptional(parsed.data.address2) } : {}),
       ...(parsed.data.stateProvince !== undefined ? { stateProvince: normalizeOptional(parsed.data.stateProvince) } : {}),
