@@ -23,7 +23,7 @@ import SettingsPageSkeleton from './SettingsSkeletons';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
-import { buildMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
+import { buildStripeMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
 import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
 import {
   getShippingHeaderSaveButtonState,
@@ -1360,7 +1360,7 @@ export default function SettingsWorkspace() {
     () => setupOptionalProductionSteps.filter((step) => !/STRIPE|RESEND|SMTP|SENDLAYER|EASYPOST|SHIPPO/i.test(step)),
     [setupOptionalProductionSteps]
   );
-  const stripeProviderStatus = providerStatusMap.STRIPE || null;
+  const stripeProviderStatus = providerStatusMap.STRIPE || stripeRuntimeStatus?.providerStatus || null;
   const resendProviderStatus = providerStatusMap.RESEND || null;
   const smtpProviderStatus = providerStatusMap.SMTP || null;
   const shippoProviderStatus = providerStatusMap.SHIPPO || null;
@@ -1489,9 +1489,30 @@ export default function SettingsWorkspace() {
   const stripeCredentialMeta = stripeProviderStatus?.credentialMeta || [];
   const stripeSavedCredentialMeta = stripeCredentialMeta.filter((entry) => entry.present);
   const stripeCredentialMaskMap = useMemo(
-    () => buildMaskedCredentialMap(stripeSavedCredentialMeta),
-    [stripeSavedCredentialMeta]
+    () =>
+      buildStripeMaskedCredentialMap({
+        credentialMeta: stripeSavedCredentialMeta,
+        runtimeProviderStatus: stripeRuntimeStatus?.providerStatus || null,
+        runtimeMode: stripeRuntimeStatus?.mode || null,
+      }),
+    [stripeRuntimeStatus?.mode, stripeRuntimeStatus?.providerStatus, stripeSavedCredentialMeta]
   );
+  const stripeSavedCredentialEntries = useMemo(() => {
+    const entries = [];
+    if (stripeCredentialMaskMap.PUBLISHABLE_KEY) {
+      entries.push({ key: 'PUBLISHABLE_KEY', maskedValue: stripeCredentialMaskMap.PUBLISHABLE_KEY });
+    }
+    if (stripeCredentialMaskMap.SECRET_KEY) {
+      entries.push({ key: 'SECRET_KEY', maskedValue: stripeCredentialMaskMap.SECRET_KEY });
+    }
+    if (stripeCredentialMaskMap.WEBHOOK_SECRET) {
+      entries.push({ key: 'WEBHOOK_SECRET', maskedValue: stripeCredentialMaskMap.WEBHOOK_SECRET });
+    }
+    if (stripeCredentialMaskMap.MODE) {
+      entries.push({ key: 'MODE', maskedValue: stripeCredentialMaskMap.MODE });
+    }
+    return entries;
+  }, [stripeCredentialMaskMap.MODE, stripeCredentialMaskMap.PUBLISHABLE_KEY, stripeCredentialMaskMap.SECRET_KEY, stripeCredentialMaskMap.WEBHOOK_SECRET]);
   const stripePublishablePlaceholder = useMemo(
     () =>
       resolveMaskedInputPlaceholder({
@@ -2095,6 +2116,9 @@ export default function SettingsWorkspace() {
     setProviderStatusError('');
     setProviderNotice('');
     setActivePaymentDrawer(providerId);
+    if (providerId === PAYMENT_PROVIDER_DRAWER.STRIPE) {
+      void refreshProviderStatuses();
+    }
   }
 
   function closePaymentDrawer() {
@@ -4319,7 +4343,7 @@ export default function SettingsWorkspace() {
                   <AdminInput
                     onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
                     placeholder={stripePublishablePlaceholder}
-                    type="password"
+                    type="text"
                     value={providerForms.STRIPE.publishableKey}
                   />
                   {stripeCredentialMaskMap.PUBLISHABLE_KEY ? (
@@ -4418,19 +4442,19 @@ export default function SettingsWorkspace() {
                   Placeholder domains are not accepted for webhook readiness.
                 </p>
               ) : null}
-              {stripeSavedCredentialMeta.length ? (
+              {stripeSavedCredentialEntries.length ? (
                 <p className={styles.compactMeta}>
                   Credentials saved securely. Secret values are encrypted and hidden.
                 </p>
               ) : null}
-              {!stripeSavedCredentialMeta.length ? (
+              {!stripeSavedCredentialEntries.length ? (
                 <p className={styles.compactMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
               ) : null}
-              {stripeSavedCredentialMeta.length ? (
+              {stripeSavedCredentialEntries.length ? (
                 <details className={styles.drawerDetails}>
                   <summary className={styles.drawerDetailsSummary}>Developer details</summary>
                   <div className={styles.drawerDetailsBody}>
-                    {stripeSavedCredentialMeta.map((entry) => (
+                    {stripeSavedCredentialEntries.map((entry) => (
                       <p className={styles.compactMeta} key={entry.key}>
                         <strong>{entry.key}:</strong> {entry.maskedValue || 'saved'}
                       </p>

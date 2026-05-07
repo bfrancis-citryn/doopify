@@ -64,6 +64,7 @@ const META_VERIFIED_AT = 'META_VERIFIED_AT'
 const META_LAST_VERIFIED_AT = 'META_LAST_VERIFIED_AT'
 const META_LAST_ERROR = 'META_LAST_ERROR'
 const META_VERIFICATION_DATA = 'META_VERIFICATION_DATA'
+const MASK_TOKEN = '******'
 
 const KNOWN_PROVIDERS = new Set<SupportedProvider>(Object.keys(PROVIDER_CONFIG) as SupportedProvider[])
 
@@ -85,7 +86,7 @@ function isMaskedCredentialPlaceholder(value: string | null) {
   if (!value) return false
   const normalized = value.trim()
   if (!normalized) return false
-  if (!/[�*]{3,}|\.{3,}/.test(normalized)) return false
+  if (!/(?:\*{3,}|\u2022{3,}|\.{3,})/.test(normalized)) return false
   return (
     normalized.startsWith('pk_') ||
     normalized.startsWith('sk_') ||
@@ -277,27 +278,27 @@ function maskCredential(provider: SupportedProvider, key: string, value: string 
 
   const suffix = value.length >= 4 ? value.slice(-4) : value
   if (key === 'PUBLISHABLE_KEY' && provider === 'STRIPE') {
-    if (value.startsWith('pk_test_')) return `pk_test_������${suffix}`
-    if (value.startsWith('pk_live_')) return `pk_live_������${suffix}`
-    return `pk_������${suffix}`
+    if (value.startsWith('pk_test_')) return `pk_test_${MASK_TOKEN}${suffix}`
+    if (value.startsWith('pk_live_')) return `pk_live_${MASK_TOKEN}${suffix}`
+    return `pk_${MASK_TOKEN}${suffix}`
   }
 
   if (key === 'SECRET_KEY' && provider === 'STRIPE') {
-    if (value.startsWith('sk_test_')) return `sk_test_������${suffix}`
-    if (value.startsWith('sk_live_')) return `sk_live_������${suffix}`
-    return `sk_������${suffix}`
+    if (value.startsWith('sk_test_')) return `sk_test_${MASK_TOKEN}${suffix}`
+    if (value.startsWith('sk_live_')) return `sk_live_${MASK_TOKEN}${suffix}`
+    return `sk_${MASK_TOKEN}${suffix}`
   }
 
   if (key === 'WEBHOOK_SECRET' && value.startsWith('whsec_')) {
-    return `whsec_������${suffix}`
+    return `whsec_${MASK_TOKEN}${suffix}`
   }
 
   if (key === 'API_KEY' && provider === 'RESEND' && value.startsWith('re_')) {
-    return `re_������${suffix}`
+    return `re_${MASK_TOKEN}${suffix}`
   }
 
-  if (value.length <= 6) return '����'
-  return `${value.slice(0, 4)}������${suffix}`
+  if (value.length <= 6) return '****'
+  return `${value.slice(0, 4)}${MASK_TOKEN}${suffix}`
 }
 
 function safeCredentialMetadata(provider: SupportedProvider, secretMap: Map<string, string>) {
@@ -1321,4 +1322,3 @@ export async function sendProviderTestEmail(input: {
     messageId: result.messageId || null,
   }
 }
-

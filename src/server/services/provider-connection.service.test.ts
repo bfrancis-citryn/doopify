@@ -660,5 +660,93 @@ describe('provider connection service', () => {
       expect.arrayContaining(['META_VERIFIED_AT', 'META_LAST_VERIFIED_AT', 'META_LAST_ERROR', 'META_VERIFICATION_DATA'])
     )
   })
+
+  it('returns db source with masked credential metadata after Stripe save for reload hydration', async () => {
+    const savedIntegration = {
+      id: 'int_stripe_status_after_save',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      createdAt: new Date('2026-05-07T09:30:00.000Z'),
+      updatedAt: new Date('2026-05-07T09:30:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_saved_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_saved_5678' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:test' },
+        { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_saved_9012' },
+      ],
+    }
+
+    mocks.prisma.integration.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([savedIntegration])
+
+    const status = await saveProviderCredentials('STRIPE', {
+      publishableKey: 'pk_test_saved_1234',
+      secretKey: 'sk_test_saved_5678',
+      mode: 'test',
+      webhookSecret: 'whsec_saved_9012',
+    })
+
+    expect(status.source).toBe('db')
+    expect(status.state).toBe('CREDENTIALS_SAVED')
+    const publishableMask = status.credentialMeta.find((entry) => entry.key === 'PUBLISHABLE_KEY')?.maskedValue
+    const secretMask = status.credentialMeta.find((entry) => entry.key === 'SECRET_KEY')?.maskedValue
+    const webhookMask = status.credentialMeta.find((entry) => entry.key === 'WEBHOOK_SECRET')?.maskedValue
+    expect(String(publishableMask || '')).toContain('pk_test_')
+    expect(String(publishableMask || '')).toContain('1234')
+    expect(String(secretMask || '')).toContain('sk_test_')
+    expect(String(secretMask || '')).toContain('5678')
+    expect(String(webhookMask || '')).toContain('whsec_')
+    expect(String(webhookMask || '')).toContain('9012')
+    expect(JSON.stringify(status)).not.toContain('sk_test_saved_5678')
+    expect(JSON.stringify(status)).not.toContain('whsec_saved_9012')
+  })
+
+  it('preserves masked API credentials after webhook-only Stripe save', async () => {
+    const existingIntegration = {
+      id: 'int_stripe_webhook_preserve_masks',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      createdAt: new Date('2026-05-07T10:00:00.000Z'),
+      updatedAt: new Date('2026-05-07T10:00:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:test' },
+        { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_1111' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T10:01:00.000Z' },
+      ],
+    }
+    const postSaveIntegration = {
+      ...existingIntegration,
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:test' },
+        { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_updated_2222' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T10:01:00.000Z' },
+      ],
+    }
+
+    mocks.prisma.integration.findMany
+      .mockResolvedValueOnce([existingIntegration])
+      .mockResolvedValueOnce([existingIntegration])
+      .mockResolvedValue([postSaveIntegration])
+
+    const status = await saveProviderCredentials('STRIPE', {
+      webhookSecret: 'whsec_updated_2222',
+    })
+
+    expect(status.state).toBe('VERIFIED')
+    const publishableMask = status.credentialMeta.find((entry) => entry.key === 'PUBLISHABLE_KEY')?.maskedValue
+    const secretMask = status.credentialMeta.find((entry) => entry.key === 'SECRET_KEY')?.maskedValue
+    const webhookMask = status.credentialMeta.find((entry) => entry.key === 'WEBHOOK_SECRET')?.maskedValue
+    expect(String(publishableMask || '')).toContain('pk_test_')
+    expect(String(publishableMask || '')).toContain('1234')
+    expect(String(secretMask || '')).toContain('sk_test_')
+    expect(String(secretMask || '')).toContain('5678')
+    expect(String(webhookMask || '')).toContain('whsec_')
+    expect(String(webhookMask || '')).toContain('2222')
+  })
 })
 
