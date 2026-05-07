@@ -24,7 +24,11 @@ import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
 import { buildMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
 import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
-import { getShippingHeaderSaveButtonState } from './shipping-save-button.helpers';
+import {
+  getShippingHeaderSaveButtonState,
+  invokeShippingSaveAction,
+  resolveShippingSaveActionRegistration,
+} from './shipping-save-button.helpers';
 import { calculateTaxPreview } from './tax-preview.helpers';
 
 const SETTINGS_SECTIONS = [
@@ -833,6 +837,7 @@ export default function SettingsWorkspace() {
   const [lastSavedAt, setLastSavedAt] = useState(Date.now());
   const [shippingModeSavedState, setShippingModeSavedState] = useState('saved');
   const [shippingModeDirty, setShippingModeDirty] = useState(false);
+  const [shippingModeSaveActionReady, setShippingModeSaveActionReady] = useState(false);
   const [shippingModeSaveError, setShippingModeSaveError] = useState('');
   const [shippingModeLastSavedAt, setShippingModeLastSavedAt] = useState(Date.now());
   const [saveClock, setSaveClock] = useState(Date.now());
@@ -2211,7 +2216,9 @@ export default function SettingsWorkspace() {
   }, []);
 
   const handleRegisterShippingModeSaveAction = useCallback((action) => {
-    shippingModeSaveActionRef.current = typeof action === 'function' ? action : null;
+    const registration = resolveShippingSaveActionRegistration(action);
+    shippingModeSaveActionRef.current = registration.saveAction;
+    setShippingModeSaveActionReady(registration.saveActionReady);
   }, []);
 
   const activeSavedState = activeSection === 'shipping' ? shippingModeSavedState : savedState;
@@ -2226,7 +2233,7 @@ export default function SettingsWorkspace() {
           loading,
           hasError: Boolean(error),
           shippingConfigLoading,
-          hasSaveAction: Boolean(shippingModeSaveActionRef.current),
+          hasSaveAction: shippingModeSaveActionReady,
           shippingModeSavedState,
           shippingModeDirty,
         })
@@ -2726,7 +2733,7 @@ export default function SettingsWorkspace() {
                       activeSection === 'brand-kit'
                         ? handleBrandKitSave
                         : activeSection === 'shipping'
-                          ? () => void shippingModeSaveActionRef.current?.()
+                          ? () => void invokeShippingSaveAction(shippingModeSaveActionRef.current)
                           : undefined
                     }
                     size="sm"
