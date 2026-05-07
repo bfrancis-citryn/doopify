@@ -12,44 +12,44 @@ describe('settings skeleton loading state', () => {
     ).toBe(true)
   })
 
-  it('shows skeleton for payments while provider or activity data is loading', () => {
+  it('does not block payments behind page skeleton while provider/activity data loads', () => {
     expect(
       isSettingsTabLoadingState({
         activeSection: 'payments',
         providerStatusLoading: true,
         providerStatusLoaded: false,
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('shows skeleton for taxes while shipping config data is loading', () => {
+  it('does not block taxes behind page skeleton while shipping config loads', () => {
     expect(
       isSettingsTabLoadingState({
         activeSection: 'taxes',
         shippingConfigLoading: true,
         shippingConfigLoaded: false,
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('shows skeleton for email while provider or activity data is loading', () => {
+  it('does not block email behind page skeleton while provider/activity data loads', () => {
     expect(
       isSettingsTabLoadingState({
         activeSection: 'email',
         emailActivityLoading: true,
         emailActivityLoaded: false,
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('shows skeleton for brand kit while brand data is loading', () => {
+  it('does not block brand kit behind page skeleton while data loads', () => {
     expect(
       isSettingsTabLoadingState({
         activeSection: 'brand-kit',
         brandKitLoading: true,
         brandKitLoaded: false,
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('shows skeleton for account until session user resolves', () => {

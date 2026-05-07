@@ -910,7 +910,7 @@ export default function SettingsWorkspace() {
   }, []);
 
   useEffect(() => {
-    if (activeSection !== 'brand-kit' || brandKitLoaded || brandKitLoading) {
+    if (activeSection !== 'brand-kit' || brandKitLoaded) {
       return;
     }
 
@@ -931,8 +931,8 @@ export default function SettingsWorkspace() {
           setBrandKitLoadWarning(true);
         }
       } finally {
+        setBrandKitLoading(false);
         if (!cancelled) {
-          setBrandKitLoading(false);
           setBrandKitLoaded(true);
         }
       }
@@ -943,7 +943,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, brandKitLoaded, brandKitLoading]);
+  }, [activeSection, brandKitLoaded]);
 
   async function refreshBrandKit() {
     try {
@@ -962,7 +962,7 @@ export default function SettingsWorkspace() {
   }
 
   useEffect(() => {
-    if (!['shipping', 'taxes'].includes(activeSection) || shippingConfigLoaded || shippingConfigLoading) {
+    if (!['shipping', 'taxes'].includes(activeSection) || shippingConfigLoaded) {
       return;
     }
 
@@ -1009,7 +1009,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, shippingConfigLoaded, shippingConfigLoading]);
+  }, [activeSection, shippingConfigLoaded]);
 
   useEffect(() => {
     const shouldLoadSetupDiagnostics = ['setup', 'payments', 'shipping', 'email'].includes(activeSection);
@@ -1034,8 +1034,8 @@ export default function SettingsWorkspace() {
           setSetupError(loadError instanceof Error ? loadError.message : 'Failed to load setup diagnostics');
         }
       } finally {
+        setSetupLoading(false);
         if (!cancelled) {
-          setSetupLoading(false);
           setSetupLoaded(true);
         }
       }
@@ -1065,8 +1065,8 @@ export default function SettingsWorkspace() {
           setReadinessError(loadError instanceof Error ? loadError.message : 'Failed to load launch readiness');
         }
       } finally {
+        setReadinessLoading(false);
         if (!cancelled) {
-          setReadinessLoading(false);
           setReadinessLoaded(true);
         }
       }
@@ -1094,8 +1094,8 @@ export default function SettingsWorkspace() {
           setDeploymentError(loadError instanceof Error ? loadError.message : 'Failed to load deployment validation');
         }
       } finally {
+        setDeploymentLoading(false);
         if (!cancelled) {
-          setDeploymentLoading(false);
           setDeploymentLoaded(true);
         }
       }
@@ -1123,8 +1123,8 @@ export default function SettingsWorkspace() {
           setWizardError(loadError instanceof Error ? loadError.message : 'Failed to load setup wizard');
         }
       } finally {
+        setWizardLoading(false);
         if (!cancelled) {
-          setWizardLoading(false);
           setWizardLoaded(true);
         }
       }
@@ -1151,7 +1151,7 @@ export default function SettingsWorkspace() {
 
   useEffect(() => {
     const shouldLoadProviders = ['payments', 'shipping', 'email'].includes(activeSection);
-    if (!shouldLoadProviders || providerStatusLoaded || providerStatusLoading) {
+    if (!shouldLoadProviders || providerStatusLoaded) {
       return;
     }
 
@@ -1208,9 +1208,7 @@ export default function SettingsWorkspace() {
         if (cancelled) return;
         setProviderStatusError(loadError instanceof Error ? loadError.message : 'Failed to load provider statuses');
       } finally {
-        if (!cancelled) {
-          setProviderStatusLoading(false);
-        }
+        setProviderStatusLoading(false);
       }
     }
 
@@ -1219,10 +1217,10 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, providerStatusLoaded, providerStatusLoading]);
+  }, [activeSection, providerStatusLoaded]);
 
   useEffect(() => {
-    if (activeSection !== 'payments' || paymentActivityLoaded || paymentActivityLoading) {
+    if (activeSection !== 'payments' || paymentActivityLoaded) {
       return;
     }
 
@@ -1243,9 +1241,7 @@ export default function SettingsWorkspace() {
         setPaymentActivityRows([]);
         setPaymentActivityError(loadError instanceof Error ? loadError.message : 'Failed to load payment activity');
       } finally {
-        if (!cancelled) {
-          setPaymentActivityLoading(false);
-        }
+        setPaymentActivityLoading(false);
       }
     }
 
@@ -1254,10 +1250,10 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, paymentActivityLoaded, paymentActivityLoading]);
+  }, [activeSection, paymentActivityLoaded]);
 
   useEffect(() => {
-    if (activeSection !== 'email' || emailActivityLoaded || emailActivityLoading) {
+    if (activeSection !== 'email' || emailActivityLoaded) {
       return;
     }
 
@@ -1285,9 +1281,7 @@ export default function SettingsWorkspace() {
         setEmailActivityRows([]);
         setEmailActivityError(loadError instanceof Error ? loadError.message : 'Failed to load email activity');
       } finally {
-        if (!cancelled) {
-          setEmailActivityLoading(false);
-        }
+        setEmailActivityLoading(false);
       }
     }
 
@@ -1296,7 +1290,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, emailActivityLoaded, emailActivityLoading]);
+  }, [activeSection, emailActivityLoaded]);
 
   useEffect(() => {
     const fallbackEmail = String(settings.supportEmail || settings.senderEmail || '').trim();

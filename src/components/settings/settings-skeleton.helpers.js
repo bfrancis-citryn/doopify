@@ -25,28 +25,6 @@ export function isSettingsTabLoadingState({
   if (hasError) return false;
   if (loading) return true;
 
-  if (activeSection === "brand-kit") {
-    return brandKitLoading && !brandKitLoaded;
-  }
-
-  if (activeSection === "taxes") {
-    return shippingConfigLoading && !shippingConfigLoaded;
-  }
-
-  if (activeSection === "payments") {
-    return (
-      (providerStatusLoading && !providerStatusLoaded) ||
-      (paymentActivityLoading && !paymentActivityLoaded)
-    );
-  }
-
-  if (activeSection === "email") {
-    return (
-      (providerStatusLoading && !providerStatusLoaded) ||
-      (emailActivityLoading && !emailActivityLoaded)
-    );
-  }
-
   if (activeSection === "setup") {
     return (
       (setupLoading && !setupLoaded) ||
