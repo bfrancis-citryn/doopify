@@ -16,6 +16,8 @@ const schema = z.object({
   shipmentId: z.string().trim().max(200).optional(),
   labelFormat: z.string().trim().min(1).max(40).optional(),
   labelSize: z.string().trim().min(1).max(40).optional(),
+  provider: z.enum(['SHIPPO', 'EASYPOST']).optional(),
+  sendTrackingEmail: z.boolean().optional(),
   items: z
     .array(
       z.object({
@@ -58,6 +60,8 @@ export async function POST(req: Request, { params }: Params) {
       shipmentId: parsed.data.shipmentId,
       labelFormat: parsed.data.labelFormat,
       labelSize: parsed.data.labelSize,
+      provider: parsed.data.provider,
+      sendTrackingEmail: parsed.data.sendTrackingEmail,
       items: parsed.data.items,
       parcel: parsed.data.parcel,
     })

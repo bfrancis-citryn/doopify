@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -64,11 +64,81 @@ function SectionDivider({ label }) {
   );
 }
 
+function providerLabel(provider) {
+  if (provider === "SHIPPO") return "Shippo";
+  if (provider === "EASYPOST") return "EasyPost";
+  return "Carrier";
+}
+
+function statusTextForShipment(input) {
+  if (input.hasLabel) return "Label purchased";
+  if (input.trackingNumber || input.trackingUrl) return "Tracking added manually";
+  return "Shipped";
+}
+
+function normalizeShipmentCards({ fulfillments, shippingLabels, currency }) {
+  const fulfillmentById = new Map((fulfillments || []).map((entry) => [entry.id, entry]));
+  const labelCards = (shippingLabels || []).map((label) => {
+    const linkedFulfillment = label.fulfillmentId ? fulfillmentById.get(label.fulfillmentId) : null;
+    return {
+      id: `label:${label.id}`,
+      hasLabel: true,
+      statusText: statusTextForShipment({ hasLabel: true }),
+      carrier: label.carrier || linkedFulfillment?.carrier || null,
+      service: label.service || linkedFulfillment?.service || null,
+      trackingNumber: label.trackingNumber || linkedFulfillment?.trackingNumber || null,
+      trackingUrl: label.trackingUrl || linkedFulfillment?.trackingUrl || null,
+      labelUrl: label.labelUrl || linkedFulfillment?.labelUrl || null,
+      provider: label.provider || null,
+      labelCost:
+        typeof label.labelAmount === "number"
+          ? label.labelAmount
+          : typeof label.labelAmountCents === "number"
+            ? Number(label.labelAmountCents) / 100
+            : null,
+      currency: label.currency || currency,
+      createdAt: label.createdAt || linkedFulfillment?.createdAt || null,
+    };
+  });
+
+  const fulfillmentWithoutLabel = (fulfillments || []).filter(
+    (entry) => !(shippingLabels || []).some((label) => label.fulfillmentId === entry.id)
+  );
+
+  const manualCards = fulfillmentWithoutLabel.map((entry) => ({
+    id: `fulfillment:${entry.id}`,
+    hasLabel: false,
+    statusText: statusTextForShipment({
+      hasLabel: false,
+      trackingNumber: entry.trackingNumber,
+      trackingUrl: entry.trackingUrl,
+    }),
+    carrier: entry.carrier || null,
+    service: entry.service || null,
+    trackingNumber: entry.trackingNumber || null,
+    trackingUrl: entry.trackingUrl || null,
+    labelUrl: entry.labelUrl || null,
+    provider: null,
+    labelCost: null,
+    currency,
+    createdAt: entry.createdAt || null,
+  }));
+
+  return [...labelCards, ...manualCards].sort((left, right) => {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+    return rightTime - leftTime;
+  });
+}
+
 export default function OrderDetailView({ order }) {
   const [liveOrder, setLiveOrder] = useState(order);
+  const initialShippingCapabilities = order?.shippingCapabilities || {};
+  const initialConnectedProviders = Array.isArray(initialShippingCapabilities.connectedProviders)
+    ? initialShippingCapabilities.connectedProviders
+    : [];
   const [refreshing, setRefreshing] = useState(false);
-  const [message, setMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [pageError, setPageError] = useState("");
   const [ratesLoading, setRatesLoading] = useState(false);
   const [buyingLabel, setBuyingLabel] = useState(false);
   const [creatingManual, setCreatingManual] = useState(false);
@@ -78,6 +148,17 @@ export default function OrderDetailView({ order }) {
   // EasyPost requires the original shipment id to avoid creating a duplicate shipment on purchase.
   const [selectedShipmentId, setSelectedShipmentId] = useState("");
   const [selectedQuantities, setSelectedQuantities] = useState({});
+  const [fulfillmentMethod, setFulfillmentMethod] = useState(
+    initialConnectedProviders.length ? "BUY_LABEL" : "MANUAL_TRACKING"
+  );
+  const [selectedLabelProvider, setSelectedLabelProvider] = useState(() => {
+    const preferredProvider =
+      initialConnectedProviders.find((provider) => provider === initialShippingCapabilities.labelProvider) ||
+      initialConnectedProviders[0] ||
+      "";
+    return preferredProvider;
+  });
+  const [toasts, setToasts] = useState([]);
   const [parcel, setParcel] = useState({
     weightOz: "12",
     lengthIn: "10",
@@ -89,8 +170,9 @@ export default function OrderDetailView({ order }) {
     service: "",
     trackingNumber: "",
     trackingUrl: "",
-    sendTrackingEmail: false,
   });
+  const [manualSendTrackingEmail, setManualSendTrackingEmail] = useState(false);
+  const [labelSendTrackingEmail, setLabelSendTrackingEmail] = useState(false);
   const [internalNoteDraft, setInternalNoteDraft] = useState("");
   const [customerNoteDraft, setCustomerNoteDraft] = useState("");
   const [sendCustomerNoteEmail, setSendCustomerNoteEmail] = useState(false);
@@ -113,14 +195,40 @@ export default function OrderDetailView({ order }) {
   const shippingAddress = currentOrder?.shippingSummary?.address || currentOrder?.shippingAddress || null;
   const billingAddress = currentOrder?.billingAddress || null;
   const shippingCapabilities = currentOrder?.shippingCapabilities || {};
-  const labelProviderConnected = Boolean(shippingCapabilities.providerConnected);
+  const connectedProviders = Array.isArray(shippingCapabilities.connectedProviders)
+    ? shippingCapabilities.connectedProviders
+    : [];
+  const hasAnyConnectedProvider = connectedProviders.length > 0;
   const canBuyShippingLabel = Boolean(currentOrder?.availableActions?.canBuyShippingLabel);
+  const hasCustomerEmail =
+    currentOrder?.emailCapabilities?.hasCustomerEmail ??
+    Boolean(currentOrder?.email || currentOrder?.customer?.email);
+  const emailProviderConfigured = Boolean(currentOrder?.emailCapabilities?.providerConfigured);
+  const shipmentCards = useMemo(
+    () => normalizeShipmentCards({ fulfillments, shippingLabels, currency }),
+    [fulfillments, shippingLabels, currency]
+  );
 
   useEffect(() => {
     setInternalNoteDraft(currentOrder?.notes || "");
     setCustomerNoteDraft("");
     setSendCustomerNoteEmail(false);
-  }, [currentOrder?.id, currentOrder?.notes]);
+    setManualSendTrackingEmail(hasCustomerEmail);
+    setLabelSendTrackingEmail(hasCustomerEmail);
+    setFulfillmentMethod(hasAnyConnectedProvider ? "BUY_LABEL" : "MANUAL_TRACKING");
+    const preferredProvider =
+      connectedProviders.find((provider) => provider === shippingCapabilities.labelProvider) ||
+      connectedProviders[0] ||
+      "";
+    setSelectedLabelProvider(preferredProvider);
+  }, [
+    currentOrder?.id,
+    currentOrder?.notes,
+    hasCustomerEmail,
+    hasAnyConnectedProvider,
+    connectedProviders,
+    shippingCapabilities.labelProvider,
+  ]);
 
   const chips = useMemo(
     () => [
@@ -169,6 +277,50 @@ export default function OrderDetailView({ order }) {
       .filter((item) => item.remainingQuantity > 0);
   }, [lineItems, fulfillments]);
 
+  const selectedRateQuote = useMemo(
+    () =>
+      rateQuotes.find((quote) => {
+        const quoteId = quote.providerRateId || quote.id;
+        return quoteId === selectedRateId;
+      }) || null,
+    [rateQuotes, selectedRateId]
+  );
+
+  function dismissToast(toastId) {
+    setToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }
+
+  function showToast(message, tone = "success", options = {}) {
+    const toastId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const toast = {
+      id: toastId,
+      tone,
+      message,
+      persistent: Boolean(options.persistent),
+    };
+    setToasts((current) => [...current, toast]);
+
+    if (!toast.persistent) {
+      const duration = options.durationMs ?? 4200;
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((entry) => entry.id !== toastId));
+      }, duration);
+    }
+
+    return toastId;
+  }
+
+  function clearQuoteSelection() {
+    setRateQuotes([]);
+    setRateProvider("");
+    setSelectedRateId("");
+    setSelectedShipmentId("");
+  }
+
+  useEffect(() => {
+    clearQuoteSelection();
+  }, [selectedLabelProvider]);
+
   function normalizeItemsPayload() {
     const payload = [];
     for (const item of fulfillableItems) {
@@ -203,13 +355,20 @@ export default function OrderDetailView({ order }) {
   async function refreshOrder() {
     if (!currentOrder?.orderNumber) return;
     setRefreshing(true);
+    setPageError("");
     try {
       const response = await fetch(
         `/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/detail`,
         { cache: "no-store" }
       );
       const json = await response.json();
-      if (json?.success) setLiveOrder(json.data);
+      if (json?.success) {
+        setLiveOrder(json.data);
+        return;
+      }
+      setPageError(parseErrorMessage(json, "Failed to refresh order details."));
+    } catch {
+      setPageError("Failed to refresh order details.");
     } finally {
       setRefreshing(false);
     }
@@ -217,34 +376,37 @@ export default function OrderDetailView({ order }) {
 
   async function loadShippingRates() {
     if (!currentOrder?.orderNumberValue) return;
-    setMessage("");
-    setErrorMessage("");
+    setPageError("");
     setRatesLoading(true);
     try {
+      if (!selectedLabelProvider) {
+        throw new Error("Select Shippo or EasyPost before loading label rates.");
+      }
       const items = normalizeItemsPayload();
       const parcelPayload = normalizeParcelPayload();
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/shipping-rates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, parcel: parcelPayload }),
+        body: JSON.stringify({ items, parcel: parcelPayload, provider: selectedLabelProvider }),
       });
       const json = await response.json();
-      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to load shipping rates."));
+      if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to load label rates."));
       const quotes = Array.isArray(json.data?.quotes) ? json.data.quotes : [];
       setRateQuotes(quotes);
-      setRateProvider(json.data?.provider || "");
+      setRateProvider(json.data?.provider || selectedLabelProvider);
       const firstQuote = quotes[0];
       setSelectedRateId(firstQuote?.providerRateId || firstQuote?.id || "");
       setSelectedShipmentId(
         typeof firstQuote?.metadata?.shipmentId === "string" ? firstQuote.metadata.shipmentId : ""
       );
-      if (!quotes.length) setMessage("No live label rates are available for the selected package.");
+      if (!quotes.length) {
+        showToast(`${providerLabel(selectedLabelProvider)} returned no label rates for this package.`, "info");
+      } else {
+        showToast(`${providerLabel(selectedLabelProvider)} label rates loaded.`, "success");
+      }
     } catch (error) {
-      setRateQuotes([]);
-      setSelectedRateId("");
-      setSelectedShipmentId("");
-      setRateProvider("");
-      setErrorMessage(error instanceof Error ? error.message : "Failed to load shipping rates.");
+      clearQuoteSelection();
+      showToast(error instanceof Error ? error.message : "Failed to load label rates.", "error");
     } finally {
       setRatesLoading(false);
     }
@@ -252,19 +414,22 @@ export default function OrderDetailView({ order }) {
 
   async function buyShippingLabel() {
     if (!currentOrder?.orderNumberValue) return;
-    setMessage("");
-    setErrorMessage("");
+    setPageError("");
     setBuyingLabel(true);
+    const providerName = providerLabel(selectedLabelProvider || rateProvider);
+    const loadingToastId = showToast(`Purchasing label from ${providerName}...`, "info", { persistent: true });
     try {
       const items = normalizeItemsPayload();
       const parcelPayload = normalizeParcelPayload();
-      if (!selectedRateId) throw new Error("Select a provider rate before buying a label.");
+      if (!selectedRateId) throw new Error("Select a label rate before buying a label.");
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/shipping-labels`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           providerRateId: selectedRateId,
           shipmentId: selectedShipmentId || undefined,
+          provider: selectedLabelProvider || undefined,
+          sendTrackingEmail: Boolean(labelSendTrackingEmail),
           items,
           parcel: parcelPayload,
         }),
@@ -272,19 +437,34 @@ export default function OrderDetailView({ order }) {
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to buy shipping label."));
       const duplicate = Boolean(json.data?.duplicate);
-      setMessage(duplicate ? "Existing shipping label reused." : "Shipping label purchased.");
+      const trackingEmail = json.data?.trackingEmail || null;
+      if (duplicate) {
+        showToast("Label already existed for this rate. Existing shipment was reused.", "info");
+      } else if (trackingEmail?.queued) {
+        showToast("Label purchased. Tracking was saved and customer email queued.", "success");
+      } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "EMAIL_PROVIDER_NOT_CONFIGURED") {
+        showToast("Label purchased. Tracking was saved. Email was not sent because no email provider is configured.", "info");
+      } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "MISSING_CUSTOMER_EMAIL") {
+        showToast("Label purchased. Tracking was saved. Customer email is missing, so no email was sent.", "info");
+      } else {
+        showToast("Label purchased. Tracking was saved.", "success");
+      }
       await refreshOrder();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to buy shipping label.");
+      showToast(
+        error instanceof Error
+          ? error.message
+          : `${providerName} could not purchase this label. Check the address/package and try again.`,
+        "error"
+      );
     } finally {
+      dismissToast(loadingToastId);
       setBuyingLabel(false);
     }
   }
 
   async function createManualTrackingFulfillment() {
     if (!currentOrder?.orderNumberValue) return;
-    setMessage("");
-    setErrorMessage("");
     setCreatingManual(true);
     try {
       const items = normalizeItemsPayload();
@@ -297,20 +477,25 @@ export default function OrderDetailView({ order }) {
           service: manualForm.service || undefined,
           trackingNumber: manualForm.trackingNumber || undefined,
           trackingUrl: manualForm.trackingUrl || undefined,
-          sendTrackingEmail: Boolean(manualForm.sendTrackingEmail),
+          sendTrackingEmail: Boolean(manualSendTrackingEmail),
         }),
       });
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to add manual tracking."));
-      setMessage(
-        manualForm.sendTrackingEmail
-          ? "Manual tracking saved. Shipment email queued — check Delivery logs to confirm it sent."
-          : "Manual tracking saved. Shipment email was not requested."
-      );
+      const trackingEmail = json.data?.trackingEmail || null;
+      if (trackingEmail?.queued) {
+        showToast("Tracking saved and customer email queued.", "success");
+      } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "EMAIL_PROVIDER_NOT_CONFIGURED") {
+        showToast("Tracking saved. Email was not sent because no email provider is configured.", "info");
+      } else if (trackingEmail?.requested && trackingEmail?.skippedReason === "MISSING_CUSTOMER_EMAIL") {
+        showToast("Tracking saved. Customer email is missing, so no email was sent.", "info");
+      } else {
+        showToast("Tracking saved.", "success");
+      }
       setManualForm((prev) => ({ ...prev, trackingNumber: "", trackingUrl: "" }));
       await refreshOrder();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to add manual tracking.");
+      showToast(error instanceof Error ? error.message : "Failed to add manual tracking.", "error");
     } finally {
       setCreatingManual(false);
     }
@@ -318,8 +503,6 @@ export default function OrderDetailView({ order }) {
 
   async function updateOrderStatusPatch(patch, loadingKey, successMessage) {
     if (!currentOrder?.orderNumberValue) return;
-    setMessage("");
-    setErrorMessage("");
     setStatusActionLoading(loadingKey);
     try {
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/status`, {
@@ -329,10 +512,10 @@ export default function OrderDetailView({ order }) {
       });
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to update order status."));
-      setMessage(successMessage);
+      showToast(successMessage, "success");
       await refreshOrder();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to update order status.");
+      showToast(error instanceof Error ? error.message : "Failed to update order status.", "error");
     } finally {
       setStatusActionLoading("");
     }
@@ -341,8 +524,6 @@ export default function OrderDetailView({ order }) {
   async function saveInternalNote() {
     if (!currentOrder?.orderNumberValue) return;
     setSavingInternalNote(true);
-    setMessage("");
-    setErrorMessage("");
     try {
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/notes`, {
         method: "PATCH",
@@ -351,10 +532,10 @@ export default function OrderDetailView({ order }) {
       });
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to save internal note."));
-      setMessage("Internal note updated.");
+      showToast("Internal note updated.", "success");
       await refreshOrder();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to save internal note.");
+      showToast(error instanceof Error ? error.message : "Failed to save internal note.", "error");
     } finally {
       setSavingInternalNote(false);
     }
@@ -363,8 +544,6 @@ export default function OrderDetailView({ order }) {
   async function addCustomerVisibleNote() {
     if (!currentOrder?.orderNumberValue) return;
     setSavingCustomerNote(true);
-    setMessage("");
-    setErrorMessage("");
     try {
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/notes`, {
         method: "PATCH",
@@ -376,20 +555,31 @@ export default function OrderDetailView({ order }) {
       const sent = Boolean(json.data?.emailDelivery?.sent);
       const attempted = Boolean(json.data?.emailDelivery?.attempted);
       const failed = attempted && !sent;
-      setMessage(
+      showToast(
         failed
           ? "Customer-visible note saved, but email delivery failed."
           : sent
             ? "Customer-visible note saved and emailed."
-            : "Customer-visible note saved."
+            : "Customer-visible note saved.",
+        failed ? "error" : "success"
       );
       setCustomerNoteDraft("");
       setSendCustomerNoteEmail(false);
       await refreshOrder();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to add customer-visible note.");
+      showToast(error instanceof Error ? error.message : "Failed to add customer-visible note.", "error");
     } finally {
       setSavingCustomerNote(false);
+    }
+  }
+
+  async function copyTrackingValue(value) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast("Tracking copied.", "success");
+    } catch {
+      showToast("Could not copy tracking number.", "error");
     }
   }
 
@@ -397,7 +587,7 @@ export default function OrderDetailView({ order }) {
     return (
       <div className={styles.page}>
         <nav className={styles.breadcrumbs}>
-          <Link className={styles.inlineLinkButton} href="/orders">← Orders</Link>
+          <Link className={styles.inlineLinkButton} href="/orders">&lt;- Orders</Link>
         </nav>
         <AdminEmptyState
           description="This order may have been removed or the identifier may be invalid."
@@ -417,24 +607,23 @@ export default function OrderDetailView({ order }) {
     <div className={styles.page}>
       {/* Breadcrumb */}
       <nav className={styles.breadcrumbs}>
-        <Link className={styles.inlineLinkButton} href="/orders">← Orders</Link>
+        <Link className={styles.inlineLinkButton} href="/orders">&lt;- Orders</Link>
       </nav>
 
-      {/* Global feedback banner — lifted out of cards so it is always visible */}
-      {(message || errorMessage) ? (
+      {pageError ? (
         <div className={styles.feedbackBanner}>
-          {message ? <p className={styles.successText}>{message}</p> : null}
-          {errorMessage ? <p className={styles.errorText}>{errorMessage}</p> : null}
+          <p className={styles.errorText}>{pageError}</p>
         </div>
       ) : null}
 
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <AdminCard className={styles.headerCard} variant="panel">
         <div className={styles.headerTop}>
           <div className={styles.headerMeta}>
             <h1 className={styles.title}>{currentOrder.orderNumber}</h1>
             <p className={styles.meta}>
-              {new Date(currentOrder.createdAt).toLocaleString()} · via{" "}
+              {new Date(currentOrder.createdAt).toLocaleString()} - via{" "}
               {currentOrder.sourceChannel || currentOrder.channel || "online store"}
             </p>
           </div>
@@ -504,10 +693,10 @@ export default function OrderDetailView({ order }) {
       </AdminCard>
 
       <div className={styles.grid}>
-        {/* ── Main column ────────────────────────────────────────────────────── */}
+        {/* â”€â”€ Main column â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className={styles.mainColumn}>
 
-          {/* ── Fulfillment history ────────────────────────────────────────── */}
+          {/* â”€â”€ Fulfillment history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Fulfillment</h3>
             {fulfillments.length ? (
@@ -518,7 +707,7 @@ export default function OrderDetailView({ order }) {
                       <strong>{entry.carrier || "Carrier pending"}</strong>
                       <p>
                         {entry.service || "Service pending"}
-                        {entry.trackingNumber ? ` · ${entry.trackingNumber}` : ""}
+                        {entry.trackingNumber ? ` - ${entry.trackingNumber}` : ""}
                       </p>
                       <div className={styles.fulfillmentLinks}>
                         {entry.trackingUrl ? (
@@ -569,12 +758,11 @@ export default function OrderDetailView({ order }) {
             ) : null}
           </AdminCard>
 
-          {/* ── Create fulfillment ─────────────────────────────────────────── */}
+          {/* Fulfillment setup */}
           <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Create fulfillment</h3>
-            <p className={styles.cardSubtitle}>Select items to fulfill, then save manual tracking or buy a carrier label.</p>
+            <p className={styles.cardSubtitle}>Choose how you want to fulfill this order.</p>
 
-            {/* Item selector */}
             {fulfillableItems.length ? (
               <div className={styles.selectorList}>
                 {fulfillableItems.map((item) => (
@@ -601,179 +789,239 @@ export default function OrderDetailView({ order }) {
               <p className={styles.metaText}>All line items are already fulfilled.</p>
             )}
 
-            {/* Manual tracking */}
-            <SectionDivider label="Manual tracking" />
-
-            <p className={styles.helperNote}>
-              Manual tracking marks items as shipped and can send the shipping confirmation email to your customer.
-            </p>
-
-            {/* Carrier + Service — 2 columns */}
-            <div className={styles.formGrid}>
-              <AdminField label="Carrier">
-                <AdminInput
-                  onChange={(event) => setManualForm((prev) => ({ ...prev, carrier: event.target.value }))}
-                  placeholder="UPS, FedEx, USPS…"
-                  value={manualForm.carrier}
-                />
-              </AdminField>
-              <AdminField label="Service">
-                <AdminInput
-                  onChange={(event) => setManualForm((prev) => ({ ...prev, service: event.target.value }))}
-                  placeholder="Ground, Priority…"
-                  value={manualForm.service}
-                />
-              </AdminField>
+            <SectionDivider label="Fulfillment method" />
+            <div className={styles.methodCards}>
+              <button
+                className={`${styles.methodCard} ${fulfillmentMethod === "BUY_LABEL" ? styles.methodCardActive : ""}`}
+                onClick={() => setFulfillmentMethod("BUY_LABEL")}
+                type="button"
+              >
+                <strong>Buy shipping label</strong>
+                <span>Purchase postage through Shippo or EasyPost, create fulfillment, and save tracking automatically.</span>
+              </button>
+              <button
+                className={`${styles.methodCard} ${fulfillmentMethod === "MANUAL_TRACKING" ? styles.methodCardActive : ""}`}
+                onClick={() => setFulfillmentMethod("MANUAL_TRACKING")}
+                type="button"
+              >
+                <strong>Add tracking manually</strong>
+                <span>Use this if you already bought postage outside Doopify.</span>
+              </button>
             </div>
 
-            {/* Tracking number + URL — full width */}
-            <div className={styles.formStack}>
-              <AdminField label="Tracking number">
-                <AdminInput
-                  onChange={(event) => setManualForm((prev) => ({ ...prev, trackingNumber: event.target.value }))}
-                  placeholder="1Z…"
-                  value={manualForm.trackingNumber}
-                />
-              </AdminField>
-              <AdminField label="Tracking URL" hint="Optional — link the customer can click to track their shipment.">
-                <AdminInput
-                  onChange={(event) => setManualForm((prev) => ({ ...prev, trackingUrl: event.target.value }))}
-                  placeholder="https://tracking.example.com/…"
-                  value={manualForm.trackingUrl}
-                />
-              </AdminField>
-            </div>
-
-            <label className={styles.checkboxRow}>
-              <input
-                checked={manualForm.sendTrackingEmail}
-                onChange={(event) =>
-                  setManualForm((prev) => ({ ...prev, sendTrackingEmail: event.target.checked }))
-                }
-                type="checkbox"
-              />
-              <span>
-                Send shipment tracking email to customer
-                {manualForm.sendTrackingEmail ? (
-                  <span style={{ display: "block", fontSize: "0.76rem", color: "var(--on-surface-variant)", marginTop: "0.2rem" }}>
-                    Email is queued via the job runner.{" "}
-                    <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
-                      Check delivery logs
-                    </Link>{" "}
-                    to confirm delivery.
-                  </span>
-                ) : null}
-              </span>
-            </label>
-
-            <div className={styles.actionRow}>
-              <AdminButton loading={creatingManual} onClick={createManualTrackingFulfillment} size="sm">
-                Save manual tracking
-              </AdminButton>
-            </div>
-
-            <p className={styles.emailLogHint}>
-              After saving, check{" "}
-              <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
-                email delivery logs
-              </Link>{" "}
-              to confirm any shipment or order confirmation emails sent correctly.
-            </p>
-
-            {/* Live label buying */}
-            {labelProviderConnected ? (
+            {fulfillmentMethod === "BUY_LABEL" ? (
               <>
                 <SectionDivider label="Buy shipping label" />
-                <div className={styles.formGrid}>
-                  <AdminField hint="Required for label purchase." label="Weight (oz)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((prev) => ({ ...prev, weightOz: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.weightOz}
-                    />
-                  </AdminField>
-                  <AdminField label="Length (in)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((prev) => ({ ...prev, lengthIn: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.lengthIn}
-                    />
-                  </AdminField>
-                  <AdminField label="Width (in)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((prev) => ({ ...prev, widthIn: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.widthIn}
-                    />
-                  </AdminField>
-                  <AdminField label="Height (in)">
-                    <AdminInput
-                      min="0"
-                      onChange={(event) => setParcel((prev) => ({ ...prev, heightIn: event.target.value }))}
-                      step="0.01"
-                      type="number"
-                      value={parcel.heightIn}
-                    />
-                  </AdminField>
-                </div>
-                <div className={styles.actionRow}>
-                  <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
-                    Load shipping rates
-                  </AdminButton>
-                </div>
-                {rateQuotes.length ? (
-                  <div className={styles.rateList}>
-                    {rateQuotes.map((quote) => {
-                      const rateId = quote.providerRateId || quote.id;
-                      return (
-                        <label className={styles.rateRow} key={rateId}>
-                          <input
-                            checked={selectedRateId === rateId}
-                            name="shipping-rate"
-                            onChange={() => {
-                              setSelectedRateId(rateId);
-                              setSelectedShipmentId(
-                                typeof quote.metadata?.shipmentId === "string" ? quote.metadata.shipmentId : ""
-                              );
-                            }}
-                            type="radio"
-                          />
-                          <span>
-                            <strong>{quote.displayName || quote.service || "Carrier rate"}</strong>
-                            <small>
-                              {(quote.carrier ? `${quote.carrier} · ` : "") +
-                                formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)}
-                            </small>
-                          </span>
-                        </label>
-                      );
-                    })}
+                {!hasAnyConnectedProvider ? (
+                  <div className={styles.noProviderNotice}>
+                    <span>
+                      No label provider connected. Configure Shippo or EasyPost in{" "}
+                      <Link className={styles.inlineLinkButton} href="/admin/settings/shipping">
+                        Shipping settings
+                      </Link>
+                      .
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    {connectedProviders.length > 1 ? (
+                      <div className={styles.providerSelectorRow}>
+                        <span className={styles.metaText}>Provider</span>
+                        <div className={styles.providerSelectorButtons}>
+                          {connectedProviders.map((provider) => (
+                            <button
+                              className={`${styles.providerSelectorButton} ${selectedLabelProvider === provider ? styles.providerSelectorButtonActive : ""}`}
+                              key={provider}
+                              onClick={() => setSelectedLabelProvider(provider)}
+                              type="button"
+                            >
+                              {providerLabel(provider)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <h4 className={styles.workflowTitle}>Buy shipping label with {providerLabel(selectedLabelProvider || connectedProviders[0])}</h4>
+                    <div className={styles.formGrid}>
+                      <AdminField hint="Required for label purchase." label="Weight (oz)">
+                        <AdminInput
+                          min="0"
+                          onChange={(event) => setParcel((prev) => ({ ...prev, weightOz: event.target.value }))}
+                          step="0.01"
+                          type="number"
+                          value={parcel.weightOz}
+                        />
+                      </AdminField>
+                      <AdminField label="Length (in)">
+                        <AdminInput
+                          min="0"
+                          onChange={(event) => setParcel((prev) => ({ ...prev, lengthIn: event.target.value }))}
+                          step="0.01"
+                          type="number"
+                          value={parcel.lengthIn}
+                        />
+                      </AdminField>
+                      <AdminField label="Width (in)">
+                        <AdminInput
+                          min="0"
+                          onChange={(event) => setParcel((prev) => ({ ...prev, widthIn: event.target.value }))}
+                          step="0.01"
+                          type="number"
+                          value={parcel.widthIn}
+                        />
+                      </AdminField>
+                      <AdminField label="Height (in)">
+                        <AdminInput
+                          min="0"
+                          onChange={(event) => setParcel((prev) => ({ ...prev, heightIn: event.target.value }))}
+                          step="0.01"
+                          type="number"
+                          value={parcel.heightIn}
+                        />
+                      </AdminField>
+                    </div>
+                    <label className={styles.checkboxRow}>
+                      <input
+                        checked={labelSendTrackingEmail}
+                        disabled={!hasCustomerEmail}
+                        onChange={(event) => setLabelSendTrackingEmail(event.target.checked)}
+                        type="checkbox"
+                      />
+                      <span>
+                        Email tracking to customer
+                        {!hasCustomerEmail ? (
+                          <span className={styles.inlineHelper}>Customer email is missing for this order.</span>
+                        ) : null}
+                      </span>
+                    </label>
                     <div className={styles.actionRow}>
-                      <AdminButton disabled={!canBuyShippingLabel} loading={buyingLabel} onClick={buyShippingLabel} size="sm">
-                        Buy shipping label{rateProvider ? ` (${rateProvider})` : ""}
+                      <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
+                        Get {providerLabel(selectedLabelProvider || connectedProviders[0])} label rates
                       </AdminButton>
                     </div>
-                  </div>
-                ) : null}
+
+                    {ratesLoading ? <p className={styles.metaText}>Loading {providerLabel(selectedLabelProvider || connectedProviders[0])} label rates…</p> : null}
+                    {rateQuotes.length ? (
+                      <>
+                        <p className={styles.metaText}>{providerLabel(rateProvider || selectedLabelProvider)} label rates</p>
+                        <div className={styles.rateList}>
+                          {rateQuotes.map((quote) => {
+                            const rateId = quote.providerRateId || quote.id;
+                            const selected = selectedRateId === rateId;
+                            return (
+                              <label className={`${styles.rateRow} ${selected ? styles.rateRowSelected : ""}`} key={rateId}>
+                                <input
+                                  checked={selected}
+                                  name="shipping-rate"
+                                  onChange={() => {
+                                    setSelectedRateId(rateId);
+                                    setSelectedShipmentId(
+                                      typeof quote.metadata?.shipmentId === "string" ? quote.metadata.shipmentId : ""
+                                    );
+                                  }}
+                                  type="radio"
+                                />
+                                <span>
+                                  <strong>{quote.carrier || "Carrier"} · {quote.service || "Service"}</strong>
+                                  <small>
+                                    {formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)} · {providerLabel(rateProvider || selectedLabelProvider)}
+                                    {quote.estimatedDeliveryText ? ` · ${quote.estimatedDeliveryText}` : ""}
+                                  </small>
+                                </span>
+                              </label>
+                            );
+                          })}
+                          <div className={styles.actionRow}>
+                            <AdminButton
+                              disabled={!canBuyShippingLabel || !selectedRateQuote}
+                              loading={buyingLabel}
+                              onClick={buyShippingLabel}
+                              size="sm"
+                            >
+                              {selectedRateQuote
+                                ? `Buy label with ${providerLabel(selectedLabelProvider || rateProvider)} — ${formatMoney((selectedRateQuote.amountCents || 0) / 100, selectedRateQuote.currency || currency)}`
+                                : `Buy label with ${providerLabel(selectedLabelProvider || rateProvider)}`}
+                            </AdminButton>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                )}
               </>
             ) : (
-              <div className={styles.noProviderNotice}>
-                <span>No label provider connected — use manual tracking above to mark shipped, or configure a carrier in{" "}
-                  <Link className={styles.inlineLinkButton} href="/admin/settings/shipping">
-                    Shipping settings
-                  </Link>.
-                </span>
-              </div>
+              <>
+                <SectionDivider label="Add tracking manually" />
+                <p className={styles.helperNote}>Use this if you already bought postage outside Doopify.</p>
+                <div className={styles.formGrid}>
+                  <AdminField label="Carrier">
+                    <AdminInput
+                      onChange={(event) => setManualForm((prev) => ({ ...prev, carrier: event.target.value }))}
+                      placeholder="UPS, FedEx, USPS…"
+                      value={manualForm.carrier}
+                    />
+                  </AdminField>
+                  <AdminField label="Service">
+                    <AdminInput
+                      onChange={(event) => setManualForm((prev) => ({ ...prev, service: event.target.value }))}
+                      placeholder="Ground, Priority…"
+                      value={manualForm.service}
+                    />
+                  </AdminField>
+                </div>
+
+                <div className={styles.formStack}>
+                  <AdminField label="Tracking number">
+                    <AdminInput
+                      onChange={(event) => setManualForm((prev) => ({ ...prev, trackingNumber: event.target.value }))}
+                      placeholder="1Z…"
+                      value={manualForm.trackingNumber}
+                    />
+                  </AdminField>
+                  <AdminField label="Tracking URL" hint="Optional — link the customer can click to track their shipment.">
+                    <AdminInput
+                      onChange={(event) => setManualForm((prev) => ({ ...prev, trackingUrl: event.target.value }))}
+                      placeholder="https://tracking.example.com/..."
+                      value={manualForm.trackingUrl}
+                    />
+                  </AdminField>
+                </div>
+
+                <label className={styles.checkboxRow}>
+                  <input
+                    checked={manualSendTrackingEmail}
+                    disabled={!hasCustomerEmail}
+                    onChange={(event) => setManualSendTrackingEmail(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    Email tracking to customer
+                    {!hasCustomerEmail ? (
+                      <span className={styles.inlineHelper}>Customer email is missing for this order.</span>
+                    ) : null}
+                  </span>
+                </label>
+                {manualSendTrackingEmail && !emailProviderConfigured ? (
+                  <p className={styles.metaText}>If no email provider is configured, tracking will still be saved.</p>
+                ) : null}
+
+                <div className={styles.actionRow}>
+                  <AdminButton loading={creatingManual} onClick={createManualTrackingFulfillment} size="sm">
+                    {manualSendTrackingEmail ? "Save tracking and email customer" : "Save tracking"}
+                  </AdminButton>
+                </div>
+                <p className={styles.emailLogHint}>
+                  After saving, check{" "}
+                  <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
+                    email delivery logs
+                  </Link>{" "}
+                  for tracking email status.
+                </p>
+              </>
             )}
           </AdminCard>
-
-          {/* ── Line items ──────────────────────────────────────────────────── */}
+          {/* â”€â”€ Line items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Line items</h3>
             {lineItems.length ? (
@@ -789,7 +1037,7 @@ export default function OrderDetailView({ order }) {
                         <span className={styles.lineItemVariant}>{item.variantTitle || item.variant || "Default variant"}</span>
                         {hasDiscount ? (
                           <span className={styles.lineItemDiscount}>
-                            Discount: −{formatMoney(
+                            Discount: -{formatMoney(
                               item.totalDiscount ?? Number(item.totalDiscountCents || 0) / 100,
                               currency
                             )}
@@ -798,7 +1046,7 @@ export default function OrderDetailView({ order }) {
                       </div>
                       <div className={styles.lineItemMeta}>
                         <span className={styles.lineItemQtyPrice}>
-                          {item.quantity} × {formatMoney(unitPrice, currency)}
+                          {item.quantity} x {formatMoney(unitPrice, currency)}
                         </span>
                         <strong className={styles.lineItemTotal}>
                           {formatMoney(totalPrice, currency)}
@@ -817,7 +1065,7 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
-          {/* ── Payment summary ─────────────────────────────────────────────── */}
+          {/* â”€â”€ Payment summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Payment summary</h3>
             <div className={styles.summaryRows}>
@@ -826,8 +1074,7 @@ export default function OrderDetailView({ order }) {
                 <span>{formatMoney(currentOrder.subtotal, currency)}</span>
               </div>
               <div className={styles.summaryRowMuted}>
-                <span>
-                  Shipping
+                <span>Shipping paid by customer
                   {currentOrder.shippingMethodName ? (
                     <span style={{ display: "block", fontSize: "0.76rem", marginTop: "0.1rem" }}>
                       {currentOrder.shippingMethodName}
@@ -843,7 +1090,7 @@ export default function OrderDetailView({ order }) {
               {Number(currentOrder.discountAmount || 0) > 0 ? (
                 <div className={styles.summaryRowMuted}>
                   <span>Discounts</span>
-                  <span>−{formatMoney(currentOrder.discountAmount, currency)}</span>
+                  <span>-{formatMoney(currentOrder.discountAmount, currency)}</span>
                 </div>
               ) : null}
               <div className={styles.summaryDivider} />
@@ -853,7 +1100,7 @@ export default function OrderDetailView({ order }) {
               </div>
             </div>
 
-            {/* Discount codes applied — only show when codes exist */}
+            {/* Discount codes applied - only show when codes exist */}
             {discounts.length ? (
               <>
                 <div className={styles.summaryDivider} style={{ marginTop: "1rem" }} />
@@ -866,11 +1113,11 @@ export default function OrderDetailView({ order }) {
                       <span className={styles.discountTagTitle}>
                         {discount.title || "Discount"}
                         {discount.method
-                          ? ` · ${String(discount.method).replaceAll("_", " ").toLowerCase()}`
+                          ? ` - ${String(discount.method).replaceAll("_", " ").toLowerCase()}`
                           : ""}
                       </span>
                       <span className={styles.discountTagAmount}>
-                        −{formatMoney(
+                        -{formatMoney(
                           discount.amount ?? Number(discount.amountCents || 0) / 100,
                           currency
                         )}
@@ -882,7 +1129,7 @@ export default function OrderDetailView({ order }) {
             ) : null}
           </AdminCard>
 
-          {/* ── Returns & refunds (OrderAdjustmentsCard) ────────────────────── */}
+          {/* â”€â”€ Returns & refunds (OrderAdjustmentsCard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <OrderAdjustmentsCard
             onOrderRefresh={refreshOrder}
             orderId={currentOrder.id}
@@ -890,7 +1137,7 @@ export default function OrderDetailView({ order }) {
             paymentStatus={currentOrder.paymentStatusRaw || currentOrder.paymentStatus}
           />
 
-          {/* ── Timeline ────────────────────────────────────────────────────── */}
+          {/* â”€â”€ Timeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.card} variant="panel">
             <h3 className={styles.cardTitle}>Timeline</h3>
             {timeline.length ? (
@@ -913,17 +1160,70 @@ export default function OrderDetailView({ order }) {
           </AdminCard>
         </div>
 
-        {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+        {/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <div className={styles.sideColumn}>
 
-          {/* ── Notes ───────────────────────────────────────────────────────── */}
+          <AdminCard className={styles.sideCard} variant="panel">
+            <h3 className={styles.cardTitle}>Shipment</h3>
+            {shipmentCards.length ? (
+              <div className={styles.shipmentCardList}>
+                {shipmentCards.map((shipment) => (
+                  <div className={styles.shipmentCard} key={shipment.id}>
+                    <div className={styles.shipmentCardHeader}>
+                      <strong>{shipment.statusText}</strong>
+                      {shipment.provider ? <span className={styles.metaText}>{providerLabel(shipment.provider)}</span> : null}
+                    </div>
+                    <p className={styles.metaText}>
+                      {shipment.carrier || "Carrier pending"}
+                      {shipment.service ? ` · ${shipment.service}` : ""}
+                    </p>
+                    {shipment.trackingNumber ? <p className={styles.noteText}>Tracking: {shipment.trackingNumber}</p> : null}
+                    {shipment.labelCost != null ? (
+                      <p className={styles.metaText}>Label cost: {formatMoney(shipment.labelCost, shipment.currency || currency)}</p>
+                    ) : null}
+                    <div className={styles.shipmentActionsRow}>
+                      {shipment.labelUrl ? (
+                        <a className={styles.inlineLinkButton} href={shipment.labelUrl} rel="noreferrer" target="_blank">
+                          Print label
+                        </a>
+                      ) : null}
+                      {shipment.trackingNumber ? (
+                        <button className={styles.textActionButton} onClick={() => copyTrackingValue(shipment.trackingNumber)} type="button">
+                          Copy tracking
+                        </button>
+                      ) : null}
+                      {shipment.trackingUrl ? (
+                        <a className={styles.inlineLinkButton} href={shipment.trackingUrl} rel="noreferrer" target="_blank">
+                          View tracking
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <AdminEmptyState
+                description="No shipments have been created yet."
+                icon="local_shipping"
+                title="No shipments"
+              />
+            )}
+            <p className={styles.metaText}>
+              <Link className={styles.inlineLinkButton} href="/admin/webhooks?tab=email">
+                Check delivery logs
+              </Link>{" "}
+              for queued tracking emails.
+            </p>
+          </AdminCard>
+
+          {/* â”€â”€ Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Notes</h3>
             <div className={styles.noteStack}>
               <AdminField label="Internal note">
                 <AdminTextarea
                   onChange={(event) => setInternalNoteDraft(event.target.value)}
-                  placeholder="Internal order note — not visible to the customer"
+                  placeholder="Internal order note - not visible to the customer"
                   rows={3}
                   value={internalNoteDraft}
                 />
@@ -985,7 +1285,7 @@ export default function OrderDetailView({ order }) {
             )}
           </AdminCard>
 
-          {/* ── Customer ────────────────────────────────────────────────────── */}
+          {/* â”€â”€ Customer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Customer</h3>
             <div className={styles.infoBlock}>
@@ -995,19 +1295,35 @@ export default function OrderDetailView({ order }) {
             </div>
           </AdminCard>
 
-          {/* ── Shipping address ─────────────────────────────────────────────── */}
+          {/* â”€â”€ Shipping address â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Shipping address</h3>
             <p className={styles.addressText}>{formatAddress(shippingAddress)}</p>
           </AdminCard>
 
-          {/* ── Billing address ──────────────────────────────────────────────── */}
+          {/* â”€â”€ Billing address â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <AdminCard className={styles.sideCard} variant="panel">
             <h3 className={styles.cardTitle}>Billing address</h3>
             <p className={styles.addressText}>{formatAddress(billingAddress)}</p>
           </AdminCard>
         </div>
       </div>
+      <div className={styles.toastViewport}>
+        {toasts.map((toast) => (
+          <div
+            className={`${styles.toast} ${toast.tone === "error" ? styles.toastError : toast.tone === "success" ? styles.toastSuccess : styles.toastInfo}`}
+            key={toast.id}
+            role="status"
+          >
+            <p>{toast.message}</p>
+            <button aria-label="Dismiss notification" onClick={() => dismissToast(toast.id)} type="button">×</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
+
+
+
+

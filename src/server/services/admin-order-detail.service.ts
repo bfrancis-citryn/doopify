@@ -1,7 +1,10 @@
+import type { ShippingLiveProvider } from '@prisma/client'
+
 import { centsToDollars } from '@/lib/money'
 import { prisma } from '@/lib/prisma'
 import { getShippingProviderConnectionStatus } from '@/server/shipping/shipping-provider.service'
 import { resolveLabelProvider } from '@/server/shipping/shipping-provider-selection'
+import { getRuntimeProviderConnection } from '@/server/services/provider-connection.service'
 
 function normalizeStatusLabel(value: string | null | undefined) {
   return String(value || '').toLowerCase().replaceAll('_', ' ')
@@ -90,11 +93,29 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
       labelProvider: true,
     },
   })
-  const labelProvider = store ? resolveLabelProvider(store) : null
-  const providerStatus = labelProvider
-    ? await getShippingProviderConnectionStatus(labelProvider)
-    : null
-  const canBuyShippingLabelFromProvider = Boolean(providerStatus?.connected)
+  const providerCandidates: ShippingLiveProvider[] = ['SHIPPO', 'EASYPOST']
+  const providerStatuses = await Promise.all(
+    providerCandidates.map(async (provider) => ({
+      provider,
+      status: await getShippingProviderConnectionStatus(provider),
+    }))
+  )
+  const connectedProviders = providerStatuses
+    .filter((entry) => Boolean(entry.status.connected))
+    .map((entry) => entry.provider)
+
+  const configuredLabelProvider = store ? resolveLabelProvider(store) : null
+  const labelProvider =
+    (configuredLabelProvider && connectedProviders.includes(configuredLabelProvider)
+      ? configuredLabelProvider
+      : connectedProviders[0] ?? configuredLabelProvider) || null
+  const canBuyShippingLabelFromProvider = connectedProviders.length > 0
+
+  const emailRuntime = await getRuntimeProviderConnection('RESEND')
+  const emailProviderConfigured = Boolean(
+    emailRuntime.source !== 'none' && emailRuntime.credentials?.API_KEY
+  )
+  const hasCustomerEmail = Boolean(order.email || order.customer?.email)
 
   const shippingAddress = order.addresses.find((entry) => entry.type === 'SHIPPING') || null
   const billingAddress = order.addresses.find((entry) => entry.type === 'BILLING') || null
@@ -393,9 +414,18 @@ export async function getAdminOrderDetailByOrderNumber(orderNumber: number) {
     estimatedDeliveryText: order.estimatedDeliveryText,
     shippingCapabilities: {
       labelProvider: labelProvider || null,
-      providerConnected: Boolean(providerStatus?.connected),
+      providerConnected: canBuyShippingLabelFromProvider,
+      connectedProviders,
+      providerConnectionByName: providerStatuses.reduce<Record<string, boolean>>((acc, entry) => {
+        acc[entry.provider] = Boolean(entry.status.connected)
+        return acc
+      }, {}),
       providerUsage: store?.shippingProviderUsage || null,
       canBuyShippingLabel: canBuyShippingLabelFromProvider,
+    },
+    emailCapabilities: {
+      hasCustomerEmail,
+      providerConfigured: emailProviderConfigured,
     },
     total: paymentSummary.total,
     subtotal: paymentSummary.subtotal,

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { err, ok, parseBody, unprocessable } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
+import { getRuntimeProviderConnection } from '@/server/services/provider-connection.service'
 import { auditActorFromUser, recordAuditLogBestEffort } from '@/server/services/audit-log.service'
 import { createManualFulfillment } from '@/server/services/order.service'
 
@@ -52,6 +53,7 @@ export async function POST(req: Request, { params }: Params) {
     },
     select: {
       id: true,
+      email: true,
     },
   })
 
@@ -60,6 +62,15 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   try {
+    const trackingEmailRequested = Boolean(parsed.data.sendTrackingEmail)
+    const hasCustomerEmail = Boolean(order.email)
+    const emailRuntime = await getRuntimeProviderConnection('RESEND')
+    const emailProviderConfigured = Boolean(
+      emailRuntime.source !== 'none' && emailRuntime.credentials?.API_KEY
+    )
+    const queueTrackingEmail =
+      trackingEmailRequested && hasCustomerEmail && emailProviderConfigured
+
     const fulfillment = await createManualFulfillment({
       orderId: order.id,
       items: parsed.data.items,
@@ -68,7 +79,7 @@ export async function POST(req: Request, { params }: Params) {
       trackingNumber: parsed.data.trackingNumber,
       trackingUrl: parsed.data.trackingUrl,
       shippedAt: parsed.data.shippedDate ? new Date(parsed.data.shippedDate) : undefined,
-      sendTrackingEmail: parsed.data.sendTrackingEmail,
+      sendTrackingEmail: queueTrackingEmail,
     })
 
     await recordAuditLogBestEffort({
@@ -87,7 +98,23 @@ export async function POST(req: Request, { params }: Params) {
       redactions: ['trackingNumber', 'trackingUrl'],
     })
 
-    return ok(fulfillment, 201)
+    return ok(
+      {
+        fulfillment,
+        trackingEmail: {
+          requested: trackingEmailRequested,
+          queued: queueTrackingEmail,
+          skippedReason: queueTrackingEmail
+            ? null
+            : trackingEmailRequested
+              ? !hasCustomerEmail
+                ? 'MISSING_CUSTOMER_EMAIL'
+                : 'EMAIL_PROVIDER_NOT_CONFIGURED'
+              : 'NOT_REQUESTED',
+        },
+      },
+      201
+    )
   } catch (error) {
     console.error('[POST /api/orders/[orderNumber]/manual-fulfillment]', error)
     const message = error instanceof Error ? error.message : 'Failed to create manual fulfillment'

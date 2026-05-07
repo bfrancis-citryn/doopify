@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     },
   },
   createManualFulfillment: vi.fn(),
+  getRuntimeProviderConnection: vi.fn(),
   auditActorFromUser: vi.fn(),
   recordAuditLogBestEffort: vi.fn(),
 }))
@@ -22,6 +23,10 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/server/services/order.service', () => ({
   createManualFulfillment: mocks.createManualFulfillment,
+}))
+
+vi.mock('@/server/services/provider-connection.service', () => ({
+  getRuntimeProviderConnection: mocks.getRuntimeProviderConnection,
 }))
 
 vi.mock('@/server/services/audit-log.service', () => ({
@@ -44,6 +49,10 @@ describe('POST /api/orders/[orderNumber]/manual-fulfillment', () => {
     vi.clearAllMocks()
     mocks.auditActorFromUser.mockImplementation((user) => user)
     mocks.recordAuditLogBestEffort.mockResolvedValue(null)
+    mocks.getRuntimeProviderConnection.mockResolvedValue({
+      source: 'runtime',
+      credentials: { API_KEY: 're_test_key' },
+    })
   })
 
   it('requires admin authorization', async () => {
@@ -72,7 +81,7 @@ describe('POST /api/orders/[orderNumber]/manual-fulfillment', () => {
       ok: true,
       user: { id: 'user_1', role: 'OWNER' },
     })
-    mocks.prisma.order.findUnique.mockResolvedValue({ id: 'order_1' })
+    mocks.prisma.order.findUnique.mockResolvedValue({ id: 'order_1', email: 'buyer@example.com' })
     mocks.createManualFulfillment.mockResolvedValue({
       id: 'ful_1',
       orderId: 'order_1',
@@ -94,12 +103,109 @@ describe('POST /api/orders/[orderNumber]/manual-fulfillment', () => {
         carrier: 'UPS',
         service: 'Ground',
         trackingNumber: 'TRACK123',
+        sendTrackingEmail: false,
       })
     )
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        trackingEmail: {
+          requested: false,
+          queued: false,
+          skippedReason: 'NOT_REQUESTED',
+        },
+      },
+    })
     expect(mocks.recordAuditLogBestEffort).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'fulfillment.manual_created',
       })
     )
+  })
+
+  it('queues tracking email when requested and email provider is configured', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'user_1', role: 'OWNER' },
+    })
+    mocks.prisma.order.findUnique.mockResolvedValue({ id: 'order_1', email: 'buyer@example.com' })
+    mocks.createManualFulfillment.mockResolvedValue({
+      id: 'ful_1',
+      orderId: 'order_1',
+      items: [],
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/orders/1001/manual-fulfillment', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...validPayload,
+          sendTrackingEmail: true,
+        }),
+      }),
+      { params: Promise.resolve({ orderNumber: '1001' }) }
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.createManualFulfillment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sendTrackingEmail: true,
+      })
+    )
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        trackingEmail: {
+          requested: true,
+          queued: true,
+          skippedReason: null,
+        },
+      },
+    })
+  })
+
+  it('does not roll back manual tracking when email provider is unavailable', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'user_1', role: 'OWNER' },
+    })
+    mocks.prisma.order.findUnique.mockResolvedValue({ id: 'order_1', email: 'buyer@example.com' })
+    mocks.getRuntimeProviderConnection.mockResolvedValue({
+      source: 'none',
+      credentials: null,
+    })
+    mocks.createManualFulfillment.mockResolvedValue({
+      id: 'ful_1',
+      orderId: 'order_1',
+      items: [],
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/orders/1001/manual-fulfillment', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...validPayload,
+          sendTrackingEmail: true,
+        }),
+      }),
+      { params: Promise.resolve({ orderNumber: '1001' }) }
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.createManualFulfillment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sendTrackingEmail: false,
+      })
+    )
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        trackingEmail: {
+          requested: true,
+          queued: false,
+          skippedReason: 'EMAIL_PROVIDER_NOT_CONFIGURED',
+        },
+      },
+    })
   })
 })

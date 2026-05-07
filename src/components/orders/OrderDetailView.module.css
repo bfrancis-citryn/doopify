@@ -1,4 +1,4 @@
-/* ─── Page shell ──────────────────────────────────────────────────────────── */
+﻿/* â”€â”€â”€ Page shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .page {
   display: grid;
@@ -24,7 +24,7 @@
   color: var(--on-surface);
 }
 
-/* ─── Feedback banner ─────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Feedback banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .feedbackBanner {
   border-radius: 1rem;
@@ -35,7 +35,7 @@
   gap: 0.25rem;
 }
 
-/* ─── Card padding ────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Card padding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* Apply to main-column AdminCard components */
 .card {
@@ -47,7 +47,7 @@
   padding: 1rem 1.25rem;
 }
 
-/* ─── Header card ─────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Header card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .headerCard {
   display: grid;
@@ -115,7 +115,7 @@
   flex-shrink: 0;
 }
 
-/* ─── Two-column layout ───────────────────────────────────────────────────── */
+/* â”€â”€â”€ Two-column layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .grid {
   display: grid;
@@ -132,7 +132,7 @@
   min-width: 0; /* prevent overflow from pushing the grid */
 }
 
-/* ─── Card internals ──────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Card internals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .cardTitle {
   margin: 0 0 1rem;
@@ -196,7 +196,7 @@
   background: var(--glass-border);
 }
 
-/* ─── Action row ──────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Action row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .actionRow {
   display: flex;
@@ -206,7 +206,7 @@
   align-items: center;
 }
 
-/* ─── Fulfillment list ────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Fulfillment list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .fulfillmentList {
   display: grid;
@@ -252,7 +252,7 @@
   flex-wrap: wrap;
 }
 
-/* ─── Item selector ───────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Item selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .selectorList {
   display: grid;
@@ -301,7 +301,7 @@
   flex-shrink: 0;
 }
 
-/* ─── Form grids ──────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Form grids â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /* 2-column for Carrier + Service */
 .formGrid {
@@ -317,7 +317,7 @@
   margin-top: 0.875rem;
 }
 
-/* ─── Live rates ──────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Live rates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .rateList {
   display: grid;
@@ -353,7 +353,86 @@
   font-size: 0.76rem;
 }
 
-/* ─── Shipping labels ─────────────────────────────────────────────────────── */
+.rateRowSelected {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--glass-border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-container-low));
+}
+
+.methodCards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.methodCard {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--surface-container-low) 70%, transparent);
+  color: var(--on-surface);
+  text-align: left;
+  padding: 0.8rem 0.9rem;
+  display: grid;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.methodCard strong {
+  font-size: 0.86rem;
+}
+
+.methodCard span {
+  color: var(--on-surface-variant);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.methodCardActive {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--glass-border));
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface-container-low));
+}
+
+.workflowTitle {
+  margin: 0.2rem 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--on-surface);
+}
+
+.providerSelectorRow {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.8rem;
+}
+
+.providerSelectorButtons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.providerSelectorButton {
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 75%, transparent);
+  color: var(--on-surface-variant);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.providerSelectorButtonActive {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--glass-border));
+  color: var(--on-surface);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface-container-low));
+}
+
+.inlineHelper {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+}
+
+/* â”€â”€â”€ Shipping labels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .labelList {
   display: grid;
@@ -385,7 +464,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ─── Checkbox ────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Checkbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .checkboxRow {
   display: flex;
@@ -406,7 +485,7 @@
   height: 15px;
 }
 
-/* ─── Line items ──────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Line items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .lineItemList {
   display: grid;
@@ -473,7 +552,7 @@
   white-space: nowrap;
 }
 
-/* ─── Payment summary ─────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Payment summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .summaryRows {
   display: grid;
@@ -520,7 +599,7 @@
   white-space: nowrap;
 }
 
-/* ─── Discount tags (inline in payment summary) ───────────────────────────── */
+/* â”€â”€â”€ Discount tags (inline in payment summary) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .discountTagList {
   display: grid;
@@ -562,7 +641,7 @@
   flex-shrink: 0;
 }
 
-/* ─── Email log hint ──────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Email log hint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .emailLogHint {
   margin: 0.875rem 0 0;
@@ -571,7 +650,7 @@
   line-height: 1.55;
 }
 
-/* ─── Notes ───────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .noteStack {
   display: grid;
@@ -605,7 +684,7 @@
   font-size: 0.74rem;
 }
 
-/* ─── Customer / address blocks ───────────────────────────────────────────── */
+/* â”€â”€â”€ Customer / address blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .infoBlock {
   display: grid;
@@ -629,7 +708,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ─── Timeline ────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Timeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .timelineList {
   display: grid;
@@ -667,7 +746,7 @@
   font-size: 0.74rem;
 }
 
-/* ─── Status text ─────────────────────────────────────────────────────────── */
+/* â”€â”€â”€ Status text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 .successText {
   margin: 0;
@@ -698,7 +777,101 @@
   overflow-wrap: anywhere;
 }
 
-/* ─── Responsive ──────────────────────────────────────────────────────────── */
+.shipmentCardList {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.shipmentCard {
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface-container-low) 72%, transparent);
+  padding: 0.75rem 0.8rem;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.shipmentCardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.shipmentCardHeader strong {
+  color: var(--on-surface);
+  font-size: 0.84rem;
+}
+
+.shipmentActionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.textActionButton {
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  padding: 0;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
+.toastViewport {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  display: grid;
+  gap: 0.55rem;
+  width: min(420px, calc(100vw - 1.5rem));
+}
+
+.toast {
+  border-radius: 0.8rem;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-low) 90%, transparent);
+  color: var(--on-surface);
+  padding: 0.7rem 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+}
+
+.toast p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.toast button {
+  border: none;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.toastSuccess {
+  border-color: color-mix(in srgb, #2e7d32 35%, var(--glass-border));
+}
+
+.toastError {
+  border-color: color-mix(in srgb, #b00020 40%, var(--glass-border));
+}
+
+.toastInfo {
+  border-color: color-mix(in srgb, #1565c0 35%, var(--glass-border));
+}
+
+/* â”€â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 @media (max-width: 1180px) {
   .grid {
@@ -720,6 +893,10 @@
 
 @media (max-width: 760px) {
   .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .methodCards {
     grid-template-columns: 1fr;
   }
 
@@ -751,3 +928,4 @@
     gap: 0.5rem;
   }
 }
+

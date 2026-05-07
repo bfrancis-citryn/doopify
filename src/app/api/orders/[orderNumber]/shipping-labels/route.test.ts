@@ -17,6 +17,8 @@ import { POST } from './route'
 
 const validPayload = {
   providerRateId: 'rate_1',
+  provider: 'SHIPPO',
+  sendTrackingEmail: true,
   labelFormat: 'PDF',
   labelSize: '4x6',
   items: [{ orderItemId: 'oi_1', quantity: 1 }],
@@ -64,6 +66,11 @@ describe('POST /api/orders/[orderNumber]/shipping-labels', () => {
       fulfillment: {
         id: 'ful_1',
       },
+      trackingEmail: {
+        requested: true,
+        queued: true,
+        skippedReason: null,
+      },
     })
 
     const response = await POST(
@@ -75,12 +82,23 @@ describe('POST /api/orders/[orderNumber]/shipping-labels', () => {
     )
 
     expect(response.status).toBe(201)
+    expect(mocks.buyOrderShippingLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNumber: 1001,
+        providerRateId: 'rate_1',
+        provider: 'SHIPPO',
+        sendTrackingEmail: true,
+      })
+    )
     expect(await response.json()).toMatchObject({
       success: true,
       data: {
         duplicate: false,
         shippingLabel: {
           id: 'label_1',
+        },
+        trackingEmail: {
+          queued: true,
         },
       },
     })

@@ -16,6 +16,7 @@ vi.mock('@/server/shipping/shipping-label.service', () => ({
 import { POST } from './route'
 
 const validPayload = {
+  provider: 'EASYPOST',
   items: [{ orderItemId: 'oi_1', quantity: 1 }],
   parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
 }
@@ -76,6 +77,12 @@ describe('POST /api/orders/[orderNumber]/shipping-rates', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(mocks.getOrderShippingRatesForLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNumber: 1001,
+        provider: 'EASYPOST',
+      })
+    )
     expect(await response.json()).toMatchObject({
       success: true,
       data: {

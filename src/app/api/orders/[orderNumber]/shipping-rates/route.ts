@@ -24,6 +24,7 @@ const schema = z.object({
     widthIn: z.number().positive(),
     heightIn: z.number().positive(),
   }),
+  provider: z.enum(['SHIPPO', 'EASYPOST']).optional(),
 })
 
 export async function POST(req: Request, { params }: Params) {
@@ -49,6 +50,7 @@ export async function POST(req: Request, { params }: Params) {
       orderNumber: parsedOrderNumber,
       items: parsed.data.items,
       parcel: parsed.data.parcel,
+      provider: parsed.data.provider,
     })
 
     return ok({

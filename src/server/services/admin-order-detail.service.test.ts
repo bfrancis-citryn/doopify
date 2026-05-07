@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     },
   },
   getShippingProviderConnectionStatus: vi.fn(),
+  getRuntimeProviderConnection: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -18,6 +19,10 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/server/shipping/shipping-provider.service', () => ({
   getShippingProviderConnectionStatus: mocks.getShippingProviderConnectionStatus,
+}))
+
+vi.mock('@/server/services/provider-connection.service', () => ({
+  getRuntimeProviderConnection: mocks.getRuntimeProviderConnection,
 }))
 
 import { getAdminOrderDetailByOrderNumber } from './admin-order-detail.service'
@@ -30,9 +35,13 @@ describe('getAdminOrderDetailByOrderNumber', () => {
       shippingProviderUsage: 'LIVE_AND_LABELS',
       labelProvider: 'EASYPOST',
     })
-    mocks.getShippingProviderConnectionStatus.mockResolvedValue({
-      provider: 'EASYPOST',
-      connected: true,
+    mocks.getShippingProviderConnectionStatus.mockImplementation(async (provider: string) => ({
+      provider,
+      connected: provider === 'EASYPOST',
+    }))
+    mocks.getRuntimeProviderConnection.mockResolvedValue({
+      source: 'runtime',
+      credentials: { API_KEY: 're_test_key' },
     })
   })
 
@@ -170,7 +179,12 @@ describe('getAdminOrderDetailByOrderNumber', () => {
           note: 'Shipment delayed by weather.',
         }),
       ],
+      emailCapabilities: {
+        hasCustomerEmail: true,
+        providerConfigured: true,
+      },
     })
+    expect(detail?.shippingCapabilities?.connectedProviders).toEqual(['EASYPOST'])
   })
 
   it('returns null when order does not exist', async () => {

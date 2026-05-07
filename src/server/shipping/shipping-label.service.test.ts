@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   getShippingProviderApiKey: vi.fn(),
   getShippingProviderLiveRates: vi.fn(),
   purchaseShippingProviderLabel: vi.fn(),
+  getRuntimeProviderConnection: vi.fn(),
   emitInternalEvent: vi.fn(),
 }))
 
@@ -45,6 +46,10 @@ vi.mock('@/server/events/dispatcher', () => ({
   emitInternalEvent: mocks.emitInternalEvent,
 }))
 
+vi.mock('@/server/services/provider-connection.service', () => ({
+  getRuntimeProviderConnection: mocks.getRuntimeProviderConnection,
+}))
+
 import { buyOrderShippingLabel } from './shipping-label.service'
 
 const baseOrder = {
@@ -56,6 +61,7 @@ const baseOrder = {
   taxAmountCents: 0,
   discountAmountCents: 0,
   totalCents: 5999,
+  email: 'buyer@example.com',
   items: [
     { id: 'oi_1', variantId: 'var_1', quantity: 1, priceCents: 5000 },
     { id: 'oi_2', variantId: 'var_2', quantity: 1, priceCents: 3000 },
@@ -139,6 +145,10 @@ beforeEach(() => {
     connected: true,
   })
   mocks.getShippingProviderApiKey.mockResolvedValue('ep_test_key')
+  mocks.getRuntimeProviderConnection.mockResolvedValue({
+    source: 'runtime',
+    credentials: { API_KEY: 're_test_key' },
+  })
   mocks.getShippingProviderLiveRates.mockResolvedValue([
     {
       id: 'rate_1',
@@ -418,5 +428,117 @@ describe('buyOrderShippingLabel', () => {
     ).rejects.toThrow(/ship-from location|origin|location is required/i)
 
     expect(mocks.purchaseShippingProviderLabel).not.toHaveBeenCalled()
+  })
+
+  it('uses requested provider override when both providers are connected', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.getShippingProviderConnectionStatus.mockImplementation(async (provider: string) => ({
+      provider,
+      connected: true,
+    }))
+    mocks.getShippingProviderApiKey.mockImplementation(async (provider: string) =>
+      provider === 'SHIPPO' ? 'shippo_test_key' : 'ep_test_key'
+    )
+    mocks.purchaseShippingProviderLabel.mockResolvedValue({
+      providerRateId: 'rate_1',
+      carrier: 'USPS',
+      service: 'Priority',
+      status: 'PURCHASED',
+      labelUrl: 'https://labels.example.com/shippo_label.pdf',
+      trackingNumber: 'SHIPPO123',
+      trackingUrl: 'https://track.example.com/SHIPPO123',
+      labelAmountCents: 799,
+      currency: 'USD',
+      rawResponse: {},
+    })
+
+    await buyOrderShippingLabel({
+      orderNumber: 1001,
+      provider: 'SHIPPO',
+      items: [{ orderItemId: 'oi_1', quantity: 1 }],
+      parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+      providerRateId: 'rate_1',
+    })
+
+    expect(mocks.purchaseShippingProviderLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'SHIPPO',
+      })
+    )
+  })
+
+  it('returns tracking email queue metadata for purchased labels', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.purchaseShippingProviderLabel.mockResolvedValue({
+      providerShipmentId: 'shp_1',
+      providerRateId: 'rate_1',
+      providerLabelId: 'pl_1',
+      carrier: 'USPS',
+      service: 'Priority',
+      status: 'PURCHASED',
+      labelUrl: 'https://labels.example.com/label_1.pdf',
+      trackingNumber: 'TRACK123',
+      trackingUrl: 'https://track.example.com/TRACK123',
+      labelAmountCents: 642,
+      currency: 'USD',
+      rawResponse: { ok: true },
+    })
+
+    const result = await buyOrderShippingLabel({
+      orderNumber: 1001,
+      items: [{ orderItemId: 'oi_1', quantity: 1 }],
+      parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+      providerRateId: 'rate_1',
+      sendTrackingEmail: true,
+    })
+
+    expect(result).toMatchObject({
+      trackingEmail: {
+        requested: true,
+        queued: true,
+        skippedReason: null,
+      },
+    })
+  })
+
+  it('does not rollback label purchase when email provider is unavailable', async () => {
+    mocks.prisma.order.findUnique.mockResolvedValue(baseOrder)
+    mocks.getRuntimeProviderConnection.mockResolvedValue({
+      source: 'none',
+      credentials: null,
+    })
+    mocks.purchaseShippingProviderLabel.mockResolvedValue({
+      providerShipmentId: 'shp_1',
+      providerRateId: 'rate_1',
+      providerLabelId: 'pl_1',
+      carrier: 'USPS',
+      service: 'Priority',
+      status: 'PURCHASED',
+      labelUrl: 'https://labels.example.com/label_1.pdf',
+      trackingNumber: 'TRACK123',
+      trackingUrl: 'https://track.example.com/TRACK123',
+      labelAmountCents: 642,
+      currency: 'USD',
+      rawResponse: { ok: true },
+    })
+
+    const result = await buyOrderShippingLabel({
+      orderNumber: 1001,
+      items: [{ orderItemId: 'oi_1', quantity: 1 }],
+      parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+      providerRateId: 'rate_1',
+      sendTrackingEmail: true,
+    })
+
+    expect(result).toMatchObject({
+      duplicate: false,
+      trackingEmail: {
+        requested: true,
+        queued: false,
+        skippedReason: 'EMAIL_PROVIDER_NOT_CONFIGURED',
+      },
+    })
+    expect(mocks.prisma.shippingLabel.create).toHaveBeenCalled()
+    expect(mocks.prisma.fulfillment.create).toHaveBeenCalled()
   })
 })

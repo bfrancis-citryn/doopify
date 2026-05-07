@@ -41,6 +41,58 @@ function normalizeLifecycleStatus(value: unknown) {
   return 'UNKNOWN' as const
 }
 
+function extractShippoTransactionMessages(payload: Record<string, unknown> | null) {
+  const messagesRaw = payload?.messages
+  const entries = Array.isArray(messagesRaw) ? messagesRaw : messagesRaw ? [messagesRaw] : []
+
+  return entries
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        return entry.trim()
+      }
+
+      if (entry && typeof entry === 'object') {
+        const record = entry as Record<string, unknown>
+        const text =
+          typeof record.text === 'string'
+            ? record.text
+            : typeof record.message === 'string'
+              ? record.message
+              : typeof record.detail === 'string'
+                ? record.detail
+                : ''
+        const code = typeof record.code === 'string' ? record.code.trim() : ''
+        return [code, text].filter(Boolean).join(': ').trim()
+      }
+
+      return ''
+    })
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function classifyShippoTransactionFailure(messages: string[]) {
+  const combined = messages.join(' ').toLowerCase()
+
+  if (!combined) {
+    return 'Provider transaction failed. Try refreshing rates and retrying the label purchase.'
+  }
+  if (/(address|postal|zip|invalid recipient|street|destination|origin)/.test(combined)) {
+    return 'Provider rejected the address. Verify destination and ship-from addresses.'
+  }
+  if (/(parcel|weight|dimension|length|width|height|mass|package)/.test(combined)) {
+    return 'Package details are missing or invalid. Check weight and dimensions.'
+  }
+  if (/(rate|expired|stale|no longer available|not found)/.test(combined)) {
+    return 'Selected rate expired. Refresh label rates and choose a new rate.'
+  }
+  if (/(test mode|test_mode|live mode|live_mode|production)/.test(combined)) {
+    return 'Provider rejected this test-mode transaction. Verify test credentials and shipment details.'
+  }
+
+  return messages[0] || 'Provider transaction failed. Please try again.'
+}
+
 export const shippoProviderAdapter: ShippingProviderAdapter = {
   async testConnection(input) {
     try {
@@ -219,8 +271,16 @@ export const shippoProviderAdapter: ShippingProviderAdapter = {
 
     const status = String(payload?.status ?? '').toUpperCase()
     if (status && status !== 'SUCCESS' && status !== 'QUEUED') {
-      const message = typeof payload?.messages === 'string' ? payload.messages : 'Transaction was not successful'
-      throw new Error(`Shippo label purchase failed: ${message}`)
+      const messages = extractShippoTransactionMessages(payload)
+      const merchantReason = classifyShippoTransactionFailure(messages)
+      console.error('[shippo.purchaseLabel] transaction failed', {
+        status,
+        providerRateId: input.rateId,
+        providerShipmentId:
+          typeof payload?.shipment === 'string' ? payload.shipment : input.shipmentId ?? null,
+        messages,
+      })
+      throw new Error(`Shippo label purchase failed: ${merchantReason}`)
     }
 
     const rate = payload?.rate as Record<string, unknown> | undefined
