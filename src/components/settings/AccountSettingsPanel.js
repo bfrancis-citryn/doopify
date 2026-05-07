@@ -6,6 +6,7 @@ import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminField from '../admin/ui/AdminField';
 import AdminInput from '../admin/ui/AdminInput';
+import { SettingsCardSkeleton } from './SettingsSkeletons';
 import styles from './SettingsWorkspace.module.css';
 
 export default function AccountSettingsPanel({ currentUser }) {
@@ -311,7 +312,7 @@ export default function AccountSettingsPanel({ currentUser }) {
           </div>
 
           <AdminCard variant="inset" className={styles.compactSettingsCard} as="section">
-            {mfaLoading ? <p className={styles.statusText}>Loading MFA status...</p> : null}
+            {mfaLoading ? <SettingsCardSkeleton fields={1} includeTitle={false} actions={0} /> : null}
             {!mfaLoading && mfaStatus ? (
               <p className={styles.statusText}>
                 {mfaStatus.enabled

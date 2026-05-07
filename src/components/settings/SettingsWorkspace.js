@@ -19,6 +19,7 @@ import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminTooltip from '../admin/ui/AdminTooltip';
+import SettingsPageSkeleton from './SettingsSkeletons';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
@@ -29,6 +30,7 @@ import {
   invokeShippingSaveAction,
   resolveShippingSaveActionRegistration,
 } from './shipping-save-button.helpers';
+import { isSettingsTabLoadingState } from './settings-skeleton.helpers';
 import { calculateTaxPreview } from './tax-preview.helpers';
 
 const SETTINGS_SECTIONS = [
@@ -998,9 +1000,7 @@ export default function SettingsWorkspace() {
         if (cancelled) return;
         setShippingConfigError(loadError instanceof Error ? loadError.message : 'Failed to load shipping configuration');
       } finally {
-        if (!cancelled) {
-          setShippingConfigLoading(false);
-        }
+        setShippingConfigLoading(false);
       }
     }
 
@@ -2227,12 +2227,35 @@ export default function SettingsWorkspace() {
     activeSection === 'shipping' ? shippingModeSaveError : activeSection === 'brand-kit' ? brandKitError : '';
 
   const showHeaderSaveButton = activeSection === 'brand-kit' || activeSection === 'shipping';
+  const activeTabLoading = isSettingsTabLoadingState({
+    activeSection,
+    loading,
+    hasError: Boolean(error),
+    brandKitLoading,
+    brandKitLoaded,
+    shippingConfigLoading,
+    shippingConfigLoaded,
+    providerStatusLoading,
+    providerStatusLoaded,
+    paymentActivityLoading,
+    paymentActivityLoaded,
+    emailActivityLoading,
+    emailActivityLoaded,
+    setupLoading,
+    setupLoaded,
+    readinessLoading,
+    readinessLoaded,
+    deploymentLoading,
+    deploymentLoaded,
+    wizardLoading,
+    wizardLoaded,
+    sessionUser,
+  });
   const shippingHeaderSaveState =
     activeSection === 'shipping'
       ? getShippingHeaderSaveButtonState({
           loading,
           hasError: Boolean(error),
-          shippingConfigLoading,
           hasSaveAction: shippingModeSaveActionReady,
           shippingModeSavedState,
           shippingModeDirty,
@@ -2241,6 +2264,7 @@ export default function SettingsWorkspace() {
   const headerSaveButtonDisabled =
     loading ||
     Boolean(error) ||
+    activeTabLoading ||
     (activeSection === 'brand-kit' && brandKitLoading) ||
     (activeSection === 'shipping' && Boolean(shippingHeaderSaveState?.disabled));
   const headerSaveButtonLabel =
@@ -2745,23 +2769,16 @@ export default function SettingsWorkspace() {
               )}
             </div>
 
-            {loading ? (
-              <div className={styles.statusBlock}>
-                <div className={styles.loadingLine} />
-                <div className={styles.loadingLine} />
-                <div className={`${styles.loadingLine} ${styles.loadingLineShort}`} />
-                <p className={styles.statusText}>Loading store settings...</p>
-              </div>
-            ) : null}
+            {activeTabLoading && !error ? <SettingsPageSkeleton section={activeSection} /> : null}
 
-            {!loading && error ? (
+            {!activeTabLoading && !loading && error ? (
               <div className={styles.statusBlock}>
                 <p className={styles.statusTitle}>Settings could not be loaded.</p>
                 <p className={styles.statusText}>{error}</p>
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'general' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'general' ? (
               <div className={styles.configStack}>
                 <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
                   <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
@@ -2845,7 +2862,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'brand-kit' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'brand-kit' ? (
               <div className={styles.brandKitLayout}>
                 <div className={styles.brandKitHeading}>
                   <h3>Brand assets</h3>
@@ -3006,7 +3023,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'shipping' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'shipping' ? (
               <ShippingSettingsWorkspace
                 embedded
                 onModeSaveStateChange={handleShippingModeSaveStateChange}
@@ -3014,7 +3031,7 @@ export default function SettingsWorkspace() {
               />
             ) : null}
 
-            {!loading && !error && activeSection === 'taxes' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'taxes' ? (
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
@@ -3183,7 +3200,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'payments' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'payments' ? (
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
@@ -3305,7 +3322,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'email' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'email' ? (
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
@@ -3501,7 +3518,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'email-legacy' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'email-legacy' ? (
               <div className={styles.configStack}>
                 <section className={styles.configSection}>
                   <div className={styles.sectionHeading}>
@@ -3722,7 +3739,7 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'webhooks' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'webhooks' ? (
               <div className={styles.configStack}>
                 <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
                   <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
@@ -3743,15 +3760,15 @@ export default function SettingsWorkspace() {
               </div>
             ) : null}
 
-            {!loading && !error && activeSection === 'account' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'account' ? (
               <AccountSettingsPanel currentUser={sessionUser} />
             ) : null}
 
-            {!loading && !error && activeSection === 'team' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'team' ? (
               <TeamSettingsPanel currentUserRole={sessionUser?.role} />
             ) : null}
 
-            {!loading && !error && activeSection === 'setup' ? (
+            {!activeTabLoading && !loading && !error && activeSection === 'setup' ? (
               <div className={styles.setupPanel}>
                 <AdminCard className={styles.setupSummaryCard} variant="card">
                   <h4>Setup mode</h4>

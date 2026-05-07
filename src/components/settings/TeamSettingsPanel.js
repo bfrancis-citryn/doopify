@@ -8,6 +8,7 @@ import AdminField from '../admin/ui/AdminField';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminSelect from '../admin/ui/AdminSelect';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
+import SettingsPageSkeleton from './SettingsSkeletons';
 import styles from './SettingsWorkspace.module.css';
 import { getTeamAccessNotice, isKnownNonOwnerRole, isOwnerRole } from './team-settings.helpers';
 
@@ -290,13 +291,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         </AdminCard>
       ) : null}
 
-      {loading ? (
-        <div className={styles.statusBlock}>
-          <div className={styles.loadingLine} />
-          <div className={styles.loadingLine} />
-          <p className={styles.statusText}>Loading team…</p>
-        </div>
-      ) : null}
+      {loading ? <SettingsPageSkeleton section="team" /> : null}
 
       {error ? (
         <AdminCard variant="card" className={styles.compactSettingsCard}>
@@ -565,3 +560,4 @@ export default function TeamSettingsPanel({ currentUserRole }) {
     </div>
   );
 }
+

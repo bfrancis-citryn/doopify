@@ -5,6 +5,7 @@ import AdminDrawer from '../admin/ui/AdminDrawer';
 import AdminField from '../admin/ui/AdminField';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
+import SettingsPageSkeleton from './SettingsSkeletons';
 import {
   WEBHOOK_EVENT_GROUPS,
   uniqueStrings,
@@ -330,7 +331,7 @@ export default function IntegrationsPanel() {
           </AdminButton>
         </div>
         <p className={styles.cardSubtext}>{integrations.length} configured, {activeCount} active.</p>
-        {loading ? <p className={styles.statusText}>Loading endpoints...</p> : null}
+        {loading ? <SettingsPageSkeleton section="webhooks" /> : null}
         {!loading && integrations.length === 0 ? (
           <p className={styles.statusText}>No outbound endpoints yet. Create one to start sending updates.</p>
         ) : null}
@@ -373,7 +374,7 @@ export default function IntegrationsPanel() {
           <h4>Needs attention</h4>
           <AdminStatusChip tone={needsAttentionCount ? 'warning' : 'neutral'}>{needsAttentionCount} issues</AdminStatusChip>
         </div>
-        {attentionLoading ? <p className={styles.statusText}>Checking retries and failures...</p> : null}
+        {attentionLoading ? <SettingsPageSkeleton section="webhooks" /> : null}
         {!attentionLoading && attentionDeliveries.length === 0 ? (
           <p className={styles.statusText}>No failed or retrying deliveries right now.</p>
         ) : null}

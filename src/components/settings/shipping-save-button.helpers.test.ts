@@ -26,7 +26,6 @@ describe('shipping header save button helper', () => {
     const state = getShippingHeaderSaveButtonState({
       loading: false,
       hasError: false,
-      shippingConfigLoading: false,
       hasSaveAction: true,
       shippingModeSavedState: 'dirty',
       shippingModeDirty: true,
@@ -44,6 +43,17 @@ describe('shipping header save button helper', () => {
     })
 
     expect(state.disabled).toBe(true)
+    expect(state.label).toBe('Save changes')
+  })
+
+  it('keeps Save changes enabled for shipping mode edits when the save action is ready', () => {
+    const state = getShippingHeaderSaveButtonState({
+      hasSaveAction: true,
+      shippingModeSavedState: 'dirty',
+      shippingModeDirty: true,
+    })
+
+    expect(state.disabled).toBe(false)
     expect(state.label).toBe('Save changes')
   })
 

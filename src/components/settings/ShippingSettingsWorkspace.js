@@ -18,6 +18,7 @@ import {
   isCheckoutMethodEqual,
   providerSelectionToLegacyUsage,
 } from "./shipping-checkout-method.helpers";
+import SettingsPageSkeleton from "./SettingsSkeletons";
 import styles from "./SettingsWorkspace.module.css";
 
 const PROVIDER_OPTIONS = [
@@ -991,7 +992,7 @@ export default function ShippingSettingsWorkspace({
           </AdminButton>
         </div>
 
-        {loading ? <p className={styles.statusText}>Loading shipping settings...</p> : null}
+        {loading ? <SettingsPageSkeleton section="shipping" /> : null}
         {error ? (
           <div className={styles.statusBlock}>
             <p className={styles.statusText}>{error}</p>
