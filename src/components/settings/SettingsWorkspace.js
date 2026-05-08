@@ -1567,7 +1567,11 @@ export default function SettingsWorkspace() {
     providerForms.STRIPE.webhookSecret,
   ]);
   const stripeConnectionPresentation = useMemo(() => {
-    const state = stripeProviderStatus?.state || (stripeHasSavedRequiredKeys ? 'CREDENTIALS_SAVED' : 'NOT_CONFIGURED');
+    const rawState = stripeProviderStatus?.state || (stripeHasSavedRequiredKeys ? 'CREDENTIALS_SAVED' : 'NOT_CONFIGURED');
+    const state =
+      stripeHasSavedRequiredKeys && rawState === 'NOT_CONFIGURED'
+        ? 'CREDENTIALS_SAVED'
+        : rawState;
 
     if (state === 'VERIFIED') {
       return {

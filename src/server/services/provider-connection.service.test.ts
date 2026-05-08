@@ -777,5 +777,65 @@ describe('provider connection service', () => {
     expect(String(snapshot.secretKeyMasked || '')).toContain('sk_test_')
     expect(String(snapshot.webhookSecretMasked || '')).toContain('whsec_')
   })
+
+  it('does not report NOT_CONFIGURED when Stripe credential metadata exists in db', async () => {
+    mocks.prisma.integration.findMany.mockResolvedValue([
+      {
+        id: 'int_stripe_configured_state',
+        type: 'PAYMENT_STRIPE',
+        status: 'ACTIVE',
+        createdAt: new Date('2026-05-07T11:15:00.000Z'),
+        updatedAt: new Date('2026-05-07T11:15:00.000Z'),
+        secrets: [
+          { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_state_1234' },
+          { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_state_5678' },
+          { id: 'sec_3', key: 'MODE', value: 'enc:test' },
+          { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_state_9012' },
+        ],
+      },
+    ])
+
+    const status = await getProviderStatus('STRIPE')
+
+    expect(status.state).toBe('CREDENTIALS_SAVED')
+    expect(status.source).toBe('db')
+    expect(status.hasCredentials).toBe(true)
+    expect(status.credentialMeta.find((entry) => entry.key === 'PUBLISHABLE_KEY')?.present).toBe(true)
+    expect(status.credentialMeta.find((entry) => entry.key === 'SECRET_KEY')?.present).toBe(true)
+    expect(status.credentialMeta.find((entry) => entry.key === 'MODE')?.present).toBe(true)
+  })
+
+  it('preserves Stripe secrets and verification metadata when save payload has no changed api fields', async () => {
+    const existingIntegration = {
+      id: 'int_stripe_noop_save',
+      type: 'PAYMENT_STRIPE',
+      status: 'ACTIVE',
+      createdAt: new Date('2026-05-07T11:20:00.000Z'),
+      updatedAt: new Date('2026-05-07T11:20:00.000Z'),
+      secrets: [
+        { id: 'sec_1', key: 'PUBLISHABLE_KEY', value: 'enc:pk_test_existing_1234' },
+        { id: 'sec_2', key: 'SECRET_KEY', value: 'enc:sk_test_existing_5678' },
+        { id: 'sec_3', key: 'MODE', value: 'enc:test' },
+        { id: 'sec_4', key: 'WEBHOOK_SECRET', value: 'enc:whsec_existing_9012' },
+        { id: 'sec_5', key: 'META_LAST_VERIFIED_AT', value: 'enc:2026-05-07T11:21:00.000Z' },
+      ],
+    }
+
+    mocks.prisma.integration.findMany.mockResolvedValue([existingIntegration])
+
+    const status = await saveProviderCredentials('STRIPE', {
+      mode: 'test',
+    })
+
+    expect(status.state).toBe('VERIFIED')
+    const allUpserts = mocks.prisma.integrationSecret.upsert.mock.calls as Array<[any]>
+    expect(allUpserts.some(([arg]) => arg?.create?.key === 'PUBLISHABLE_KEY')).toBe(true)
+    expect(allUpserts.some(([arg]) => arg?.create?.key === 'SECRET_KEY')).toBe(true)
+    expect(allUpserts.some(([arg]) => arg?.create?.key === 'WEBHOOK_SECRET')).toBe(true)
+    const metaDeleteCalls = (mocks.prisma.integrationSecret.deleteMany.mock.calls as Array<[any]>).filter(
+      ([arg]) => Array.isArray(arg?.where?.key?.in)
+    )
+    expect(metaDeleteCalls.length).toBe(0)
+  })
 })
 
