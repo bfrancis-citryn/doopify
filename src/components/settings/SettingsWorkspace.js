@@ -27,7 +27,7 @@ import {
   buildStripeCredentialSavePayload,
   buildStripeMaskedCredentialMap,
   resolveStripeConnectionState,
-  resolveMaskedInputPlaceholder,
+  shouldShowStripeCredentialInput,
 } from './stripe-credential-masking.helpers';
 import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
 import {
@@ -294,6 +294,12 @@ const EMPTY_SHIPPING_TAX_PREVIEW = {
   country: 'US',
   province: '',
 };
+
+const EMPTY_STRIPE_REPLACE_STATE = Object.freeze({
+  publishableKey: false,
+  secretKey: false,
+  webhookSecret: false,
+});
 
 const EMPTY_TAX_PREVIEW_RESULT = {
   subtotal: 0,
@@ -827,6 +833,9 @@ export default function SettingsWorkspace() {
   const [templateEditorSendResult, setTemplateEditorSendResult] = useState(null);
   const [providerActionById, setProviderActionById] = useState({});
   const [providerForms, setProviderForms] = useState(EMPTY_PROVIDER_FORMS);
+  const [stripeCredentialReplaceByField, setStripeCredentialReplaceByField] = useState({
+    ...EMPTY_STRIPE_REPLACE_STATE,
+  });
   const [providerTestEmailById, setProviderTestEmailById] = useState({
     RESEND: '',
     SMTP: '',
@@ -1518,33 +1527,21 @@ export default function SettingsWorkspace() {
     }
     return entries;
   }, [stripeCredentialMaskMap.MODE, stripeCredentialMaskMap.PUBLISHABLE_KEY, stripeCredentialMaskMap.SECRET_KEY, stripeCredentialMaskMap.WEBHOOK_SECRET]);
-  const stripePublishablePlaceholder = useMemo(
-    () =>
-      resolveMaskedInputPlaceholder({
-        draftValue: providerForms.STRIPE.publishableKey,
-        fallbackPlaceholder: 'pk_test_...',
-        savedMaskedValue: stripeCredentialMaskMap.PUBLISHABLE_KEY,
-      }),
-    [providerForms.STRIPE.publishableKey, stripeCredentialMaskMap.PUBLISHABLE_KEY]
-  );
-  const stripeSecretPlaceholder = useMemo(
-    () =>
-      resolveMaskedInputPlaceholder({
-        draftValue: providerForms.STRIPE.secretKey,
-        fallbackPlaceholder: 'sk_test_...',
-        savedMaskedValue: stripeCredentialMaskMap.SECRET_KEY,
-      }),
-    [providerForms.STRIPE.secretKey, stripeCredentialMaskMap.SECRET_KEY]
-  );
-  const stripeWebhookPlaceholder = useMemo(
-    () =>
-      resolveMaskedInputPlaceholder({
-        draftValue: providerForms.STRIPE.webhookSecret,
-        fallbackPlaceholder: 'whsec_...',
-        savedMaskedValue: stripeCredentialMaskMap.WEBHOOK_SECRET,
-      }),
-    [providerForms.STRIPE.webhookSecret, stripeCredentialMaskMap.WEBHOOK_SECRET]
-  );
+  const stripeShowPublishableInput = shouldShowStripeCredentialInput({
+    savedMaskedValue: stripeCredentialMaskMap.PUBLISHABLE_KEY,
+    draftValue: providerForms.STRIPE.publishableKey,
+    isReplacing: stripeCredentialReplaceByField.publishableKey,
+  });
+  const stripeShowSecretInput = shouldShowStripeCredentialInput({
+    savedMaskedValue: stripeCredentialMaskMap.SECRET_KEY,
+    draftValue: providerForms.STRIPE.secretKey,
+    isReplacing: stripeCredentialReplaceByField.secretKey,
+  });
+  const stripeShowWebhookInput = shouldShowStripeCredentialInput({
+    savedMaskedValue: stripeCredentialMaskMap.WEBHOOK_SECRET,
+    draftValue: providerForms.STRIPE.webhookSecret,
+    isReplacing: stripeCredentialReplaceByField.webhookSecret,
+  });
   const stripeSavedMode = useMemo(() => {
     const raw = String(stripeCredentialMaskMap.MODE || stripeRuntimeStatus?.providerStatus?.mode || stripeRuntimeStatus?.mode || '')
       .trim()
@@ -1555,8 +1552,12 @@ export default function SettingsWorkspace() {
     stripeCredentialMaskMap.PUBLISHABLE_KEY && stripeCredentialMaskMap.SECRET_KEY
   );
   const stripeSavePayload = useMemo(() => {
-    return buildStripeCredentialSavePayload(providerForms.STRIPE);
+    return buildStripeCredentialSavePayload({
+      ...providerForms.STRIPE,
+      savedMaskMap: stripeCredentialMaskMap,
+    });
   }, [
+    stripeCredentialMaskMap,
     providerForms.STRIPE.mode,
     providerForms.STRIPE.publishableKey,
     providerForms.STRIPE.secretKey,
@@ -2133,11 +2134,15 @@ export default function SettingsWorkspace() {
     setProviderNotice('');
     setActivePaymentDrawer(providerId);
     if (providerId === PAYMENT_PROVIDER_DRAWER.STRIPE) {
+      setStripeCredentialReplaceByField({ ...EMPTY_STRIPE_REPLACE_STATE });
+    }
+    if (providerId === PAYMENT_PROVIDER_DRAWER.STRIPE) {
       void refreshProviderStatuses();
     }
   }
 
   function closePaymentDrawer() {
+    setStripeCredentialReplaceByField({ ...EMPTY_STRIPE_REPLACE_STATE });
     setActivePaymentDrawer(null);
   }
 
@@ -2443,6 +2448,35 @@ export default function SettingsWorkspace() {
       ...current,
       [provider]: { ...nextDefaults },
     }));
+    if (provider === 'STRIPE') {
+      setStripeCredentialReplaceByField({ ...EMPTY_STRIPE_REPLACE_STATE });
+    }
+  }
+
+  function startStripeCredentialReplace(field) {
+    setStripeCredentialReplaceByField((current) => ({
+      ...current,
+      [field]: true,
+    }));
+  }
+
+  function cancelStripeCredentialReplace(field) {
+    setStripeCredentialReplaceByField((current) => ({
+      ...current,
+      [field]: false,
+    }));
+
+    if (field === 'publishableKey') {
+      patchProviderForm('STRIPE', { publishableKey: '' });
+      return;
+    }
+
+    if (field === 'secretKey') {
+      patchProviderForm('STRIPE', { secretKey: '' });
+      return;
+    }
+
+    patchProviderForm('STRIPE', { webhookSecret: '' });
   }
 
   async function handleSaveProviderCredentials(provider, payload) {
@@ -4354,39 +4388,81 @@ export default function SettingsWorkspace() {
               <p className={styles.compactMeta}>
                 Save API keys and webhook secret, then verify Stripe API and add the webhook endpoint in Stripe.
               </p>
+              <p className={styles.compactMeta}>
+                Credentials are saved securely. Secret values are encrypted and hidden. Use Replace only when changing keys.
+              </p>
               <div className={`${styles.drawerFormGrid} ${styles.compactFormGrid}`}>
                 <AdminField hint="pk_test_... or pk_live_..." label="Publishable key">
-                  <AdminInput
-                    onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
-                    placeholder={stripePublishablePlaceholder}
-                    type="text"
-                    value={providerForms.STRIPE.publishableKey}
-                  />
-                  {stripeCredentialMaskMap.PUBLISHABLE_KEY ? (
-                    <p className={styles.credentialSavedHint}>Saved: {stripeCredentialMaskMap.PUBLISHABLE_KEY}</p>
-                  ) : null}
+                  {stripeShowPublishableInput ? (
+                    <div className={styles.credentialInputStack}>
+                      <AdminInput
+                        onChange={(event) => patchProviderForm('STRIPE', { publishableKey: event.target.value })}
+                        placeholder="pk_test_..."
+                        type="text"
+                        value={providerForms.STRIPE.publishableKey}
+                      />
+                      {stripeCredentialMaskMap.PUBLISHABLE_KEY ? (
+                        <AdminButton onClick={() => cancelStripeCredentialReplace('publishableKey')} size="sm" variant="ghost">
+                          Cancel replacement
+                        </AdminButton>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className={styles.savedCredentialRow}>
+                      <span className={styles.savedCredentialValue}>Saved credential • {stripeCredentialMaskMap.PUBLISHABLE_KEY}</span>
+                      <AdminButton onClick={() => startStripeCredentialReplace('publishableKey')} size="sm" variant="ghost">
+                        Replace
+                      </AdminButton>
+                    </div>
+                  )}
                 </AdminField>
                 <AdminField hint="sk_test_... or sk_live_..." label="Secret key">
-                  <AdminInput
-                    onChange={(event) => patchProviderForm('STRIPE', { secretKey: event.target.value })}
-                    placeholder={stripeSecretPlaceholder}
-                    type="password"
-                    value={providerForms.STRIPE.secretKey}
-                  />
-                  {stripeCredentialMaskMap.SECRET_KEY ? (
-                    <p className={styles.credentialSavedHint}>Saved: {stripeCredentialMaskMap.SECRET_KEY}</p>
-                  ) : null}
+                  {stripeShowSecretInput ? (
+                    <div className={styles.credentialInputStack}>
+                      <AdminInput
+                        onChange={(event) => patchProviderForm('STRIPE', { secretKey: event.target.value })}
+                        placeholder="sk_test_..."
+                        type="password"
+                        value={providerForms.STRIPE.secretKey}
+                      />
+                      {stripeCredentialMaskMap.SECRET_KEY ? (
+                        <AdminButton onClick={() => cancelStripeCredentialReplace('secretKey')} size="sm" variant="ghost">
+                          Cancel replacement
+                        </AdminButton>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className={styles.savedCredentialRow}>
+                      <span className={styles.savedCredentialValue}>Saved credential • {stripeCredentialMaskMap.SECRET_KEY}</span>
+                      <AdminButton onClick={() => startStripeCredentialReplace('secretKey')} size="sm" variant="ghost">
+                        Replace
+                      </AdminButton>
+                    </div>
+                  )}
                 </AdminField>
                 <AdminField hint="Used to verify webhook signatures from Stripe." label="Webhook secret">
-                  <AdminInput
-                    onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
-                    placeholder={stripeWebhookPlaceholder}
-                    type="password"
-                    value={providerForms.STRIPE.webhookSecret}
-                  />
-                  {stripeCredentialMaskMap.WEBHOOK_SECRET ? (
-                    <p className={styles.credentialSavedHint}>Saved: {stripeCredentialMaskMap.WEBHOOK_SECRET}</p>
-                  ) : null}
+                  {stripeShowWebhookInput ? (
+                    <div className={styles.credentialInputStack}>
+                      <AdminInput
+                        onChange={(event) => patchProviderForm('STRIPE', { webhookSecret: event.target.value })}
+                        placeholder="whsec_..."
+                        type="password"
+                        value={providerForms.STRIPE.webhookSecret}
+                      />
+                      {stripeCredentialMaskMap.WEBHOOK_SECRET ? (
+                        <AdminButton onClick={() => cancelStripeCredentialReplace('webhookSecret')} size="sm" variant="ghost">
+                          Cancel replacement
+                        </AdminButton>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className={styles.savedCredentialRow}>
+                      <span className={styles.savedCredentialValue}>Saved credential • {stripeCredentialMaskMap.WEBHOOK_SECRET}</span>
+                      <AdminButton onClick={() => startStripeCredentialReplace('webhookSecret')} size="sm" variant="ghost">
+                        Replace
+                      </AdminButton>
+                    </div>
+                  )}
                 </AdminField>
                 <label className={styles.field}>
                   <span>Mode</span>
@@ -4439,14 +4515,6 @@ export default function SettingsWorkspace() {
                 <p className={styles.setupFixText}>
                   Placeholder domains are not accepted for webhook readiness.
                 </p>
-              ) : null}
-              {stripeSavedCredentialEntries.length ? (
-                <p className={styles.compactMeta}>
-                  Credentials saved securely. Secret values are encrypted and hidden.
-                </p>
-              ) : null}
-              {!stripeSavedCredentialEntries.length ? (
-                <p className={styles.compactMeta}>No DB credential metadata yet. Env fallback may still be active.</p>
               ) : null}
               {stripeSavedCredentialEntries.length ? (
                 <details className={styles.drawerDetails}>

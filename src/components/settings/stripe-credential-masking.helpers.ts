@@ -82,6 +82,7 @@ type StripeDrawerForm = {
   secretKey?: string | null
   webhookSecret?: string | null
   mode?: string | null
+  savedMaskMap?: Record<string, string> | null
 }
 
 export function resolveStripeConnectionState(input: {
@@ -104,17 +105,46 @@ export function resolveStripeConnectionState(input: {
 }
 
 export function buildStripeCredentialSavePayload(input: StripeDrawerForm) {
-  const publishableKey = String(input.publishableKey || '').trim()
-  const secretKey = String(input.secretKey || '').trim()
-  const webhookSecret = String(input.webhookSecret || '').trim()
+  const savedMaskMap = input.savedMaskMap || {}
+
+  const normalizeCredentialForSave = (value: string | null | undefined, savedMaskedValue: string | undefined) => {
+    const normalized = String(value || '').trim()
+    if (!normalized) return undefined
+    if (savedMaskedValue && normalized === savedMaskedValue) return undefined
+
+    // Defensive guard: masked values are display-only and must never be re-submitted as credentials.
+    if (normalized.includes('******') || normalized.includes('••••')) return undefined
+
+    return normalized
+  }
+
+  const publishableKey = normalizeCredentialForSave(input.publishableKey, savedMaskMap.PUBLISHABLE_KEY)
+  const secretKey = normalizeCredentialForSave(input.secretKey, savedMaskMap.SECRET_KEY)
+  const webhookSecret = normalizeCredentialForSave(input.webhookSecret, savedMaskMap.WEBHOOK_SECRET)
   const normalizedMode = String(input.mode || '')
     .trim()
     .toLowerCase()
 
   return {
-    publishableKey: publishableKey || undefined,
-    secretKey: secretKey || undefined,
-    webhookSecret: webhookSecret || undefined,
+    publishableKey,
+    secretKey,
+    webhookSecret,
     mode: normalizedMode === 'live' ? 'live' : 'test',
   }
+}
+
+export function shouldShowStripeCredentialInput(input: {
+  savedMaskedValue?: string | null
+  draftValue?: string | null
+  isReplacing?: boolean
+}) {
+  const hasSavedMaskedValue = Boolean(String(input.savedMaskedValue || '').trim())
+  if (!hasSavedMaskedValue) return true
+
+  if (Boolean(input.isReplacing)) return true
+
+  const hasDraftValue = Boolean(String(input.draftValue || '').trim())
+  if (hasDraftValue) return true
+
+  return false
 }

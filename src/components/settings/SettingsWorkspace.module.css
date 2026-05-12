@@ -1104,10 +1104,28 @@
   word-break: break-word;
 }
 
-.credentialSavedHint {
-  margin: 0.24rem 0 0;
-  font-size: 0.7rem;
+.credentialInputStack {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.savedCredentialRow {
+  border: 1px solid color-mix(in srgb, var(--glass-border) 84%, transparent);
+  border-radius: 0.72rem;
+  padding: 0.46rem 0.56rem;
+  background: color-mix(in srgb, var(--surface-container-lowest) 76%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.48rem;
+}
+
+.savedCredentialValue {
+  font-size: 0.74rem;
   color: var(--on-surface-variant);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .endpointInlineRow {
@@ -1180,6 +1198,11 @@
 
   .statusSummaryValue {
     text-align: left;
+  }
+
+  .savedCredentialRow {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

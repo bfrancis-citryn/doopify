@@ -6,6 +6,7 @@ import {
   buildStripeMaskedCredentialMap,
   resolveStripeConnectionState,
   resolveMaskedInputPlaceholder,
+  shouldShowStripeCredentialInput,
 } from './stripe-credential-masking.helpers'
 
 describe('stripe credential masking helpers', () => {
@@ -137,6 +138,27 @@ describe('stripe credential masking helpers', () => {
     })
   })
 
+  it('does not submit masked saved display values as real Stripe secrets', () => {
+    const payload = buildStripeCredentialSavePayload({
+      publishableKey: 'pk_test_••••WQ73',
+      secretKey: 'sk_test_••••3XHw',
+      webhookSecret: 'whsec_••••uTip',
+      savedMaskMap: {
+        PUBLISHABLE_KEY: 'pk_test_••••WQ73',
+        SECRET_KEY: 'sk_test_••••3XHw',
+        WEBHOOK_SECRET: 'whsec_••••uTip',
+      },
+      mode: 'test',
+    })
+
+    expect(payload).toEqual({
+      publishableKey: undefined,
+      secretKey: undefined,
+      webhookSecret: undefined,
+      mode: 'test',
+    })
+  })
+
   it('normalizes Stripe mode to test/live only for save payloads', () => {
     const payload = buildStripeCredentialSavePayload({
       publishableKey: 'pk_live_new_1234',
@@ -163,5 +185,45 @@ describe('stripe credential masking helpers', () => {
     })
 
     expect(state).toBe('CREDENTIALS_SAVED')
+  })
+
+  it('renders saved credential display when masked value exists and replace is not active', () => {
+    const showInput = shouldShowStripeCredentialInput({
+      savedMaskedValue: 'pk_test_••••WQ73',
+      draftValue: '',
+      isReplacing: false,
+    })
+
+    expect(showInput).toBe(false)
+  })
+
+  it('replace action reveals editable input for saved credentials', () => {
+    const showInput = shouldShowStripeCredentialInput({
+      savedMaskedValue: 'sk_test_••••3XHw',
+      draftValue: '',
+      isReplacing: true,
+    })
+
+    expect(showInput).toBe(true)
+  })
+
+  it('cancel replacement returns to saved credential display state', () => {
+    const showInput = shouldShowStripeCredentialInput({
+      savedMaskedValue: 'whsec_••••uTip',
+      draftValue: '',
+      isReplacing: false,
+    })
+
+    expect(showInput).toBe(false)
+  })
+
+  it('shows an editable input when no saved credential exists', () => {
+    const showInput = shouldShowStripeCredentialInput({
+      savedMaskedValue: '',
+      draftValue: '',
+      isReplacing: false,
+    })
+
+    expect(showInput).toBe(true)
   })
 })
