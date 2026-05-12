@@ -51,6 +51,10 @@ describe('team users route', () => {
     expect(payload.data.users[0].role).toBe('OWNER')
     const serialized = JSON.stringify(payload)
     expect(serialized).not.toContain('passwordHash')
+    expect(serialized).not.toContain('mfaTotpSecretEnc')
+    expect(serialized).not.toContain('mfaRecoveryCodesHash')
+    expect(serialized).not.toContain('tokenHash')
+    expect(serialized).not.toContain('sessionToken')
   })
 
   it('blocks non-owner from creating users', async () => {

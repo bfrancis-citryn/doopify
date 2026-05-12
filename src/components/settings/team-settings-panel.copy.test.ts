@@ -33,6 +33,27 @@ describe('TeamSettingsPanel role select wiring', () => {
     expect(panel).toContain("body: JSON.stringify({ action, ...extra })")
   })
 
+  it('supports inline edit-name flow and update_profile payload', () => {
+    const panel = read('src/components/settings/TeamSettingsPanel.js')
+
+    expect(panel).toContain('Edit name')
+    expect(panel).toContain('teamProfileEditor')
+    expect(panel).toContain("patchUser(user.id, 'update_profile'")
+    expect(panel).toContain('firstName: editProfileForm.firstName')
+    expect(panel).toContain('lastName: editProfileForm.lastName')
+  })
+
+  it('shows Delete account only for disabled users and uses owner-only delete route', () => {
+    const panel = read('src/components/settings/TeamSettingsPanel.js')
+
+    expect(panel).toContain('Delete account')
+    expect(panel).toContain('!user.isActive')
+    expect(panel).toContain("fetch(`/api/team/users/${user.id}`, { method: 'DELETE' })")
+    expect(panel).toContain('Delete this disabled user permanently? This cannot be undone.')
+    expect(panel).toContain('Type ${user.email} or DELETE to confirm permanent deletion.')
+    expect(panel).toContain('user.id !== currentUserId')
+  })
+
   it('renders compact manage menus for users and pending invites', () => {
     const panel = read('src/components/settings/TeamSettingsPanel.js')
     const styles = read('src/components/settings/SettingsWorkspace.module.css')
@@ -53,6 +74,7 @@ describe('TeamSettingsPanel role select wiring', () => {
     expect(styles).toContain('.teamRowLayout')
     expect(styles).toContain('.teamRowActions')
     expect(styles).toContain('.teamRoleEditor')
+    expect(styles).toContain('.teamProfileEditor')
     expect(styles).toContain('.teamHeaderActions')
   })
 
@@ -67,5 +89,6 @@ describe('TeamSettingsPanel role select wiring', () => {
     expect(panel).toContain('if (!window.confirm(`Revoke all active sessions for ${email}?`)) return;')
     expect(panel).toContain('if (!window.confirm(`Revoke invite for ${email}?`)) return;')
     expect(panel).toContain('Add another active owner before disabling this account.')
+    expect(panel).toContain('Disabled users cannot sign in. Delete is available after disable if you want to remove the account.')
   })
 })

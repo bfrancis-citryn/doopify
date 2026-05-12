@@ -3942,7 +3942,7 @@ export default function SettingsWorkspace() {
             ) : null}
 
             {!activeTabLoading && !loading && !error && activeSection === 'team' ? (
-              <TeamSettingsPanel currentUserRole={sessionUser?.role} />
+              <TeamSettingsPanel currentUserRole={sessionUser?.role} currentUserId={sessionUser?.id} />
             ) : null}
 
             {!activeTabLoading && !loading && !error && activeSection === 'setup' ? (

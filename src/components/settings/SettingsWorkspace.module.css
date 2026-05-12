@@ -1279,11 +1279,37 @@
   line-height: 1.35;
 }
 
+.teamDisabledHelperText {
+  margin: 0.12rem 0 0;
+  color: var(--on-surface-variant);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .teamRoleEditor {
   border-top: 1px solid var(--glass-border);
   padding-top: 0.56rem;
   display: grid;
   gap: 0.34rem;
+}
+
+.teamProfileEditor {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 0.56rem;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.teamProfileEditorTitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--on-surface);
+  font-weight: 720;
+}
+
+.teamProfileEditorGrid {
+  display: grid;
+  gap: 0.46rem;
 }
 
 .teamRoleEditorTitle {
