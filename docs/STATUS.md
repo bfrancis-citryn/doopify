@@ -334,12 +334,12 @@ Production readiness foundation now includes:
 - optional integration workflow in `.github/workflows/integration.yml` (runs when `DATABASE_URL_TEST` secret is configured)
 - security-header foundation with proxy-applied baseline headers, production HSTS, and CSP report-only mode
 - production runbook docs:
-  - `PRODUCTION_DEPLOYMENT_CHECKLIST.md`
+  - `deployment/checklist.md`
   - `ENVIRONMENT_VARIABLE_REFERENCE.md`
-  - `WEBHOOK_CONFIGURATION_GUIDE.md`
-  - `STRIPE_SETUP_GUIDE.md`
-  - `RESEND_SETUP_GUIDE.md`
-  - `NEON_SETUP_GUIDE.md`
+  - `setup/stripe.md`
+  - `setup/email.md`
+  - `deployment/vercel.md`
+  - `troubleshooting.md`
   - `BACKUP_AND_RESTORE.md`
   - `ADMIN_USER_RECOVERY_GUIDE.md`
 

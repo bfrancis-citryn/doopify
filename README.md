@@ -66,8 +66,10 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 | Topic | Guide |
 |---|---|
 | Pilot smoke checklist | [docs/operations/pilot-smoke-checklist.md](./docs/operations/pilot-smoke-checklist.md) |
+| Pilot validation runbook | [docs/operations/pilot-validation-runbook.md](./docs/operations/pilot-validation-runbook.md) |
 | Troubleshooting | [docs/troubleshooting.md](./docs/troubleshooting.md) |
 | Production runbook | [docs/PRODUCTION_RUNBOOK.md](./docs/PRODUCTION_RUNBOOK.md) |
+| Deployment checklist | [docs/deployment/checklist.md](./docs/deployment/checklist.md) |
 | Backup and restore | [docs/BACKUP_AND_RESTORE.md](./docs/BACKUP_AND_RESTORE.md) |
 | Secret rotation | [docs/SECRET_ROTATION_RUNBOOK.md](./docs/SECRET_ROTATION_RUNBOOK.md) |
 | Admin recovery | [docs/ADMIN_USER_RECOVERY_GUIDE.md](./docs/ADMIN_USER_RECOVERY_GUIDE.md) |

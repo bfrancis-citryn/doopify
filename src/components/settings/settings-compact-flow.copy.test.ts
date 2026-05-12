@@ -107,7 +107,9 @@ describe('settings compact flow', () => {
     expect(workspace).toContain('Saved: {stripeCredentialMaskMap.SECRET_KEY}')
     expect(workspace).toContain('Saved: {stripeCredentialMaskMap.WEBHOOK_SECRET}')
     expect(workspace).toContain('buildStripeMaskedCredentialMap')
-    expect(workspace).toContain('stripeRuntimeStatus?.providerStatus')
+    expect(workspace).toContain('resolveStripeConnectionState')
+    expect(workspace).toContain('runtimeStatus: stripeRuntimeStatus || null')
+    expect(workspace).toContain('const stripeCredentialMeta = providerStatusMap.STRIPE?.credentialMeta || [];')
     expect(workspace).toContain('const stripeSavedCredentialEntries = useMemo(() => {')
     expect(workspace).toContain('void refreshProviderStatuses();')
     expect(workspace).toContain('Credentials saved securely. Secret values are encrypted and hidden.')
@@ -118,11 +120,7 @@ describe('settings compact flow', () => {
     expect(workspace).toContain('Store URL needs setup')
     expect(workspace).toContain('Show advanced options')
     expect(workspace).toContain('Hide advanced options')
-    expect(workspace).toContain('const stripeSavePayload = useMemo(() => {')
-    expect(workspace).toContain('publishableKey: publishableKey || undefined')
-    expect(workspace).toContain('secretKey: secretKey || undefined')
-    expect(workspace).toContain('webhookSecret: webhookSecret || undefined')
-    expect(workspace).toContain("mode: providerForms.STRIPE.mode")
+    expect(workspace).toContain('buildStripeCredentialSavePayload(providerForms.STRIPE)')
 
     const stripeRefreshCallCount = (workspace.match(/await refreshProviderStatuses\(\);/g) || []).length
     expect(stripeRefreshCallCount).toBeGreaterThanOrEqual(3)

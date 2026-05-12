@@ -15,13 +15,13 @@ Before writing code, read:
 5. `docs/CONTRIBUTING.md` — development rules and definition of done
 
 When working on specific areas:
-- Email observability: `docs/internal/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
-- Setup/CLI: `docs/internal/SETUP_AND_CLI_PLAN.md`
-- Shipping: `docs/internal/SHIPPING_SETUP_AND_LABELS_ROADMAP.md`
+- Email observability: `docs/archive/internal/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
+- Setup/CLI: `docs/archive/internal/SETUP_AND_CLI_PLAN.md`
+- Shipping: `docs/archive/internal/SHIPPING_SETUP_AND_LABELS_ROADMAP.md`
 
 If these files conflict, treat `docs/STATUS.md` as current state, `docs/features-roadmap.md` as the build sequence, and `docs/HARDENING.md` as the security/correctness backlog.
 
-Do not use files in `docs/archive/` or `docs/internal/` as current status — they are historical context.
+Do not use files in `docs/archive/` as current status — they are historical context.
 
 ## Current Repo Truth
 
@@ -182,4 +182,4 @@ When a shipped/pending/deferred status changes, update:
 
 Do not recreate `CLAUDE.md`, phase kickoff docs, or a duplicate phase-completion roadmap.
 
-Internal planning docs live in `docs/internal/`. Do not treat them as current status.
+Internal planning docs live in `docs/archive/internal/`. Do not treat them as current status.

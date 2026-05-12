@@ -13,7 +13,6 @@ The active documentation surface is now:
 - `docs/features-roadmap.md`
 - `docs/HARDENING.md`
 - `docs/CONTRIBUTING.md`
-- `docs/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
 - `docs/LAUNCH_ROLLOUT.md`
 
 Archived here:

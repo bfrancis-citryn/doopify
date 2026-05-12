@@ -80,6 +80,6 @@ Run this checklist at least quarterly against a disposable recovery target:
 
 ## Related Runbooks
 
-- `docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md`
+- `docs/deployment/checklist.md`
 - `docs/ADMIN_USER_RECOVERY_GUIDE.md`
 - `docs/SECRET_ROTATION_RUNBOOK.md`

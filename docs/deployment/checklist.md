@@ -8,8 +8,8 @@
 
 - [ ] Local verification gate is green (see Section 1)
 - [ ] Required production secrets are available
-- [ ] Neon project/branch is ready for production traffic (see `docs/NEON_SETUP_GUIDE.md`)
-- [ ] Stripe account and webhook endpoint are configured (see `docs/STRIPE_SETUP_GUIDE.md`)
+- [ ] Neon project/branch is ready for production traffic (see `docs/deployment/vercel.md`)
+- [ ] Stripe account and webhook endpoint are configured (see `docs/setup/stripe.md`)
 - [ ] Resend domain and webhook endpoint are configured, or email is intentionally skipped
 - [ ] At least one active product with a valid price and available inventory exists
 - [ ] Shipping is configured (manual rates or live provider)

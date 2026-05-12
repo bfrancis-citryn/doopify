@@ -23,7 +23,12 @@ import SettingsPageSkeleton from './SettingsSkeletons';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
-import { buildStripeMaskedCredentialMap, resolveMaskedInputPlaceholder } from './stripe-credential-masking.helpers';
+import {
+  buildStripeCredentialSavePayload,
+  buildStripeMaskedCredentialMap,
+  resolveStripeConnectionState,
+  resolveMaskedInputPlaceholder,
+} from './stripe-credential-masking.helpers';
 import { normalizeSettingsSessionUser } from './settings-session-user.helpers';
 import {
   getShippingHeaderSaveButtonState,
@@ -1486,16 +1491,16 @@ export default function SettingsWorkspace() {
     ],
     []
   );
-  const stripeCredentialMeta = stripeProviderStatus?.credentialMeta || [];
+  const stripeCredentialMeta = providerStatusMap.STRIPE?.credentialMeta || [];
   const stripeSavedCredentialMeta = stripeCredentialMeta.filter((entry) => entry.present);
   const stripeCredentialMaskMap = useMemo(
     () =>
       buildStripeMaskedCredentialMap({
         credentialMeta: stripeSavedCredentialMeta,
-        runtimeProviderStatus: stripeRuntimeStatus?.providerStatus || null,
+        runtimeStatus: stripeRuntimeStatus || null,
         runtimeMode: stripeRuntimeStatus?.mode || null,
       }),
-    [stripeRuntimeStatus?.mode, stripeRuntimeStatus?.providerStatus, stripeSavedCredentialMeta]
+    [providerStatusMap.STRIPE?.credentialMeta, stripeRuntimeStatus]
   );
   const stripeSavedCredentialEntries = useMemo(() => {
     const entries = [];
@@ -1550,16 +1555,7 @@ export default function SettingsWorkspace() {
     stripeCredentialMaskMap.PUBLISHABLE_KEY && stripeCredentialMaskMap.SECRET_KEY
   );
   const stripeSavePayload = useMemo(() => {
-    const publishableKey = providerForms.STRIPE.publishableKey.trim();
-    const secretKey = providerForms.STRIPE.secretKey.trim();
-    const webhookSecret = providerForms.STRIPE.webhookSecret.trim();
-
-    return {
-      publishableKey: publishableKey || undefined,
-      secretKey: secretKey || undefined,
-      webhookSecret: webhookSecret || undefined,
-      mode: providerForms.STRIPE.mode,
-    };
+    return buildStripeCredentialSavePayload(providerForms.STRIPE);
   }, [
     providerForms.STRIPE.mode,
     providerForms.STRIPE.publishableKey,
@@ -1567,11 +1563,10 @@ export default function SettingsWorkspace() {
     providerForms.STRIPE.webhookSecret,
   ]);
   const stripeConnectionPresentation = useMemo(() => {
-    const rawState = stripeProviderStatus?.state || (stripeHasSavedRequiredKeys ? 'CREDENTIALS_SAVED' : 'NOT_CONFIGURED');
-    const state =
-      stripeHasSavedRequiredKeys && rawState === 'NOT_CONFIGURED'
-        ? 'CREDENTIALS_SAVED'
-        : rawState;
+    const state = resolveStripeConnectionState({
+      providerState: stripeProviderStatus?.state || null,
+      credentialMaskMap: stripeCredentialMaskMap,
+    });
 
     if (state === 'VERIFIED') {
       return {
@@ -1606,7 +1601,7 @@ export default function SettingsWorkspace() {
       badgeTone: 'warning',
       copy: 'Save your Stripe API credentials to configure checkout.',
     };
-  }, [stripeHasSavedRequiredKeys, stripeProviderStatus?.lastError, stripeProviderStatus?.state]);
+  }, [stripeCredentialMaskMap, stripeProviderStatus?.lastError, stripeProviderStatus?.state]);
   const stripeConnectionSummaryRows = useMemo(
     () => [
       { label: 'Status', value: stripeConnectionPresentation.badgeLabel },

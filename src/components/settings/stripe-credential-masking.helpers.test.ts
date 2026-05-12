@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildStripeCredentialSavePayload,
   buildMaskedCredentialMap,
   buildStripeMaskedCredentialMap,
+  resolveStripeConnectionState,
   resolveMaskedInputPlaceholder,
 } from './stripe-credential-masking.helpers'
 
@@ -96,5 +98,70 @@ describe('stripe credential masking helpers', () => {
     expect(reopenMap.PUBLISHABLE_KEY).toBe(firstOpenMap.PUBLISHABLE_KEY)
     expect(reopenMap.SECRET_KEY).toBe(firstOpenMap.SECRET_KEY)
     expect(reopenMap.MODE).toBe('test')
+  })
+
+  it('hydrates from runtime status snapshots when nested provider status is returned', () => {
+    const map = buildStripeMaskedCredentialMap({
+      credentialMeta: [],
+      runtimeStatus: {
+        mode: 'live',
+        providerStatus: {
+          publishableKeyMasked: 'pk_live_******1234',
+          secretKeyMasked: 'sk_live_******5678',
+          webhookSecretMasked: 'whsec_******9012',
+        },
+      },
+    })
+
+    expect(map).toEqual({
+      PUBLISHABLE_KEY: 'pk_live_******1234',
+      SECRET_KEY: 'sk_live_******5678',
+      WEBHOOK_SECRET: 'whsec_******9012',
+      MODE: 'live',
+    })
+  })
+
+  it('builds Stripe save payloads without sending empty unchanged fields', () => {
+    const payload = buildStripeCredentialSavePayload({
+      publishableKey: '',
+      secretKey: '   ',
+      webhookSecret: '',
+      mode: 'test',
+    })
+
+    expect(payload).toEqual({
+      publishableKey: undefined,
+      secretKey: undefined,
+      webhookSecret: undefined,
+      mode: 'test',
+    })
+  })
+
+  it('normalizes Stripe mode to test/live only for save payloads', () => {
+    const payload = buildStripeCredentialSavePayload({
+      publishableKey: 'pk_live_new_1234',
+      secretKey: 'sk_live_new_5678',
+      webhookSecret: 'whsec_new_9012',
+      mode: 'LIVE',
+    })
+
+    expect(payload).toEqual({
+      publishableKey: 'pk_live_new_1234',
+      secretKey: 'sk_live_new_5678',
+      webhookSecret: 'whsec_new_9012',
+      mode: 'live',
+    })
+  })
+
+  it('does not keep Stripe in NOT_CONFIGURED when saved masked API keys are present', () => {
+    const state = resolveStripeConnectionState({
+      providerState: 'NOT_CONFIGURED',
+      credentialMaskMap: {
+        PUBLISHABLE_KEY: 'pk_test_******1234',
+        SECRET_KEY: 'sk_test_******5678',
+      },
+    })
+
+    expect(state).toBe('CREDENTIALS_SAVED')
   })
 })

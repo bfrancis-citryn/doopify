@@ -6,12 +6,12 @@
 
 ## Core Runbooks
 
-- `docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md`
+- `docs/deployment/checklist.md`
 - `docs/ENVIRONMENT_VARIABLE_REFERENCE.md`
-- `docs/WEBHOOK_CONFIGURATION_GUIDE.md`
-- `docs/STRIPE_SETUP_GUIDE.md`
-- `docs/RESEND_SETUP_GUIDE.md`
-- `docs/NEON_SETUP_GUIDE.md`
+- `docs/setup/stripe.md`
+- `docs/setup/email.md`
+- `docs/deployment/vercel.md`
+- `docs/troubleshooting.md`
 - `docs/BACKUP_AND_RESTORE.md`
 - `docs/ADMIN_USER_RECOVERY_GUIDE.md`
 
