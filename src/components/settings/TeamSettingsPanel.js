@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminButton from '../admin/ui/AdminButton';
 import AdminCard from '../admin/ui/AdminCard';
 import AdminDrawer from '../admin/ui/AdminDrawer';
+import AdminDropdown from '../admin/ui/AdminDropdown';
 import AdminField from '../admin/ui/AdminField';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminSelect from '../admin/ui/AdminSelect';
@@ -42,6 +43,31 @@ function formatDate(dateStr) {
   }
 }
 
+function getUserDisplayName(user) {
+  return user.firstName || user.lastName
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+    : user.email;
+}
+
+function initialsFromText(text) {
+  if (!text) return '?';
+  const parts = text
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return parts[0][0].toUpperCase();
+}
+
+function getUserInitials(user) {
+  return initialsFromText(getUserDisplayName(user));
+}
+
+function getInviteInitials(email) {
+  return initialsFromText(email);
+}
+
 function parseTeamApiError(response, payload, fallbackMessage) {
   const apiError = typeof payload?.error === 'string' ? payload.error.trim() : '';
   if (apiError) return apiError;
@@ -65,15 +91,25 @@ export default function TeamSettingsPanel({ currentUserRole }) {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState('invite'); // invite | create
-  const [drawerForm, setDrawerForm] = useState({ email: '', role: 'STAFF', firstName: '', lastName: '', password: '', confirmPassword: '' });
+  const [drawerForm, setDrawerForm] = useState({
+    email: '',
+    role: 'STAFF',
+    firstName: '',
+    lastName: '',
+    password: '',
+    confirmPassword: '',
+  });
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerError, setDrawerError] = useState('');
   const [drawerNotice, setDrawerNotice] = useState('');
 
   const [actionLoading, setActionLoading] = useState({});
   const [actionError, setActionError] = useState({});
+  const [actionNotice, setActionNotice] = useState({});
   const [editRoleUserId, setEditRoleUserId] = useState('');
   const [editRoleValue, setEditRoleValue] = useState('STAFF');
+  const [openUserMenuId, setOpenUserMenuId] = useState('');
+  const [openInviteMenuId, setOpenInviteMenuId] = useState('');
 
   const loadTeam = useCallback(async () => {
     if (!currentUserRole) {
@@ -211,6 +247,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
   const patchUser = async (userId, action, extra = {}) => {
     setActionLoading((s) => ({ ...s, [userId]: true }));
     setActionError((s) => ({ ...s, [userId]: '' }));
+    setActionNotice((s) => ({ ...s, [userId]: '' }));
     try {
       const res = await fetch(`/api/team/users/${userId}`, {
         method: 'PATCH',
@@ -226,6 +263,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         return;
       }
       setEditRoleUserId('');
+      setOpenUserMenuId('');
       await loadTeam();
     } catch {
       setActionError((s) => ({ ...s, [userId]: 'An error occurred.' }));
@@ -234,13 +272,83 @@ export default function TeamSettingsPanel({ currentUserRole }) {
     }
   };
 
-  const revokeInvite = async (inviteId) => {
-    setActionLoading((s) => ({ ...s, [inviteId]: true }));
+  const requestPasswordResetLink = async (userId, email) => {
+    setActionLoading((s) => ({ ...s, [userId]: true }));
+    setActionError((s) => ({ ...s, [userId]: '' }));
+    setActionNotice((s) => ({ ...s, [userId]: '' }));
     try {
-      await fetch(`/api/team/invites/${inviteId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/team/users/${userId}/reset-password`, { method: 'POST' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError((s) => ({
+          ...s,
+          [userId]: parseTeamApiError(res, payload, 'Failed to generate password reset link.'),
+        }));
+        return;
+      }
+
+      const token = payload?.data?.resetToken;
+      const resetUrl = `${window.location.origin}/reset-password?token=${token}`;
+      setActionNotice((s) => ({ ...s, [userId]: `Password reset link for ${email}:\n${resetUrl}` }));
+    } catch {
+      setActionError((s) => ({ ...s, [userId]: 'An error occurred.' }));
+    } finally {
+      setActionLoading((s) => ({ ...s, [userId]: false }));
+    }
+  };
+
+  const revokeUserSessionsAction = async (userId, email) => {
+    if (!window.confirm(`Revoke all active sessions for ${email}?`)) return;
+
+    setActionLoading((s) => ({ ...s, [userId]: true }));
+    setActionError((s) => ({ ...s, [userId]: '' }));
+    setActionNotice((s) => ({ ...s, [userId]: '' }));
+    try {
+      const res = await fetch(`/api/team/users/${userId}/sessions`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError((s) => ({
+          ...s,
+          [userId]: parseTeamApiError(res, payload, 'Failed to revoke sessions.'),
+        }));
+        return;
+      }
+
+      const revokedCount = Number(payload?.data?.revoked || 0);
+      setActionNotice((s) => ({
+        ...s,
+        [userId]: revokedCount > 0
+          ? `Revoked ${revokedCount} session(s) for ${email}.`
+          : `No active sessions found for ${email}.`,
+      }));
+    } catch {
+      setActionError((s) => ({ ...s, [userId]: 'An error occurred.' }));
+    } finally {
+      setActionLoading((s) => ({ ...s, [userId]: false }));
+    }
+  };
+
+  const revokeInvite = async (inviteId, email) => {
+    if (!window.confirm(`Revoke invite for ${email}?`)) return;
+
+    setActionLoading((s) => ({ ...s, [inviteId]: true }));
+    setActionError((s) => ({ ...s, [inviteId]: '' }));
+    setActionNotice((s) => ({ ...s, [inviteId]: '' }));
+    try {
+      const res = await fetch(`/api/team/invites/${inviteId}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError((s) => ({
+          ...s,
+          [inviteId]: parseTeamApiError(res, payload, 'Failed to revoke invite.'),
+        }));
+        return;
+      }
+
+      setOpenInviteMenuId('');
       await loadTeam();
     } catch {
-      // silent
+      setActionError((s) => ({ ...s, [inviteId]: 'An error occurred.' }));
     } finally {
       setActionLoading((s) => ({ ...s, [inviteId]: false }));
     }
@@ -249,6 +357,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
   const resendInvite = async (inviteId, email) => {
     setActionLoading((s) => ({ ...s, [inviteId]: true }));
     setActionError((s) => ({ ...s, [inviteId]: '' }));
+    setActionNotice((s) => ({ ...s, [inviteId]: '' }));
     try {
       const res = await fetch(`/api/team/invites/${inviteId}/resend`, { method: 'POST' });
       const payload = await res.json().catch(() => ({}));
@@ -259,9 +368,11 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         }));
         return;
       }
+
       const token = payload?.data?.inviteToken;
       const inviteUrl = `${window.location.origin}/join?token=${token}`;
-      alert(`New invite link for ${email}:\n${inviteUrl}`);
+      setActionNotice((s) => ({ ...s, [inviteId]: `New invite link for ${email}:\n${inviteUrl}` }));
+      setOpenInviteMenuId('');
       await loadTeam();
     } catch {
       setActionError((s) => ({ ...s, [inviteId]: 'An error occurred.' }));
@@ -269,6 +380,8 @@ export default function TeamSettingsPanel({ currentUserRole }) {
       setActionLoading((s) => ({ ...s, [inviteId]: false }));
     }
   };
+
+  const activeOwnerCount = users.filter((user) => user.role === 'OWNER' && user.isActive).length;
 
   return (
     <div className={styles.configStack}>
@@ -312,7 +425,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
 
       {error ? (
         <AdminCard variant="card" className={styles.compactSettingsCard}>
-          <p className={styles.statusText} style={{ color: 'var(--color-danger, #e55)' }}>{error}</p>
+          <p className={`${styles.statusText} ${styles.teamRowError}`}>{error}</p>
         </AdminCard>
       ) : null}
 
@@ -322,7 +435,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
             <div className={styles.sectionHeading}>
               <h3>Team members</h3>
               {isOwner ? (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className={styles.teamHeaderActions}>
                   <AdminButton size="sm" variant="secondary" onClick={openInviteDrawer}>Invite member</AdminButton>
                   <AdminButton size="sm" variant="ghost" onClick={openCreateDrawer}>Create directly</AdminButton>
                 </div>
@@ -336,31 +449,105 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                 </p>
               </AdminCard>
             ) : (
-              users.map((user) => (
-                <AdminCard key={user.id} variant="inset" className={styles.brandRow} spotlight>
-                  <div className={styles.rowMeta}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <h4 style={{ margin: 0 }}>
-                        {user.firstName || user.lastName
-                          ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                          : user.email}
-                      </h4>
-                      <AdminStatusChip tone={roleChipTone(user.role)}>{user.role}</AdminStatusChip>
-                      {!user.isActive ? <AdminStatusChip tone="danger">Disabled</AdminStatusChip> : null}
-                    </div>
-                    <p className={styles.compactMeta}>{user.email}</p>
-                    <p className={styles.compactMeta}>Last login: {formatDate(user.lastLoginAt)}</p>
-                    {actionError[user.id] ? (
-                      <p style={{ color: 'var(--color-danger, #e55)', fontSize: 13, marginTop: 4 }}>
-                        {actionError[user.id]}
-                      </p>
-                    ) : null}
-                  </div>
+              users.map((user) => {
+                const isOnlyActiveOwner = user.role === 'OWNER' && user.isActive && activeOwnerCount <= 1;
 
-                  {isOwner ? (
-                    <div className={styles.rowInputs} style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-                      {editRoleUserId === user.id ? (
-                        <div style={{ display: 'flex', gap: 6 }}>
+                return (
+                  <AdminCard key={user.id} variant="inset" className={`${styles.brandRow} ${styles.teamRowCard}`} spotlight>
+                    <div className={styles.teamRowLayout}>
+                      <div className={styles.teamAvatar} aria-hidden="true">{getUserInitials(user)}</div>
+
+                      <div className={styles.teamRowContent}>
+                        <div className={styles.teamNameLine}>
+                          <h4 className={styles.teamName}>{getUserDisplayName(user)}</h4>
+                          <div className={styles.teamChipRow}>
+                            <AdminStatusChip tone={roleChipTone(user.role)}>{user.role}</AdminStatusChip>
+                            {!user.isActive ? <AdminStatusChip tone="danger">Disabled</AdminStatusChip> : null}
+                          </div>
+                        </div>
+                        <p className={styles.compactMeta}>{user.email}</p>
+                        <p className={styles.compactMeta}>Last login: {formatDate(user.lastLoginAt)}</p>
+                        {isOnlyActiveOwner ? (
+                          <p className={styles.teamOwnerGuardHint}>Add another active owner before disabling this account.</p>
+                        ) : null}
+                        {actionError[user.id] ? <p className={styles.teamRowError}>{actionError[user.id]}</p> : null}
+                        {actionNotice[user.id] ? <p className={styles.teamRowNotice}>{actionNotice[user.id]}</p> : null}
+                      </div>
+
+                      {isOwner ? (
+                        <div className={styles.teamRowActions}>
+                          <AdminDropdown
+                            align="end"
+                            open={openUserMenuId === user.id}
+                            onOpenChange={(open) => setOpenUserMenuId(open ? user.id : '')}
+                            trigger={(
+                              <AdminButton
+                                size="sm"
+                                variant="secondary"
+                                aria-label={`Manage ${user.email}`}
+                                disabled={actionLoading[user.id]}
+                              >
+                                Manage
+                              </AdminButton>
+                            )}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditRoleUserId(user.id);
+                                setEditRoleValue(user.role);
+                                setActionError((s) => ({ ...s, [user.id]: '' }));
+                              }}
+                            >
+                              Change role
+                            </button>
+                            {user.isActive ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => requestPasswordResetLink(user.id, user.email)}
+                                  disabled={actionLoading[user.id]}
+                                >
+                                  {actionLoading[user.id] ? 'Generating reset link...' : 'Reset password'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => revokeUserSessionsAction(user.id, user.email)}
+                                  disabled={actionLoading[user.id]}
+                                >
+                                  {actionLoading[user.id] ? 'Revoking sessions...' : 'Revoke sessions'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className={isOnlyActiveOwner ? styles.teamMenuItemDisabled : styles.teamMenuItemDanger}
+                                  disabled={isOnlyActiveOwner || actionLoading[user.id]}
+                                  onClick={() => {
+                                    if (!window.confirm(`Disable ${user.email}? They will be signed out immediately.`)) return;
+                                    patchUser(user.id, 'disable');
+                                  }}
+                                >
+                                  {actionLoading[user.id] ? 'Disabling...' : 'Disable user'}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => patchUser(user.id, 'reactivate')}
+                                disabled={actionLoading[user.id]}
+                              >
+                                {actionLoading[user.id] ? 'Reactivating...' : 'Reactivate user'}
+                              </button>
+                            )}
+                          </AdminDropdown>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {isOwner && editRoleUserId === user.id ? (
+                      <div className={styles.teamRoleEditor}>
+                        <p className={styles.teamRoleEditorTitle}>Change role</p>
+                        <p className={styles.compactMeta}>Current role: {user.role}</p>
+                        <div className={styles.teamRoleEditorControls}>
                           <AdminSelect
                             value={editRoleValue}
                             onChange={(value) => setEditRoleValue(value)}
@@ -374,48 +561,20 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                           >
                             Save
                           </AdminButton>
-                          <AdminButton size="sm" variant="ghost" onClick={() => setEditRoleUserId('')}>Cancel</AdminButton>
+                          <AdminButton
+                            size="sm"
+                            variant="ghost"
+                            disabled={actionLoading[user.id]}
+                            onClick={() => setEditRoleUserId('')}
+                          >
+                            Cancel
+                          </AdminButton>
                         </div>
-                      ) : (
-                        <AdminButton
-                          size="sm"
-                          variant="ghost"
-                          disabled={actionLoading[user.id]}
-                          onClick={() => {
-                            setEditRoleUserId(user.id);
-                            setEditRoleValue(user.role);
-                          }}
-                        >
-                          Change role
-                        </AdminButton>
-                      )}
-
-                      {user.isActive ? (
-                        <AdminButton
-                          size="sm"
-                          variant="ghost"
-                          disabled={actionLoading[user.id]}
-                          onClick={() => {
-                            if (!window.confirm(`Disable ${user.email}? They will be signed out immediately.`)) return;
-                            patchUser(user.id, 'disable');
-                          }}
-                        >
-                          {actionLoading[user.id] ? 'Disabling…' : 'Disable'}
-                        </AdminButton>
-                      ) : (
-                        <AdminButton
-                          size="sm"
-                          variant="secondary"
-                          disabled={actionLoading[user.id]}
-                          onClick={() => patchUser(user.id, 'reactivate')}
-                        >
-                          {actionLoading[user.id] ? 'Reactivating…' : 'Reactivate'}
-                        </AdminButton>
-                      )}
-                    </div>
-                  ) : null}
-                </AdminCard>
-              ))
+                      </div>
+                    ) : null}
+                  </AdminCard>
+                );
+              })
             )}
           </section>
 
@@ -432,33 +591,53 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                 </AdminCard>
               ) : (
                 invites.map((invite) => (
-                  <AdminCard key={invite.id} variant="inset" className={styles.brandRow} spotlight>
-                    <div className={styles.rowMeta}>
-                      <h4 style={{ margin: 0 }}>{invite.email}</h4>
-                      <p className={styles.compactMeta}>Role: {invite.role} · Expires: {formatDate(invite.expiresAt)}</p>
-                      {actionError[invite.id] ? (
-                        <p style={{ color: 'var(--color-danger, #e55)', fontSize: 13, marginTop: 4 }}>
-                          {actionError[invite.id]}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <AdminButton
-                        size="sm"
-                        variant="secondary"
-                        disabled={actionLoading[invite.id]}
-                        onClick={() => resendInvite(invite.id, invite.email)}
-                      >
-                        Resend
-                      </AdminButton>
-                      <AdminButton
-                        size="sm"
-                        variant="ghost"
-                        disabled={actionLoading[invite.id]}
-                        onClick={() => revokeInvite(invite.id)}
-                      >
-                        Revoke
-                      </AdminButton>
+                  <AdminCard key={invite.id} variant="inset" className={`${styles.brandRow} ${styles.teamRowCard}`} spotlight>
+                    <div className={styles.teamRowLayout}>
+                      <div className={styles.teamAvatar} aria-hidden="true">{getInviteInitials(invite.email)}</div>
+                      <div className={styles.teamRowContent}>
+                        <div className={styles.teamNameLine}>
+                          <h4 className={styles.teamName}>{invite.email}</h4>
+                          <div className={styles.teamChipRow}>
+                            <AdminStatusChip tone={roleChipTone(invite.role)}>{invite.role}</AdminStatusChip>
+                          </div>
+                        </div>
+                        <p className={styles.compactMeta}>Expires: {formatDate(invite.expiresAt)}</p>
+                        {actionError[invite.id] ? <p className={styles.teamRowError}>{actionError[invite.id]}</p> : null}
+                        {actionNotice[invite.id] ? <p className={styles.teamRowNotice}>{actionNotice[invite.id]}</p> : null}
+                      </div>
+                      <div className={styles.teamRowActions}>
+                        <AdminDropdown
+                          align="end"
+                          open={openInviteMenuId === invite.id}
+                          onOpenChange={(open) => setOpenInviteMenuId(open ? invite.id : '')}
+                          trigger={(
+                            <AdminButton
+                              size="sm"
+                              variant="secondary"
+                              aria-label={`Manage invite ${invite.email}`}
+                              disabled={actionLoading[invite.id]}
+                            >
+                              Manage
+                            </AdminButton>
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => resendInvite(invite.id, invite.email)}
+                            disabled={actionLoading[invite.id]}
+                          >
+                            {actionLoading[invite.id] ? 'Resending...' : 'Resend'}
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.teamMenuItemDanger}
+                            onClick={() => revokeInvite(invite.id, invite.email)}
+                            disabled={actionLoading[invite.id]}
+                          >
+                            Revoke
+                          </button>
+                        </AdminDropdown>
+                      </div>
                     </div>
                   </AdminCard>
                 ))
@@ -496,7 +675,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                   onChange={(value) => setDrawerField('role', value)}
                   options={ROLE_OPTIONS}
                 />
-                <p className={styles.compactMeta} style={{ marginTop: 4 }}>
+                <p className={`${styles.compactMeta} ${styles.teamHintTop}`}>
                   {ROLE_DESCRIPTIONS[drawerForm.role]}
                 </p>
               </AdminField>
@@ -538,21 +717,21 @@ export default function TeamSettingsPanel({ currentUserRole }) {
             </div>
 
             {drawerError ? (
-              <p style={{ color: 'var(--color-danger, #e55)', fontSize: 13, marginTop: 8 }}>{drawerError}</p>
+              <p className={styles.teamDrawerError}>{drawerError}</p>
             ) : null}
 
             {drawerNotice ? (
-              <p style={{ color: 'var(--color-success, #4c8)', fontSize: 13, marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{drawerNotice}</p>
+              <p className={styles.teamDrawerNotice}>{drawerNotice}</p>
             ) : null}
 
-            <div className={styles.compactActionRow} style={{ marginTop: 16 }}>
+            <div className={`${styles.compactActionRow} ${styles.teamDrawerActions}`}>
               <AdminButton
                 variant="primary"
                 disabled={drawerLoading || !drawerForm.email}
                 onClick={handleDrawerSubmit}
               >
                 {drawerLoading
-                  ? drawerMode === 'invite' ? 'Sending…' : 'Creating…'
+                  ? drawerMode === 'invite' ? 'Sending...' : 'Creating...'
                   : drawerMode === 'invite' ? 'Send invite' : 'Create account'}
               </AdminButton>
               <AdminButton variant="ghost" disabled={drawerLoading} onClick={closeDrawer}>
@@ -564,7 +743,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
           {drawerMode === 'invite' ? (
             <div className={styles.compactInfoStrip}>
               <p className={styles.compactInfoStripTitle}>About invite links</p>
-              <p>Invite links are single-use, expire after 7 days, and are stored hashed. Share the generated link securely with the invitee — it is not sent by email automatically.</p>
+              <p>Invite links are single-use, expire after 7 days, and are stored hashed. Share the generated link securely with the invitee - it is not sent by email automatically.</p>
             </div>
           ) : (
             <div className={styles.compactInfoStrip}>
@@ -577,4 +756,3 @@ export default function TeamSettingsPanel({ currentUserRole }) {
     </div>
   );
 }
-

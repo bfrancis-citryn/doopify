@@ -1190,6 +1190,148 @@
   align-items: center;
 }
 
+.teamHeaderActions {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.teamRowCard {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.teamRowLayout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.62rem;
+  align-items: start;
+}
+
+.teamAvatar {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-container-high) 68%, transparent);
+  color: var(--on-surface);
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.teamRowContent {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.teamNameLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.teamName {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--on-surface);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.teamChipRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  flex-wrap: wrap;
+}
+
+.teamRowActions {
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.teamRowError {
+  margin: 0.12rem 0 0;
+  color: var(--error);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.teamRowNotice {
+  margin: 0.12rem 0 0;
+  color: var(--emerald-500);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.teamOwnerGuardHint {
+  margin: 0.12rem 0 0;
+  color: var(--amber-500);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.teamRoleEditor {
+  border-top: 1px solid var(--glass-border);
+  padding-top: 0.56rem;
+  display: grid;
+  gap: 0.34rem;
+}
+
+.teamRoleEditorTitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--on-surface);
+  font-weight: 720;
+}
+
+.teamRoleEditorControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.teamMenuItemDanger {
+  color: var(--error) !important;
+}
+
+.teamMenuItemDisabled {
+  color: var(--on-surface-variant) !important;
+}
+
+.teamHintTop {
+  margin-top: 0.25rem;
+}
+
+.teamDrawerError {
+  margin: 0.5rem 0 0;
+  color: var(--error);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.teamDrawerNotice {
+  margin: 0.5rem 0 0;
+  color: var(--emerald-500);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.teamDrawerActions {
+  margin-top: 1rem;
+}
+
 @media (max-width: 640px) {
   .statusSummaryRow {
     flex-direction: column;
@@ -1203,6 +1345,19 @@
   .savedCredentialRow {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .teamRowLayout {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .teamRowActions {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .teamRoleEditorControls {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

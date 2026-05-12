@@ -101,6 +101,9 @@
 .cardTiltWrap {
   position: relative;
   width: 100%;
+  border-radius: 1.9rem;
+  overflow: hidden;
+  isolation: isolate;
   transform-style: preserve-3d;
   transform: perspective(1600px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y));
   transition: transform 160ms ease;
@@ -130,14 +133,14 @@
 }
 
 .cardGlowRing {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 22px 70px rgba(0, 0, 0, 0.46), 0 0 24px rgba(178, 132, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 22px 70px rgba(0, 0, 0, 0.46), 0 0 24px rgba(178, 132, 255, 0.08);
 }
 
 .cardBeamTop,
 .cardBeamBottom {
   height: 2px;
   width: 38%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  background: linear-gradient(90deg, transparent, rgb(255, 255, 255), transparent);
   filter: blur(0.8px);
 }
 

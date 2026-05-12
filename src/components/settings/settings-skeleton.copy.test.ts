@@ -10,7 +10,8 @@ describe('settings skeleton integration', () => {
   it('uses shared settings skeleton primitives in workspace', () => {
     const source = read('src/components/settings/SettingsWorkspace.js')
 
-    expect(source).toContain("import SettingsPageSkeleton from './SettingsSkeletons'")
+    expect(source).toContain("import SettingsPageSkeleton")
+    expect(source).toContain("from './SettingsSkeletons'")
     expect(source).toContain('isSettingsTabLoadingState')
     expect(source).toContain('activeTabLoading')
     expect(source).toContain('<SettingsPageSkeleton section={activeSection} />')
@@ -31,6 +32,14 @@ describe('settings skeleton integration', () => {
     const source = read('src/components/settings/TeamSettingsPanel.js')
     expect(source).toContain('<SettingsPageSkeleton section="team" />')
     expect(source).not.toContain('Loading team')
+  })
+
+  it('uses an initial payments skeleton while provider runtime status hydrates', () => {
+    const source = read('src/components/settings/SettingsWorkspace.js')
+    expect(source).toContain('showPaymentsInitialProviderSkeleton')
+    expect(source).toContain('<SettingsCardSkeleton actions={1} chips={3} rows={3} />')
+    expect(source).toContain('Refreshing provider statuses...')
+    expect(source).not.toContain('Loading provider statuses...')
   })
 
   it('uses webhooks skeleton in integrations panel loading states', () => {

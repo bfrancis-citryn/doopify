@@ -19,7 +19,7 @@ import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminTextarea from '../admin/ui/AdminTextarea';
 import AdminTooltip from '../admin/ui/AdminTooltip';
-import SettingsPageSkeleton from './SettingsSkeletons';
+import SettingsPageSkeleton, { SettingsCardSkeleton } from './SettingsSkeletons';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
@@ -2332,6 +2332,8 @@ export default function SettingsWorkspace() {
   const activeSavedAgoText = activeSection === 'shipping' ? shippingModeSavedAgoText : savedAgoText;
   const activeSavedErrorCopy =
     activeSection === 'shipping' ? shippingModeSaveError : activeSection === 'brand-kit' ? brandKitError : '';
+  const showPaymentsInitialProviderSkeleton =
+    activeSection === 'payments' && !providerStatusLoaded && !providerStatusError;
 
   const showHeaderSaveButton = activeSection === 'brand-kit' || activeSection === 'shipping';
   const activeTabLoading = isSettingsTabLoadingState({
@@ -3362,25 +3364,33 @@ export default function SettingsWorkspace() {
                     </p>
                   </div>
                 </section>
-                {providerStatusError ? (
+                {showPaymentsInitialProviderSkeleton ? (
+                  <section className={styles.configSection}>
+                    <SettingsCardSkeleton actions={1} chips={3} rows={3} />
+                    <SettingsCardSkeleton actions={0} rows={2} />
+                    <SettingsCardSkeleton actions={0} rows={3} />
+                  </section>
+                ) : null}
+                {!showPaymentsInitialProviderSkeleton && providerStatusError ? (
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>Provider action error</p>
                     <p className={styles.statusText}>{providerStatusError}</p>
                   </div>
                 ) : null}
-                {providerNotice ? (
+                {!showPaymentsInitialProviderSkeleton && providerNotice ? (
                   <div className={styles.statusBlock}>
                     <p className={styles.statusTitle}>Provider update</p>
                     <p className={styles.statusText}>{providerNotice}</p>
                   </div>
                 ) : null}
-                {providerStatusLoading ? (
+                {!showPaymentsInitialProviderSkeleton && providerStatusLoading ? (
                   <div className={styles.statusBlock}>
-                    <p className={styles.statusText}>Loading provider statuses...</p>
+                    <p className={styles.statusText}>Refreshing provider statuses...</p>
                   </div>
                 ) : null}
 
-                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                {!showPaymentsInitialProviderSkeleton ? (
+                  <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
                   <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Payment providers</h4>
                     <AdminTooltip content="Provider credentials are managed in drawers to keep this page compact and secret-safe." />
@@ -3429,9 +3439,11 @@ export default function SettingsWorkspace() {
                       </article>
                     ))}
                   </div>
-                </AdminCard>
+                  </AdminCard>
+                ) : null}
 
-                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                {!showPaymentsInitialProviderSkeleton ? (
+                  <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
                   <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Customer checkout methods</h4>
                     <AdminTooltip content="Method labels are derived from real runtime status and never claim unsupported behavior." />
@@ -3448,9 +3460,11 @@ export default function SettingsWorkspace() {
                       </article>
                     ))}
                   </div>
-                </AdminCard>
+                  </AdminCard>
+                ) : null}
 
-                <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
+                {!showPaymentsInitialProviderSkeleton ? (
+                  <AdminCard as="section" className={`${styles.paymentSectionCard} ${styles.compactSettingsCard}`} variant="card">
                   <div className={`${styles.setupCardHeader} ${styles.compactSectionHeader}`}>
                     <h4>Payment activity</h4>
                     <AdminTooltip content="Rows currently come from order payment records. Refund timeline enrichment will follow with a dedicated activity API." />
@@ -3470,7 +3484,8 @@ export default function SettingsWorkspace() {
                       title="No payment activity yet"
                     />
                   )}
-                </AdminCard>
+                  </AdminCard>
+                ) : null}
               </div>
             ) : null}
 
