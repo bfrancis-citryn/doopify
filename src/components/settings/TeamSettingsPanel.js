@@ -363,7 +363,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                         <div style={{ display: 'flex', gap: 6 }}>
                           <AdminSelect
                             value={editRoleValue}
-                            onChange={(e) => setEditRoleValue(e.target.value)}
+                            onChange={(value) => setEditRoleValue(value)}
                             options={ROLE_OPTIONS}
                           />
                           <AdminButton
@@ -493,7 +493,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
               <AdminField label="Role">
                 <AdminSelect
                   value={drawerForm.role}
-                  onChange={(e) => setDrawerField('role', e.target.value)}
+                  onChange={(value) => setDrawerField('role', value)}
                   options={ROLE_OPTIONS}
                 />
                 <p className={styles.compactMeta} style={{ marginTop: 4 }}>
