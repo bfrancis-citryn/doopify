@@ -1,6 +1,7 @@
 > **⚠ STALE ARCHIVE — DO NOT USE**
 >
-> This is the old lowercase `phase-3-kickoff.md` from `docs/`. The canonical file is `PHASE_3_KICKOFF.md` at the repo root.
+> This is the old lowercase `phase-3-kickoff.md` from `docs/`.
+> Use `docs/STATUS.md`, `docs/features-roadmap.md`, and `docs/HARDENING.md` for current truth.
 > This version predates checkout-native discounts, persisted shipping/tax config, webhook replay and retry tooling,
 > the admin webhooks workspace, and the full real-DB integration spec suite.
 

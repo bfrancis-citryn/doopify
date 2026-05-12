@@ -9,8 +9,9 @@ Thank you for contributing to Doopify.
 Read in order:
 
 1. [docs/STATUS.md](./docs/STATUS.md) — what is currently shipped and active
-2. [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) — full development rules and definition of done
-3. [AGENTS.md](./AGENTS.md) — architecture constraints and agent rules
+2. [docs/features-roadmap.md](./docs/features-roadmap.md) — build sequencing and phase priorities
+3. [docs/HARDENING.md](./docs/HARDENING.md) — security/correctness expectations
+4. [AGENTS.md](./AGENTS.md) — architecture constraints and agent rules
 
 ---
 
@@ -64,5 +65,3 @@ When a shipped/pending/deferred status changes, update:
 - `docs/features-roadmap.md`
 - `docs/HARDENING.md` if security/correctness/ops changed
 - `README.md` if onboarding changed
-
-See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) for the full development guide.

@@ -8,20 +8,16 @@ Documentation refresh: May 5, 2026
 
 Before writing code, read:
 
-1. `docs/STATUS.md` — current shipped, active, and pending status
-2. `docs/PROJECT_INTENT.md` — product intent, architecture principles, and non-goals
-3. `docs/features-roadmap.md` — product phases and build sequencing
-4. `docs/HARDENING.md` — security, correctness, and operational readiness
-5. `docs/CONTRIBUTING.md` — development rules and definition of done
-
-When working on specific areas:
-- Email observability: `docs/archive/internal/TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md`
-- Setup/CLI: `docs/archive/internal/SETUP_AND_CLI_PLAN.md`
-- Shipping: `docs/archive/internal/SHIPPING_SETUP_AND_LABELS_ROADMAP.md`
+1. `docs/STATUS.md` - current shipped, active, and pending status
+2. `docs/PROJECT_INTENT.md` - product intent, architecture principles, and non-goals
+3. `docs/features-roadmap.md` - product phases and build sequencing
+4. `docs/HARDENING.md` - security, correctness, and operational readiness
+5. `CONTRIBUTING.md` - development rules and definition of done
 
 If these files conflict, treat `docs/STATUS.md` as current state, `docs/features-roadmap.md` as the build sequence, and `docs/HARDENING.md` as the security/correctness backlog.
 
-Do not use files in `docs/archive/` as current status — they are historical context.
+Ignore files in `docs/archive/` unless the user explicitly asks for historical context.
+Do not use `docs/archive/**` as current status, setup, deployment, or security truth.
 
 ## Current Repo Truth
 

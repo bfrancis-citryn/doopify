@@ -1,3 +1,10 @@
+> **STALE ARCHIVE - HISTORICAL ONLY**
+>
+> This checklist was consolidated into `docs/operations/pilot-validation-runbook.md` on May 12, 2026.
+> Do not use this file as current operational truth.
+
+---
+
 # Doopify Pilot Smoke Checklist
 
 > Use this checklist before handing off to a pilot merchant or declaring the deployment smoke-tested.

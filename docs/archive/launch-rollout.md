@@ -1,7 +1,8 @@
 > **⚠ STALE ARCHIVE — DO NOT USE**
 >
-> This is the old lowercase `launch-rollout.md` from `docs/`. The canonical file is `LAUNCH_ROLLOUT.md` at the repo root.
-> This version predates multiple shipped Phase 3 features and has an outdated readiness checklist.
+> This is the old lowercase `launch-rollout.md` from `docs/`.
+> Active launch/pilot operations guidance now lives in `docs/operations/merchant-launch-guide.md`
+> and `docs/operations/pilot-validation-runbook.md`.
 
 ---
 

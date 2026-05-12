@@ -17,9 +17,9 @@ Active planning docs:
 - `HARDENING.md` for cross-cutting trust, security, and operational work
 - `CONTRIBUTING.md` for implementation rules and definition of done
 - `AGENTS.md` for AI-agent instructions
-- `TRANSACTIONAL_EMAIL_OBSERVABILITY_PLAN.md` for the next Phase 4 email observability slice
-- `SETUP_AND_CLI_PLAN.md` for the planned setup wizard and deployment CLI sequence
-- `LAUNCH_ROLLOUT.md` for launch positioning and marketing rollout guidance
+- `security.md` for security posture summary
+- `troubleshooting.md` for runtime and setup incident resolution
+- `quickstart.md` for setup onboarding path
 
 Historical planning docs are intentionally omitted from this active handoff pack. Do not use old `CLAUDE.md`, stale Phase 3 kickoff docs, or legacy phase-completion ledgers as current repo status.
 

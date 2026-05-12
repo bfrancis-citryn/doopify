@@ -145,4 +145,4 @@ Go to **Products** in the admin and create at least one product:
 - Deploy to Vercel: [docs/deployment/vercel.md](./deployment/vercel.md)
 - Invite team members: [docs/setup/team.md](./setup/team.md)
 - Configure email: [docs/setup/email.md](./setup/email.md)
-- Run the pilot smoke checklist: [docs/operations/pilot-smoke-checklist.md](./operations/pilot-smoke-checklist.md)
+- Run the pilot validation runbook: [docs/operations/pilot-validation-runbook.md](./operations/pilot-validation-runbook.md)

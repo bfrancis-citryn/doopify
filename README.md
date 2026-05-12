@@ -65,7 +65,6 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 
 | Topic | Guide |
 |---|---|
-| Pilot smoke checklist | [docs/operations/pilot-smoke-checklist.md](./docs/operations/pilot-smoke-checklist.md) |
 | Pilot validation runbook | [docs/operations/pilot-validation-runbook.md](./docs/operations/pilot-validation-runbook.md) |
 | Troubleshooting | [docs/troubleshooting.md](./docs/troubleshooting.md) |
 | Production runbook | [docs/PRODUCTION_RUNBOOK.md](./docs/PRODUCTION_RUNBOOK.md) |
@@ -157,6 +156,6 @@ Never point `DATABASE_URL_TEST` at your development or production database.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) and [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
+See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Do not re-add `CLAUDE.md` or duplicate phase-completion roadmaps. Use `AGENTS.md`, `docs/STATUS.md`, `docs/features-roadmap.md`, and `docs/HARDENING.md` for repo truth.

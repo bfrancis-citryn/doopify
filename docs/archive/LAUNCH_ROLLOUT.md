@@ -1,3 +1,10 @@
+> **STALE ARCHIVE - HISTORICAL ONLY**
+>
+> This rollout positioning guide was moved from active docs on May 12, 2026.
+> Use `docs/operations/merchant-launch-guide.md` and `docs/operations/pilot-validation-runbook.md` for current launch operations guidance.
+
+---
+
 # Doopify Launch Rollout
 
 > Positioning and rollout guide for the developer-first, self-hostable commerce story.

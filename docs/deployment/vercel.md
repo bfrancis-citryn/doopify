@@ -152,7 +152,7 @@ Vercel Cron calls do not pass a bearer token by default — use an external sche
 
 ## 8. Post-deploy smoke check
 
-Run through [docs/operations/pilot-smoke-checklist.md](../operations/pilot-smoke-checklist.md) before handing off to a merchant.
+Run through [docs/operations/pilot-validation-runbook.md](../operations/pilot-validation-runbook.md) before handing off to a merchant.
 
 ---
 

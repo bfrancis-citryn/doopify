@@ -296,3 +296,50 @@ Complete this checklist before opening the pilot to any merchant:
 - [ ] Backup path confirmed
 - [ ] Rollback steps understood
 - [ ] Admin recovery runbook accessible
+
+---
+
+## 17. Smoke Regression Checklist (Consolidated)
+
+Use this final pass immediately before merchant handoff.
+
+### Admin auth and access
+
+- [ ] `/login` loads and owner/admin login succeeds.
+- [ ] Logout destroys session and protected admin routes redirect back to `/login`.
+- [ ] Admin navigation remains functional (`/admin`, `/admin/orders`, `/admin/webhooks`, `/admin/settings`).
+
+### Storefront and checkout regression
+
+- [ ] `/shop` and at least one `/shop/[handle]` page load without console/runtime errors.
+- [ ] Cart add/remove still works after a completed order.
+- [ ] Checkout rejects empty-cart and missing-shipping-option flows with clear errors.
+- [ ] Failed payment card (`4000 0000 0000 9995`) does not create an order.
+- [ ] Successful payment card (`4242 4242 4242 4242`) completes checkout and shows success.
+
+### Order, inventory, and pricing
+
+- [ ] Order appears in admin only after verified webhook processing.
+- [ ] Inventory decrements exactly once for successful paid order.
+- [ ] Discount code flow (if configured) applies correctly and increments usage counters.
+
+### Shipping, tax, and email
+
+- [ ] Shipping rates appear for intended destination and configured mode (manual/live/hybrid).
+- [ ] Tax behavior matches configuration (enabled with expected line item, or intentionally disabled).
+- [ ] Email delivery record appears in delivery logs (or intentional email skip is documented).
+
+### Final sign-off
+
+| Check | Result | Notes |
+|---|---|---|
+| Stripe webhook -> 200 OK | | |
+| Order created by webhook (not redirect) | | |
+| Inventory decremented correctly | | |
+| Order visible in admin | | |
+| Email delivered or intentionally skipped | | |
+| No critical console/runtime errors | | |
+
+**Signed off by:** _______________
+**Date:** _______________
+**Environment URL:** _______________

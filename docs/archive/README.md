@@ -1,33 +1,29 @@
-# Archived Planning Docs
+# Archive Documentation
 
-These files are historical references removed from the active docs workflow.
+`docs/archive/` contains historical planning, design, and migration notes.
 
-Use archived docs for background only. Do not treat them as current repo status.
+Treat every file under this folder as historical context only.
 
-The active documentation surface is now:
+Do not use `docs/archive/**` as current product, security, setup, or deployment truth unless a maintainer explicitly asks for historical context.
+
+## Current Truth Docs
+
+Use these first for current behavior and direction:
 
 - `README.md`
 - `AGENTS.md`
+- `CHANGELOG.md`
+- `CONTRIBUTING.md`
 - `docs/STATUS.md`
-- `docs/PROJECT_INTENT.md`
 - `docs/features-roadmap.md`
 - `docs/HARDENING.md`
-- `docs/CONTRIBUTING.md`
-- `docs/LAUNCH_ROLLOUT.md`
+- `docs/PROJECT_INTENT.md`
+- `docs/security.md`
+- `docs/troubleshooting.md`
+- `docs/quickstart.md`
 
-Archived here:
+## Archive Usage Rule
 
-- `ROADMAP.md`
-- `dev-features.md`
-- `plugin-feature.md`
-- `phase-3-kickoff.md`
-- `PHASE_3_KICKOFF.md`
-- `launch-rollout.md`
-- `doopify-docs-refresh-flat.md`
-- `PHASE_COMPLETION_PLAN.md`
-
-Notes:
-
-- `PHASE_3_KICKOFF.md` was moved out of active docs after Phase 3 completed.
-- `PHASE_COMPLETION_PLAN.md` was archived because it duplicated and sometimes lagged behind the canonical status, roadmap, and hardening docs.
-- Use `docs/STATUS.md` for current shipped state and `docs/features-roadmap.md` for sequencing.
+- Start in current truth docs.
+- Read archive docs only to understand why an old decision happened.
+- If archive content conflicts with current truth docs, current truth docs win.
