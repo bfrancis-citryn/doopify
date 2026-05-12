@@ -37,4 +37,15 @@ describe('product variant weight UI contract', () => {
     expect(css).toContain('min-width: 5rem;')
     expect(css).toContain('grid-template-columns: minmax(0, 1fr);')
   })
+
+  it('renders polished default-variant copy and grouped inventory/shipping labels', () => {
+    const sourcePath = path.resolve(process.cwd(), 'src/components/products/ProductVariantEditor.js')
+    const source = fs.readFileSync(sourcePath, 'utf8')
+
+    expect(source).toContain('Default variant')
+    expect((source.match(/>Quantity available</g) || []).length).toBe(1)
+    expect(source).toContain('Used for shipping rates and label calculations.')
+    expect(source).toContain('Inventory tracking enabled')
+    expect(source).toContain('Add option')
+  })
 })

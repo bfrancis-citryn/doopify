@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import AdminButton from '../admin/ui/AdminButton';
-import AdminEmptyState from '../admin/ui/AdminEmptyState';
 import AdminSelect from '../admin/ui/AdminSelect';
 import { useProductStore } from '../../context/ProductContext';
 import styles from './ProductVariantEditor.module.css';
@@ -228,6 +227,7 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
                     </div>
                     <div className={styles.variantInventoryCell}>
                       <input
+                        aria-label={`Quantity available for ${variant.title || 'variant'}`}
                         className={rowErrors.inventoryQty ? `${styles.inventoryInput} ${styles.inputError}` : styles.inventoryInput}
                         min="0"
                         onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
@@ -240,6 +240,7 @@ function GroupedVariantRows({ draftProduct, actions, formatMoney, variantRowErro
                     <div className={styles.weightCell}>
                       <div className={styles.weightInputWrap}>
                         <input
+                          aria-label={`Weight for ${variant.title || 'variant'}`}
                           className={`admin-input ${styles.weightInput}`}
                           min="0"
                           onChange={event => actions.updateVariantField(variant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
@@ -274,36 +275,38 @@ function BasicInventoryCard({ draftProduct, actions }) {
   const inventoryQty = baseVariant?.inventoryQty ?? 0;
   const weight = baseVariant?.weight ?? '';
   const weightUnit = baseVariant?.weightUnit || 'kg';
+  const quantityInputId = baseVariant?.id ? `default-variant-quantity-${baseVariant.id}` : 'default-variant-quantity';
+  const weightInputId = baseVariant?.id ? `default-variant-weight-${baseVariant.id}` : 'default-variant-weight';
 
   return (
     <div className={styles.basicInventoryCard}>
       <div className={styles.basicInventoryHeader}>
-        <h4 className={styles.basicInventoryTitle}>Inventory &amp; shipping</h4>
-        <label className={styles.inventoryTrackedToggle}>
-          <span>Inventory tracked</span>
-          <input checked readOnly type="checkbox" />
-        </label>
+        <h4 className={styles.basicInventoryTitle}>Default variant details</h4>
+        <span className={styles.inventoryTrackingPill}>Inventory tracking enabled</span>
       </div>
 
-      <div className={styles.basicInventoryTable}>
-        <div className={styles.basicInventoryRow}>
-          <span>Quantity</span>
-          <span>Quantity</span>
-        </div>
-        <div className={styles.basicInventoryRow}>
-          <span>{draftProduct.vendor || 'Default location'}</span>
+      <div className={styles.basicInventorySections}>
+        <section className={styles.basicInfoSection} aria-label="Inventory">
+          <h5 className={styles.basicInfoSectionTitle}>Inventory</h5>
+          <label className={styles.basicFieldLabel} htmlFor={quantityInputId}>Quantity available</label>
           <input
+            id={quantityInputId}
+            aria-label="Quantity available"
             className={styles.inventoryInput}
             min="0"
             onChange={event => actions.updateVariantField(baseVariant.id, 'inventoryQty', event.target.value)}
             type="number"
             value={inventoryQty}
           />
-        </div>
-        <div className={styles.basicInventoryRow}>
-          <span>Weight (for shipping)</span>
+        </section>
+
+        <section className={styles.basicInfoSection} aria-label="Shipping">
+          <h5 className={styles.basicInfoSectionTitle}>Shipping</h5>
+          <label className={styles.basicFieldLabel} htmlFor={weightInputId}>Weight</label>
           <div className={styles.weightInputWrap}>
             <input
+              id={weightInputId}
+              aria-label="Weight"
               className={`admin-input ${styles.weightInput}`}
               min="0"
               onChange={event => actions.updateVariantField(baseVariant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
@@ -318,8 +321,31 @@ function BasicInventoryCard({ draftProduct, actions }) {
               value={weightUnit}
             />
           </div>
-        </div>
+          <p className={styles.basicFieldHelp}>Used for shipping rates and label calculations.</p>
+        </section>
       </div>
+    </div>
+  );
+}
+
+function DefaultVariantCard({ actions }) {
+  return (
+    <div className={styles.defaultVariantCard}>
+      <div className={styles.defaultVariantHeader}>
+        <h5 className={styles.defaultVariantTitle}>Default variant</h5>
+        <p className={styles.defaultVariantBody}>
+          This product has one default variant. Add options like Size, Color, or Material only if this product comes in multiple versions.
+        </p>
+      </div>
+      <AdminButton
+        className={styles.defaultVariantAction}
+        leftIcon={<span className="material-symbols-outlined">add_circle</span>}
+        onClick={() => actions.addOptionGroup()}
+        size="sm"
+        variant="secondary"
+      >
+        Add option
+      </AdminButton>
     </div>
   );
 }
@@ -361,16 +387,14 @@ export default function ProductVariantEditor() {
             />
           ))
         ) : (
-          <AdminEmptyState
-            description="Add an option like Size, Color, or Material to generate Shopify-style variants."
-            icon="category"
-            title="Single default variant"
-          />
+          <DefaultVariantCard actions={actions} />
         )}
 
-        <AdminButton className={styles.addOptionLink} leftIcon={<span className="material-symbols-outlined">add_circle</span>} onClick={() => actions.addOptionGroup()} size="sm" variant="secondary">
-          Add another option
-        </AdminButton>
+        {draftProduct.options.length ? (
+          <AdminButton className={styles.addOptionLink} leftIcon={<span className="material-symbols-outlined">add_circle</span>} onClick={() => actions.addOptionGroup()} size="sm" variant="secondary">
+            Add another option
+          </AdminButton>
+        ) : null}
       </div>
 
       {editor.validationErrors.options && !draftProduct.options.some(option => editor.validationErrors.options?.includes(option.name)) ? (
@@ -456,6 +480,7 @@ export default function ProductVariantEditor() {
 
                     <div className={styles.variantInventoryCell}>
                       <input
+                        aria-label={`Quantity available for ${variant.title || 'variant'}`}
                         className={rowErrors.inventoryQty ? `${styles.inventoryInput} ${styles.inputError}` : styles.inventoryInput}
                         min="0"
                         onChange={event => actions.updateVariantField(variant.id, 'inventoryQty', event.target.value)}
@@ -468,6 +493,7 @@ export default function ProductVariantEditor() {
                     <div className={styles.weightCell}>
                       <div className={styles.weightInputWrap}>
                         <input
+                          aria-label={`Weight for ${variant.title || 'variant'}`}
                           className={`admin-input ${styles.weightInput}`}
                           min="0"
                           onChange={event => actions.updateVariantField(variant.id, 'weight', event.target.value === '' ? null : Number(event.target.value))}
