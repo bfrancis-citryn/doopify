@@ -80,6 +80,7 @@ import {
   acceptTeamInvite,
   activeOwnerExists,
   bootstrapOwner,
+  createTeamUser,
   disableTeamUser,
   getUserSessions,
   inviteTeamUser,
@@ -234,6 +235,56 @@ describe('team service', () => {
       const createCall = mocks.prisma.user.create.mock.calls[0][0]
       expect(createCall.data.passwordHash).toBe('hashed_value')
       expect(createCall.data).not.toHaveProperty('password')
+    })
+  })
+
+  // ── inviteTeamUser ──────────────────────────────────────────────────────────
+
+  describe('createTeamUser', () => {
+    it('creates an ADMIN user when requested by an owner-managed flow', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue(null)
+      mocks.prisma.user.create.mockResolvedValue({
+        id: 'admin_1',
+        email: 'admin@example.com',
+        firstName: 'Ada',
+        lastName: 'Admin',
+        role: 'ADMIN',
+        isActive: true,
+        createdAt: new Date(),
+      })
+
+      const created = await createTeamUser({
+        email: 'admin@example.com',
+        password: 'securepassword1',
+        firstName: 'Ada',
+        lastName: 'Admin',
+        role: 'ADMIN',
+      })
+
+      expect(created.role).toBe('ADMIN')
+      expect(mocks.prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'admin@example.com',
+            role: 'ADMIN',
+          }),
+        })
+      )
+    })
+
+    it('returns a clear error when database UserRole enum is missing ADMIN', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue(null)
+      mocks.prisma.user.create.mockRejectedValue(
+        new Error('invalid input value for enum "UserRole": "ADMIN"')
+      )
+
+      await expect(
+        createTeamUser({
+          email: 'admin@example.com',
+          password: 'securepassword1',
+          role: 'ADMIN',
+        })
+      ).rejects.toThrow('Team role ADMIN is not available in the database schema')
     })
   })
 

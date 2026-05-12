@@ -46,6 +46,14 @@ export async function PATCH(req: Request, context: RouteContext) {
     return ok({ user })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update user'
+    console.error('[team.users.patch] failed', {
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      targetUserId: id,
+      action: parsed.data.action,
+      requestedRole: parsed.data.action === 'set_role' ? parsed.data.role : undefined,
+      message,
+    })
     return err(message, 400)
   }
 }

@@ -353,6 +353,7 @@ function buildSetupDoctorReportFallback(facts) {
   add('prisma-client-generated', 'Prisma client generated', true, pass(facts.prismaClientGenerated), facts.prismaClientGenerated ? 'Prisma client artifacts were found.' : 'Prisma client artifacts were not found.', 'Run npm run db:generate to generate Prisma client artifacts.')
   add('store-exists', 'Store exists', true, facts.databaseReachable ? (facts.storeCount > 0 ? 'PASS' : 'FAIL') : 'WARN', facts.databaseReachable ? (facts.storeCount > 0 ? `${facts.storeCount} store record(s) found.` : 'No store records found.') : 'Skipped because database check did not complete.', 'Run npm run db:seed:bootstrap or create a store via setup flow.')
   add('owner-user-exists', 'Owner/admin user exists', true, facts.databaseReachable ? (facts.ownerCount > 0 ? 'PASS' : 'FAIL') : 'WARN', facts.databaseReachable ? (facts.ownerCount > 0 ? `${facts.ownerCount} OWNER user(s) found.` : 'No OWNER user found.') : 'Skipped because database check did not complete.', 'Run npm run db:seed:bootstrap or create an OWNER user through setup tooling.')
+  add('user-role-admin-enum', 'UserRole enum includes ADMIN', true, facts.databaseReachable ? (facts.userRoleAdminSupported ? 'PASS' : 'FAIL') : 'WARN', facts.databaseReachable ? (facts.userRoleAdminSupported ? 'UserRole enum contains ADMIN.' : 'UserRole enum is missing ADMIN.') : 'Skipped because database check did not complete.', 'Apply latest schema changes to this database (`npm run db:push` or prisma migrate deploy) so UserRole includes ADMIN.')
 
   const jwtStrong = Boolean(facts.jwtSecret) && facts.jwtSecret.length >= 32
   add('jwt-secret', 'JWT_SECRET strength', true, jwtStrong ? (isWeak(facts.jwtSecret) ? 'WARN' : 'PASS') : 'FAIL', !facts.jwtSecret ? 'JWT_SECRET is missing.' : jwtStrong ? 'JWT_SECRET is present and strong enough.' : `JWT_SECRET is too short (${facts.jwtSecret.length} characters).`, 'Set JWT_SECRET in .env.local to a random secret with at least 32 characters.')
@@ -447,6 +448,7 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
       databaseError: databaseUrlPresent ? 'Install dependencies before running DB checks.' : 'DATABASE_URL is missing.',
       storeCount: null,
       ownerCount: null,
+      userRoleAdminSupported: null,
       storeConfigured: null,
       storeContactConfigured: null,
     }
@@ -467,7 +469,7 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
 
     await prisma.$queryRawUnsafe('SELECT 1')
 
-    const [storeCount, ownerCount, firstStore] = await Promise.all([
+    const [storeCount, ownerCount, firstStore, userRoleAdminRows] = await Promise.all([
       prisma.store.count(),
       prisma.user.count({ where: { role: 'OWNER', isActive: true } }),
       prisma.store.findFirst({
@@ -478,12 +480,22 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
         },
         orderBy: { createdAt: 'asc' },
       }),
+      prisma.$queryRawUnsafe(`
+        SELECT enum.enumlabel
+        FROM pg_enum enum
+        JOIN pg_type type ON enum.enumtypid = type.oid
+        WHERE type.typname = 'UserRole'
+          AND enum.enumlabel = 'ADMIN'
+      `),
     ])
+
+    const userRoleAdminSupported = Array.isArray(userRoleAdminRows) && userRoleAdminRows.length > 0
 
     return {
       databaseReachable: true,
       storeCount,
       ownerCount,
+      userRoleAdminSupported,
       storeConfigured: Boolean(firstStore?.name?.trim()),
       storeContactConfigured: Boolean(firstStore?.email?.trim()),
     }
@@ -493,6 +505,7 @@ async function checkDatabaseFacts(databaseUrlPresent, dependenciesInstalled) {
       databaseError: sanitizeErrorMessage(error),
       storeCount: null,
       ownerCount: null,
+      userRoleAdminSupported: null,
       storeConfigured: null,
       storeContactConfigured: null,
     }
@@ -537,6 +550,7 @@ async function createDoctorReport() {
     prismaClientGenerated,
     storeCount: databaseFacts.storeCount,
     ownerCount: databaseFacts.ownerCount,
+    userRoleAdminSupported: databaseFacts.userRoleAdminSupported,
     storeConfigured: databaseFacts.storeConfigured,
     storeContactConfigured: databaseFacts.storeContactConfigured,
     jwtSecret: process.env.JWT_SECRET,
@@ -1221,6 +1235,9 @@ async function runDbCheck() {
   if (!facts.databaseReachable) {
     throw new Error(`Database connection failed: ${facts.databaseError || 'unknown error'}`)
   }
+  if (!facts.userRoleAdminSupported) {
+    throw new Error('Database schema drift detected: UserRole enum is missing ADMIN. Apply latest Prisma schema changes before deploying.')
+  }
 
   console.log('Database check passed.')
   console.log(`- Host: ${host}`)
@@ -1228,6 +1245,7 @@ async function runDbCheck() {
   console.log(`- sslmode: ${sslmode}`)
   console.log(`- Store records: ${facts.storeCount ?? 0}`)
   console.log(`- OWNER users: ${facts.ownerCount ?? 0}`)
+  console.log(`- UserRole.ADMIN supported: ${facts.userRoleAdminSupported ? 'yes' : 'no'}`)
 }
 
 async function runStripeWebhookAutomation() {

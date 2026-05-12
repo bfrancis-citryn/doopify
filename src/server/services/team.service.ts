@@ -9,6 +9,27 @@ import type { UserRole } from '@prisma/client'
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const PASSWORD_RESET_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
 const TEAM_MANAGEABLE_ROLES: UserRole[] = ['OWNER', 'ADMIN', 'STAFF', 'VIEWER']
+const TEAM_ROLE_ENUM_DRIFT_ERROR =
+  'Team role ADMIN is not available in the database schema. Apply the latest Prisma migration (or run `npm run db:push` for this environment) and redeploy.'
+
+function mapTeamRolePersistenceError(error: unknown): Error {
+  if (!(error instanceof Error)) return new Error('Team role update failed.')
+
+  const message = error.message || ''
+  const normalized = message.toLowerCase()
+  const looksLikeEnumMismatch =
+    normalized.includes('userrole') &&
+    normalized.includes('admin') &&
+    (normalized.includes('invalid input value for enum') ||
+      normalized.includes('value') ||
+      normalized.includes('enum'))
+
+  if (looksLikeEnumMismatch) {
+    return new Error(TEAM_ROLE_ENUM_DRIFT_ERROR)
+  }
+
+  return error
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
@@ -194,25 +215,29 @@ export async function createTeamUser(input: CreateTeamUserInput) {
 
   const passwordHash = await bcrypt.hash(password, 12)
 
-  return prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      firstName: trimToNull(input.firstName),
-      lastName: trimToNull(input.lastName),
-      role: input.role,
-      isActive: true,
-    },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      role: true,
-      isActive: true,
-      createdAt: true,
-    },
-  })
+  try {
+    return await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        firstName: trimToNull(input.firstName),
+        lastName: trimToNull(input.lastName),
+        role: input.role,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    })
+  } catch (error) {
+    throw mapTeamRolePersistenceError(error)
+  }
 }
 
 // ── Invite user ─────────────────────────────────────────────────────────────
@@ -259,23 +284,28 @@ export async function inviteTeamUser(input: InviteTeamUserInput): Promise<{
   const tokenHash = await bcrypt.hash(rawToken, 10)
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS)
 
-  const invite = await prisma.userInvite.create({
-    data: {
-      email,
-      role: input.role,
-      tokenHash,
-      expiresAt,
-      invitedById: input.invitedById ?? null,
-    },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      expiresAt: true,
-      createdAt: true,
-      invitedById: true,
-    },
-  })
+  let invite
+  try {
+    invite = await prisma.userInvite.create({
+      data: {
+        email,
+        role: input.role,
+        tokenHash,
+        expiresAt,
+        invitedById: input.invitedById ?? null,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        expiresAt: true,
+        createdAt: true,
+        invitedById: true,
+      },
+    })
+  } catch (error) {
+    throw mapTeamRolePersistenceError(error)
+  }
 
   await recordAuditLogBestEffort({
     action: 'team.invite_created',
@@ -389,11 +419,16 @@ export async function updateTeamUserRole(
     await assertNotLastOwner(userId, 'demote this user from OWNER')
   }
 
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: { role: newRole },
-    select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
-  })
+  let updated
+  try {
+    updated = await prisma.user.update({
+      where: { id: userId },
+      data: { role: newRole },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+    })
+  } catch (error) {
+    throw mapTeamRolePersistenceError(error)
+  }
 
   await recordAuditLogBestEffort({
     action: 'team.role_changed',

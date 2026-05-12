@@ -23,6 +23,11 @@ export async function GET(req: Request) {
     return ok({ users })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to list users'
+    console.error('[team.users.get] failed', {
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      message,
+    })
     return err(message, 500)
   }
 }
@@ -44,6 +49,13 @@ export async function POST(req: Request) {
     return ok({ user }, 201)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create user'
+    console.error('[team.users.post] failed', {
+      actorId: auth.user.id,
+      actorRole: auth.user.role,
+      targetEmail: parsed.data.email,
+      requestedRole: parsed.data.role,
+      message,
+    })
     return err(message, 400)
   }
 }

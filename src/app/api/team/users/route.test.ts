@@ -94,4 +94,32 @@ describe('team users route', () => {
     expect(serialized).not.toContain('passwordHash')
     expect(serialized).not.toContain('securepass1')
   })
+
+  it('owner can create an ADMIN user', async () => {
+    mocks.requireOwner.mockResolvedValue(ownerAuth)
+    mocks.createTeamUser.mockResolvedValue({
+      id: 'new_admin',
+      email: 'admin@example.com',
+      firstName: null,
+      lastName: null,
+      role: 'ADMIN',
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/team/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'admin@example.com', password: 'securepass1', role: 'ADMIN' }),
+      })
+    )
+
+    expect(response.status).toBe(201)
+    const payload = await response.json()
+    expect(payload.data.user.role).toBe('ADMIN')
+    expect(mocks.createTeamUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'admin@example.com', role: 'ADMIN' })
+    )
+  })
 })

@@ -42,6 +42,17 @@ function formatDate(dateStr) {
   }
 }
 
+function parseTeamApiError(response, payload, fallbackMessage) {
+  const apiError = typeof payload?.error === 'string' ? payload.error.trim() : '';
+  if (apiError) return apiError;
+
+  if (response.status === 403) {
+    return 'Team management is owner-only in private beta. Sign in as an OWNER to create users or change roles.';
+  }
+
+  return `${fallbackMessage} (HTTP ${response.status})`;
+}
+
 export default function TeamSettingsPanel({ currentUserRole }) {
   const isOwner = isOwnerRole(currentUserRole);
   const isKnownNonOwner = isKnownNonOwnerRole(currentUserRole);
@@ -158,7 +169,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setDrawerError(payload?.error || 'Failed to send invite.');
+          setDrawerError(parseTeamApiError(res, payload, 'Failed to send invite.'));
           return;
         }
         const token = payload?.data?.inviteToken;
@@ -184,7 +195,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setDrawerError(payload?.error || 'Failed to create user.');
+          setDrawerError(parseTeamApiError(res, payload, 'Failed to create user.'));
           return;
         }
         setDrawerOpen(false);
@@ -208,7 +219,10 @@ export default function TeamSettingsPanel({ currentUserRole }) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setActionError((s) => ({ ...s, [userId]: payload?.error || 'Action failed.' }));
+        setActionError((s) => ({
+          ...s,
+          [userId]: parseTeamApiError(res, payload, 'Role or status update failed.'),
+        }));
         return;
       }
       setEditRoleUserId('');
@@ -239,7 +253,10 @@ export default function TeamSettingsPanel({ currentUserRole }) {
       const res = await fetch(`/api/team/invites/${inviteId}/resend`, { method: 'POST' });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setActionError((s) => ({ ...s, [inviteId]: payload?.error || 'Failed to resend.' }));
+        setActionError((s) => ({
+          ...s,
+          [inviteId]: parseTeamApiError(res, payload, 'Failed to resend invite.'),
+        }));
         return;
       }
       const token = payload?.data?.inviteToken;
