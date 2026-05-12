@@ -78,6 +78,19 @@ describe('settings compact flow', () => {
     expect(workspace).not.toContain('Address editing will be expanded here.')
   })
 
+  it('renders General currency and time zone as AdminSelect controls with helper copy', () => {
+    const workspace = read('src/components/settings/SettingsWorkspace.js')
+
+    expect(workspace).toContain("label=\"Time zone\"")
+    expect(workspace).toContain("label=\"Currency\"")
+    expect(workspace).toContain('options={GENERAL_SETTINGS_TIMEZONE_OPTIONS}')
+    expect(workspace).toContain('options={GENERAL_SETTINGS_CURRENCY_OPTIONS}')
+    expect(workspace).toContain('Used for admin date displays, scheduled actions, and merchant-facing timestamps.')
+    expect(workspace).toContain('Used for new checkout sessions, payment intents, shipping rates, and new orders. Existing orders keep their original currency.')
+    expect(workspace).not.toContain('<AdminInput onChange={(event) => handleSettingsPatch({ timezone: event.target.value })}')
+    expect(workspace).not.toContain('<AdminInput onChange={(event) => handleSettingsPatch({ currency: event.target.value })}')
+  })
+
   it('keeps Payments rows compact with drawer-based management', () => {
     const workspace = read('src/components/settings/SettingsWorkspace.js')
 

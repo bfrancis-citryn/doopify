@@ -13,25 +13,24 @@ import AdminInput from "../admin/ui/AdminInput";
 import AdminSavedState from "../admin/ui/AdminSavedState";
 import AdminSchedulePopover from "../admin/ui/AdminSchedulePopover";
 import AdminTextarea from "../admin/ui/AdminTextarea";
+import { useSettings } from "../../context/SettingsContext";
+import { formatDateTimeForDisplay, resolveSafeTimeZone } from "../../lib/date-time-format";
 import styles from "./ProductEditorDrawer.module.css";
 
-function formatScheduleText(isoDate) {
+function formatScheduleText(isoDate, timeZone) {
   if (!isoDate) {
     return "Not scheduled";
   }
 
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) {
-    return "Not scheduled";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
+  return formatDateTimeForDisplay(isoDate, {
+    timeZone,
+    fallbackText: "Not scheduled",
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+  });
 }
 
 function SectionCard({ eyebrow, title, children }) {
@@ -45,6 +44,7 @@ function SectionCard({ eyebrow, title, children }) {
 }
 
 export default function ProductEditorDrawer() {
+  const { settings } = useSettings();
   const { editor, formatMoney, actions } = useProductStore();
   const [activeTabId, setActiveTabId] = useState("basic");
   const draftProduct = editor.draftProduct;
@@ -67,14 +67,17 @@ export default function ProductEditorDrawer() {
   const saveState = editor.isSaving ? "saving" : editor.hasUnsavedChanges ? "dirty" : "saved";
   const computedState = getComputedProductStateMeta(draftProduct);
   const hasFutureSchedule = isFuturePublishDate(draftProduct.publishedAt);
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local timezone";
+  const timezone =
+    resolveSafeTimeZone(settings?.timezone) ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "Local timezone";
   const scheduleLabel = hasFutureSchedule
-    ? `Scheduled for ${formatScheduleText(draftProduct.publishedAt)}`
+    ? `Scheduled for ${formatScheduleText(draftProduct.publishedAt, timezone)}`
     : "";
   const scheduleSummary = hasFutureSchedule
     ? scheduleLabel
     : draftProduct.publishedAt
-      ? `Published ${formatScheduleText(draftProduct.publishedAt)}`
+      ? `Published ${formatScheduleText(draftProduct.publishedAt, timezone)}`
       : "Not scheduled";
 
   const handleStatusChange = (nextStatus) => {

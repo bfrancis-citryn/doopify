@@ -25,6 +25,15 @@ const validPayload = {
   parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
 }
 
+const validPayloadWithoutProvider = {
+  providerRateId: 'rate_1',
+  sendTrackingEmail: true,
+  labelFormat: 'PDF',
+  labelSize: '4x6',
+  items: [{ orderItemId: 'oi_1', quantity: 1 }],
+  parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+}
+
 describe('POST /api/orders/[orderNumber]/shipping-labels', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -102,6 +111,46 @@ describe('POST /api/orders/[orderNumber]/shipping-labels', () => {
         },
       },
     })
+  })
+
+  it('falls back to store default provider when no provider override is provided', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'user_1', role: 'OWNER' },
+    })
+    mocks.buyOrderShippingLabel.mockResolvedValue({
+      duplicate: false,
+      shippingLabel: {
+        id: 'label_2',
+        orderId: 'order_1',
+        labelUrl: 'https://labels.example.com/label_2.pdf',
+      },
+      fulfillment: {
+        id: 'ful_2',
+      },
+      trackingEmail: {
+        requested: true,
+        queued: true,
+        skippedReason: null,
+      },
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/orders/1001/shipping-labels', {
+        method: 'POST',
+        body: JSON.stringify(validPayloadWithoutProvider),
+      }),
+      { params: Promise.resolve({ orderNumber: '1001' }) }
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.buyOrderShippingLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNumber: 1001,
+        providerRateId: 'rate_1',
+        provider: undefined,
+      })
+    )
   })
 })
 

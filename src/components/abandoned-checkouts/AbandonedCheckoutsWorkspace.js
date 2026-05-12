@@ -12,18 +12,20 @@ import AdminStatCard, { AdminStatsGrid } from '@/components/admin/ui/AdminStatCa
 import AdminStatusChip from '@/components/admin/ui/AdminStatusChip';
 import AdminTable from '@/components/admin/ui/AdminTable';
 import AdminToolbar from '@/components/admin/ui/AdminToolbar';
+import { useSettings } from '@/context/SettingsContext';
+import { formatDateTimeForDisplay } from '@/lib/date-time-format';
 import styles from './AbandonedCheckoutsWorkspace.module.css';
 
 function formatMoneyFromCents(cents, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format((Number(cents) || 0) / 100);
 }
 
-function formatTime(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleString();
+function formatTime(value, timeZone) {
+  return formatDateTimeForDisplay(value, { timeZone, fallbackText: '-' });
 }
 
 export default function AbandonedCheckoutsWorkspace() {
+  const { settings } = useSettings();
   const [loading, setLoading] = useState(true);
   const [checkouts, setCheckouts] = useState([]);
   const [page, setPage] = useState(1);
@@ -144,10 +146,10 @@ export default function AbandonedCheckoutsWorkspace() {
                 { key: 'email', header: 'Email', render: row => row.email || '-' },
                 { key: 'total', header: 'Total', render: row => formatMoneyFromCents(row.totalCents, row.currency) },
                 { key: 'status', header: 'Status', render: row => <AdminStatusChip tone={row.recoveredAt ? 'success' : 'warning'}>{row.status}</AdminStatusChip> },
-                { key: 'created', header: 'Created', render: row => formatTime(row.createdAt) },
-                { key: 'abandoned', header: 'Abandoned', render: row => formatTime(row.abandonedAt) },
+                { key: 'created', header: 'Created', render: row => formatTime(row.createdAt, settings?.timezone) },
+                { key: 'abandoned', header: 'Abandoned', render: row => formatTime(row.abandonedAt, settings?.timezone) },
                 { key: 'emails', header: 'Recovery Emails', render: row => row.recoveryEmailCount },
-                { key: 'last', header: 'Last Sent', render: row => formatTime(row.recoveryEmailSentAt) },
+                { key: 'last', header: 'Last Sent', render: row => formatTime(row.recoveryEmailSentAt, settings?.timezone) },
                 { key: 'recovered', header: 'Recovered', render: row => (row.recoveredAt ? 'Yes' : 'No') },
                 {
                   key: 'action', header: 'Action', render: row => (

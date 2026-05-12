@@ -6,6 +6,8 @@ import AdminField from '../admin/ui/AdminField';
 import AdminInput from '../admin/ui/AdminInput';
 import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import SettingsPageSkeleton from './SettingsSkeletons';
+import { useSettings } from '../../context/SettingsContext';
+import { formatDateTimeForDisplay } from '../../lib/date-time-format';
 import {
   WEBHOOK_EVENT_GROUPS,
   uniqueStrings,
@@ -125,6 +127,7 @@ function sortByCreatedAtDesc(items) {
 }
 
 export default function IntegrationsPanel() {
+  const { settings } = useSettings();
   const [integrations, setIntegrations] = useState([]);
   const [attentionDeliveries, setAttentionDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -357,7 +360,14 @@ export default function IntegrationsPanel() {
                   </div>
                   <div className={styles.endpointMain}>
                     <AdminStatusChip tone={formatStatusTone(integration.status)}>{integration.status === 'ACTIVE' ? 'Active' : 'Inactive'}</AdminStatusChip>
-                    <p className={styles.endpointMeta}>{integration.updatedAt ? `Updated ${new Date(integration.updatedAt).toLocaleString()}` : 'No recent updates'}</p>
+                    <p className={styles.endpointMeta}>
+                      {integration.updatedAt
+                        ? `Updated ${formatDateTimeForDisplay(integration.updatedAt, {
+                            timeZone: settings?.timezone,
+                            fallbackText: 'Unknown',
+                          })}`
+                        : 'No recent updates'}
+                    </p>
                   </div>
                   <AdminButton onClick={() => openManageDrawer(integration)} size="sm" variant="secondary">
                     Manage

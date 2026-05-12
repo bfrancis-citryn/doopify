@@ -14,6 +14,8 @@ import AdminStatusChip from "../admin/ui/AdminStatusChip";
 import AdminTable from "../admin/ui/AdminTable";
 import AdminTextarea from "../admin/ui/AdminTextarea";
 import AdminTooltip from "../admin/ui/AdminTooltip";
+import { useSettings } from "../../context/SettingsContext";
+import { formatDateTimeForDisplay } from "../../lib/date-time-format";
 import styles from "./OrderAdjustmentsCard.module.css";
 
 const REFUND_REASON_OPTIONS = [
@@ -112,6 +114,7 @@ function buildReturnDraftItems(orderItems) {
 }
 
 export default function OrderAdjustmentsCard({ onOrderRefresh, orderId, orderNumber, paymentStatus = "" }) {
+  const { settings } = useSettings();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -222,7 +225,11 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderId, orderNum
       {
         key: "date",
         header: "Date",
-        render: (row) => new Date(row.createdAt).toLocaleString(),
+        render: (row) =>
+          formatDateTimeForDisplay(row.createdAt, {
+            timeZone: settings?.timezone,
+            fallbackText: "Unknown",
+          }),
       },
       {
         key: "actions",

@@ -10,6 +10,8 @@ import AdminInput from "../admin/ui/AdminInput";
 import AdminStatusChip from "../admin/ui/AdminStatusChip";
 import AdminTextarea from "../admin/ui/AdminTextarea";
 import OrderAdjustmentsCard from "./OrderAdjustmentsCard";
+import { useSettings } from "../../context/SettingsContext";
+import { formatDateTimeForDisplay } from "../../lib/date-time-format";
 import styles from "./OrderDetailView.module.css";
 
 function normalizeOrderNumber(orderNumber) {
@@ -129,6 +131,50 @@ function providerLabel(provider) {
   return "Carrier";
 }
 
+export const STORE_DEFAULT_LABEL_PROVIDER_OPTION = "STORE_DEFAULT";
+
+function normalizeConnectedProviders(input) {
+  const values = Array.isArray(input) ? input : [];
+  const orderedProviders = ["EASYPOST", "SHIPPO"];
+  return orderedProviders.filter((provider) => values.includes(provider));
+}
+
+export function resolveOrderLabelProviderSelection(input) {
+  const connectedProviders = normalizeConnectedProviders(input?.connectedProviders);
+  const storeDefaultProvider =
+    connectedProviders.find((provider) => provider === input?.storeDefaultProvider) || null;
+  const fallbackProvider = storeDefaultProvider || connectedProviders[0] || "";
+  const selectedChoiceRaw = String(input?.selectedChoice || "").trim().toUpperCase();
+  const selectedChoice =
+    selectedChoiceRaw === STORE_DEFAULT_LABEL_PROVIDER_OPTION
+      ? STORE_DEFAULT_LABEL_PROVIDER_OPTION
+      : connectedProviders.includes(selectedChoiceRaw)
+        ? selectedChoiceRaw
+        : connectedProviders.length > 1
+          ? STORE_DEFAULT_LABEL_PROVIDER_OPTION
+          : fallbackProvider;
+  const selectedProvider =
+    selectedChoice === STORE_DEFAULT_LABEL_PROVIDER_OPTION
+      ? fallbackProvider
+      : connectedProviders.find((provider) => provider === selectedChoice) || "";
+  const selectedProviderDisconnected = Boolean(
+    selectedChoice !== STORE_DEFAULT_LABEL_PROVIDER_OPTION &&
+      selectedChoice &&
+      !connectedProviders.includes(selectedChoice)
+  );
+
+  return {
+    connectedProviders,
+    storeDefaultProvider,
+    selectedChoice,
+    selectedProvider,
+    providerOverride:
+      selectedChoice === STORE_DEFAULT_LABEL_PROVIDER_OPTION ? undefined : selectedProvider || undefined,
+    selectedProviderDisconnected,
+    storeDefaultMissing: selectedChoice === STORE_DEFAULT_LABEL_PROVIDER_OPTION && !storeDefaultProvider,
+  };
+}
+
 function statusTextForShipment(input) {
   if (input.hasLabel) return "Label purchased";
   if (input.trackingNumber || input.trackingUrl) return "Tracking added manually";
@@ -196,11 +242,13 @@ export default function OrderDetailView({
   isNotFound = false,
   onOrderRefreshed = null,
 }) {
+  const { settings } = useSettings();
   const [liveOrder, setLiveOrder] = useState(order);
   const initialShippingCapabilities = order?.shippingCapabilities || {};
   const initialConnectedProviders = Array.isArray(initialShippingCapabilities.connectedProviders)
     ? initialShippingCapabilities.connectedProviders
     : [];
+  const initialStoreDefaultLabelProvider = initialShippingCapabilities.labelProvider || null;
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState("");
   const [ratesLoading, setRatesLoading] = useState(false);
@@ -215,13 +263,12 @@ export default function OrderDetailView({
   const [fulfillmentMethod, setFulfillmentMethod] = useState(
     initialConnectedProviders.length ? "BUY_LABEL" : "MANUAL_TRACKING"
   );
-  const [selectedLabelProvider, setSelectedLabelProvider] = useState(() => {
-    const preferredProvider =
-      initialConnectedProviders.find((provider) => provider === initialShippingCapabilities.labelProvider) ||
-      initialConnectedProviders[0] ||
-      "";
-    return preferredProvider;
-  });
+  const [selectedLabelProviderChoice, setSelectedLabelProviderChoice] = useState(() =>
+    initialConnectedProviders.length > 1
+      ? STORE_DEFAULT_LABEL_PROVIDER_OPTION
+      : initialStoreDefaultLabelProvider || initialConnectedProviders[0] || ""
+  );
+  const [ratesLoadAttempted, setRatesLoadAttempted] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [parcel, setParcel] = useState({
     weightOz: "12",
@@ -250,6 +297,7 @@ export default function OrderDetailView({
 
   const currentOrder = liveOrder || order;
   const currency = currentOrder?.currency || "USD";
+  const storeTimeZone = settings?.timezone;
   const lineItems = currentOrder?.lineItems || [];
   const fulfillments = currentOrder?.fulfillments || [];
   const shippingLabels = currentOrder?.shippingLabels || [];
@@ -262,6 +310,18 @@ export default function OrderDetailView({
   const connectedProviders = Array.isArray(shippingCapabilities.connectedProviders)
     ? shippingCapabilities.connectedProviders
     : [];
+  const storeDefaultLabelProvider = shippingCapabilities.labelProvider || null;
+  const labelProviderSelection = useMemo(
+    () =>
+      resolveOrderLabelProviderSelection({
+        connectedProviders,
+        storeDefaultProvider: storeDefaultLabelProvider,
+        selectedChoice: selectedLabelProviderChoice,
+      }),
+    [connectedProviders, selectedLabelProviderChoice, storeDefaultLabelProvider]
+  );
+  const selectedProviderForLabel = labelProviderSelection.selectedProvider;
+  const selectedProviderOverride = labelProviderSelection.providerOverride;
   const hasAnyConnectedProvider = connectedProviders.length > 0;
   const canBuyShippingLabel = Boolean(currentOrder?.availableActions?.canBuyShippingLabel);
   const hasCustomerEmail =
@@ -280,11 +340,12 @@ export default function OrderDetailView({
     setManualSendTrackingEmail(hasCustomerEmail);
     setLabelSendTrackingEmail(hasCustomerEmail);
     setFulfillmentMethod(hasAnyConnectedProvider ? "BUY_LABEL" : "MANUAL_TRACKING");
-    const preferredProvider =
-      connectedProviders.find((provider) => provider === shippingCapabilities.labelProvider) ||
-      connectedProviders[0] ||
-      "";
-    setSelectedLabelProvider(preferredProvider);
+    setSelectedLabelProviderChoice(
+      connectedProviders.length > 1
+        ? STORE_DEFAULT_LABEL_PROVIDER_OPTION
+        : shippingCapabilities.labelProvider || connectedProviders[0] || ""
+    );
+    setRatesLoadAttempted(false);
   }, [
     currentOrder?.id,
     currentOrder?.notes,
@@ -379,11 +440,12 @@ export default function OrderDetailView({
     setRateProvider("");
     setSelectedRateId("");
     setSelectedShipmentId("");
+    setRatesLoadAttempted(false);
   }
 
   useEffect(() => {
     clearQuoteSelection();
-  }, [selectedLabelProvider]);
+  }, [selectedLabelProviderChoice]);
 
   function normalizeItemsPayload() {
     const payload = [];
@@ -446,30 +508,34 @@ export default function OrderDetailView({
     setPageError("");
     setRatesLoading(true);
     try {
-      if (!selectedLabelProvider) {
-        throw new Error("Select Shippo or EasyPost before loading label rates.");
+      if (!selectedProviderForLabel) {
+        throw new Error("Select a connected label provider before loading label rates.");
+      }
+      if (labelProviderSelection.selectedProviderDisconnected) {
+        throw new Error(`${providerLabel(selectedProviderForLabel)} is not currently connected.`);
       }
       const items = normalizeItemsPayload();
       const parcelPayload = normalizeParcelPayload();
       const response = await fetch(`/api/orders/${normalizeOrderNumber(currentOrder.orderNumber)}/shipping-rates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, parcel: parcelPayload, provider: selectedLabelProvider }),
+        body: JSON.stringify({ items, parcel: parcelPayload, provider: selectedProviderOverride }),
       });
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(parseErrorMessage(json, "Failed to load label rates."));
       const quotes = Array.isArray(json.data?.quotes) ? json.data.quotes : [];
       setRateQuotes(quotes);
-      setRateProvider(json.data?.provider || selectedLabelProvider);
+      setRateProvider(json.data?.provider || selectedProviderForLabel);
       const firstQuote = quotes[0];
       setSelectedRateId(firstQuote?.providerRateId || firstQuote?.id || "");
       setSelectedShipmentId(
         typeof firstQuote?.metadata?.shipmentId === "string" ? firstQuote.metadata.shipmentId : ""
       );
+      setRatesLoadAttempted(true);
       if (!quotes.length) {
-        showToast(`${providerLabel(selectedLabelProvider)} returned no label rates for this package.`, "info");
+        showToast(`${providerLabel(selectedProviderForLabel)} returned no label rates for this package.`, "info");
       } else {
-        showToast(`${providerLabel(selectedLabelProvider)} label rates loaded.`, "success");
+        showToast(`${providerLabel(selectedProviderForLabel)} label rates loaded.`, "success");
       }
     } catch (error) {
       clearQuoteSelection();
@@ -483,7 +549,7 @@ export default function OrderDetailView({
     if (!currentOrder?.orderNumberValue) return;
     setPageError("");
     setBuyingLabel(true);
-    const providerName = providerLabel(selectedLabelProvider || rateProvider);
+    const providerName = providerLabel(selectedProviderForLabel || rateProvider);
     const loadingToastId = showToast(`Purchasing label from ${providerName}...`, "info", { persistent: true });
     try {
       const items = normalizeItemsPayload();
@@ -495,7 +561,7 @@ export default function OrderDetailView({
         body: JSON.stringify({
           providerRateId: selectedRateId,
           shipmentId: selectedShipmentId || undefined,
-          provider: selectedLabelProvider || undefined,
+          provider: selectedProviderOverride,
           sendTrackingEmail: Boolean(labelSendTrackingEmail),
           items,
           parcel: parcelPayload,
@@ -708,7 +774,10 @@ export default function OrderDetailView({
           <div className={styles.headerMeta}>
             <h1 className={styles.title}>{currentOrder.orderNumber}</h1>
             <p className={styles.meta}>
-              {new Date(currentOrder.createdAt).toLocaleString()} - via{" "}
+              {formatDateTimeForDisplay(currentOrder.createdAt, {
+                timeZone: storeTimeZone,
+                fallbackText: "Unknown",
+              })} - via{" "}
               {currentOrder.sourceChannel || currentOrder.channel || "online store"}
             </p>
           </div>
@@ -882,7 +951,7 @@ export default function OrderDetailView({
                 type="button"
               >
                 <strong>Buy shipping label</strong>
-                <span>Purchase postage through Shippo or EasyPost, create fulfillment, and save tracking automatically.</span>
+                <span>Purchase postage through a connected provider, create fulfillment, and save tracking automatically.</span>
               </button>
               <button
                 className={`${styles.methodCard} ${fulfillmentMethod === "MANUAL_TRACKING" ? styles.methodCardActive : ""}`}
@@ -900,7 +969,7 @@ export default function OrderDetailView({
                 {!hasAnyConnectedProvider ? (
                   <div className={styles.noProviderNotice}>
                     <span>
-                      No label provider connected. Configure Shippo or EasyPost in{" "}
+                      No label provider connected. Configure label providers in{" "}
                       <Link className={styles.inlineLinkButton} href="/admin/settings/shipping">
                         Shipping settings
                       </Link>
@@ -909,25 +978,58 @@ export default function OrderDetailView({
                   </div>
                 ) : (
                   <>
-                    {connectedProviders.length > 1 ? (
+                    {labelProviderSelection.connectedProviders.length > 1 ? (
                       <div className={styles.providerSelectorRow}>
-                        <span className={styles.metaText}>Provider</span>
+                        <div className={styles.providerSelectorHeader}>
+                          <span className={styles.metaText}>Label provider</span>
+                          <Link className={styles.inlineLinkButton} href="/admin/settings/shipping">
+                            Manage providers
+                          </Link>
+                        </div>
                         <div className={styles.providerSelectorButtons}>
-                          {connectedProviders.map((provider) => (
+                          <button
+                            className={`${styles.providerSelectorButton} ${selectedLabelProviderChoice === STORE_DEFAULT_LABEL_PROVIDER_OPTION ? styles.providerSelectorButtonActive : ""}`}
+                            onClick={() => setSelectedLabelProviderChoice(STORE_DEFAULT_LABEL_PROVIDER_OPTION)}
+                            type="button"
+                          >
+                            Store default
+                          </button>
+                          {labelProviderSelection.connectedProviders.map((provider) => (
                             <button
-                              className={`${styles.providerSelectorButton} ${selectedLabelProvider === provider ? styles.providerSelectorButtonActive : ""}`}
+                              className={`${styles.providerSelectorButton} ${selectedLabelProviderChoice === provider ? styles.providerSelectorButtonActive : ""}`}
                               key={provider}
-                              onClick={() => setSelectedLabelProvider(provider)}
+                              onClick={() => setSelectedLabelProviderChoice(provider)}
                               type="button"
                             >
                               {providerLabel(provider)}
                             </button>
                           ))}
                         </div>
+                        <p className={styles.metaText}>
+                          {labelProviderSelection.storeDefaultProvider
+                            ? `Store default: ${providerLabel(labelProviderSelection.storeDefaultProvider)}`
+                            : "Store default is not configured. A connected provider will be used."}
+                        </p>
                       </div>
+                    ) : (
+                      <div className={styles.providerSingleRow}>
+                        <span className={styles.metaText}>Label provider</span>
+                        <span className={styles.providerSingleMeta}>
+                          {providerLabel(selectedProviderForLabel)} · Connected
+                        </span>
+                        <Link className={styles.inlineLinkButton} href="/admin/settings/shipping">
+                          Manage providers
+                        </Link>
+                      </div>
+                    )}
+
+                    {labelProviderSelection.selectedProviderDisconnected ? (
+                      <p className={styles.providerInlineError}>
+                        {providerLabel(selectedProviderForLabel)} is disconnected. Choose a connected provider or update Shipping settings.
+                      </p>
                     ) : null}
 
-                    <h4 className={styles.workflowTitle}>Buy shipping label with {providerLabel(selectedLabelProvider || connectedProviders[0])}</h4>
+                    <h4 className={styles.workflowTitle}>Buy shipping label with {providerLabel(selectedProviderForLabel || rateProvider)}</h4>
                     <div className={styles.formGrid}>
                       <AdminField hint="Required for label purchase." label="Weight (oz)">
                         <AdminInput
@@ -981,19 +1083,32 @@ export default function OrderDetailView({
                       </span>
                     </label>
                     <div className={styles.actionRow}>
-                      <AdminButton loading={ratesLoading} onClick={loadShippingRates} size="sm" variant="secondary">
-                        Get {providerLabel(selectedLabelProvider || connectedProviders[0])} label rates
+                      <AdminButton
+                        disabled={labelProviderSelection.selectedProviderDisconnected}
+                        loading={ratesLoading}
+                        onClick={loadShippingRates}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Get label rates
                       </AdminButton>
                     </div>
 
-                    {ratesLoading ? <p className={styles.metaText}>Loading {providerLabel(selectedLabelProvider || connectedProviders[0])} label rates…</p> : null}
+                    {ratesLoading ? <p className={styles.metaText}>Loading label rates…</p> : null}
+                    {!ratesLoading && ratesLoadAttempted && !rateQuotes.length ? (
+                      <AdminEmptyState
+                        description="No rates were returned for this package. Adjust parcel details or try another provider."
+                        title="No label rates available"
+                      />
+                    ) : null}
                     {rateQuotes.length ? (
                       <>
-                        <p className={styles.metaText}>{providerLabel(rateProvider || selectedLabelProvider)} label rates</p>
+                        <p className={styles.metaText}>{providerLabel(rateProvider || selectedProviderForLabel)} label rates</p>
                         <div className={styles.rateList}>
                           {rateQuotes.map((quote) => {
                             const rateId = quote.providerRateId || quote.id;
                             const selected = selectedRateId === rateId;
+                            const quoteProvider = quote.source || rateProvider || selectedProviderForLabel;
                             return (
                               <label className={`${styles.rateRow} ${selected ? styles.rateRowSelected : ""}`} key={rateId}>
                                 <input
@@ -1008,9 +1123,13 @@ export default function OrderDetailView({
                                   type="radio"
                                 />
                                 <span>
-                                  <strong>{quote.carrier || "Carrier"} · {quote.service || "Service"}</strong>
+                                  <strong>
+                                    <span className={styles.rateProviderBadge}>{providerLabel(quoteProvider)}</span>
+                                    {" "}
+                                    {quote.carrier || "Carrier"} · {quote.service || "Service"}
+                                  </strong>
                                   <small>
-                                    {formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)} · {providerLabel(rateProvider || selectedLabelProvider)}
+                                    {formatMoney((quote.amountCents || 0) / 100, quote.currency || currency)}
                                     {quote.estimatedDeliveryText ? ` · ${quote.estimatedDeliveryText}` : ""}
                                   </small>
                                 </span>
@@ -1025,8 +1144,8 @@ export default function OrderDetailView({
                               size="sm"
                             >
                               {selectedRateQuote
-                                ? `Buy label with ${providerLabel(selectedLabelProvider || rateProvider)} — ${formatMoney((selectedRateQuote.amountCents || 0) / 100, selectedRateQuote.currency || currency)}`
-                                : `Buy label with ${providerLabel(selectedLabelProvider || rateProvider)}`}
+                                ? `Buy label with ${providerLabel(selectedProviderForLabel || rateProvider)} — ${formatMoney((selectedRateQuote.amountCents || 0) / 100, selectedRateQuote.currency || currency)}`
+                                : `Buy label with ${providerLabel(selectedProviderForLabel || rateProvider)}`}
                             </AdminButton>
                           </div>
                         </div>
@@ -1233,7 +1352,7 @@ export default function OrderDetailView({
                   <div className={styles.timelineRow} key={entry.id}>
                     <strong>{entry.event || entry.title || entry.type}</strong>
                     {entry.detail ? <p>{entry.detail}</p> : null}
-                    <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                    <small>{formatDateTimeForDisplay(entry.createdAt, { timeZone: storeTimeZone, fallbackText: "Unknown" })}</small>
                   </div>
                 ))}
               </div>
@@ -1355,7 +1474,7 @@ export default function OrderDetailView({
                   {customerVisibleNotes.map((entry) => (
                     <div className={styles.noteHistoryRow} key={entry.id}>
                       <strong>{entry.note}</strong>
-                      <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                      <small>{formatDateTimeForDisplay(entry.createdAt, { timeZone: storeTimeZone, fallbackText: "Unknown" })}</small>
                     </div>
                   ))}
                 </div>

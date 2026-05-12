@@ -1,95 +1,16 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  buildSettingsPatchPayload,
+  SETTINGS_DEFAULTS,
+  transformStore,
+} from './settings-context.helpers'
 
 const SettingsContext = createContext(null);
 
-const DEFAULT_SETTINGS = {
-  storeName: 'Doopify Store',
-  supportEmail: 'support@doopify.com',
-  phone: '',
-  address: '',
-  timezone: 'America/New_York',
-  currency: 'USD',
-  logoUrl: '',
-  brandPrimary: '#004fc4',
-  brandAccent: '#60a5fa',
-  orderPrefix: 'DPY',
-  defaultLocation: 'Main warehouse',
-  shippingOrigin: 'Main warehouse',
-  freeShippingThreshold: '100',
-  domesticShippingRate: '9.99',
-  internationalShippingRate: '19.99',
-  domesticTaxRate: '7',
-  internationalTaxRate: '0',
-  taxEnabled: false,
-  taxStrategy: 'NONE',
-  defaultTaxRatePercent: '0',
-  taxShipping: false,
-  pricesIncludeTax: false,
-  taxOriginCountry: '',
-  taxOriginState: '',
-  taxOriginPostalCode: '',
-  senderEmail: 'hello@doopify.com',
-  lowInventoryAlert: '5',
-};
-
-function parseNumberField(value) {
-  if (value == null || value === '') return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function transformStore(store) {
-  const address = [store.address1, store.city, store.province, store.country]
-    .filter(Boolean)
-    .join(', ');
-
-  return {
-    storeName: store.name || DEFAULT_SETTINGS.storeName,
-    supportEmail: store.email || DEFAULT_SETTINGS.supportEmail,
-    phone: store.phone || '',
-    address,
-    timezone: store.timezone || DEFAULT_SETTINGS.timezone,
-    currency: store.currency || 'USD',
-    logoUrl: store.logoUrl || '',
-    brandPrimary: store.primaryColor || DEFAULT_SETTINGS.brandPrimary,
-    brandAccent: store.secondaryColor || DEFAULT_SETTINGS.brandAccent,
-    orderPrefix: 'DPY',
-    defaultLocation: store.city || DEFAULT_SETTINGS.defaultLocation,
-    shippingOrigin: store.city || DEFAULT_SETTINGS.shippingOrigin,
-    freeShippingThreshold: store.shippingThreshold?.toString() || DEFAULT_SETTINGS.freeShippingThreshold,
-    domesticShippingRate:
-      store.shippingDomesticRate?.toString() || DEFAULT_SETTINGS.domesticShippingRate,
-    internationalShippingRate:
-      store.shippingInternationalRate?.toString() || DEFAULT_SETTINGS.internationalShippingRate,
-    domesticTaxRate:
-      store.domesticTaxRate != null
-        ? String(Number(store.domesticTaxRate) * 100)
-        : DEFAULT_SETTINGS.domesticTaxRate,
-    internationalTaxRate:
-      store.internationalTaxRate != null
-        ? String(Number(store.internationalTaxRate) * 100)
-        : DEFAULT_SETTINGS.internationalTaxRate,
-    taxEnabled: Boolean(store.taxEnabled),
-    taxStrategy: store.taxStrategy || DEFAULT_SETTINGS.taxStrategy,
-    defaultTaxRatePercent:
-      store.defaultTaxRatePercent != null
-        ? String(Number(store.defaultTaxRatePercent))
-        : DEFAULT_SETTINGS.defaultTaxRatePercent,
-    taxShipping: Boolean(store.taxShipping),
-    pricesIncludeTax: Boolean(store.pricesIncludeTax),
-    taxOriginCountry: store.taxOriginCountry || '',
-    taxOriginState: store.taxOriginState || '',
-    taxOriginPostalCode: store.taxOriginPostalCode || '',
-    senderEmail: store.email || DEFAULT_SETTINGS.senderEmail,
-    lowInventoryAlert: '5',
-    _storeId: store.id,
-  };
-}
-
 export function SettingsProvider({ children }) {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -119,47 +40,7 @@ export function SettingsProvider({ children }) {
       await fetch('/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: patch.storeName,
-          email: patch.supportEmail,
-          phone: patch.phone,
-          timezone: patch.timezone,
-          currency: patch.currency,
-          logoUrl: patch.logoUrl,
-          primaryColor: patch.brandPrimary,
-          secondaryColor: patch.brandAccent,
-          shippingThreshold: parseNumberField(patch.freeShippingThreshold),
-          shippingDomesticRate: parseNumberField(patch.domesticShippingRate),
-          shippingInternationalRate: parseNumberField(patch.internationalShippingRate),
-          domesticTaxRate:
-            patch.domesticTaxRate != null && patch.domesticTaxRate !== ''
-              ? Number(patch.domesticTaxRate) / 100
-              : undefined,
-          internationalTaxRate:
-            patch.internationalTaxRate != null && patch.internationalTaxRate !== ''
-              ? Number(patch.internationalTaxRate) / 100
-              : undefined,
-          taxEnabled: patch.taxEnabled,
-          taxStrategy: patch.taxStrategy,
-          defaultTaxRatePercent:
-            patch.defaultTaxRatePercent != null && patch.defaultTaxRatePercent !== ''
-              ? Number(patch.defaultTaxRatePercent)
-              : undefined,
-          taxShipping: patch.taxShipping,
-          pricesIncludeTax: patch.pricesIncludeTax,
-          taxOriginCountry:
-            patch.taxOriginCountry !== undefined
-              ? patch.taxOriginCountry || null
-              : undefined,
-          taxOriginState:
-            patch.taxOriginState !== undefined
-              ? patch.taxOriginState || null
-              : undefined,
-          taxOriginPostalCode:
-            patch.taxOriginPostalCode !== undefined
-              ? patch.taxOriginPostalCode || null
-              : undefined,
-        }),
+        body: JSON.stringify(buildSettingsPatchPayload(patch)),
       });
     } catch (e) {
       console.error('[SettingsContext] save failed', e);

@@ -23,6 +23,11 @@ import SettingsPageSkeleton from './SettingsSkeletons';
 import ShippingSettingsWorkspace from './ShippingSettingsWorkspace';
 import TeamSettingsPanel from './TeamSettingsPanel';
 import AccountSettingsPanel from './AccountSettingsPanel';
+import { formatDateTimeForDisplay } from '@/lib/date-time-format';
+import {
+  STORE_CURRENCY_OPTIONS,
+  STORE_TIMEZONE_OPTIONS,
+} from '@/lib/store-settings-options';
 import {
   buildStripeCredentialSavePayload,
   buildStripeMaskedCredentialMap,
@@ -355,6 +360,9 @@ const STRIPE_MODE_OPTIONS = [
   { value: 'live', label: 'live' },
 ];
 
+export const GENERAL_SETTINGS_CURRENCY_OPTIONS = STORE_CURRENCY_OPTIONS;
+export const GENERAL_SETTINGS_TIMEZONE_OPTIONS = STORE_TIMEZONE_OPTIONS;
+
 function parseNumberOrUndefined(value) {
   if (value == null || value === '') return undefined;
   const parsed = Number(value);
@@ -535,10 +543,11 @@ function formatEventType(value) {
     .trim();
 }
 
-function formatDateTime(value) {
-  if (!value) return 'Not verified yet';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? 'Not verified yet' : parsed.toLocaleString();
+function formatDateTime(value, timeZone) {
+  return formatDateTimeForDisplay(value, {
+    timeZone,
+    fallbackText: 'Not verified yet',
+  });
 }
 
 function statusToneFromLabel(value) {
@@ -718,7 +727,7 @@ export function buildPaymentProviderRows(input) {
   ];
 }
 
-export function buildPaymentActivityRowsFromOrders(orders) {
+export function buildPaymentActivityRowsFromOrders(orders, timeZone) {
   const rows = [];
   for (const order of orders || []) {
     const orderPayments = Array.isArray(order?.payments) ? order.payments : [];
@@ -737,9 +746,9 @@ export function buildPaymentActivityRowsFromOrders(orders) {
         id: payment.id || `${order.id || order.orderNumber}-${payment.stripePaymentIntentId || 'payment'}`,
         dateValue: payment.createdAt || order.createdAt || null,
         dateText: payment.createdAt
-          ? new Date(payment.createdAt).toLocaleString()
+          ? formatDateTimeForDisplay(payment.createdAt, { timeZone, fallbackText: 'Unknown' })
           : order.createdAt
-            ? new Date(order.createdAt).toLocaleString()
+            ? formatDateTimeForDisplay(order.createdAt, { timeZone, fallbackText: 'Unknown' })
             : 'Unknown',
         orderText: order.orderNumber ? `#${String(order.orderNumber).replace(/^#/, '')}` : 'Unknown',
         providerText: formatProviderLabel(payment.provider),
@@ -1248,7 +1257,7 @@ export default function SettingsWorkspace() {
         // TODO(phase4): Replace this with a dedicated payment/refund activity endpoint when available.
         const payload = await fetch('/api/orders?page=1&pageSize=25', { cache: 'no-store' }).then(parseApiJson);
         if (cancelled) return;
-        const rows = buildPaymentActivityRowsFromOrders(payload?.orders || []);
+        const rows = buildPaymentActivityRowsFromOrders(payload?.orders || [], settings.timezone);
         setPaymentActivityRows(rows);
         setPaymentActivityLoaded(true);
       } catch (loadError) {
@@ -1265,7 +1274,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, paymentActivityLoaded]);
+  }, [activeSection, paymentActivityLoaded, settings.timezone]);
 
   useEffect(() => {
     if (activeSection !== 'email' || emailActivityLoaded) {
@@ -1282,7 +1291,10 @@ export default function SettingsWorkspace() {
         if (cancelled) return;
         const rows = (payload?.deliveries || []).map((delivery) => ({
           id: delivery.id,
-          dateText: delivery.createdAt ? new Date(delivery.createdAt).toLocaleString() : 'Unknown',
+          dateText: formatDateTimeForDisplay(delivery.createdAt, {
+            timeZone: settings.timezone,
+            fallbackText: 'Unknown',
+          }),
           recipientText: delivery.recipientEmail || 'Unknown',
           templateText: formatEventType(delivery.template || delivery.event || 'email'),
           statusText: normalizeStatusLabel(delivery.status) || 'unknown',
@@ -1305,7 +1317,7 @@ export default function SettingsWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [activeSection, emailActivityLoaded]);
+  }, [activeSection, emailActivityLoaded, settings.timezone]);
 
   useEffect(() => {
     const fallbackEmail = String(settings.supportEmail || settings.senderEmail || '').trim();
@@ -1610,7 +1622,7 @@ export default function SettingsWorkspace() {
       { label: 'Credentials source', value: stripeCheckoutSourceLabel },
       { label: 'API keys', value: stripeHasSavedRequiredKeys ? 'Saved' : 'Missing required keys' },
       { label: 'Webhook', value: stripeWebhookSourceLabel },
-      { label: 'Last verified', value: formatDateTime(stripeSetupStatus.lastVerifiedAt) },
+      { label: 'Last verified', value: formatDateTime(stripeSetupStatus.lastVerifiedAt, settings.timezone) },
     ],
     [
       stripeConnectionPresentation.badgeLabel,
@@ -2931,11 +2943,27 @@ export default function SettingsWorkspace() {
                         value={settings.phone || ''}
                       />
                     </AdminField>
-                    <AdminField label="Timezone">
-                      <AdminInput onChange={(event) => handleSettingsPatch({ timezone: event.target.value })} value={settings.timezone || ''} />
+                    <AdminField
+                      hint="Used for admin date displays, scheduled actions, and merchant-facing timestamps."
+                      label="Time zone"
+                    >
+                      <AdminSelect
+                        className={styles.input}
+                        onChange={(nextValue) => handleSettingsPatch({ timezone: nextValue })}
+                        options={GENERAL_SETTINGS_TIMEZONE_OPTIONS}
+                        value={settings.timezone || 'America/New_York'}
+                      />
                     </AdminField>
-                    <AdminField label="Currency">
-                      <AdminInput onChange={(event) => handleSettingsPatch({ currency: event.target.value })} value={settings.currency || 'USD'} />
+                    <AdminField
+                      hint="Used for new checkout sessions, payment intents, shipping rates, and new orders. Existing orders keep their original currency."
+                      label="Currency"
+                    >
+                      <AdminSelect
+                        className={styles.input}
+                        onChange={(nextValue) => handleSettingsPatch({ currency: nextValue })}
+                        options={GENERAL_SETTINGS_CURRENCY_OPTIONS}
+                        value={settings.currency || 'USD'}
+                      />
                     </AdminField>
                   </div>
                 </AdminCard>
@@ -3520,7 +3548,7 @@ export default function SettingsWorkspace() {
                             <strong>Active source:</strong> {providerRow.status.sourceLabel || 'Not active'}
                           </p>
                           <p className={styles.compactMeta}>
-                            <strong>Last verified:</strong> {formatDateTime(providerRow.status.lastVerifiedAt)}
+                            <strong>Last verified:</strong> {formatDateTime(providerRow.status.lastVerifiedAt, settings.timezone)}
                           </p>
                           <div className={`${styles.methodChipRow} ${styles.compactChipRow}`}>
                             {providerRow.chips.map((chip) => (
@@ -3675,7 +3703,12 @@ export default function SettingsWorkspace() {
                     <p className={styles.statusText}>{smtpSetupStatus.detail}</p>
                     <p className={styles.statusText}>
                       <strong>Active source:</strong> {smtpSetupStatus.sourceLabel || 'Not active'}
-                      {smtpSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(smtpSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
+                      {smtpSetupStatus.lastVerifiedAt
+                        ? ` • Last verified ${formatDateTimeForDisplay(smtpSetupStatus.lastVerifiedAt, {
+                            timeZone: settings.timezone,
+                            fallbackText: 'Not verified yet',
+                          })}`
+                        : ''}
                     </p>
                     <div className={styles.inlineGrid}>
                       <label className={styles.field}>
@@ -3761,7 +3794,12 @@ export default function SettingsWorkspace() {
                     <p className={styles.statusText}>{resendSetupStatus.detail}</p>
                     <p className={styles.statusText}>
                       <strong>Active source:</strong> {resendSetupStatus.sourceLabel || 'Not active'}
-                      {resendSetupStatus.lastVerifiedAt ? ` • Last verified ${new Date(resendSetupStatus.lastVerifiedAt).toLocaleString()}` : ''}
+                      {resendSetupStatus.lastVerifiedAt
+                        ? ` • Last verified ${formatDateTimeForDisplay(resendSetupStatus.lastVerifiedAt, {
+                            timeZone: settings.timezone,
+                            fallbackText: 'Not verified yet',
+                          })}`
+                        : ''}
                     </p>
                     <div className={styles.inlineGrid}>
                       <label className={styles.field}>
@@ -4692,7 +4730,7 @@ export default function SettingsWorkspace() {
                   <strong>Webhook status:</strong> {describeResendSetup(setupCheckById).label}
                 </p>
                 <p className={styles.compactMeta}>
-                  <strong>Last verified:</strong> {formatDateTime(resendSetupStatus.lastVerifiedAt)}
+                  <strong>Last verified:</strong> {formatDateTime(resendSetupStatus.lastVerifiedAt, settings.timezone)}
                 </p>
               </div>
             </AdminCard>
@@ -4809,7 +4847,7 @@ export default function SettingsWorkspace() {
                   <strong>Active source:</strong> {smtpSetupStatus.sourceLabel || 'Not active'}
                 </p>
                 <p className={styles.compactMeta}>
-                  <strong>Last verified:</strong> {formatDateTime(smtpSetupStatus.lastVerifiedAt)}
+                  <strong>Last verified:</strong> {formatDateTime(smtpSetupStatus.lastVerifiedAt, settings.timezone)}
                 </p>
               </div>
             </AdminCard>

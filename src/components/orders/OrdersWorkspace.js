@@ -16,6 +16,8 @@ import AdminStatusChip from '../admin/ui/AdminStatusChip';
 import AdminTable from '../admin/ui/AdminTable';
 import AdminToolbar from '../admin/ui/AdminToolbar';
 import { useOrders } from '../../context/OrdersContext';
+import { useSettings } from '../../context/SettingsContext';
+import { formatDateTimeForDisplay } from '../../lib/date-time-format';
 import {
   ORDER_PAYMENT_STATUSES,
   ORDER_VIEWS,
@@ -45,12 +47,28 @@ function getStatusTone(status) {
   return 'neutral';
 }
 
-function formatDashboardDate(value) {
-  return new Date(value).toLocaleDateString([], { month: 'short', day: 'numeric' });
+function formatDashboardDate(value, timeZone) {
+  return formatDateTimeForDisplay(value, {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+    year: undefined,
+    hour: undefined,
+    minute: undefined,
+    fallbackText: '-',
+  });
 }
 
-function formatDashboardTime(value) {
-  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function formatDashboardTime(value, timeZone) {
+  return formatDateTimeForDisplay(value, {
+    timeZone,
+    month: undefined,
+    day: undefined,
+    year: undefined,
+    hour: 'numeric',
+    minute: '2-digit',
+    fallbackText: '-',
+  });
 }
 
 const selectOptions = (label, values) => [
@@ -61,6 +79,7 @@ const selectOptions = (label, values) => [
 export default function OrdersWorkspace() {
   const router = useRouter();
   const { orders, setOrders, loading, error } = useOrders();
+  const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState('all');
   const [selectedIds, setSelectedIds] = useState([]);
@@ -185,8 +204,8 @@ export default function OrdersWorkspace() {
       header: 'Placed',
       render: (order) => (
         <div className={styles.statCell}>
-          <strong>{formatDashboardDate(order.createdAt)}</strong>
-          <small>{formatDashboardTime(order.createdAt)}</small>
+          <strong>{formatDashboardDate(order.createdAt, settings?.timezone)}</strong>
+          <small>{formatDashboardTime(order.createdAt, settings?.timezone)}</small>
         </div>
       ),
     },

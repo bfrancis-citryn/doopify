@@ -20,10 +20,10 @@ function formatCompactNumber(value) {
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }
 
-function formatCurrency(value) {
+function formatCurrency(value, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: String(currency || 'USD').toUpperCase(),
     maximumFractionDigits: value >= 1000 ? 0 : 2,
   }).format(value);
 }
@@ -169,7 +169,11 @@ export default function AdminDashboardWorkspace() {
 
         <AdminStatsGrid>
           <AdminStatCard label="Orders" meta="Active system queue" value={loading ? '--' : formatCompactNumber(orders.length)} />
-          <AdminStatCard label="Gross sales" meta="Across all recorded orders" value={loading ? '--' : formatCurrency(overview.grossSales)} />
+          <AdminStatCard
+            label="Gross sales"
+            meta="Across all recorded orders"
+            value={loading ? '--' : formatCurrency(overview.grossSales, settings?.currency || 'USD')}
+          />
           <AdminStatCard label="Active catalog" meta="Products currently sellable" value={loading ? '--' : formatCompactNumber(overview.activeProducts)} />
           <AdminStatCard label="Customers" meta="Profiles available to support" value={loading ? '--' : formatCompactNumber(customers.length)} />
         </AdminStatsGrid>

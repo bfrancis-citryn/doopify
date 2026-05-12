@@ -403,6 +403,14 @@
   margin-bottom: 0.8rem;
 }
 
+.providerSelectorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .providerSelectorButtons {
   display: flex;
   gap: 0.5rem;
@@ -423,6 +431,43 @@
   border-color: color-mix(in srgb, var(--primary) 55%, var(--glass-border));
   color: var(--on-surface);
   background: color-mix(in srgb, var(--primary) 14%, var(--surface-container-low));
+}
+
+.providerSingleRow {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+
+.providerSingleMeta {
+  font-size: 0.78rem;
+  color: var(--on-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.2rem 0.58rem;
+  background: color-mix(in srgb, var(--surface-container-low) 74%, transparent);
+}
+
+.providerInlineError {
+  margin: 0 0 0.75rem;
+  color: var(--danger, #cc3b3b);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.rateProviderBadge {
+  display: inline-block;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.4rem;
+  background: color-mix(in srgb, var(--surface-container-low) 76%, transparent);
+  vertical-align: middle;
 }
 
 .inlineHelper {

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ok, err, parseBody } from '@/lib/api'
 import { centsToDollars, dollarsToCents } from '@/lib/money'
+import { SUPPORTED_STORE_CURRENCIES, SUPPORTED_STORE_TIMEZONES } from '@/lib/store-settings-options'
 import { requireAdmin } from '@/server/auth/require-auth'
 import { getStoreSettings, updateStoreSettings } from '@/server/services/settings.service'
 
@@ -30,8 +31,8 @@ const updateSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().optional(),
   domain: z.string().optional(),
-  currency: z.string().length(3).optional(),
-  timezone: z.string().optional(),
+  currency: z.enum(SUPPORTED_STORE_CURRENCIES).optional(),
+  timezone: z.enum(SUPPORTED_STORE_TIMEZONES).optional(),
   logoUrl: z.union([z.string().url(), z.literal('')]).optional(),
   primaryColor: z.string().optional(),
   secondaryColor: z.string().optional(),

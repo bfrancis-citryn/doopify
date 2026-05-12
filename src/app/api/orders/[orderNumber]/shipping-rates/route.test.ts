@@ -21,6 +21,11 @@ const validPayload = {
   parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
 }
 
+const validPayloadWithoutProvider = {
+  items: [{ orderItemId: 'oi_1', quantity: 1 }],
+  parcel: { weightOz: 12, lengthIn: 10, widthIn: 8, heightIn: 4 },
+}
+
 describe('POST /api/orders/[orderNumber]/shipping-rates', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -91,6 +96,35 @@ describe('POST /api/orders/[orderNumber]/shipping-rates', () => {
         quotes: [{ providerRateId: 'rate_1', amountCents: 642 }],
       },
     })
+  })
+
+  it('falls back to store default provider when provider override is not supplied', async () => {
+    mocks.requireAdmin.mockResolvedValue({
+      ok: true,
+      user: { id: 'user_1', role: 'OWNER' },
+    })
+    mocks.getOrderShippingRatesForLabel.mockResolvedValue({
+      provider: 'SHIPPO',
+      source: 'SHIPPO',
+      currency: 'USD',
+      quotes: [],
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/orders/1001/shipping-rates', {
+        method: 'POST',
+        body: JSON.stringify(validPayloadWithoutProvider),
+      }),
+      { params: Promise.resolve({ orderNumber: '1001' }) }
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.getOrderShippingRatesForLabel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderNumber: 1001,
+        provider: undefined,
+      })
+    )
   })
 })
 
