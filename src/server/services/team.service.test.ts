@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
       findMany: vi.fn(),
     },
     userInvite: {
@@ -47,6 +48,9 @@ const mocks = vi.hoisted(() => ({
     session: {
       deleteMany: vi.fn(),
       findMany: vi.fn(),
+    },
+    mfaLoginChallenge: {
+      deleteMany: vi.fn(),
     },
     passwordReset: {
       create: vi.fn(),
@@ -91,6 +95,8 @@ import {
   resendTeamInvite,
   revokeTeamInvite,
   revokeUserSessions,
+  deleteDisabledTeamUser,
+  updateTeamUserProfile,
   updateTeamUserRole,
 } from './team.service'
 
@@ -104,6 +110,7 @@ describe('team service', () => {
     mocks.prisma.$transaction.mockImplementation(async (cb: any) => cb(mocks.prisma))
     mocks.prisma.session.deleteMany.mockResolvedValue({ count: 0 })
     mocks.prisma.passwordReset.deleteMany.mockResolvedValue({ count: 0 })
+    mocks.prisma.mfaLoginChallenge.deleteMany.mockResolvedValue({ count: 0 })
     mocks.recordAuditLogBestEffort.mockResolvedValue(null)
   })
 
@@ -407,6 +414,69 @@ describe('team service', () => {
     })
   })
 
+  describe('updateTeamUserProfile', () => {
+    it('updates first and last name for a team member', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'staff@example.com',
+        firstName: null,
+        lastName: null,
+        role: 'STAFF',
+        isActive: true,
+        lastLoginAt: null,
+        createdAt: new Date(),
+      })
+      mocks.prisma.user.update.mockResolvedValue({
+        id: 'u1',
+        email: 'staff@example.com',
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        role: 'STAFF',
+        isActive: true,
+        lastLoginAt: null,
+        createdAt: new Date(),
+      })
+
+      const result = await updateTeamUserProfile('u1', { firstName: 'Ada', lastName: 'Lovelace' })
+      expect(result.firstName).toBe('Ada')
+      expect(result.lastName).toBe('Lovelace')
+    })
+
+    it('normalizes empty names to null', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'staff@example.com',
+        firstName: 'Old',
+        lastName: 'Name',
+        role: 'STAFF',
+        isActive: true,
+        lastLoginAt: null,
+        createdAt: new Date(),
+      })
+      mocks.prisma.user.update.mockResolvedValue({
+        id: 'u1',
+        email: 'staff@example.com',
+        firstName: null,
+        lastName: null,
+        role: 'STAFF',
+        isActive: true,
+        lastLoginAt: null,
+        createdAt: new Date(),
+      })
+
+      await updateTeamUserProfile('u1', { firstName: '   ', lastName: '' })
+
+      expect(mocks.prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            firstName: null,
+            lastName: null,
+          }),
+        })
+      )
+    })
+  })
+
   // ── disableTeamUser ─────────────────────────────────────────────────────────
 
   describe('disableTeamUser', () => {
@@ -444,6 +514,68 @@ describe('team service', () => {
 
       const result = await reactivateTeamUser('user_1')
       expect(result.isActive).toBe(true)
+    })
+  })
+
+  describe('deleteDisabledTeamUser', () => {
+    it('deletes a disabled user and cleans up auth artifacts', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'disabled@example.com',
+        role: 'STAFF',
+        isActive: false,
+      })
+      mocks.prisma.session.deleteMany.mockResolvedValue({ count: 2 })
+      mocks.prisma.passwordReset.deleteMany.mockResolvedValue({ count: 1 })
+      mocks.prisma.mfaLoginChallenge.deleteMany.mockResolvedValue({ count: 3 })
+      mocks.prisma.user.delete.mockResolvedValue({ id: 'u1' })
+
+      const result = await deleteDisabledTeamUser('u1', {
+        id: 'owner_1',
+        email: 'owner@example.com',
+        role: 'OWNER',
+      })
+
+      expect(mocks.prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } })
+      expect(result.deleted).toBe(true)
+      expect(result.cleanup).toEqual({
+        sessionsDeleted: 2,
+        passwordResetsDeleted: 1,
+        mfaChallengesDeleted: 3,
+      })
+    })
+
+    it('prevents deleting an active user', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        email: 'active@example.com',
+        role: 'STAFF',
+        isActive: true,
+      })
+
+      await expect(
+        deleteDisabledTeamUser('u1', { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' })
+      ).rejects.toThrow('Only disabled users can be deleted')
+    })
+
+    it('prevents deleting your own account', async () => {
+      await expect(
+        deleteDisabledTeamUser('owner_1', { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' })
+      ).rejects.toThrow('cannot delete your own account')
+    })
+
+    it('prevents deleting the only owner account', async () => {
+      mocks.prisma.user.findUnique.mockResolvedValue({
+        id: 'owner_2',
+        email: 'owner2@example.com',
+        role: 'OWNER',
+        isActive: false,
+      })
+      mocks.prisma.user.count.mockResolvedValue(0)
+
+      await expect(
+        deleteDisabledTeamUser('owner_2', { id: 'owner_1', email: 'owner@example.com', role: 'OWNER' })
+      ).rejects.toThrow('only OWNER account')
     })
   })
 

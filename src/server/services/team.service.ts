@@ -443,6 +443,66 @@ export async function updateTeamUserRole(
 
 // ── Disable user ────────────────────────────────────────────────────────────
 
+export type UpdateTeamUserProfileInput = {
+  firstName?: string | null
+  lastName?: string | null
+}
+
+export async function updateTeamUserProfile(
+  userId: string,
+  input: UpdateTeamUserProfileInput,
+  actor?: { id: string; email: string; role: UserRole | string } | null
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      isActive: true,
+      lastLoginAt: true,
+      createdAt: true,
+    },
+  })
+  if (!user) throw new Error('User not found.')
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      firstName: trimToNull(input.firstName),
+      lastName: trimToNull(input.lastName),
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      isActive: true,
+      lastLoginAt: true,
+      createdAt: true,
+    },
+  })
+
+  await recordAuditLogBestEffort({
+    action: 'team.user_profile_updated',
+    actor: actor ? { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role } : { actorType: 'SYSTEM' },
+    resource: { type: 'User', id: userId },
+    summary: `Team profile updated for ${user.email}`,
+    snapshot: {
+      email: user.email,
+      previousFirstName: user.firstName,
+      previousLastName: user.lastName,
+      nextFirstName: updated.firstName,
+      nextLastName: updated.lastName,
+    },
+  })
+
+  return updated
+}
+
 export async function disableTeamUser(
   userId: string,
   actor?: { id: string; email: string; role: UserRole | string } | null
@@ -473,6 +533,67 @@ export async function disableTeamUser(
 }
 
 // ── Reactivate user ─────────────────────────────────────────────────────────
+
+export async function deleteDisabledTeamUser(
+  userId: string,
+  actor: { id: string; email: string; role: UserRole | string }
+) {
+  if (actor.id === userId) {
+    throw new Error('You cannot delete your own account.')
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, role: true, isActive: true },
+  })
+  if (!user) throw new Error('User not found.')
+  if (user.isActive) throw new Error('Only disabled users can be deleted.')
+
+  if (user.role === 'OWNER') {
+    const otherOwners = await prisma.user.count({
+      where: {
+        role: 'OWNER',
+        id: { not: userId },
+      },
+    })
+    if (otherOwners < 1) {
+      throw new Error('Cannot delete this user: this is the only OWNER account.')
+    }
+  }
+
+  const cleanup = await prisma.$transaction(async (tx) => {
+    const deletedSessions = await tx.session.deleteMany({ where: { userId } })
+    const deletedPasswordResets = await tx.passwordReset.deleteMany({ where: { userId } })
+    const deletedMfaChallenges = await tx.mfaLoginChallenge.deleteMany({ where: { userId } })
+    await tx.user.delete({ where: { id: userId } })
+
+    return {
+      sessionsDeleted: deletedSessions.count,
+      passwordResetsDeleted: deletedPasswordResets.count,
+      mfaChallengesDeleted: deletedMfaChallenges.count,
+    }
+  })
+
+  await recordAuditLogBestEffort({
+    action: 'team.user_deleted',
+    actor: { actorType: 'STAFF', actorId: actor.id, actorEmail: actor.email, actorRole: actor.role },
+    resource: { type: 'User', id: userId },
+    summary: `Disabled user deleted: ${user.email}`,
+    snapshot: {
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive,
+      cleanup,
+    },
+  })
+
+  return {
+    id: user.id,
+    email: user.email,
+    deleted: true as const,
+    cleanup,
+  }
+}
 
 export async function reactivateTeamUser(
   userId: string,

@@ -79,7 +79,7 @@ function parseTeamApiError(response, payload, fallbackMessage) {
   return `${fallbackMessage} (HTTP ${response.status})`;
 }
 
-export default function TeamSettingsPanel({ currentUserRole }) {
+export default function TeamSettingsPanel({ currentUserRole, currentUserId }) {
   const isOwner = isOwnerRole(currentUserRole);
   const isKnownNonOwner = isKnownNonOwnerRole(currentUserRole);
 
@@ -108,6 +108,8 @@ export default function TeamSettingsPanel({ currentUserRole }) {
   const [actionNotice, setActionNotice] = useState({});
   const [editRoleUserId, setEditRoleUserId] = useState('');
   const [editRoleValue, setEditRoleValue] = useState('STAFF');
+  const [editProfileUserId, setEditProfileUserId] = useState('');
+  const [editProfileForm, setEditProfileForm] = useState({ firstName: '', lastName: '' });
   const [openUserMenuId, setOpenUserMenuId] = useState('');
   const [openInviteMenuId, setOpenInviteMenuId] = useState('');
 
@@ -263,12 +265,68 @@ export default function TeamSettingsPanel({ currentUserRole }) {
         return;
       }
       setEditRoleUserId('');
+      setEditProfileUserId('');
       setOpenUserMenuId('');
       await loadTeam();
     } catch {
       setActionError((s) => ({ ...s, [userId]: 'An error occurred.' }));
     } finally {
       setActionLoading((s) => ({ ...s, [userId]: false }));
+    }
+  };
+
+  const openProfileEditor = (user) => {
+    setEditProfileUserId(user.id);
+    setEditProfileForm({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+    });
+    setActionError((s) => ({ ...s, [user.id]: '' }));
+  };
+
+  const deleteDisabledUserAccount = async (user) => {
+    if (user.isActive) return;
+
+    const proceed = window.confirm('Delete this disabled user permanently? This cannot be undone.');
+    if (!proceed) return;
+
+    const typed = window.prompt(
+      `Type ${user.email} or DELETE to confirm permanent deletion.`,
+      ''
+    );
+    if (typed == null) return;
+
+    const normalizedTyped = typed.trim();
+    if (normalizedTyped !== user.email && normalizedTyped.toUpperCase() !== 'DELETE') {
+      setActionError((s) => ({
+        ...s,
+        [user.id]: 'Confirmation did not match. Type the user email or DELETE to confirm.',
+      }));
+      return;
+    }
+
+    setActionLoading((s) => ({ ...s, [user.id]: true }));
+    setActionError((s) => ({ ...s, [user.id]: '' }));
+    setActionNotice((s) => ({ ...s, [user.id]: '' }));
+    try {
+      const res = await fetch(`/api/team/users/${user.id}`, { method: 'DELETE' });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActionError((s) => ({
+          ...s,
+          [user.id]: parseTeamApiError(res, payload, 'Failed to delete user account.'),
+        }));
+        return;
+      }
+
+      setOpenUserMenuId('');
+      setEditProfileUserId('');
+      setEditRoleUserId('');
+      await loadTeam();
+    } catch {
+      setActionError((s) => ({ ...s, [user.id]: 'An error occurred.' }));
+    } finally {
+      setActionLoading((s) => ({ ...s, [user.id]: false }));
     }
   };
 
@@ -382,6 +440,7 @@ export default function TeamSettingsPanel({ currentUserRole }) {
   };
 
   const activeOwnerCount = users.filter((user) => user.role === 'OWNER' && user.isActive).length;
+  const ownerCount = users.filter((user) => user.role === 'OWNER').length;
 
   return (
     <div className={styles.configStack}>
@@ -451,6 +510,11 @@ export default function TeamSettingsPanel({ currentUserRole }) {
             ) : (
               users.map((user) => {
                 const isOnlyActiveOwner = user.role === 'OWNER' && user.isActive && activeOwnerCount <= 1;
+                const isOnlyOwnerAccount = user.role === 'OWNER' && ownerCount <= 1;
+                const canDeleteDisabledUser =
+                  !user.isActive &&
+                  user.id !== currentUserId &&
+                  !isOnlyOwnerAccount;
 
                 return (
                   <AdminCard key={user.id} variant="inset" className={`${styles.brandRow} ${styles.teamRowCard}`} spotlight>
@@ -467,6 +531,11 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                         </div>
                         <p className={styles.compactMeta}>{user.email}</p>
                         <p className={styles.compactMeta}>Last login: {formatDate(user.lastLoginAt)}</p>
+                        {!user.isActive ? (
+                          <p className={styles.teamDisabledHelperText}>
+                            Disabled users cannot sign in. Delete is available after disable if you want to remove the account.
+                          </p>
+                        ) : null}
                         {isOnlyActiveOwner ? (
                           <p className={styles.teamOwnerGuardHint}>Add another active owner before disabling this account.</p>
                         ) : null}
@@ -491,6 +560,12 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                               </AdminButton>
                             )}
                           >
+                            <button
+                              type="button"
+                              onClick={() => openProfileEditor(user)}
+                            >
+                              Edit name
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
@@ -530,13 +605,25 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                                 </button>
                               </>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => patchUser(user.id, 'reactivate')}
-                                disabled={actionLoading[user.id]}
-                              >
-                                {actionLoading[user.id] ? 'Reactivating...' : 'Reactivate user'}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => patchUser(user.id, 'reactivate')}
+                                  disabled={actionLoading[user.id]}
+                                >
+                                  {actionLoading[user.id] ? 'Reactivating...' : 'Reactivate user'}
+                                </button>
+                                {user.id !== currentUserId ? (
+                                  <button
+                                    type="button"
+                                    className={canDeleteDisabledUser ? styles.teamMenuItemDanger : styles.teamMenuItemDisabled}
+                                    onClick={() => deleteDisabledUserAccount(user)}
+                                    disabled={!canDeleteDisabledUser || actionLoading[user.id]}
+                                  >
+                                    {actionLoading[user.id] ? 'Deleting...' : 'Delete account'}
+                                  </button>
+                                ) : null}
+                              </>
                             )}
                           </AdminDropdown>
                         </div>
@@ -566,6 +653,55 @@ export default function TeamSettingsPanel({ currentUserRole }) {
                             variant="ghost"
                             disabled={actionLoading[user.id]}
                             onClick={() => setEditRoleUserId('')}
+                          >
+                            Cancel
+                          </AdminButton>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {isOwner && editProfileUserId === user.id ? (
+                      <div className={styles.teamProfileEditor}>
+                        <p className={styles.teamProfileEditorTitle}>Edit name</p>
+                        <div className={styles.teamProfileEditorGrid}>
+                          <AdminField label="First name">
+                            <AdminInput
+                              value={editProfileForm.firstName}
+                              onChange={(event) =>
+                                setEditProfileForm((current) => ({ ...current, firstName: event.target.value }))
+                              }
+                              placeholder="First name"
+                            />
+                          </AdminField>
+                          <AdminField label="Last name">
+                            <AdminInput
+                              value={editProfileForm.lastName}
+                              onChange={(event) =>
+                                setEditProfileForm((current) => ({ ...current, lastName: event.target.value }))
+                              }
+                              placeholder="Last name"
+                            />
+                          </AdminField>
+                        </div>
+                        <div className={styles.teamRoleEditorControls}>
+                          <AdminButton
+                            size="sm"
+                            variant="primary"
+                            disabled={actionLoading[user.id]}
+                            onClick={() =>
+                              patchUser(user.id, 'update_profile', {
+                                firstName: editProfileForm.firstName,
+                                lastName: editProfileForm.lastName,
+                              })
+                            }
+                          >
+                            {actionLoading[user.id] ? 'Saving...' : 'Save'}
+                          </AdminButton>
+                          <AdminButton
+                            size="sm"
+                            variant="ghost"
+                            disabled={actionLoading[user.id]}
+                            onClick={() => setEditProfileUserId('')}
                           >
                             Cancel
                           </AdminButton>
