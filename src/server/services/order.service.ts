@@ -278,6 +278,7 @@ export async function createOrder(data: {
   stripePaymentIntentId?: string
   stripeChargeId?: string
   paymentStatus?: PaymentStatus
+  decrementInventory?: boolean
   fulfillmentStatus?: FulfillmentStatus
   status?: OrderStatus
 }) {
@@ -300,6 +301,7 @@ export async function createOrder(data: {
   })
 
   const paymentStatus = data.paymentStatus ?? 'PAID'
+  const shouldDecrementInventory = data.decrementInventory ?? paymentStatus === 'PAID'
   const fulfillmentStatus = data.fulfillmentStatus ?? 'UNFULFILLED'
   const orderStatus = data.status ?? 'OPEN'
   const discountApplications = data.discountApplications ?? []
@@ -307,16 +309,18 @@ export async function createOrder(data: {
 
   try {
     const order = await prisma.$transaction(async (tx) => {
-      for (const item of data.items) {
-        if (!item.variantId) continue
+      if (shouldDecrementInventory) {
+        for (const item of data.items) {
+          if (!item.variantId) continue
 
-        const updated = await tx.productVariant.updateMany({
-          where: { id: item.variantId, inventory: { gte: item.quantity } },
-          data: { inventory: { decrement: item.quantity } },
-        })
+          const updated = await tx.productVariant.updateMany({
+            where: { id: item.variantId, inventory: { gte: item.quantity } },
+            data: { inventory: { decrement: item.quantity } },
+          })
 
-        if (updated.count === 0) {
-          throw new Error(`Insufficient inventory for variant ${item.variantId}`)
+          if (updated.count === 0) {
+            throw new Error(`Insufficient inventory for variant ${item.variantId}`)
+          }
         }
       }
 

@@ -68,6 +68,7 @@ describe('convertDraftOrder', () => {
         customerId: 'cust_1',
         email: 'sam@example.com',
         paymentStatus: 'PENDING',
+        decrementInventory: false,
         shippingAmountCents: 1025,
         taxAmountCents: 150,
         discountAmountCents: 500,
@@ -87,6 +88,39 @@ describe('convertDraftOrder', () => {
       orderNumber: 1009,
       redirectUrl: '/orders/1009',
     })
+  })
+
+  it('converts paid draft orders with paid inventory behavior enabled', async () => {
+    mocks.prisma.order.findFirst.mockResolvedValue(null)
+    mocks.createOrder.mockResolvedValue({
+      id: 'ord_paid',
+      orderNumber: 1044,
+      note: null,
+      tags: [],
+    })
+    mocks.prisma.order.update.mockResolvedValue({})
+    mocks.createOrderEvent.mockResolvedValue({})
+
+    await convertDraftOrder({
+      draftId: 'draft_paid',
+      paymentStatus: 'paid',
+      lineItems: [
+        {
+          productId: 'prod_1',
+          variantId: 'var_1',
+          title: 'Product',
+          quantity: 1,
+          originalPrice: 35,
+        },
+      ],
+    })
+
+    expect(mocks.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentStatus: 'PAID',
+        decrementInventory: true,
+      })
+    )
   })
 
   it('uses override amount only when override is enabled and creates an audit event', async () => {
@@ -179,6 +213,107 @@ describe('convertDraftOrder', () => {
       orderNumber: 1002,
       redirectUrl: '/orders/1002',
     })
+  })
+
+  it('returns duplicate on retry and does not run a second conversion side effect', async () => {
+    mocks.prisma.order.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'ord_1', orderNumber: 1111 })
+    mocks.createOrder.mockResolvedValue({
+      id: 'ord_1',
+      orderNumber: 1111,
+      note: null,
+      tags: [],
+    })
+    mocks.prisma.order.update.mockResolvedValue({})
+    mocks.createOrderEvent.mockResolvedValue({})
+
+    const payload = {
+      draftId: 'draft_retry',
+      paymentStatus: 'paid' as const,
+      lineItems: [
+        {
+          title: 'Product',
+          quantity: 1,
+          originalPrice: 12,
+        },
+      ],
+    }
+
+    const first = await convertDraftOrder(payload)
+    const second = await convertDraftOrder(payload)
+
+    expect(first).toEqual({
+      duplicate: false,
+      orderId: 'ord_1',
+      orderNumber: 1111,
+      redirectUrl: '/orders/1111',
+    })
+    expect(second).toEqual({
+      duplicate: true,
+      orderId: 'ord_1',
+      orderNumber: 1111,
+      redirectUrl: '/orders/1111',
+    })
+    expect(mocks.createOrder).toHaveBeenCalledTimes(1)
+  })
+
+  it('wraps paid conversion inventory failures and avoids partial draft conversion metadata', async () => {
+    mocks.prisma.order.findFirst.mockResolvedValue(null)
+    mocks.createOrder.mockRejectedValue(new Error('Insufficient inventory for variant var_1'))
+
+    await expect(
+      convertDraftOrder({
+        draftId: 'draft_insufficient',
+        paymentStatus: 'paid',
+        lineItems: [
+          {
+            title: 'Product',
+            quantity: 4,
+            originalPrice: 40,
+          },
+        ],
+      })
+    ).rejects.toMatchObject({
+      name: 'DraftOrderConversionError',
+      code: 'CONVERSION_FAILED',
+      message: 'Insufficient inventory for variant var_1',
+    } satisfies Partial<DraftOrderConversionError>)
+
+    expect(mocks.prisma.order.update).not.toHaveBeenCalled()
+    expect(mocks.createOrderEvent).not.toHaveBeenCalled()
+  })
+
+  it('allows pending conversion quantities without inventory mutation by forwarding pending semantics', async () => {
+    mocks.prisma.order.findFirst.mockResolvedValue(null)
+    mocks.createOrder.mockResolvedValue({
+      id: 'ord_pending_large_qty',
+      orderNumber: 1301,
+      note: null,
+      tags: [],
+    })
+    mocks.prisma.order.update.mockResolvedValue({})
+    mocks.createOrderEvent.mockResolvedValue({})
+
+    await convertDraftOrder({
+      draftId: 'draft_pending_large_qty',
+      paymentStatus: 'pending',
+      lineItems: [
+        {
+          title: 'Product',
+          quantity: 999,
+          originalPrice: 9.99,
+        },
+      ],
+    })
+
+    expect(mocks.createOrder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentStatus: 'PENDING',
+        decrementInventory: false,
+        items: [expect.objectContaining({ quantity: 999 })],
+      })
+    )
   })
 
   it('throws invalid draft error for missing line items', async () => {

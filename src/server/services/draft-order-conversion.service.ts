@@ -173,11 +173,15 @@ export async function convertDraftOrder(input: ConvertDraftOrderInput): Promise<
   }
 
   try {
+    const paymentStatus =
+      String(input.paymentStatus || 'pending').toLowerCase() === 'paid' ? 'PAID' : 'PENDING'
+
     const order = await createOrder({
       customerId: input.customerId || undefined,
       email: normalizeText(input.email) || undefined,
       items: orderItems,
-      paymentStatus: String(input.paymentStatus || 'pending').toLowerCase() === 'paid' ? 'PAID' : 'PENDING',
+      paymentStatus,
+      decrementInventory: paymentStatus === 'PAID',
       taxAmountCents: dollarsToCents(input.taxAmount ?? 0),
       shippingAmountCents: dollarsToCents(input.shippingAmount ?? 0),
       discountAmountCents: dollarsToCents(input.discountAmount ?? 0),
