@@ -24,6 +24,12 @@ const PUBLIC_PREFIXES = [
   '/public',
 ]
 
+function isPublicMediaReadRequest(pathname: string, method: string) {
+  // Storefront product DTOs expose media as /api/media/:assetId.
+  // Keep reads public for asset delivery while mutations stay authenticated.
+  return method === 'GET' && /^\/api\/media\/[^/]+$/.test(pathname)
+}
+
 function nextWithSecurityHeaders() {
   return applySecurityHeaders(NextResponse.next())
 }
@@ -38,6 +44,10 @@ function redirectWithSecurityHeaders(url: URL) {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  if (isPublicMediaReadRequest(pathname, req.method)) {
+    return nextWithSecurityHeaders()
+  }
 
   const isPublic = PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
   if (isPublic) return nextWithSecurityHeaders()

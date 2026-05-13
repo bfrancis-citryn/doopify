@@ -107,6 +107,39 @@ describe('proxy auth protection and security headers', () => {
     expect(mocks.verifyToken).not.toHaveBeenCalled()
   })
 
+  it('keeps GET /api/media/:assetId public for storefront image delivery', async () => {
+    const response = await proxy(new NextRequest('http://localhost/api/media/asset_1'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
+  it('still blocks unauthenticated media mutation requests', async () => {
+    const patchResponse = await proxy(
+      new NextRequest('http://localhost/api/media/asset_1', {
+        method: 'PATCH',
+      })
+    )
+    const deleteResponse = await proxy(
+      new NextRequest('http://localhost/api/media/asset_1', {
+        method: 'DELETE',
+      })
+    )
+
+    expect(patchResponse.status).toBe(401)
+    expect(await patchResponse.json()).toEqual({
+      success: false,
+      error: 'Unauthorized',
+    })
+    expect(deleteResponse.status).toBe(401)
+    expect(await deleteResponse.json()).toEqual({
+      success: false,
+      error: 'Unauthorized',
+    })
+    expect(mocks.verifyToken).not.toHaveBeenCalled()
+  })
+
   it('allows /create-owner through without auth as a public route', async () => {
     const response = await proxy(new NextRequest('http://localhost/create-owner'))
 
