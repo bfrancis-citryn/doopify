@@ -67,6 +67,7 @@ Historical planning docs are intentionally omitted from this active handoff pack
 - Prisma-backed background job abstraction for side effects with claiming, retries/backoff, exhaustion, and cron-compatible runner API
 - Abandoned checkout recovery foundation with persisted checkout recovery fields, admin review APIs/UI, safe tokenized recovery payload API, and secret-protected due-send processing
 - Brand Kit foundation with centralized Store branding fields, admin Brand Kit screen/API, and safe storefront/checkout/email branding defaults
+- Media object storage adapters now support Postgres (local/dev fallback), Vercel Blob (`MEDIA_STORAGE_PROVIDER=vercel-blob`), and S3/R2 (`MEDIA_STORAGE_PROVIDER=s3`) with stable `/api/media/:assetId` app URLs
 - private-beta storefront/checkout theme lock: Brand settings currently expose assets/support identity fields while frontend CSS owns checkout/storefront color and Stripe Payment Element readability
 - Private email delivery observability APIs for list/detail/resend with safe resend eligibility controls
 - Admin customer data export API at `GET /api/customers/[id]/export` with audit emission

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   deleteAsset: vi.fn(),
+  getAsset: vi.fn(),
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
@@ -13,13 +14,37 @@ vi.mock('@/server/media/media-storage', () => ({
   getMediaStorageAdapter: () => ({
     provider: 'postgres',
     put: vi.fn(),
-    get: vi.fn(),
+    get: mocks.getAsset,
     delete: mocks.deleteAsset,
     getPublicUrl: (assetId: string) => `/api/media/${assetId}`,
   }),
+  getMediaPublicUrl: (assetId: string) => `/api/media/${assetId}`,
 }))
 
-import { DELETE } from './route'
+import { DELETE, GET } from './route'
+
+describe('GET /api/media/[assetId]', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.getAsset.mockResolvedValue({
+      redirectUrl: 'https://blob.vercel-storage.com/media/asset_1/image.png',
+      mimeType: 'image/png',
+      filename: 'image.png',
+      size: 1024,
+      cacheControl: 'public, max-age=31536000, immutable',
+    })
+  })
+
+  it('redirects to publicUrl for object-stored assets', async () => {
+    const response = await GET(new Request('http://localhost/api/media/asset_1'), {
+      params: Promise.resolve({ assetId: 'asset_1' }),
+    })
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('https://blob.vercel-storage.com/media/asset_1/image.png')
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+  })
+})
 
 describe('DELETE /api/media/[assetId]', () => {
   beforeEach(() => {

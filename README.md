@@ -23,7 +23,7 @@ Doopify is a real commerce application built with Next.js 16, Prisma, PostgreSQL
 - Background job infrastructure with retry, exhaustion, and cron-compatible runner
 - Audit logging for team operations, payment events, and lifecycle mutations
 - Legal/compliance storefront baseline (`/privacy`, `/terms`, `/.well-known/security.txt`)
-- Media storage (Postgres default; S3/R2 optional)
+- Media storage (Postgres local/dev fallback; Vercel Blob recommended on Vercel; S3/R2 optional)
 - GitHub Actions CI and production deployment runbooks
 
 ---
@@ -147,7 +147,8 @@ Never point `DATABASE_URL_TEST` at your development or production database.
 
 ## Private beta limitations
 
-- Media stored in Postgres by default — not suitable for high-volume public traffic without enabling S3/R2 object storage
+- Media stored in Postgres by default (local/dev fallback) — use `MEDIA_STORAGE_PROVIDER=vercel-blob` on Vercel or `MEDIA_STORAGE_PROVIDER=s3` for S3/R2 before high-volume public traffic
+- Product and gallery images are public media URLs — do not upload sensitive or private files
 - CSP is in report-only mode — tighten to enforce after production verification
 - No customer account system — checkout is guest-only
 - No public plugin marketplace or theme directory

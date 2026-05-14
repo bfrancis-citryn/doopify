@@ -24,6 +24,7 @@ export async function GET(req: Request) {
       encryptionKeyPresent: Boolean(process.env.ENCRYPTION_KEY),
 
       mediaStorageProvider,
+      mediaBlobTokenPresent: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       mediaS3RegionPresent: Boolean(process.env.MEDIA_S3_REGION),
       mediaS3BucketPresent: Boolean(process.env.MEDIA_S3_BUCKET),
       mediaS3AccessKeyIdPresent: Boolean(process.env.MEDIA_S3_ACCESS_KEY_ID),

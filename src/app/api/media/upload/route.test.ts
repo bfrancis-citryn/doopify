@@ -4,6 +4,15 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   put: vi.fn(),
   findProduct: vi.fn(),
+  getMediaStorageAdapter: vi.fn(),
+  MediaStorageConfigError: class MediaStorageConfigError extends Error {
+    provider: string
+    constructor(provider: string, message: string) {
+      super(message)
+      this.name = 'MediaStorageConfigError'
+      this.provider = provider
+    }
+  },
 }))
 
 vi.mock('@/server/auth/require-auth', () => ({
@@ -11,13 +20,8 @@ vi.mock('@/server/auth/require-auth', () => ({
 }))
 
 vi.mock('@/server/media/media-storage', () => ({
-  getMediaStorageAdapter: () => ({
-    provider: 'postgres',
-    put: mocks.put,
-    get: vi.fn(),
-    delete: vi.fn(),
-    getPublicUrl: (assetId: string) => `/api/media/${assetId}`,
-  }),
+  getMediaStorageAdapter: mocks.getMediaStorageAdapter,
+  MediaStorageConfigError: mocks.MediaStorageConfigError,
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -38,6 +42,13 @@ describe('POST /api/media/upload', () => {
       user: { id: 'admin_1', email: 'admin@example.com', role: 'OWNER' },
     })
     mocks.findProduct.mockResolvedValue({ id: 'prod_1' })
+    mocks.getMediaStorageAdapter.mockReturnValue({
+      provider: 'postgres',
+      put: mocks.put,
+      get: vi.fn(),
+      delete: vi.fn(),
+      getPublicUrl: (assetId: string) => `/api/media/${assetId}`,
+    })
     mocks.put.mockResolvedValue({
       id: 'asset_1',
       provider: 'postgres',
@@ -168,7 +179,77 @@ describe('POST /api/media/upload', () => {
     expect(response.status).toBe(500)
     expect(json).toMatchObject({
       success: false,
-      error: 'Failed to upload file',
+      error: 'Storage write failed. Verify media storage configuration and provider availability.',
     })
+  })
+
+  it('returns a specific error when media storage provider config is missing', async () => {
+    mocks.getMediaStorageAdapter.mockImplementation(() => {
+      throw new mocks.MediaStorageConfigError(
+        'vercel-blob',
+        'MEDIA_STORAGE_PROVIDER=vercel-blob requires BLOB_READ_WRITE_TOKEN.'
+      )
+    })
+
+    const pngBytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+    ])
+    const formData = new FormData()
+    formData.set('file', new File([pngBytes], 'asset.png', { type: 'image/png' }))
+
+    const response = await POST(
+      new Request('http://localhost/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      })
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(json).toMatchObject({
+      success: false,
+      error: 'Missing storage configuration. Configure MEDIA_STORAGE_PROVIDER and provider credentials.',
+    })
+  })
+
+  it('passes productId through to storage put for product-linked uploads', async () => {
+    const pngBytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+    ])
+    const formData = new FormData()
+    formData.set('file', new File([pngBytes], 'asset.png', { type: 'image/png' }))
+    formData.set('productId', 'prod_1')
+
+    mocks.put.mockResolvedValueOnce({
+      id: 'asset_linked',
+      provider: 'postgres',
+      url: '/api/media/asset_linked',
+      filename: 'asset.png',
+      altText: null,
+      mimeType: 'image/png',
+      size: pngBytes.length,
+      createdAt: new Date(),
+      linkedProducts: 1,
+    })
+
+    const response = await POST(
+      new Request('http://localhost/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      })
+    )
+    const json = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(mocks.findProduct).toHaveBeenCalledWith({
+      where: { id: 'prod_1' },
+      select: { id: true },
+    })
+    expect(mocks.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'prod_1',
+      })
+    )
+    expect(json.data.linkedProducts).toBe(1)
   })
 })

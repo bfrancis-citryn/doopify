@@ -10,6 +10,7 @@ function baseFacts(): DeploymentValidationFacts {
     isProduction: true,
     encryptionKeyPresent: true,
     mediaStorageProvider: 'postgres',
+    mediaBlobTokenPresent: false,
     mediaS3RegionPresent: false,
     mediaS3BucketPresent: false,
     mediaS3AccessKeyIdPresent: false,
@@ -110,6 +111,29 @@ describe('buildDeploymentValidationReport', () => {
 
     const check = report.checks.find((c) => c.id === 'object-storage')
     expect(check?.status).toBe('optional')
+  })
+
+  it('marks object storage as ready when Vercel Blob mode has token configured', () => {
+    const facts = baseFacts()
+    facts.mediaStorageProvider = 'vercel-blob'
+    facts.mediaBlobTokenPresent = true
+
+    const report = buildDeploymentValidationReport(facts)
+    const check = report.checks.find((c) => c.id === 'object-storage')
+
+    expect(check?.status).toBe('ready')
+  })
+
+  it('marks object storage as needs_setup when Vercel Blob mode is missing token', () => {
+    const facts = baseFacts()
+    facts.mediaStorageProvider = 'vercel-blob'
+    facts.mediaBlobTokenPresent = false
+
+    const report = buildDeploymentValidationReport(facts)
+    const check = report.checks.find((c) => c.id === 'object-storage')
+
+    expect(check?.status).toBe('needs_setup')
+    expect(check?.optional).toBe(false)
   })
 
   it('marks rate limit store as needs_setup when memory is set in production', () => {

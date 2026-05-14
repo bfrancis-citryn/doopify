@@ -66,7 +66,7 @@ The repo currently includes:
 - Settings -> Email now emphasizes customer-message workflow sections (providers, sender identity, branding, templates, activity) with provider credentials kept behind Manage drawers
 - Settings default tab now opens on **General**; Brand Kit is no longer the first settings experience
 - DB-backed admin APIs for products, orders, customers, discounts, analytics, settings, media, collections, shipping zones, tax rules, integrations, inbound webhook deliveries, outbound webhook deliveries, and email deliveries
-- media object storage foundation with adapter-based provider selection (`MEDIA_STORAGE_PROVIDER=postgres|s3`), S3-compatible object storage support (Cloudflare R2/AWS S3 envs), and Postgres binary fallback for local/dev
+- media object storage foundation with adapter-based provider selection (`MEDIA_STORAGE_PROVIDER=postgres|vercel-blob|s3`), Vercel Blob support for Vercel production, S3-compatible object storage support (Cloudflare R2/AWS S3 envs), and Postgres binary fallback for local/dev
 - durable inbound Stripe webhook delivery logging with verified local payload storage, replay, retry scheduling/exhaustion, diagnostics, and admin visibility at `/admin/webhooks`
 - System sidebar now labels `/admin/webhooks` as **Delivery logs** (monitoring/debugging); outbound endpoint configuration remains in `Settings -> Webhooks`
 - typed internal event dispatcher and static integration registry

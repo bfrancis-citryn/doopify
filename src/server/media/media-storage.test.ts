@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getMediaPublicUrl, getMediaStorageAdapter, resetMediaStorageAdapterCacheForTests } from './media-storage'
+import {
+  getMediaPublicUrl,
+  getMediaStorageAdapter,
+  resetMediaStorageAdapterCacheForTests,
+} from './media-storage'
 
 describe('media storage resolver', () => {
   afterEach(() => {
@@ -20,16 +24,12 @@ describe('media storage resolver', () => {
     expect(getMediaStorageAdapter().provider).toBe('postgres')
   })
 
-  it('falls back to Postgres storage when s3 is configured without required env vars', () => {
+  it('throws a config error when s3 is configured without required env vars', () => {
     vi.stubEnv('MEDIA_STORAGE_PROVIDER', 's3')
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    expect(getMediaStorageAdapter().provider).toBe('postgres')
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[media-storage] MEDIA_STORAGE_PROVIDER=s3 is configured without required MEDIA_S3_* values. Falling back to Postgres storage.'
+    expect(() => getMediaStorageAdapter()).toThrowError(
+      'MEDIA_STORAGE_PROVIDER=s3 requires MEDIA_S3_REGION, MEDIA_S3_BUCKET, MEDIA_S3_ACCESS_KEY_ID, and MEDIA_S3_SECRET_ACCESS_KEY.'
     )
-
-    warnSpy.mockRestore()
   })
 
   it('uses s3 storage when provider and required env vars are configured', () => {
@@ -40,6 +40,29 @@ describe('media storage resolver', () => {
     vi.stubEnv('MEDIA_S3_SECRET_ACCESS_KEY', 'secret')
 
     expect(getMediaStorageAdapter().provider).toBe('s3')
+  })
+
+  it('uses Vercel Blob storage when provider is vercel-blob and token is configured', () => {
+    vi.stubEnv('MEDIA_STORAGE_PROVIDER', 'vercel-blob')
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel_blob_rw_token')
+
+    expect(getMediaStorageAdapter().provider).toBe('vercel-blob')
+  })
+
+  it('supports MEDIA_STORAGE_PROVIDER=blob alias', () => {
+    vi.stubEnv('MEDIA_STORAGE_PROVIDER', 'blob')
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel_blob_rw_token')
+
+    expect(getMediaStorageAdapter().provider).toBe('vercel-blob')
+  })
+
+  it('throws a config error when Vercel Blob provider is configured without token', () => {
+    vi.stubEnv('MEDIA_STORAGE_PROVIDER', 'vercel-blob')
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', '')
+
+    expect(() => getMediaStorageAdapter()).toThrowError(
+      'MEDIA_STORAGE_PROVIDER=vercel-blob requires BLOB_READ_WRITE_TOKEN.'
+    )
   })
 
   it('uses legacy MEDIA_S3_PUBLIC_URL as fallback and warns once', () => {
@@ -87,6 +110,22 @@ describe('media storage resolver', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       '[media-storage] MEDIA_STORAGE_PROVIDER=r2 is unsupported. Falling back to Postgres storage.'
     )
+    warnSpy.mockRestore()
+  })
+
+  it('warns in production when MEDIA_STORAGE_PROVIDER is unset and Postgres fallback is used', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('MEDIA_STORAGE_PROVIDER', '')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    expect(getMediaStorageAdapter().provider).toBe('postgres')
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[media-storage] MEDIA_STORAGE_PROVIDER is unset in production. Falling back to Postgres media storage (not recommended for production scale).'
+    )
+
+    warnSpy.mockClear()
+    expect(getMediaStorageAdapter().provider).toBe('postgres')
+    expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 

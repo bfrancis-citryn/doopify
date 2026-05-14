@@ -438,7 +438,7 @@ These ideas are intentionally rejected for this phase:
 - Internal event handlers are allowed to fail without corrupting already-committed order or payment data
 - Outbound merchant webhook failures should become delivery records, not uncaught lifecycle errors
 - Setup automation should start with read-only diagnostics and status checks before mutating user environments
-- Postgres-backed media remains an intentional local/dev fallback, while production can use S3-compatible object storage via `MEDIA_STORAGE_PROVIDER=s3` and `MEDIA_S3_*` configuration
+- Postgres-backed media remains an intentional local/dev fallback, while production should use object storage: `MEDIA_STORAGE_PROVIDER=vercel-blob` with `BLOB_READ_WRITE_TOKEN` on Vercel, or `MEDIA_STORAGE_PROVIDER=s3` with `MEDIA_S3_*` configuration for S3/R2
 
 ## Exit Criteria For The Next Hardening Pass
 

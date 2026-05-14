@@ -1,4 +1,4 @@
-export type MediaStorageProvider = 'postgres' | 's3'
+export type MediaStorageProvider = 'postgres' | 's3' | 'vercel-blob'
 
 export type PutMediaObjectInput = {
   filename: string

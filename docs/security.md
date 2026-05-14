@@ -76,13 +76,14 @@ Audit events are best-effort — a failed audit write does not block the underly
 - Admin mutation routes require a valid session.
 - Owner-only routes (team management, provider credentials, payment settings) require `requireOwner`.
 - Media served from `/api/media/:id` is currently public by ID. Treat media IDs as semi-public.
+- Product and gallery media should be treated as public assets. Do not upload sensitive files.
 
 ---
 
 ## Known beta limitations
 
 - **CSP is report-only**, not enforced. Monitor CSP reports and tighten after verification.
-- **Media is stored in Postgres** by default (`MediaAsset.data`). Object storage (S3/R2) is supported via `MEDIA_STORAGE_PROVIDER=s3` but is optional. Postgres-backed media is not suitable for high-volume public traffic.
+- **Media is stored in Postgres** by default (`MediaAsset.data`) as a local/dev fallback. For production, prefer object storage: `MEDIA_STORAGE_PROVIDER=vercel-blob` on Vercel with `BLOB_READ_WRITE_TOKEN`, or `MEDIA_STORAGE_PROVIDER=s3` for S3/R2. Postgres-backed media is not suitable for high-volume public traffic.
 - **Rate limiting uses Postgres** in production. No Redis layer exists.
 - **No customer account auth** — customers check out as guests. Customer auth hardening is a later phase.
 - **Audit log is append-only** with no retention policy or export tooling yet.

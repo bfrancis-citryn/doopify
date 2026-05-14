@@ -25,6 +25,7 @@ export type DeploymentValidationFacts = {
   encryptionKeyPresent: boolean
 
   mediaStorageProvider: string | null
+  mediaBlobTokenPresent: boolean
   mediaS3RegionPresent: boolean
   mediaS3BucketPresent: boolean
   mediaS3AccessKeyIdPresent: boolean
@@ -74,6 +75,27 @@ function evaluateEncryptionKey(facts: DeploymentValidationFacts): DeploymentChec
 function evaluateObjectStorage(facts: DeploymentValidationFacts): DeploymentCheck {
   const provider = facts.mediaStorageProvider?.toLowerCase() ?? 'postgres'
 
+  if (provider === 'vercel-blob' || provider === 'blob') {
+    if (facts.mediaBlobTokenPresent) {
+      return {
+        id: 'object-storage',
+        title: 'Object storage',
+        optional: true,
+        status: 'ready',
+        summary: 'Vercel Blob object storage is configured. Media binaries will be stored outside Postgres.',
+      }
+    }
+
+    return {
+      id: 'object-storage',
+      title: 'Object storage',
+      optional: false,
+      status: 'needs_setup',
+      summary: 'MEDIA_STORAGE_PROVIDER=vercel-blob is set but BLOB_READ_WRITE_TOKEN is missing.',
+      fix: 'Set BLOB_READ_WRITE_TOKEN for Vercel Blob uploads and deletes.',
+    }
+  }
+
   if (provider === 's3') {
     const hasAllRequired =
       facts.mediaS3RegionPresent &&
@@ -107,10 +129,10 @@ function evaluateObjectStorage(facts: DeploymentValidationFacts): DeploymentChec
     optional: true,
     status: 'optional',
     summary: facts.isProduction
-      ? 'Using Postgres media storage in production. Suitable for private beta but not recommended at scale. Consider configuring S3/R2.'
+      ? 'Using Postgres media storage in production. Suitable for private beta but not recommended at scale. Consider configuring Vercel Blob (on Vercel) or S3/R2.'
       : 'Using Postgres media storage (default). Suitable for local development and private beta.',
     fix: facts.isProduction
-      ? 'Set MEDIA_STORAGE_PROVIDER=s3 and configure MEDIA_S3_* vars for production scale.'
+      ? 'Set MEDIA_STORAGE_PROVIDER=vercel-blob with BLOB_READ_WRITE_TOKEN (Vercel) or MEDIA_STORAGE_PROVIDER=s3 with MEDIA_S3_* vars.'
       : undefined,
   }
 }

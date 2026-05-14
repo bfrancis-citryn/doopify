@@ -169,6 +169,10 @@ After the order is created:
 4. Link the image to the test product.
 5. Open the storefront product page — confirm the product image loads.
 
+If using Vercel Blob (`MEDIA_STORAGE_PROVIDER=vercel-blob`):
+- Confirm uploads succeed with `BLOB_READ_WRITE_TOKEN` configured.
+- Confirm product image requests redirect from `/api/media/{assetId}` to a `blob.vercel-storage.com` URL.
+
 If using S3/R2 object storage (`MEDIA_STORAGE_PROVIDER=s3`):
 - Confirm the media URL redirects to the CDN/S3 public URL (check browser Network tab).
 - Confirm `MEDIA_PUBLIC_BASE_URL` is set in the deployment validation panel if using a CDN.

@@ -1,7 +1,7 @@
 import { err, ok, parseBody } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
-import { getMediaStorageAdapter } from '@/server/media/media-storage'
+import { getMediaPublicUrl, getMediaStorageAdapter } from '@/server/media/media-storage'
 import { NextResponse } from 'next/server'
 
 interface Params {
@@ -88,7 +88,7 @@ export async function PATCH(req: Request, { params }: Params) {
       createdAt: asset.createdAt,
       linkedProducts: asset._count.productMedia,
       products: asset.productMedia.map((media) => media.product),
-      url: getMediaStorageAdapter().getPublicUrl(asset.id),
+        url: getMediaPublicUrl(asset.id),
     })
   } catch (e) {
     console.error('[PATCH /api/media/[assetId]]', e)

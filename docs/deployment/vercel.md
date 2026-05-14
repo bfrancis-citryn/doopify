@@ -71,6 +71,10 @@ In the Vercel dashboard under **Settings → Environment Variables**, set all re
 - `RESEND_WEBHOOK_SECRET`
 - `JOB_RUNNER_SECRET`
 - `ABANDONED_CHECKOUT_SECRET`
+- `MEDIA_STORAGE_PROVIDER=vercel-blob`
+- `BLOB_READ_WRITE_TOKEN`
+
+Use Postgres media only as a local/dev fallback. For Vercel-hosted production, prefer Vercel Blob.
 
 Alternatively, use the CLI helper to push local env vars to Vercel:
 

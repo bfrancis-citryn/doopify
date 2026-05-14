@@ -1,9 +1,24 @@
 import { postgresMediaStorageAdapter } from '@/server/media/postgres-media-storage'
 import { createS3MediaStorageAdapter, type S3MediaStorageConfig } from '@/server/media/s3-media-storage'
 import type { MediaStorageAdapter } from '@/server/media/storage-adapter'
+import {
+  createVercelBlobMediaStorageAdapter,
+  type VercelBlobMediaStorageConfig,
+} from '@/server/media/vercel-blob-media-storage'
 
 let cachedS3Adapter: MediaStorageAdapter | null = null
+let cachedBlobAdapter: MediaStorageAdapter | null = null
 let warnedLegacyMediaPublicUrlEnv = false
+let warnedProductionPostgresDefault = false
+
+export class MediaStorageConfigError extends Error {
+  provider: string
+  constructor(provider: string, message: string) {
+    super(message)
+    this.name = 'MediaStorageConfigError'
+    this.provider = provider
+  }
+}
 
 function resolveMediaPublicBaseUrlFromEnv() {
   const canonical = process.env.MEDIA_PUBLIC_BASE_URL?.trim()
@@ -45,24 +60,56 @@ function getS3ConfigFromEnv(): S3MediaStorageConfig | null {
   }
 }
 
+function getVercelBlobConfigFromEnv(): VercelBlobMediaStorageConfig | null {
+  const token = process.env.BLOB_READ_WRITE_TOKEN?.trim()
+  if (!token) {
+    return null
+  }
+
+  return { token }
+}
+
+function mediaUrl(assetId: string) {
+  return `/api/media/${assetId}`
+}
+
 export function getMediaStorageAdapter(): MediaStorageAdapter {
   const provider = process.env.MEDIA_STORAGE_PROVIDER?.trim().toLowerCase()
 
   if (!provider || provider === 'postgres') {
+    if (!provider && process.env.NODE_ENV === 'production' && !warnedProductionPostgresDefault) {
+      console.warn(
+        '[media-storage] MEDIA_STORAGE_PROVIDER is unset in production. Falling back to Postgres media storage (not recommended for production scale).'
+      )
+      warnedProductionPostgresDefault = true
+    }
     return postgresMediaStorageAdapter
   }
 
   if (provider === 's3') {
     const config = getS3ConfigFromEnv()
     if (!config) {
-      console.warn(
-        '[media-storage] MEDIA_STORAGE_PROVIDER=s3 is configured without required MEDIA_S3_* values. Falling back to Postgres storage.'
+      throw new MediaStorageConfigError(
+        's3',
+        'MEDIA_STORAGE_PROVIDER=s3 requires MEDIA_S3_REGION, MEDIA_S3_BUCKET, MEDIA_S3_ACCESS_KEY_ID, and MEDIA_S3_SECRET_ACCESS_KEY.'
       )
-      return postgresMediaStorageAdapter
     }
 
     cachedS3Adapter ??= createS3MediaStorageAdapter(config)
     return cachedS3Adapter
+  }
+
+  if (provider === 'vercel-blob' || provider === 'blob') {
+    const config = getVercelBlobConfigFromEnv()
+    if (!config) {
+      throw new MediaStorageConfigError(
+        'vercel-blob',
+        'MEDIA_STORAGE_PROVIDER=vercel-blob requires BLOB_READ_WRITE_TOKEN.'
+      )
+    }
+
+    cachedBlobAdapter ??= createVercelBlobMediaStorageAdapter(config)
+    return cachedBlobAdapter
   }
 
   console.warn(`[media-storage] MEDIA_STORAGE_PROVIDER=${provider} is unsupported. Falling back to Postgres storage.`)
@@ -70,10 +117,12 @@ export function getMediaStorageAdapter(): MediaStorageAdapter {
 }
 
 export function getMediaPublicUrl(assetId: string) {
-  return getMediaStorageAdapter().getPublicUrl(assetId)
+  return mediaUrl(assetId)
 }
 
 export function resetMediaStorageAdapterCacheForTests() {
   cachedS3Adapter = null
+  cachedBlobAdapter = null
   warnedLegacyMediaPublicUrlEnv = false
+  warnedProductionPostgresDefault = false
 }

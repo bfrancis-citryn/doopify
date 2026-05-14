@@ -68,8 +68,8 @@ Confirm each variable is set in your production environment. See `docs/ENVIRONME
 
 ### Media / object storage (optional for private beta)
 
-- [ ] `MEDIA_STORAGE_PROVIDER=s3` — Set if using S3/R2 object storage
-- [ ] `MEDIA_S3_REGION`, `MEDIA_S3_BUCKET`, `MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY` — Required when S3 mode is active
+- [ ] On Vercel: `MEDIA_STORAGE_PROVIDER=vercel-blob` and `BLOB_READ_WRITE_TOKEN` configured
+- [ ] On S3/R2: `MEDIA_STORAGE_PROVIDER=s3` plus `MEDIA_S3_REGION`, `MEDIA_S3_BUCKET`, `MEDIA_S3_ACCESS_KEY_ID`, `MEDIA_S3_SECRET_ACCESS_KEY`
 
 ### Rate limiting (multi-instance)
 
@@ -144,7 +144,7 @@ This runs:
 
 - [ ] Media upload works (`/media` admin)
 - [ ] Product images load on storefront with Postgres storage
-- [ ] If using S3: product images redirect/stream from object storage correctly
+- [ ] If using Vercel Blob or S3/R2: product images redirect/stream from object storage correctly
 
 ---
 

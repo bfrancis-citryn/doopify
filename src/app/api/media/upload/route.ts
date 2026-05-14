@@ -1,7 +1,7 @@
 import { ok, err } from '@/lib/api'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/server/auth/require-auth'
-import { getMediaStorageAdapter } from '@/server/media/media-storage'
+import { getMediaStorageAdapter, MediaStorageConfigError } from '@/server/media/media-storage'
 
 export const runtime = 'nodejs'
 
@@ -52,13 +52,23 @@ export async function POST(req: Request) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
 
+  let fileNameForLog: string | null = null
+  let fileSizeForLog: number | null = null
+  let mimeTypeForLog: string | null = null
+  let productIdForLog: string | null = null
+
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     const productId = formData.get('productId') as string | null
     const altText = formData.get('altText') as string | null
+    productIdForLog = productId
 
     if (!file) return err('No file provided')
+    fileNameForLog = file.name
+    fileSizeForLog = file.size
+    mimeTypeForLog = file.type || null
+
     if (file.size > MAX_SIZE) return err('File too large. Maximum size is 10 MB.')
 
     const buffer = Buffer.from(await file.arrayBuffer())
@@ -83,14 +93,28 @@ export async function POST(req: Request) {
       }
     }
 
-    const asset = await getMediaStorageAdapter().put({
-      filename: file.name,
-      altText,
-      mimeType: detectedMimeType,
-      size: file.size,
-      buffer,
-      productId,
-    })
+    const adapter = getMediaStorageAdapter()
+    let asset
+    try {
+      asset = await adapter.put({
+        filename: file.name,
+        altText,
+        mimeType: detectedMimeType,
+        size: file.size,
+        buffer,
+        productId,
+      })
+    } catch (storageError) {
+      console.error('[POST /api/media/upload] storage write failed', {
+        provider: adapter.provider,
+        filename: fileNameForLog,
+        fileSize: fileSizeForLog,
+        mimeType: mimeTypeForLog,
+        productId: productIdForLog,
+        errorName: storageError instanceof Error ? storageError.name : 'UnknownError',
+      })
+      return err('Storage write failed. Verify media storage configuration and provider availability.', 500)
+    }
 
     return ok({
       id: asset.id,
@@ -103,7 +127,25 @@ export async function POST(req: Request) {
       linkedProducts: asset.linkedProducts,
     }, 201)
   } catch (e) {
-    console.error('[POST /api/media/upload]', e)
+    if (e instanceof MediaStorageConfigError) {
+      console.error('[POST /api/media/upload] media storage config error', {
+        provider: e.provider,
+        filename: fileNameForLog,
+        fileSize: fileSizeForLog,
+        mimeType: mimeTypeForLog,
+        productId: productIdForLog,
+        errorMessage: e.message,
+      })
+      return err('Missing storage configuration. Configure MEDIA_STORAGE_PROVIDER and provider credentials.', 500)
+    }
+
+    console.error('[POST /api/media/upload] unexpected failure', {
+      filename: fileNameForLog,
+      fileSize: fileSizeForLog,
+      mimeType: mimeTypeForLog,
+      productId: productIdForLog,
+      errorName: e instanceof Error ? e.name : 'UnknownError',
+    })
     return err('Failed to upload file', 500)
   }
 }

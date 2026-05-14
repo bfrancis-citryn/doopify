@@ -55,7 +55,8 @@
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `MEDIA_STORAGE_PROVIDER` | Optional | `postgres` (default) or `s3`. Controls where media binary data is stored. |
+| `MEDIA_STORAGE_PROVIDER` | Optional | `postgres` (local/dev fallback), `vercel-blob`/`blob` (recommended on Vercel), or `s3` (S3/R2). Controls where media binary data is stored. |
+| `BLOB_READ_WRITE_TOKEN` | Required when `MEDIA_STORAGE_PROVIDER=vercel-blob` or `blob` | Vercel Blob read/write token used for media uploads and deletes. |
 | `MEDIA_S3_REGION` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 region (e.g., `auto` for Cloudflare R2). |
 | `MEDIA_S3_BUCKET` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 bucket name. |
 | `MEDIA_S3_ACCESS_KEY_ID` | Required when `MEDIA_STORAGE_PROVIDER=s3` | S3/R2 access key ID. |
@@ -116,3 +117,5 @@
 - Never commit real credentials.
 - Rotate production secrets after incident response or compromise suspicion.
 - `MEDIA_PUBLIC_BASE_URL` is the canonical media CDN env var. `MEDIA_S3_PUBLIC_URL` is legacy/deprecated.
+- Postgres media storage is a local/dev fallback. Use Vercel Blob on Vercel production, or S3/R2 for non-Vercel object storage.
+- Product/gallery media is public by design. Do not upload sensitive/private files.
