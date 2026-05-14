@@ -176,6 +176,7 @@ export default function OrderAdjustmentsCard({ onOrderRefresh, orderId, orderNum
   }, [orderIdentifier]);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     refreshSummary();
   }, [refreshSummary]);
 

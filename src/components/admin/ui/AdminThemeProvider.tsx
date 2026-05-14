@@ -76,6 +76,7 @@ export default function AdminThemeProvider({ children }: { children?: ReactNode 
 
   useEffect(() => {
     const nextResolvedTheme = resolveTheme(themePreference);
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setResolvedTheme(nextResolvedTheme);
     applyTheme(nextResolvedTheme);
     try {

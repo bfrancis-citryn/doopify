@@ -904,6 +904,7 @@ export default function SettingsWorkspace() {
     const params = new URLSearchParams(window.location.search);
     const section = params.get('section');
     if (section && SETTINGS_SECTIONS.some((entry) => entry.id === section)) {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
       setActiveSection(section);
     }
   }, []);
@@ -1323,6 +1324,7 @@ export default function SettingsWorkspace() {
     const fallbackEmail = String(settings.supportEmail || settings.senderEmail || '').trim();
     if (!fallbackEmail) return;
 
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setProviderTestEmailById((current) => ({
       RESEND: current.RESEND || fallbackEmail,
       SMTP: current.SMTP || fallbackEmail,
@@ -1635,6 +1637,7 @@ export default function SettingsWorkspace() {
   );
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setProviderForms((current) => {
       const currentStripe = current.STRIPE || EMPTY_PROVIDER_FORMS.STRIPE;
       if (

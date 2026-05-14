@@ -97,9 +97,9 @@ export default async function CollectionsPage() {
             <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.36)', marginBottom: 28, lineHeight: 1.7 }}>
               Collections group products into curated storefront edits.<br />Create one in the admin and assign products to make this page live.
             </p>
-            <a href="/shop" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 20px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)', color: '#f2ede4', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>
+            <Link href="/shop" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '0 20px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.14)', color: '#f2ede4', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' }}>
               Browse all products
-            </a>
+            </Link>
           </div>
         )}
       </div>

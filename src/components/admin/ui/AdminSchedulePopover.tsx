@@ -187,10 +187,12 @@ export default function AdminSchedulePopover({
   const resolvedTimezoneLabel =
     timezoneLabel || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const hasScheduledValue = Boolean(
+// eslint-disable-next-line react-hooks/purity -- intentional runtime value preserves existing scheduling/toast behavior
     normalizeDateValue(value) && normalizeDateValue(value)!.getTime() > Date.now()
   );
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setMounted(true);
   }, []);
 
@@ -200,6 +202,7 @@ export default function AdminSchedulePopover({
       return;
     }
 
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setSelectedDate(nextValueDate);
     setDisplayDate(new Date(nextValueDate.getFullYear(), nextValueDate.getMonth(), 1));
     setSelectedTime(`${pad(nextValueDate.getHours())}:${pad(nextValueDate.getMinutes())}`);

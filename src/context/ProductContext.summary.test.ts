@@ -79,7 +79,6 @@ describe('transformApiProductSummary', () => {
   })
 
   it('does not throw when options field is absent from the payload', () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { options: _omitted, ...noOptions } = minimalSummary
 
     expect(() => transformApiProductSummary(noOptions)).not.toThrow()

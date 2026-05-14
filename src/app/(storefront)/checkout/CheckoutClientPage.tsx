@@ -480,7 +480,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       resetPaymentStep();
     }
     lastCartSignatureRef.current = cartSignature;
-  }, [cartSignature, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cartSignature, checkout]);
 
   useEffect(() => {
     if (!checkout) {
@@ -492,7 +492,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       resetPaymentStep();
     }
     lastAddressSignatureRef.current = addressSignature;
-  }, [addressSignature, checkout]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [addressSignature, checkout]);
 
   useEffect(() => {
     if (!checkout) {
@@ -504,7 +504,7 @@ export default function CheckoutClientPage({ publishableKey, store, recoveryToke
       resetPaymentStep();
     }
     lastShippingSelectionRef.current = selectedShippingQuoteId;
-  }, [checkout, selectedShippingQuoteId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [checkout, selectedShippingQuoteId]);
 
   function resetPaymentStep() {
     if (paymentElementRef.current) {

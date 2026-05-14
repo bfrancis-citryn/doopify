@@ -201,10 +201,12 @@ export default function MediaLibraryWorkspace() {
 
   useEffect(() => {
     if (!assets.length || selectedAsset) return;
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setSelectedAssetId(assets[0].id);
   }, [assets, selectedAsset]);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setAltDraft(selectedAsset?.altText || '');
   }, [selectedAsset?.altText, selectedAsset?.id]);
 

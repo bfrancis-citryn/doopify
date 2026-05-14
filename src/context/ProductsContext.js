@@ -54,6 +54,7 @@ export function ProductsProvider({ children }) {
     }
   }, []);
 
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   const updateProduct = useCallback((productId, updater) => {

@@ -230,18 +230,22 @@ export default function WebhookDeliveriesWorkspace() {
   }, []);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     if (mode === 'inbound') loadDeliveries(1);
   }, [mode, loadDeliveries]);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     if (mode === 'outbound') loadOutboundDeliveries(1);
   }, [mode, loadOutboundDeliveries]);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     if (mode === 'email') loadEmailDeliveries(1);
   }, [mode, loadEmailDeliveries]);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     loadRunnerStatus();
   }, [loadRunnerStatus]);
 

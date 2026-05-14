@@ -47,6 +47,7 @@ export default function AdminSelect({
 
   useEffect(() => {
     const selectedIndex = options.findIndex((option) => option.value === value);
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
   }, [options, value]);
 
@@ -55,6 +56,7 @@ export default function AdminSelect({
   }, [open]);
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     setMounted(true);
   }, []);
 

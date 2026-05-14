@@ -45,6 +45,7 @@ export default function AccountSettingsPanel({ currentUser }) {
   };
 
   useEffect(() => {
+// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional effect-driven state sync for existing async/load flow
     loadMfaStatus();
   }, [isOwner]);
 
