@@ -102,6 +102,7 @@ Verification gate (run before every commit):
 
 ```bash
 npm run db:generate
+npm run lint
 npx tsc --noEmit
 npm run test
 npm run build

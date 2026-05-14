@@ -115,3 +115,4 @@
 - Keep `.env` and `.env.local` local-only; use host-managed secrets for production.
 - Never commit real credentials.
 - Rotate production secrets after incident response or compromise suspicion.
+- `MEDIA_PUBLIC_BASE_URL` is the canonical media CDN env var. `MEDIA_S3_PUBLIC_URL` is legacy/deprecated.

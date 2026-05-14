@@ -33,12 +33,13 @@ Run before every commit:
 
 ```bash
 npm run db:generate
+npm run lint
 npx tsc --noEmit
 npm run test
 npm run build
 ```
 
-A change is not done until all four pass.
+A change is not done until all five pass.
 
 ---
 

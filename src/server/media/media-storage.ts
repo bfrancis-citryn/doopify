@@ -3,6 +3,25 @@ import { createS3MediaStorageAdapter, type S3MediaStorageConfig } from '@/server
 import type { MediaStorageAdapter } from '@/server/media/storage-adapter'
 
 let cachedS3Adapter: MediaStorageAdapter | null = null
+let warnedLegacyMediaPublicUrlEnv = false
+
+function resolveMediaPublicBaseUrlFromEnv() {
+  const canonical = process.env.MEDIA_PUBLIC_BASE_URL?.trim()
+  if (canonical) {
+    return canonical
+  }
+
+  const legacy = process.env.MEDIA_S3_PUBLIC_URL?.trim()
+  if (legacy) {
+    if (!warnedLegacyMediaPublicUrlEnv) {
+      console.warn('[media-storage] MEDIA_S3_PUBLIC_URL is deprecated. Use MEDIA_PUBLIC_BASE_URL instead.')
+      warnedLegacyMediaPublicUrlEnv = true
+    }
+    return legacy
+  }
+
+  return undefined
+}
 
 function getS3ConfigFromEnv(): S3MediaStorageConfig | null {
   const endpoint = process.env.MEDIA_S3_ENDPOINT?.trim() || undefined
@@ -10,7 +29,7 @@ function getS3ConfigFromEnv(): S3MediaStorageConfig | null {
   const bucket = process.env.MEDIA_S3_BUCKET?.trim()
   const accessKeyId = process.env.MEDIA_S3_ACCESS_KEY_ID?.trim()
   const secretAccessKey = process.env.MEDIA_S3_SECRET_ACCESS_KEY?.trim()
-  const publicBaseUrl = process.env.MEDIA_PUBLIC_BASE_URL?.trim() || undefined
+  const publicBaseUrl = resolveMediaPublicBaseUrlFromEnv()
 
   if (!region || !bucket || !accessKeyId || !secretAccessKey) {
     return null
@@ -56,4 +75,5 @@ export function getMediaPublicUrl(assetId: string) {
 
 export function resetMediaStorageAdapterCacheForTests() {
   cachedS3Adapter = null
+  warnedLegacyMediaPublicUrlEnv = false
 }
