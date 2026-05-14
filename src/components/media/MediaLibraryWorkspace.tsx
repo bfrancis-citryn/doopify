@@ -25,6 +25,12 @@ import AdminSkeleton from '../admin/ui/AdminSkeleton';
 import AdminSplitPane from '../admin/ui/AdminSplitPane';
 import AdminToolbarBase from '../admin/ui/AdminToolbar';
 import AdminUploadDropzone from '../admin/ui/AdminUploadDropzone';
+import {
+  MAX_MEDIA_UPLOAD_VERCEL_FORMAT_HINT,
+  getOversizedMediaFiles,
+  parseMediaUploadResponse,
+  resolveMediaUploadFailureMessage,
+} from '../../context/product-media-upload.helpers';
 import styles from './MediaLibraryWorkspace.module.css';
 
 type LinkedProduct = {
@@ -217,6 +223,13 @@ export default function MediaLibraryWorkspace() {
     const files = Array.from(fileList || []);
     if (!files.length) return;
 
+    const oversizedFiles = getOversizedMediaFiles(files);
+    if (oversizedFiles.length) {
+      setErrorMessage(MAX_MEDIA_UPLOAD_VERCEL_FORMAT_HINT);
+      setNotice('');
+      return;
+    }
+
     setIsUploading(true);
     setErrorMessage('');
     setNotice('');
@@ -229,8 +242,16 @@ export default function MediaLibraryWorkspace() {
         form.append('altText', file.name);
 
         const res = await fetch('/api/media/upload', { method: 'POST', body: form });
-        const json = (await res.json()) as ApiResponse<MediaAsset>;
-        if (!json.success) throw new Error(json.error || 'Upload failed');
+        const { json, isJson } = await parseMediaUploadResponse(res);
+        if (!res.ok || !json?.success) {
+          throw new Error(
+            resolveMediaUploadFailureMessage({
+              status: res.status,
+              jsonError: json && 'error' in json ? json.error || null : null,
+              isJson,
+            })
+          );
+        }
         uploadedAssets.push(json.data);
       }
 

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildProductMediaPayload, resolveMediaUploadStrategy } from './product-media-upload.helpers'
+import {
+  MAX_MEDIA_UPLOAD_BYTES,
+  MAX_MEDIA_UPLOAD_VERCEL_MESSAGE,
+  buildProductMediaPayload,
+  getOversizedMediaFiles,
+  isOversizedMediaFile,
+  parseMediaUploadResponse,
+  resolveMediaUploadFailureMessage,
+  resolveMediaUploadStrategy,
+  syncPersistedMediaOnProduct,
+} from './product-media-upload.helpers'
 
 describe('product media upload helpers', () => {
   it('attaches drawer uploads directly for saved products', () => {
@@ -59,5 +69,106 @@ describe('product media upload helpers', () => {
       { assetId: 'asset_1', position: 0, isFeatured: false },
       { assetId: 'asset_2', position: 1, isFeatured: true },
     ])
+  })
+
+  it('rejects files above the Vercel-safe client upload size before fetch', () => {
+    const oversized = new File([new Uint8Array(MAX_MEDIA_UPLOAD_BYTES + 1)], 'too-large.png', { type: 'image/png' })
+    const valid = new File([new Uint8Array(128)], 'ok.png', { type: 'image/png' })
+
+    expect(isOversizedMediaFile(oversized)).toBe(true)
+    expect(isOversizedMediaFile(valid)).toBe(false)
+    expect(getOversizedMediaFiles([valid, oversized])).toEqual([oversized])
+  })
+
+  it('maps 413 and non-JSON upload responses to the Vercel limit message', async () => {
+    expect(
+      resolveMediaUploadFailureMessage({
+        status: 413,
+        jsonError: null,
+        isJson: true,
+      })
+    ).toBe(MAX_MEDIA_UPLOAD_VERCEL_MESSAGE)
+
+    const nonJsonResponse = new Response('payload too large', {
+      status: 413,
+      headers: { 'content-type': 'text/plain' },
+    })
+    const parsed = await parseMediaUploadResponse(nonJsonResponse)
+
+    expect(parsed).toEqual({ json: null, isJson: false })
+    expect(
+      resolveMediaUploadFailureMessage({
+        status: nonJsonResponse.status,
+        jsonError: null,
+        isJson: parsed.isJson,
+      })
+    ).toBe(MAX_MEDIA_UPLOAD_VERCEL_MESSAGE)
+  })
+
+  it('prefers API error payloads and falls back to generic storage message otherwise', () => {
+    expect(
+      resolveMediaUploadFailureMessage({
+        status: 500,
+        jsonError: 'Storage write failed. Verify media storage configuration and provider availability.',
+        isJson: true,
+      })
+    ).toBe('Storage write failed. Verify media storage configuration and provider availability.')
+
+    expect(
+      resolveMediaUploadFailureMessage({
+        status: 500,
+        jsonError: null,
+        isJson: true,
+      })
+    ).toBe('Upload failed. Check media storage settings and try again.')
+  })
+
+  it('syncs persisted product media so first uploaded image is featured when none was set', () => {
+    const updated = syncPersistedMediaOnProduct(
+      {
+        id: 'prod_1',
+        title: 'Dead Coast Society',
+        featuredImageId: null,
+        images: [],
+      },
+      [
+        {
+          id: 'image_1',
+          assetId: 'asset_1',
+          src: '/api/media/asset_1',
+          alt: 'Front shot',
+          sortOrder: 0,
+        },
+      ],
+      null
+    )
+
+    expect(updated?.images).toHaveLength(1)
+    expect(updated?.featuredImageId).toBe('image_1')
+  })
+
+  it('syncs persisted media without overwriting non-media product fields', () => {
+    const updated = syncPersistedMediaOnProduct(
+      {
+        id: 'prod_1',
+        title: 'Edited title',
+        featuredImageId: null,
+        images: [],
+      },
+      [
+        {
+          id: 'image_1',
+          assetId: 'asset_1',
+          src: '/api/media/asset_1',
+          alt: 'Front shot',
+          sortOrder: 0,
+        },
+      ],
+      'image_1'
+    )
+
+    expect(updated?.title).toBe('Edited title')
+    expect(updated?.featuredImageId).toBe('image_1')
+    expect(updated?.images?.[0]?.assetId).toBe('asset_1')
   })
 })

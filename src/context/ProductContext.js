@@ -22,7 +22,16 @@ import {
   transformApiProductSummary,
   validateProduct,
 } from '../lib/productUtils';
-import { buildProductMediaPayload, resolveMediaUploadStrategy } from './product-media-upload.helpers';
+import {
+  buildProductMediaPayload,
+  GENERIC_MEDIA_UPLOAD_FAILURE_MESSAGE,
+  MAX_MEDIA_UPLOAD_VERCEL_FORMAT_HINT,
+  getOversizedMediaFiles,
+  parseMediaUploadResponse,
+  resolveMediaUploadFailureMessage,
+  resolveMediaUploadStrategy,
+  syncPersistedMediaOnProduct,
+} from './product-media-upload.helpers';
 
 const ProductContext = createContext(null);
 
@@ -441,6 +450,40 @@ function productReducer(state, action) {
         editor: {
           ...makeEditorState(action.product, 'existing'),
           autosaveEnabled: state.editor.autosaveEnabled,
+        },
+      };
+    }
+    case 'SYNC_PERSISTED_PRODUCT_MEDIA': {
+      const nextProducts = state.products.map(product =>
+        product.id === action.productId
+          ? syncPersistedMediaOnProduct(product, action.images, action.featuredImageId)
+          : product
+      );
+
+      const draftMatches = state.editor.draftProduct?.id === action.productId;
+      const baselineMatches = state.editor.baselineProduct?.id === action.productId;
+      const nextDraft = draftMatches
+        ? syncPersistedMediaOnProduct(state.editor.draftProduct, action.images, action.featuredImageId)
+        : state.editor.draftProduct;
+      const nextBaseline = baselineMatches
+        ? syncPersistedMediaOnProduct(state.editor.baselineProduct, action.images, action.featuredImageId)
+        : state.editor.baselineProduct;
+
+      const nextPreviewImageId = draftMatches
+        ? nextDraft?.images?.find(image => image.id === state.editor.previewImageId)?.id ||
+          nextDraft?.featuredImageId ||
+          nextDraft?.images?.[0]?.id ||
+          null
+        : state.editor.previewImageId;
+
+      return {
+        ...state,
+        products: nextProducts,
+        editor: {
+          ...state.editor,
+          draftProduct: nextDraft,
+          baselineProduct: nextBaseline,
+          previewImageId: nextPreviewImageId,
         },
       };
     }
@@ -983,6 +1026,12 @@ export function ProductProvider({ children }) {
   const addImagesFromFiles = async (fileList, { attachToDraft = true } = {}) => {
     const files = Array.from(fileList || []);
     if (!files.length) return [];
+    const oversizedFiles = getOversizedMediaFiles(files);
+    if (oversizedFiles.length) {
+      pushToast(MAX_MEDIA_UPLOAD_VERCEL_FORMAT_HINT, 'error');
+      return [];
+    }
+
     const uploadStrategy = resolveMediaUploadStrategy({
       editorMode: state.editor.mode,
       draftProductId: state.editor.draftProduct?.id || null,
@@ -1029,10 +1078,11 @@ export function ProductProvider({ children }) {
         }
 
         const res = await fetch('/api/media/upload', { method: 'POST', body: form });
-        const json = await res.json();
+        const { json, isJson } = await parseMediaUploadResponse(res);
 
-        if (json.success) {
+        if (res.ok && json?.success) {
           uploadedAssets.push(json.data);
+          let persistedMediaState = null;
           if (uploadStrategy.shouldAttachToDraft && optimisticImage?.id) {
             updateDraftProduct(draftProduct => {
               const nextImages = draftProduct.images.map(image =>
@@ -1046,6 +1096,7 @@ export function ProductProvider({ children }) {
                   : image
               );
               const mediaState = ensureMediaState(nextImages, draftProduct.featuredImageId || optimisticImage.id);
+              persistedMediaState = mediaState;
 
               return {
                 ...draftProduct,
@@ -1054,8 +1105,23 @@ export function ProductProvider({ children }) {
               };
             });
           }
+
+          if (
+            uploadStrategy.shouldIncludeProductId &&
+            uploadStrategy.productId &&
+            uploadStrategy.shouldAttachToDraft &&
+            persistedMediaState
+          ) {
+            dispatch({
+              type: 'SYNC_PERSISTED_PRODUCT_MEDIA',
+              productId: uploadStrategy.productId,
+              images: persistedMediaState.images,
+              featuredImageId: persistedMediaState.featuredImageId,
+            });
+          }
+
           if (uploadStrategy.shouldIncludeProductId && Number(json.data?.linkedProducts || 0) < 1) {
-            pushToast('Image uploaded, but could not attach automatically. Save to sync product media.', 'warning');
+            pushToast('Image uploaded, but could not attach automatically. Add it from Media Library.', 'warning');
           }
         } else {
           if (uploadStrategy.shouldAttachToDraft && optimisticImage?.id) {
@@ -1073,7 +1139,14 @@ export function ProductProvider({ children }) {
               };
             });
           }
-          pushToast(json.error || 'Upload failed', 'error');
+          pushToast(
+            resolveMediaUploadFailureMessage({
+              status: res.status,
+              jsonError: json?.error || null,
+              isJson,
+            }),
+            'error'
+          );
         }
       } catch (e) {
         console.error('[addImagesFromFiles] upload error', e);
@@ -1092,7 +1165,7 @@ export function ProductProvider({ children }) {
             };
           });
         }
-        pushToast('Upload failed — check Cloudinary credentials', 'error');
+        pushToast(GENERIC_MEDIA_UPLOAD_FAILURE_MESSAGE, 'error');
       } finally {
         dispatch({ type: 'ADJUST_MEDIA_UPLOADS', delta: -1 });
       }
