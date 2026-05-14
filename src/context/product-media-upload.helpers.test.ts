@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   MAX_MEDIA_UPLOAD_BYTES,
   MAX_MEDIA_UPLOAD_VERCEL_MESSAGE,
   buildProductMediaPayload,
+  fetchPersistedProductDetail,
   getOversizedMediaFiles,
   isOversizedMediaFile,
   parseMediaUploadResponse,
@@ -170,5 +171,43 @@ describe('product media upload helpers', () => {
     expect(updated?.title).toBe('Edited title')
     expect(updated?.featuredImageId).toBe('image_1')
     expect(updated?.images?.[0]?.assetId).toBe('asset_1')
+  })
+
+  it('fetches refreshed product detail from /api/products/:id for persisted media sync', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        success: true,
+        data: { id: 'prod_1', media: [{ id: 'media_1' }] },
+      }),
+    })
+
+    const result = await fetchPersistedProductDetail({ productId: 'prod_1', fetchImpl })
+
+    expect(fetchImpl).toHaveBeenCalledWith('/api/products/prod_1')
+    expect(result).toEqual({
+      ok: true,
+      error: null,
+      data: { id: 'prod_1', media: [{ id: 'media_1' }] },
+      status: 200,
+    })
+  })
+
+  it('returns safe failure payload when refreshed product detail fetch fails', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: vi.fn().mockResolvedValue({
+        success: false,
+        error: 'Failed to update product',
+      }),
+    })
+
+    const result = await fetchPersistedProductDetail({ productId: 'prod_1', fetchImpl })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toBe('Failed to update product')
+    expect(result.status).toBe(500)
   })
 })

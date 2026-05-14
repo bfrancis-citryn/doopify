@@ -98,3 +98,34 @@ export function syncPersistedMediaOnProduct(product, images, featuredImageId) {
     featuredImageId: featuredImageId || images[0]?.id || null,
   }
 }
+
+/**
+ * @param {{ productId: string, fetchImpl?: typeof fetch }} input
+ */
+export async function fetchPersistedProductDetail({ productId, fetchImpl = fetch }) {
+  if (!productId) {
+    return { ok: false, error: 'Missing product id', data: null, status: 0 }
+  }
+
+  try {
+    const response = await fetchImpl(`/api/products/${productId}`)
+    const json = await response.json().catch(() => null)
+    if (!response.ok || !json?.success || !json?.data) {
+      return {
+        ok: false,
+        error: json?.error || 'Failed to fetch refreshed product detail.',
+        data: null,
+        status: response.status,
+      }
+    }
+
+    return { ok: true, error: null, data: json.data, status: response.status }
+  } catch {
+    return {
+      ok: false,
+      error: 'Failed to fetch refreshed product detail.',
+      data: null,
+      status: 0,
+    }
+  }
+}

@@ -26,6 +26,7 @@ import {
   buildProductMediaPayload,
   GENERIC_MEDIA_UPLOAD_FAILURE_MESSAGE,
   MAX_MEDIA_UPLOAD_VERCEL_FORMAT_HINT,
+  fetchPersistedProductDetail,
   getOversizedMediaFiles,
   parseMediaUploadResponse,
   resolveMediaUploadFailureMessage,
@@ -712,6 +713,32 @@ export function ProductProvider({ children }) {
     }
   };
 
+  const refreshPersistedProductMedia = async productId => {
+    if (!productId) {
+      return false;
+    }
+
+    try {
+      const refreshed = await fetchPersistedProductDetail({ productId });
+      if (!refreshed.ok || !refreshed.data) {
+        return false;
+      }
+
+      const refreshedProduct = transformApiProduct(refreshed.data);
+      const mediaState = ensureMediaState(refreshedProduct.images, refreshedProduct.featuredImageId);
+      dispatch({
+        type: 'SYNC_PERSISTED_PRODUCT_MEDIA',
+        productId,
+        images: mediaState.images,
+        featuredImageId: mediaState.featuredImageId,
+      });
+      return true;
+    } catch (error) {
+      console.error('[ProductContext] failed to refresh persisted product media', error);
+      return false;
+    }
+  };
+
   const openNewProduct = () => {
     const draftProduct = createEmptyProductDraft();
 
@@ -1066,6 +1093,7 @@ export function ProductProvider({ children }) {
     }
 
     const uploadedAssets = [];
+    let shouldRefreshPersistedMedia = false;
 
     for (const [fileIndex, file] of files.entries()) {
       const optimisticImage = optimisticImages[fileIndex];
@@ -1082,7 +1110,6 @@ export function ProductProvider({ children }) {
 
         if (res.ok && json?.success) {
           uploadedAssets.push(json.data);
-          let persistedMediaState = null;
           if (uploadStrategy.shouldAttachToDraft && optimisticImage?.id) {
             updateDraftProduct(draftProduct => {
               const nextImages = draftProduct.images.map(image =>
@@ -1096,7 +1123,6 @@ export function ProductProvider({ children }) {
                   : image
               );
               const mediaState = ensureMediaState(nextImages, draftProduct.featuredImageId || optimisticImage.id);
-              persistedMediaState = mediaState;
 
               return {
                 ...draftProduct,
@@ -1106,18 +1132,8 @@ export function ProductProvider({ children }) {
             });
           }
 
-          if (
-            uploadStrategy.shouldIncludeProductId &&
-            uploadStrategy.productId &&
-            uploadStrategy.shouldAttachToDraft &&
-            persistedMediaState
-          ) {
-            dispatch({
-              type: 'SYNC_PERSISTED_PRODUCT_MEDIA',
-              productId: uploadStrategy.productId,
-              images: persistedMediaState.images,
-              featuredImageId: persistedMediaState.featuredImageId,
-            });
+          if (uploadStrategy.shouldIncludeProductId && uploadStrategy.productId && uploadStrategy.shouldAttachToDraft) {
+            shouldRefreshPersistedMedia = true;
           }
 
           if (uploadStrategy.shouldIncludeProductId && Number(json.data?.linkedProducts || 0) < 1) {
@@ -1171,6 +1187,13 @@ export function ProductProvider({ children }) {
       }
     }
 
+    if (shouldRefreshPersistedMedia && uploadStrategy.productId) {
+      const refreshed = await refreshPersistedProductMedia(uploadStrategy.productId);
+      if (!refreshed) {
+        pushToast('Image uploaded, but gallery refresh failed. Reopen the product to confirm media state.', 'warning');
+      }
+    }
+
     if (uploadedAssets.length) {
       const successMessage = uploadStrategy.shouldAttachToDraft
         ? `${uploadedAssets.length} image${uploadedAssets.length > 1 ? 's' : ''} uploaded`
@@ -1181,7 +1204,7 @@ export function ProductProvider({ children }) {
     return uploadedAssets;
   };
 
-  const addImagesFromLibrary = mediaAssets => {
+  const addImagesFromLibrary = async mediaAssets => {
     const assets = Array.isArray(mediaAssets) ? mediaAssets : [mediaAssets];
     const normalizedAssets = assets.filter(asset => asset?.id && asset?.url);
 
@@ -1190,6 +1213,9 @@ export function ProductProvider({ children }) {
     }
 
     let addedCount = 0;
+    let nextPersistedMediaState = null;
+    const draftProductId = state.editor.draftProduct?.id || null;
+    const isPersistedProduct = state.editor.mode === 'existing' && Boolean(draftProductId);
 
     updateDraftProduct(draftProduct => {
       const existingAssetIds = new Set(draftProduct.images.map(image => image.assetId).filter(Boolean));
@@ -1216,6 +1242,7 @@ export function ProductProvider({ children }) {
         nextImages,
         draftProduct.featuredImageId || nextImages[0]?.id || null
       );
+      nextPersistedMediaState = mediaState;
 
       return {
         ...draftProduct,
@@ -1225,6 +1252,33 @@ export function ProductProvider({ children }) {
     });
 
     if (addedCount) {
+      if (isPersistedProduct && draftProductId && nextPersistedMediaState) {
+        try {
+          const response = await fetch(`/api/products/${draftProductId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              media: buildProductMediaPayload(
+                nextPersistedMediaState.images,
+                nextPersistedMediaState.featuredImageId
+              ),
+            }),
+          });
+          const json = await response.json().catch(() => null);
+          if (!response.ok || !json?.success) {
+            throw new Error(json?.error || 'Failed to update product media relations.');
+          }
+
+          await refreshPersistedProductMedia(draftProductId);
+        } catch (error) {
+          console.error('[ProductContext] failed to persist media library attachment', error);
+          pushToast('Image added locally, but failed to persist product media. Save to retry sync.', 'warning');
+          return addedCount;
+        }
+      } else if (state.editor.mode === 'new') {
+        pushToast('Image staged in this new product draft. Save the product to persist media.', 'info');
+      }
+
       pushToast(`${addedCount} image${addedCount > 1 ? 's' : ''} added from the media library`, 'success');
     } else {
       pushToast('Those images are already in the product gallery.', 'info');

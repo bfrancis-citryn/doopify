@@ -159,7 +159,7 @@ export default function ProductMediaManager() {
     <>
       <AdminUploadDropzone
         className={styles.uploadZone}
-        description="Drop files to upload and attach directly to this product gallery."
+        description="Drop JPG, PNG, WebP, or GIF files up to 4.5 MB to attach them to this product gallery."
         onFilesSelected={handleGalleryDropzoneUpload}
         title="Drag and drop product media"
       />
@@ -260,8 +260,8 @@ export default function ProductMediaManager() {
     <>
       <div className={styles.libraryIntro}>
         <div>
-          <p className={styles.libraryEyebrow}>Neon Media Library</p>
-          <p className={styles.libraryText}>Uploads live in Prisma-backed storage so you can reuse them across products or manage everything on the dedicated Media page.</p>
+          <p className={styles.libraryEyebrow}>Media Library</p>
+          <p className={styles.libraryText}>Upload reusable product images for galleries, storefronts, and product pages. Files are stored in your configured media provider and managed through Doopify.</p>
         </div>
         <div className={styles.actionRow}>
           <AdminButton leftIcon={<span className="material-symbols-outlined">upload</span>} onClick={() => libraryUploadInputRef.current?.click()} size="sm" variant="primary">
@@ -304,7 +304,7 @@ export default function ProductMediaManager() {
 
       <AdminUploadDropzone
         className={styles.uploadZone}
-        description="Drop files here to upload, then add them into this product's gallery."
+        description="Drop JPG, PNG, WebP, or GIF files up to 4.5 MB to upload reusable media."
         onFilesSelected={handleLibraryDropzoneUpload}
         title="Drag and drop to media library"
       />

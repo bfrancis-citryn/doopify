@@ -337,7 +337,7 @@ export default function MediaLibraryWorkspace() {
       <AdminPage>
         <AdminPageHeader
           actions={<AdminButton onClick={() => uploadInputRef.current?.click()} size="sm" variant="primary">{isUploading ? 'Uploading...' : 'Upload media'}</AdminButton>}
-          description="Manage product assets with searchable library and metadata controls."
+          description="Manage reusable product images stored in your configured media provider."
           eyebrow="Media"
           title="Media library"
         />
@@ -347,7 +347,7 @@ export default function MediaLibraryWorkspace() {
             {hasAssets || isLoading ? (
               <>
                 <AdminUploadDropzone
-                  description="Drag files into the library or choose files manually."
+                  description="Drag JPG, PNG, WebP, or GIF files up to 4.5 MB into the library, or choose files manually."
                   disabled={isUploading}
                   onFilesSelected={handleUploadFiles}
                   title={isUploading ? 'Uploading assets...' : 'Upload new assets'}
@@ -401,7 +401,7 @@ export default function MediaLibraryWorkspace() {
                 </div>
                 <AdminUploadDropzone
                   className={styles.emptyUploadDropzone}
-                  description="Drop files to start your media library."
+                  description="Drop JPG, PNG, WebP, or GIF files up to 4.5 MB to start your media library."
                   disabled={isUploading}
                   onFilesSelected={handleUploadFiles}
                   title={isUploading ? 'Uploading assets...' : 'Upload your first asset'}
